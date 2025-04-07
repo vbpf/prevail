@@ -269,9 +269,9 @@ code:
     r0 = *(u8 *)(r2 + 100);
 
 post: ["meta_offset=[-4098, 0]",
-  "r0.svalue=[0, 255]", "r0.type=number", "r0.uvalue=[0, 255]",
-  "r1.svalue=[101, 4098]", "r1.type=number", "r1.uvalue=r1.svalue",
-  "r2.packet_offset=meta_offset", "r2.svalue=[4098, 2147418112]", "r2.type=packet",
-  "r3.svalue=101", "r3.type=number", "r3.uvalue=101"]
+       "r0.svalue=[0, 255]", "r0.type=number", "r0.uvalue=[0, 255]",
+       "r1.svalue=[101, 4098]", "r1.type=number", "r1.uvalue=r1.svalue",
+       "r2.packet_offset=meta_offset", "r2.svalue=[4098, 2147418112]", "r2.type=packet",
+       "r3.svalue=101", "r3.type=number", "r3.uvalue=101"]
 messages:
   - "3: Upper bound must be at most packet_size (valid_access(r2.offset+100, width=1) for read)"
