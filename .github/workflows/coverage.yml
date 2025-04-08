@@ -19,7 +19,6 @@ jobs:
       # Configuration type to build.  For documentation on how build matrices work, see
       # https://docs.github.com/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
       BUILD_CONFIGURATION: ${{matrix.configurations}}
-      REPO_NAME: ${{ split(github.repository, '/')[1] }}
 
     steps:
       - name: Install dependencies
