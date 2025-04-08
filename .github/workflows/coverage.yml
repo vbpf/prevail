@@ -19,6 +19,7 @@ jobs:
       # Configuration type to build.  For documentation on how build matrices work, see
       # https://docs.github.com/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
       BUILD_CONFIGURATION: ${{matrix.configurations}}
+      REPO_NAME: ${{ github.repository.split('/')[-1] }}
 
     steps:
       - name: Install dependencies
@@ -43,7 +44,7 @@ jobs:
       - name: Generate code coverage report
         run: |
           mkdir coverage
-          lcov --ignore-errors all --capture --directory build --include '*/ebpf-verifier/src/*' --output-file coverage/lcov.info
+          lcov --ignore-errors all --capture --directory build --include "*/${REPO_NAME}/src/*" --output-file coverage/lcov.info
 
       - name: Coveralls Parallel
         uses: coverallsapp/github-action@master
