@@ -29,7 +29,7 @@ get_target_property(GSL_INCLUDE_DIRS Microsoft.GSL::GSL INTERFACE_INCLUDE_DIRECT
 if (VERIFIER_ENABLE_TESTS)
     FetchContent_Declare(Catch2
             GIT_REPOSITORY "https://github.com/catchorg/Catch2.git"
-            GIT_TAG "v3.8.0"
+            GIT_TAG "v3.8.1"
             GIT_SHALLOW ON
     )
     FetchContent_MakeAvailable(Catch2)
