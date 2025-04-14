@@ -3,6 +3,7 @@
 #if __linux__
 
 #include <cstring>
+#include <iostream>
 #include <linux/bpf.h>
 #include <tuple>
 #include <unistd.h>

@@ -19,8 +19,6 @@ ebpf-samples
 # Files using Apache-2.0 license
 src/crab/array_domain.cpp
 src/crab/array_domain.hpp
-src/crab/cfg.hpp
-src/crab/cfg_bgl.hpp
 src/crab/fwd_analyzer.cpp
 src/crab/fwd_analyzer.hpp
 src/crab/interval.cpp
