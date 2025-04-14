@@ -22,6 +22,7 @@
 #include <optional>
 #include <unordered_set>
 #include <utility>
+#include <variant>
 
 #include <boost/container/flat_map.hpp>
 

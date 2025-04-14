@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "asm_syntax.hpp"
-#include "crab/cfg.hpp"
+#include "cfg/cfg.hpp"
 #include "crab/fwd_analyzer.hpp"
 #include "crab/interval.hpp"
 #include "crab/type_encoding.hpp"

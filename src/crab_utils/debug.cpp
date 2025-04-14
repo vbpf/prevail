@@ -1,6 +1,6 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: Apache-2.0
-#include "debug.hpp"
+#include "crab_utils/debug.hpp"
 
 namespace prevail {
 bool CrabLogFlag = false;

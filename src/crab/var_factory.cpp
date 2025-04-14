@@ -4,7 +4,7 @@
  * Factories for variable names.
  */
 
-#include "crab/label.hpp"
+#include "cfg/label.hpp"
 #include "crab/variable.hpp"
 #include "crab_utils/lazy_allocator.hpp"
 

@@ -97,6 +97,7 @@ link_directories(${Boost_LIBRARY_DIRS})
 
 file(GLOB LIB_SRC
         "./src/*.cpp"
+        "./src/cfg/*.cpp"
         "./src/crab/*.cpp"
         "./src/crab_utils/*.cpp"
         "./src/linux/gpl/spec_prototypes.cpp"

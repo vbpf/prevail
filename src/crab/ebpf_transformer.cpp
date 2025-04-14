@@ -13,9 +13,9 @@
 #include "asm_unmarshal.hpp"
 #include "config.hpp"
 #include "crab/array_domain.hpp"
+#include "crab/dsl_syntax.hpp"
 #include "crab/ebpf_domain.hpp"
 #include "crab_utils/num_safety.hpp"
-#include "dsl_syntax.hpp"
 #include "platform.hpp"
 #include "string_constraints.hpp"
 

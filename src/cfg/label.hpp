@@ -7,10 +7,8 @@
 #include <climits>
 #include <functional>
 #include <limits>
-#include <ostream>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include "crab_utils/num_safety.hpp"
 

@@ -1,5 +1,5 @@
 // Copyright (c) Prevail Verifier contributors.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: MIT
 #pragma once
 
 /*
@@ -10,11 +10,9 @@
 #include <memory>
 #include <ranges>
 #include <set>
-#include <variant>
 #include <vector>
 
-#include "config.hpp"
-#include "crab/label.hpp"
+#include "cfg/label.hpp"
 #include "crab_utils/debug.hpp"
 struct cfg_builder_t;
 namespace prevail {

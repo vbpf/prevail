@@ -5,11 +5,11 @@
 #include <map>
 #include <vector>
 
-#include "crab/cfg.hpp"
-#include "crab/label.hpp"
-#include "crab_utils/debug.hpp"
-
 #include "asm_syntax.hpp"
+#include "cfg/cfg.hpp"
+#include "cfg/label.hpp"
+#include "config.hpp"
+#include "crab_utils/debug.hpp"
 
 class Program {
     friend struct cfg_builder_t;

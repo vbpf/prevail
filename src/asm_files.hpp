@@ -6,7 +6,6 @@
 #include <string>
 #include <vector>
 
-#include "asm_syntax.hpp"
 #include "platform.hpp"
 
 class UnmarshalError final : public std::runtime_error {

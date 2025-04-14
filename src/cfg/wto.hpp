@@ -26,10 +26,11 @@
 #include <optional>
 #include <stack>
 #include <utility>
+#include <variant>
 #include <vector>
 
-#include "crab/cfg.hpp"
-#include "crab/label.hpp"
+#include "cfg/cfg.hpp"
+#include "cfg/label.hpp"
 
 namespace prevail {
 

@@ -7,11 +7,10 @@
 #include <string>
 #include <vector>
 
-#include "config.hpp"
-#include "crab/cfg.hpp"
-#include "crab/wto.hpp"
-
 #include "asm_syntax.hpp"
+#include "cfg/cfg.hpp"
+#include "cfg/wto.hpp"
+#include "config.hpp"
 #include "program.hpp"
 
 using std::optional;

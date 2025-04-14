@@ -13,7 +13,7 @@
 #include "crab/type_encoding.hpp"
 #include "crab/variable.hpp"
 #include "crab_utils/debug.hpp"
-#include "dsl_syntax.hpp"
+#include "crab/dsl_syntax.hpp"
 
 namespace prevail {
 
