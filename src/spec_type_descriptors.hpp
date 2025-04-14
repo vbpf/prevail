@@ -76,4 +76,4 @@ void print_map_descriptors(const std::vector<EbpfMapDescriptor>& descriptors, st
 
 std::ostream& operator<<(std::ostream& os, const btf_line_info_t& line_info);
 
-extern thread_local crab::lazy_allocator<program_info> thread_local_program_info;
+extern thread_local prevail::lazy_allocator<program_info> thread_local_program_info;

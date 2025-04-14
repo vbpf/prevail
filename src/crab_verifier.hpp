@@ -50,10 +50,10 @@ class Report final {
 };
 
 class Invariants final {
-    crab::invariant_table_t invariants;
+    prevail::invariant_table_t invariants;
 
   public:
-    explicit Invariants(crab::invariant_table_t&& invariants) : invariants(std::move(invariants)) {}
+    explicit Invariants(prevail::invariant_table_t&& invariants) : invariants(std::move(invariants)) {}
     Invariants(Invariants&& invariants) = default;
     Invariants(const Invariants& invariants) = default;
 
@@ -61,7 +61,7 @@ class Invariants final {
 
     string_invariant invariant_at(const label_t& label) const;
 
-    crab::interval_t exit_value() const;
+    prevail::interval_t exit_value() const;
 
     int max_loop_count() const;
     bool verified(const Program& prog) const;

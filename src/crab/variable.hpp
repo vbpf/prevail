@@ -11,11 +11,11 @@
 #include "crab_utils/lazy_allocator.hpp"
 #include "crab_utils/num_big.hpp"
 
-namespace crab {
+namespace prevail {
 
 std::vector<std::string> default_variable_names();
 
-// Wrapper for typed variables used by the crab abstract domains and linear_constraints.
+// Wrapper for typed variables used by the abstract domains and linear_constraints.
 // Being a class (instead of a type alias) enables overloading in dsl_syntax
 class variable_t final {
     uint64_t _id;
@@ -81,4 +81,4 @@ class variable_t final {
     static bool printing_order(const variable_t& a, const variable_t& b);
 }; // class variable_t
 
-} // namespace crab
+} // namespace prevail

@@ -47,7 +47,7 @@ struct cfg_builder_t final {
         if (const auto it = prog.m_cfg.neighbours.find(_label); it != prog.m_cfg.neighbours.end()) {
             CRAB_ERROR("Label ", to_string(_label), " already exists");
         }
-        prog.m_cfg.neighbours.emplace(_label, crab::cfg_t::adjacent_t{});
+        prog.m_cfg.neighbours.emplace(_label, prevail::cfg_t::adjacent_t{});
         prog.m_instructions.emplace(_label, ins);
     }
 
@@ -83,7 +83,7 @@ struct cfg_builder_t final {
     }
 };
 
-using crab::basic_block_t;
+using prevail::basic_block_t;
 
 /// Get the inverse of a given comparison operation.
 static Condition::Op reverse(const Condition::Op op) {
@@ -301,7 +301,7 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const program_inf
     // hierarchical decomposition of the CFG that identifies all strongly connected components (cycles) and their entry
     // points. These entry points serve as natural locations for loop counters that help verify program termination.
     if (options.cfg_opts.check_for_termination) {
-        const crab::wto_t wto{builder.prog.cfg()};
+        const prevail::wto_t wto{builder.prog.cfg()};
         wto.for_each_loop_head([&](const label_t& label) -> void {
             builder.insert_after(label, label_t::make_increment_counter(label), IncrementLoopCounter{label});
         });
@@ -449,7 +449,7 @@ std::map<std::string, int> collect_stats(const Program& prog) {
     return res;
 }
 
-crab::cfg_t crab::cfg_from_adjacency_list(const std::map<label_t, std::vector<label_t>>& adj_list) {
+prevail::cfg_t prevail::cfg_from_adjacency_list(const std::map<label_t, std::vector<label_t>>& adj_list) {
     cfg_builder_t builder;
     for (const auto& label : std::views::keys(adj_list)) {
         if (label == label_t::entry || label == label_t::exit) {

@@ -3,15 +3,11 @@
 #include <stdexcept>
 #if __linux__
 #include <linux/bpf.h>
-#define PTYPE(name, descr, native_type, prefixes) \
-    { name, descr, native_type, prefixes }
-#define PTYPE_PRIVILEGED(name, descr, native_type, prefixes) \
-    { name, descr, native_type, prefixes, true }
+#define PTYPE(name, descr, native_type, prefixes) {name, descr, native_type, prefixes}
+#define PTYPE_PRIVILEGED(name, descr, native_type, prefixes) {name, descr, native_type, prefixes, true}
 #else
-#define PTYPE(name, descr, native_type, prefixes) \
-    { name, descr, 0, prefixes }
-#define PTYPE_PRIVILEGED(name, descr, native_type, prefixes) \
-    { name, descr, 0, prefixes, true }
+#define PTYPE(name, descr, native_type, prefixes) {name, descr, 0, prefixes}
+#define PTYPE_PRIVILEGED(name, descr, native_type, prefixes) {name, descr, 0, prefixes, true}
 #endif
 #include "crab_verifier.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
@@ -202,7 +198,7 @@ static int create_map_linux(const uint32_t map_type, const uint32_t key_size, co
     }
 
 #if __linux__
-    union bpf_attr attr {};
+    union bpf_attr attr{};
     memset(&attr, '\0', sizeof(attr));
     attr.map_type = map_type;
     attr.key_size = key_size;

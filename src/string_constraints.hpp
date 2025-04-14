@@ -16,7 +16,7 @@ struct string_invariant {
 
     string_invariant() = default;
 
-    explicit string_invariant(std::set<std::string> inv) : maybe_inv(std::move(inv)){};
+    explicit string_invariant(std::set<std::string> inv) : maybe_inv(std::move(inv)) {};
 
     string_invariant(const string_invariant& inv) = default;
     string_invariant& operator=(const string_invariant& inv) = default;
@@ -54,5 +54,5 @@ struct string_invariant {
     friend std::ostream& operator<<(std::ostream&, const string_invariant& inv);
 };
 
-std::vector<crab::linear_constraint_t> parse_linear_constraints(const std::set<std::string>& constraints,
-                                                                std::vector<crab::interval_t>& numeric_ranges);
+std::vector<prevail::linear_constraint_t> parse_linear_constraints(const std::set<std::string>& constraints,
+                                                                   std::vector<prevail::interval_t>& numeric_ranges);

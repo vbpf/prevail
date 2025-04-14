@@ -18,9 +18,9 @@
 using std::regex;
 using std::regex_match;
 
-using crab::linear_constraint_t;
-using crab::linear_expression_t;
-using crab::number_t;
+using prevail::linear_constraint_t;
+using prevail::linear_expression_t;
+using prevail::number_t;
 
 #define REG R"_(\s*(r\d\d?)\s*)_"
 #define WREG R"_(\s*([wr]\d\d?)\s*)_"
@@ -279,21 +279,21 @@ static InstructionSeq parse_program(std::istream& is) {
 
 static uint8_t regnum(const std::string& s) { return static_cast<uint8_t>(boost::lexical_cast<uint16_t>(s.substr(1))); }
 
-static crab::variable_t special_var(const std::string& s) {
+static prevail::variable_t special_var(const std::string& s) {
     if (s == "packet_size") {
-        return crab::variable_t::packet_size();
+        return prevail::variable_t::packet_size();
     }
     if (s == "meta_offset") {
-        return crab::variable_t::meta_offset();
+        return prevail::variable_t::meta_offset();
     }
     throw std::runtime_error(std::string() + "Bad special variable: " + s);
 }
 
 std::vector<linear_constraint_t> parse_linear_constraints(const std::set<std::string>& constraints,
-                                                          std::vector<crab::interval_t>& numeric_ranges) {
-    using namespace crab::dsl_syntax;
-    using crab::regkind;
-    using crab::variable_t;
+                                                          std::vector<prevail::interval_t>& numeric_ranges) {
+    using namespace prevail::dsl_syntax;
+    using prevail::regkind;
+    using prevail::variable_t;
 
     std::vector<linear_constraint_t> res;
     for (const std::string& cst_text : constraints) {
@@ -321,8 +321,8 @@ std::vector<linear_constraint_t> parse_linear_constraints(const std::set<std::st
         } else if (regex_match(cst_text, m,
                                regex(REG DOT "type"
                                              "=" TYPE))) {
-            variable_t d = variable_t::reg(crab::data_kind_t::types, regnum(m[1]));
-            res.push_back(d == crab::string_to_type_encoding(m[2]));
+            variable_t d = variable_t::reg(prevail::data_kind_t::types, regnum(m[1]));
+            res.push_back(d == prevail::string_to_type_encoding(m[2]));
         } else if (regex_match(cst_text, m, regex(REG DOT KIND "=" IMM))) {
             variable_t d = variable_t::reg(regkind(m[2]), regnum(m[1]));
             number_t value;
@@ -352,13 +352,13 @@ std::vector<linear_constraint_t> parse_linear_constraints(const std::set<std::st
         } else if (regex_match(cst_text, m,
                                regex("s" ARRAY_RANGE DOT "type"
                                      "=" TYPE))) {
-            crab::type_encoding_t type = crab::string_to_type_encoding(m[3]);
-            if (type == crab::type_encoding_t::T_NUM) {
+            prevail::type_encoding_t type = prevail::string_to_type_encoding(m[3]);
+            if (type == prevail::type_encoding_t::T_NUM) {
                 numeric_ranges.emplace_back(signed_number(m[1]), signed_number(m[2]));
             } else {
                 number_t lb = signed_number(m[1]);
                 number_t ub = signed_number(m[2]);
-                variable_t d = variable_t::cell_var(crab::data_kind_t::types, lb, ub - lb + 1);
+                variable_t d = variable_t::cell_var(prevail::data_kind_t::types, lb, ub - lb + 1);
                 res.push_back(d == type);
             }
         } else if (regex_match(cst_text, m,
@@ -366,14 +366,14 @@ std::vector<linear_constraint_t> parse_linear_constraints(const std::set<std::st
                                      "=" IMM))) {
             number_t lb = signed_number(m[1]);
             number_t ub = signed_number(m[2]);
-            variable_t d = variable_t::cell_var(crab::data_kind_t::svalues, lb, ub - lb + 1);
+            variable_t d = variable_t::cell_var(prevail::data_kind_t::svalues, lb, ub - lb + 1);
             res.push_back(d == signed_number(m[3]));
         } else if (regex_match(cst_text, m,
                                regex("s" ARRAY_RANGE DOT "uvalue"
                                      "=" IMM))) {
             number_t lb = signed_number(m[1]);
             number_t ub = signed_number(m[2]);
-            variable_t d = variable_t::cell_var(crab::data_kind_t::uvalues, lb, ub - lb + 1);
+            variable_t d = variable_t::cell_var(prevail::data_kind_t::uvalues, lb, ub - lb + 1);
             res.push_back(d == unsigned_number(m[3]));
         } else {
             throw std::runtime_error(std::string("Unknown constraint: ") + cst_text);

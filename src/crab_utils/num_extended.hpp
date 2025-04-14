@@ -9,7 +9,7 @@
 #include "crab_utils/num_big.hpp"
 #include "crab_utils/stats.hpp"
 
-namespace crab {
+namespace prevail {
 
 class extended_number final {
     bool _is_infinite;
@@ -252,4 +252,4 @@ class extended_number final {
 
 }; // class extended_number
 
-} // namespace crab
+} // namespace prevail

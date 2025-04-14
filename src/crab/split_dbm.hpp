@@ -37,13 +37,11 @@
 
 #include "string_constraints.hpp"
 
-namespace crab {
+namespace prevail {
 
 enum class arith_binop_t { ADD, SUB, MUL, SDIV, UDIV, SREM, UREM };
 enum class bitwise_binop_t { AND, OR, XOR, SHL, LSHR, ASHR };
 using binop_t = std::variant<arith_binop_t, bitwise_binop_t>;
-
-namespace domains {
 
 class SplitDBM final {
   public:
@@ -304,5 +302,4 @@ class SplitDBM final {
     static void clear_thread_local_state();
 }; // class SplitDBM
 
-} // namespace domains
-} // namespace crab
+} // namespace prevail

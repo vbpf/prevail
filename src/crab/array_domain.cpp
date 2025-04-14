@@ -18,7 +18,7 @@
 #include "crab_utils/num_safety.hpp"
 #include "spec_type_descriptors.hpp"
 
-namespace crab::domains {
+namespace prevail {
 
 using index_t = uint64_t;
 
@@ -874,4 +874,4 @@ array_domain_t array_domain_t::narrow(const array_domain_t& other) const {
 }
 
 std::ostream& operator<<(std::ostream& o, const array_domain_t& dom) { return o << dom.num_bytes; }
-} // namespace crab::domains
+} // namespace prevail

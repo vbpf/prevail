@@ -10,7 +10,7 @@
 #include "crab/wto.hpp"
 #include "program.hpp"
 
-namespace crab {
+namespace prevail {
 
 class interleaved_fwd_fixpoint_iterator_t final {
     const Program& _prog;
@@ -196,4 +196,4 @@ void interleaved_fwd_fixpoint_iterator_t::operator()(const std::shared_ptr<wto_c
     }
 }
 
-} // namespace crab
+} // namespace prevail

@@ -11,7 +11,7 @@
 #include "crab/variable.hpp"
 #include "string_constraints.hpp"
 
-namespace crab {
+namespace prevail {
 
 // Pointers in the BPF VM are defined to be 64 bits.  Some contexts, like
 // data, data_end, and meta in Linux's struct xdp_md are only 32 bit offsets
@@ -39,7 +39,7 @@ class ebpf_domain_t final {
 
   public:
     ebpf_domain_t();
-    ebpf_domain_t(NumAbsDomain inv, domains::array_domain_t stack);
+    ebpf_domain_t(NumAbsDomain inv, array_domain_t stack);
 
     // Generic abstract domain operations
     static ebpf_domain_t top();
@@ -104,9 +104,9 @@ class ebpf_domain_t final {
     /// Represents the stack as a memory region, i.e., an array of bytes,
     /// allowing mapping to variable in the m_inv numeric domains
     /// while dealing with overlapping byte ranges.
-    domains::array_domain_t stack;
+    array_domain_t stack;
 
     TypeDomain type_inv;
 };
 
-} // namespace crab
+} // namespace prevail

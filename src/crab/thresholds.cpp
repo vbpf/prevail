@@ -4,7 +4,7 @@
 #include "crab/cfg.hpp"
 #include "crab/label.hpp"
 
-namespace crab {
+namespace prevail {
 
 inline namespace iterators {
 
@@ -95,4 +95,4 @@ std::ostream& operator<<(std::ostream& o, const wto_thresholds_t& t) {
 }
 } // namespace iterators
 
-} // namespace crab
+} // namespace prevail

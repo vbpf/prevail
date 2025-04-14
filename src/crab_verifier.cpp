@@ -17,10 +17,10 @@
 #include "crab_verifier.hpp"
 #include "string_constraints.hpp"
 
-using crab::ebpf_domain_t;
+using prevail::ebpf_domain_t;
 using std::string;
 
-thread_local crab::lazy_allocator<program_info> thread_local_program_info;
+thread_local prevail::lazy_allocator<program_info> thread_local_program_info;
 thread_local ebpf_verifier_options_t thread_local_options;
 void ebpf_verifier_clear_before_analysis();
 
@@ -32,10 +32,10 @@ bool Invariants::is_valid_after(const label_t& label, const string_invariant& st
 
 string_invariant Invariants::invariant_at(const label_t& label) const { return invariants.at(label).post.to_set(); }
 
-crab::interval_t Invariants::exit_value() const { return invariants.at(label_t::exit).post.get_r0(); }
+prevail::interval_t Invariants::exit_value() const { return invariants.at(label_t::exit).post.get_r0(); }
 
 int Invariants::max_loop_count() const {
-    crab::extended_number max_loop_count{0};
+    prevail::extended_number max_loop_count{0};
     // Gather the upper bound of loop counts from post-invariants.
     for (const auto& inv_pair : std::views::values(invariants)) {
         max_loop_count = std::max(max_loop_count, inv_pair.post.get_loop_count_upper_bound());
@@ -99,13 +99,13 @@ Report Invariants::check_assertions(const Program& prog) const {
 }
 
 void ebpf_verifier_clear_before_analysis() {
-    crab::domains::clear_thread_local_state();
-    crab::variable_t::clear_thread_local_state();
+    prevail::clear_thread_local_state();
+    prevail::variable_t::clear_thread_local_state();
 }
 
 void ebpf_verifier_clear_thread_local_state() {
-    crab::CrabStats::clear_thread_local_state();
+    prevail::CrabStats::clear_thread_local_state();
     thread_local_program_info.clear();
-    crab::domains::clear_thread_local_state();
-    crab::domains::SplitDBM::clear_thread_local_state();
+    prevail::clear_thread_local_state();
+    prevail::SplitDBM::clear_thread_local_state();
 }

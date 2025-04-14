@@ -13,7 +13,7 @@
 #include "crab/wto.hpp"
 #include "crab_utils/debug.hpp"
 
-namespace crab {
+namespace prevail {
 
 inline namespace iterators {
 
@@ -72,4 +72,4 @@ class wto_thresholds_t final {
 }; // class wto_thresholds_t
 
 } // end namespace iterators
-} // end namespace crab
+} // end namespace prevail

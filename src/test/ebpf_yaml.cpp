@@ -138,7 +138,7 @@ static RawTestCase parse_case(const YAML::Node& case_node) {
 }
 
 static InstructionSeq raw_cfg_to_instruction_seq(const vector<std::tuple<string, vector<string>>>& raw_blocks) {
-    std::map<string, crab::label_t> label_name_to_label;
+    std::map<string, prevail::label_t> label_name_to_label;
 
     int label_index = 0;
     for (const auto& [label_name, raw_block] : raw_blocks) {

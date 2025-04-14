@@ -14,9 +14,7 @@
 
 #include "asm_syntax.hpp" // for Reg
 
-namespace crab {
-
-using domains::NumAbsDomain;
+namespace prevail {
 
 struct reg_pack_t {
     variable_t svalue; // int64_t value.
@@ -72,4 +70,4 @@ struct TypeDomain {
     bool is_in_group(const NumAbsDomain& inv, const Reg& r, TypeGroup group) const;
 };
 
-} // namespace crab
+} // namespace prevail

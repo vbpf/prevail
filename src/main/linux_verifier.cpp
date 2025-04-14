@@ -24,7 +24,7 @@ std::tuple<bool, double> bpf_verify_program(const EbpfProgramType& type, const s
     buf[0] = 0;
     std::memset(buf.data(), '\0', buf.size());
 
-    union bpf_attr attr {};
+    union bpf_attr attr{};
     std::memset(&attr, '\0', sizeof(attr));
     attr.prog_type = gsl::narrow<__u32>(type.platform_specific_data);
     attr.insn_cnt = gsl::narrow<__u32>(raw_prog.size());

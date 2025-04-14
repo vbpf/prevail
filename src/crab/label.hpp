@@ -16,7 +16,7 @@
 
 constexpr char STACK_FRAME_DELIMITER = '/';
 
-namespace crab {
+namespace prevail {
 struct label_t {
     std::string stack_frame_prefix; ///< Variable prefix when calling this label.
     int from{};                     ///< Jump source, or simply index of instruction
@@ -91,4 +91,4 @@ inline std::function<int32_t(label_t)> label_to_offset32(const pc_t pc) {
     };
 }
 
-} // namespace crab
+} // namespace prevail

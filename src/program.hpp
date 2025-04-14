@@ -18,12 +18,12 @@ class Program {
 
     // This is a cache. The assertions can also be computed on the fly.
     std::map<label_t, std::vector<Assertion>> m_assertions{{label_t::entry, {}}, {label_t::exit, {}}};
-    crab::cfg_t m_cfg;
+    prevail::cfg_t m_cfg;
 
     // TODO: add program_info field
 
   public:
-    const crab::cfg_t& cfg() const { return m_cfg; }
+    const prevail::cfg_t& cfg() const { return m_cfg; }
 
     //! return a view of the labels, including entry and exit
     [[nodiscard]]

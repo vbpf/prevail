@@ -15,7 +15,7 @@
 #include "crab_utils/num_safety.hpp"
 #include "spec_type_descriptors.hpp"
 
-using crab::label_t;
+using prevail::label_t;
 
 // Assembly syntax.
 namespace asm_syntax {
@@ -332,7 +332,7 @@ struct ValidStore {
     constexpr bool operator==(const ValidStore&) const = default;
 };
 
-using crab::TypeGroup;
+using prevail::TypeGroup;
 struct TypeConstraint {
     Reg reg;
     TypeGroup types;
@@ -368,7 +368,7 @@ std::string to_string(Instruction const& ins);
 std::ostream& operator<<(std::ostream& os, Bin::Op op);
 std::ostream& operator<<(std::ostream& os, Condition::Op op);
 
-inline std::ostream& operator<<(std::ostream& os, const Imm imm) { return os << crab::to_signed(imm.v); }
+inline std::ostream& operator<<(std::ostream& os, const Imm imm) { return os << prevail::to_signed(imm.v); }
 inline std::ostream& operator<<(std::ostream& os, Reg const& a) { return os << "r" << gsl::narrow<int>(a.v); }
 inline std::ostream& operator<<(std::ostream& os, Value const& a) {
     if (const auto pa = std::get_if<Imm>(&a)) {
@@ -388,7 +388,7 @@ int size(const Instruction& inst);
 } // namespace asm_syntax
 
 using namespace asm_syntax;
-using crab::pc_t;
+using prevail::pc_t;
 
 template <class... Ts>
 struct overloaded : Ts... {

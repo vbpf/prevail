@@ -7,7 +7,7 @@
 #include "crab/variable.hpp"
 #include "crab_utils/num_big.hpp"
 
-namespace crab {
+namespace prevail {
 // A linear expression is of the form: Ax + By + Cz + ... + N.
 // That is, a sum of terms where each term is either a
 // coefficient * variable, or simply a coefficient
@@ -164,4 +164,4 @@ inline std::ostream& operator<<(std::ostream& o, const linear_expression_t& expr
     return o;
 }
 
-} // namespace crab
+} // namespace prevail

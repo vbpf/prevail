@@ -4,7 +4,7 @@
 
 #include <optional>
 
-namespace crab {
+namespace prevail {
 
 /**
  * @brief Lazy allocator for objects of type T. The allocator does not allocate the object until it is first accessed.
@@ -75,4 +75,4 @@ class lazy_allocator {
         return get();
     }
 };
-} // namespace crab
+} // namespace prevail
