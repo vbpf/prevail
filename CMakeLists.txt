@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: MIT
 # Set cmake version to 3.16 to use CMP0091 aka MSVC_RUNTIME_LIBRARY property.
 cmake_minimum_required(VERSION 3.16)
+if (POLICY CMP0167)
+    cmake_policy(SET CMP0167 NEW)
+endif ()
 
 project(ebpf_verifier)
 
