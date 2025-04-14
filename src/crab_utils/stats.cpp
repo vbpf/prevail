@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "stats.hpp"
 
-#include <optional>
 #ifdef _WIN32
 #include <windows.h>
 #undef max
@@ -13,8 +12,8 @@
 
 namespace crab {
 
-thread_local crab::lazy_allocator<std::map<std::string, unsigned>> CrabStats::counters;
-thread_local crab::lazy_allocator<std::map<std::string, Stopwatch>> CrabStats::sw;
+thread_local lazy_allocator<std::map<std::string, unsigned>> CrabStats::counters;
+thread_local lazy_allocator<std::map<std::string, Stopwatch>> CrabStats::sw;
 
 void CrabStats::clear_thread_local_state() {
     counters.clear();
