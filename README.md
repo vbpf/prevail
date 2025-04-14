@@ -1,18 +1,18 @@
-[![Coverage Status](https://coveralls.io/repos/github/vbpf/ebpf-verifier/badge.svg?branch=main)](https://coveralls.io/github/vbpf/ebpf-verifier?branch=main)[![CodeQL](https://github.com/vbpf/ebpf-verifier/actions/workflows/codeql-analysis.yml/badge.svg?branch=main)](https://github.com/vbpf/ebpf-verifier/actions/workflows/codeql-analysis.yml)
+[![Coverage Status](https://coveralls.io/repos/github/vbpf/prevail/badge.svg?branch=main)](https://coveralls.io/github/vbpf/prevail?branch=main)[![CodeQL](https://github.com/vbpf/prevail/actions/workflows/codeql-analysis.yml/badge.svg?branch=main)](https://github.com/vbpf/prevail/actions/workflows/codeql-analysis.yml)
 
 # PREVAIL - A new eBPF verifier
 ## a Polynomial-Runtime EBPF Verifier using an Abstract Interpretation Layer
 
 
 
-The version discussed in the [PLDI paper](https://vbpf.github.io/assets/prevail-paper.pdf) is available [here](https://github.com/vbpf/ebpf-verifier/tree/d29fd26345c3126bf166cf1c45233a9b2f9fb0a0).
+The version discussed in the [PLDI paper](https://vbpf.github.io/assets/prevail-paper.pdf) is available [here](https://github.com/vbpf/prevail/tree/d29fd26345c3126bf166cf1c45233a9b2f9fb0a0).
 
 ## Getting Started
 
 Clone:
 ```
-git clone --recurse-submodules https://github.com/vbpf/ebpf-verifier.git
-cd ebpf-verifier
+git clone --recurse-submodules https://github.com/vbpf/prevail.git
+cd prevail
 ```
 
 ### Building
@@ -59,7 +59,7 @@ cmake --build build --config Release
 ```bash
 brew install llvm cmake boost yaml-cpp
 ```
-The system llvm currently comes with Clang 15, which isn't enough to compile the ebpf-verifier, as it depends on C++20. Brew's llvm comes with Clang 17.
+The system llvm currently comes with Clang 15, which isn't enough to compile prevail, as it depends on C++20. Brew's llvm comes with Clang 17.
 
 #### Make:
 ```
