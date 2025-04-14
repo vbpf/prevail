@@ -65,7 +65,7 @@ jobs:
       matrix:
         configurations: [Debug, Release]
         target: [tests, library]
-    runs-on: windows-2022
+    runs-on: windows-2025
     env:
       # Configuration type to build.  For documentation on how build matrices work, see
       # https://docs.github.com/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
