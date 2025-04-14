@@ -42,7 +42,7 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
         find_package(yaml-cpp REQUIRED)
     endif ()
     find_package(Boost REQUIRED)
-    set(CMAKE_CXX_STANDARD 23)
+    set(CMAKE_CXX_STANDARD 20)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
     list(APPEND CMAKE_CONFIGURATION_TYPES FuzzerDebug)
@@ -128,8 +128,7 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
 
     set(SANITIZE_FLAGS -fsanitize=address -O1 -fno-omit-frame-pointer)
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++23")
-    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++20")
 endif ()
 
 add_library(ebpfverifier ${LIB_SRC})
