@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <memory>
-
 #include <boost/container/flat_map.hpp>
 
 #include "crab_utils/num_safeint.hpp"
@@ -31,11 +29,11 @@ class TreeSMap final {
         key_iter_t() = default;
         explicit key_iter_t(const col::const_iterator& _e) : e(_e) {}
 
-        // XXX: to make sure that we always return the same address
-        // for the "empty" iterator, otherwise we can trigger
-        // undefined behavior.
-        inline static std::unique_ptr<key_iter_t> _empty_iter = std::make_unique<key_iter_t>();
-        static key_iter_t empty_iterator() { return *_empty_iter; }
+        /// return canonical empty iterator
+        static key_iter_t empty_iterator() {
+            static key_iter_t empty_iter;
+            return empty_iter;
+        }
 
         key_t operator*() const { return e->first; }
         bool operator!=(const key_iter_t& o) const { return e != o.e; }
@@ -142,8 +140,6 @@ class TreeSMap final {
 
 // Adaptive sparse-set based weighted graph implementation
 class AdaptGraph final {
-    using smap_t = TreeSMap;
-
   public:
     /** DBM weights (Weight) can be represented using one of the following
      * types:
@@ -233,19 +229,19 @@ class AdaptGraph final {
             Weight val;
         };
 
-        smap_t::elt_iter_t it{};
+        TreeSMap::elt_iter_t it{};
         const std::vector<Weight>* ws{};
 
-        edge_const_iter(const smap_t::elt_iter_t& _it, const std::vector<Weight>& _ws) : it(_it), ws(&_ws) {}
+        edge_const_iter(const TreeSMap::elt_iter_t& _it, const std::vector<Weight>& _ws) : it(_it), ws(&_ws) {}
         edge_const_iter(const edge_const_iter& o) = default;
         edge_const_iter& operator=(const edge_const_iter& o) = default;
         edge_const_iter() = default;
 
-        // XXX: to make sure that we always return the same address
-        // for the "empty" iterator, otherwise we can trigger
-        // undefined behavior.
-        inline static std::unique_ptr<edge_const_iter> _empty_iter = std::make_unique<edge_const_iter>();
-        static edge_const_iter empty_iterator() { return *_empty_iter; }
+        /// return canonical empty iterator
+        static edge_const_iter empty_iterator() {
+            static edge_const_iter empty_iter;
+            return empty_iter;
+        }
 
         edge_ref operator*() const { return edge_ref{it->first, (*ws)[it->second]}; }
         edge_const_iter operator++() {
@@ -256,7 +252,7 @@ class AdaptGraph final {
     };
 
     struct edge_const_range_t {
-        using elt_range_t = smap_t::elt_range_t;
+        using elt_range_t = TreeSMap::elt_range_t;
         using iterator = edge_const_iter;
 
         elt_range_t r;
@@ -279,8 +275,8 @@ class AdaptGraph final {
     using fwd_edge_const_iter = edge_const_iter;
     using rev_edge_const_iter = edge_const_iter;
 
-    using adj_range_t = smap_t::key_const_range_t;
-    using adj_const_range_t = smap_t::key_const_range_t;
+    using adj_range_t = TreeSMap::key_const_range_t;
+    using adj_const_range_t = TreeSMap::key_const_range_t;
     using neighbour_range = adj_range_t;
     using neighbour_const_range = adj_const_range_t;
 
@@ -357,7 +353,7 @@ class AdaptGraph final {
         edge_count -= _succs[v].size();
         _succs[v].clear();
 
-        for (smap_t::key_t k : _preds[v].keys()) {
+        for (TreeSMap::key_t k : _preds[v].keys()) {
             _succs[k].remove(v);
         }
         edge_count -= _preds[v].size();
@@ -492,8 +488,8 @@ class AdaptGraph final {
 
     // Ick. This'll have another indirection on every operation.
     // We'll see what the performance costs are like.
-    std::vector<smap_t> _preds{};
-    std::vector<smap_t> _succs{};
+    std::vector<TreeSMap> _preds{};
+    std::vector<TreeSMap> _succs{};
     std::vector<Weight> _ws{};
 
     size_t edge_count{};
