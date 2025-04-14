@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 #include <catch2/catch_all.hpp>
 
-#include "crab/cfg.hpp"
-#include "crab/wto.hpp"
+#include "cfg/cfg.hpp"
+#include "cfg/wto.hpp"
 
 using prevail::label_t;
 using prevail::wto_t;

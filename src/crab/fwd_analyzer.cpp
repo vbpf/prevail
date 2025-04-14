@@ -3,11 +3,11 @@
 #include <utility>
 #include <variant>
 
+#include "cfg/cfg.hpp"
+#include "cfg/wto.hpp"
 #include "config.hpp"
-#include "crab/cfg.hpp"
 #include "crab/ebpf_domain.hpp"
 #include "crab/fwd_analyzer.hpp"
-#include "crab/wto.hpp"
 #include "program.hpp"
 
 namespace prevail {

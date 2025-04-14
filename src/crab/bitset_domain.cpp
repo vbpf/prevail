@@ -1,7 +1,8 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
-#include "bitset_domain.hpp"
 #include <ostream>
+
+#include "bitset_domain.hpp"
 
 std::ostream& operator<<(std::ostream& o, const bitset_domain_t& b) {
     o << "Numbers -> {";

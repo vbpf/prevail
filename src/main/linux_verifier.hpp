@@ -3,7 +3,6 @@
 #pragma once
 
 #include "platform.hpp"
-#include <iostream>
 
 #if __linux__
 

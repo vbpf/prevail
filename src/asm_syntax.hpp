@@ -10,7 +10,7 @@
 #include <variant>
 #include <vector>
 
-#include "crab/label.hpp"
+#include "cfg/label.hpp"
 #include "crab/type_encoding.hpp"
 #include "crab_utils/num_safety.hpp"
 #include "spec_type_descriptors.hpp"

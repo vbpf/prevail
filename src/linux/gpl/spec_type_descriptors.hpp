@@ -1,10 +1,4 @@
 #pragma once
-#include <cassert>
-#include <string>
-#include <unordered_map>
-#include <vector>
-
-#include "ebpf_vm_isa.hpp"
 
 constexpr int NMAPS = 64;
 constexpr int NONMAPS = 5;

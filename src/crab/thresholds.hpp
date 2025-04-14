@@ -5,12 +5,9 @@
 #include <climits>
 #include <map>
 
-#include <boost/range/iterator_range.hpp>
-
-#include "crab/cfg.hpp"
+#include "cfg/cfg.hpp"
+#include "cfg/wto.hpp"
 #include "crab/interval.hpp"
-#include "crab/linear_constraint.hpp"
-#include "crab/wto.hpp"
 #include "crab_utils/debug.hpp"
 
 namespace prevail {

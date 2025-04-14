@@ -1,8 +1,12 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
+#include <map>
 #include <ranges>
+#include <variant>
 
-#include "wto.hpp"
+#include "cfg/cfg.hpp"
+#include "cfg/label.hpp"
+#include "cfg/wto.hpp"
 
 // This file contains an iterative implementation of the recursive algorithm in
 // Bourdoncle, "Efficient chaotic iteration strategies with widenings", 1993

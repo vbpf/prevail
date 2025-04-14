@@ -1,8 +1,8 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: Apache-2.0
 #include "crab/thresholds.hpp"
-#include "crab/cfg.hpp"
-#include "crab/label.hpp"
+#include "cfg/cfg.hpp"
+#include "cfg/label.hpp"
 
 namespace prevail {
 

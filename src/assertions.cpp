@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "asm_syntax.hpp"
-#include "crab/cfg.hpp"
+#include "cfg/cfg.hpp"
 #include "platform.hpp"
 
 using prevail::TypeGroup;
