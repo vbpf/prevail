@@ -11,10 +11,10 @@
 #include <sys/time.h>
 #endif
 
-namespace crab {
+namespace prevail {
 
-thread_local crab::lazy_allocator<std::map<std::string, unsigned>> CrabStats::counters;
-thread_local crab::lazy_allocator<std::map<std::string, Stopwatch>> CrabStats::sw;
+thread_local prevail::lazy_allocator<std::map<std::string, unsigned>> CrabStats::counters;
+thread_local prevail::lazy_allocator<std::map<std::string, Stopwatch>> CrabStats::sw;
 
 void CrabStats::clear_thread_local_state() {
     counters.clear();
@@ -135,4 +135,4 @@ ScopedCrabStats::ScopedCrabStats(const std::string& name, const bool reset) : m_
 
 ScopedCrabStats::~ScopedCrabStats() { CrabStats::stop(m_name); }
 
-} // namespace crab
+} // namespace prevail

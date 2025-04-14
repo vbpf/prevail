@@ -7,7 +7,7 @@
 
 #include "crab/interval.hpp"
 
-using crab::interval_t;
+using prevail::interval_t;
 
 TEST_CASE("sign_extend 1 bit positive-positive", "[sign_extension]") {
     // no actual sign extension needed

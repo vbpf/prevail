@@ -8,7 +8,7 @@
 #include "crab/variable.hpp"
 #include "crab_utils/lazy_allocator.hpp"
 
-namespace crab {
+namespace prevail {
 
 class Stopwatch {
     long started;
@@ -83,4 +83,4 @@ class ScopedCrabStats {
     explicit ScopedCrabStats(const std::string& name, bool reset = false);
     ~ScopedCrabStats();
 };
-} // namespace crab
+} // namespace prevail

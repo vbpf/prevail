@@ -15,7 +15,7 @@
 #include "crab_utils/debug.hpp"
 #include "dsl_syntax.hpp"
 
-namespace crab {
+namespace prevail {
 
 template <is_enum T>
 static void operator++(T& t) {
@@ -274,7 +274,7 @@ NumAbsDomain TypeDomain::join_by_if_else(const NumAbsDomain& inv, const linear_c
 }
 
 static linear_constraint_t eq_types(const Reg& a, const Reg& b) {
-    using namespace crab::dsl_syntax;
+    using namespace prevail::dsl_syntax;
     return eq(reg_pack(a).type, reg_pack(b).type);
 }
 
@@ -288,7 +288,7 @@ bool TypeDomain::implies_type(const NumAbsDomain& inv, const linear_constraint_t
 }
 
 bool TypeDomain::is_in_group(const NumAbsDomain& inv, const Reg& r, const TypeGroup group) const {
-    using namespace crab::dsl_syntax;
+    using namespace prevail::dsl_syntax;
     const variable_t t = reg_pack(r).type;
     switch (group) {
     case TypeGroup::number: return inv.entail(t == T_NUM);
@@ -335,7 +335,7 @@ bool is_singleton_type(const TypeGroup t) {
 }
 
 std::ostream& operator<<(std::ostream& os, const TypeGroup ts) {
-    using namespace crab;
+    using namespace prevail;
     static const std::map<TypeGroup, std::string> string_to_type{
         {TypeGroup::number, S_NUM},
         {TypeGroup::map_fd, S_MAP},
@@ -357,4 +357,4 @@ std::ostream& operator<<(std::ostream& os, const TypeGroup ts) {
     CRAB_ERROR("Unsupported type group", ts);
 }
 
-} // namespace crab
+} // namespace prevail

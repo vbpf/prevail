@@ -23,15 +23,15 @@
 // single vertex such as 8, or a cycle such as (5 6).
 
 #include <memory>
+#include <optional>
 #include <stack>
 #include <utility>
 #include <vector>
-#include <optional>
 
 #include "crab/cfg.hpp"
 #include "crab/label.hpp"
 
-namespace crab {
+namespace prevail {
 
 // Bourdoncle, "Efficient chaotic iteration strategies with widenings", 1993
 // uses the notation w(c) to refer to the set of heads of the nested components
@@ -148,4 +148,4 @@ class wto_t final {
         }
     }
 };
-} // namespace crab
+} // namespace prevail

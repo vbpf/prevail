@@ -13,7 +13,7 @@
 #include "crab_utils/lazy_allocator.hpp"
 #include "crab_utils/num_safety.hpp"
 
-namespace crab {
+namespace prevail {
 // Graph views - for when we want to traverse some mutation
 // of the graph without actually constructing it.
 // ============
@@ -1194,4 +1194,4 @@ class GraphOps {
     }
 };
 
-} // namespace crab
+} // namespace prevail

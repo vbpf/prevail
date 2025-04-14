@@ -11,7 +11,7 @@
 #include "string_constraints.hpp"
 #include "type_encoding.hpp"
 
-namespace crab::domains {
+namespace prevail {
 
 static std::optional<SplitDBM::vert_id> try_at(const SplitDBM::vert_map_t& map, const variable_t v) {
     const auto it = map.find(v);
@@ -1266,7 +1266,7 @@ SplitDBM::Weight SplitDBM::pot_value(const variable_t v) const {
 }
 
 interval_t SplitDBM::eval_interval(const linear_expression_t& e) const {
-    using namespace crab::interval_operators;
+    using namespace prevail::interval_operators;
     interval_t r{e.constant_term()};
     for (const auto& [variable, coefficient] : e.variable_terms()) {
         r += coefficient * operator[](variable);
@@ -1362,9 +1362,9 @@ static interval_t get_interval(const SplitDBM::vert_map_t& m, const SplitDBM::gr
 }
 
 interval_t SplitDBM::get_interval(const variable_t x, const int finite_width) const {
-    return domains::get_interval(vert_map, g, x, finite_width);
+    return prevail::get_interval(vert_map, g, x, finite_width);
 }
 
-interval_t SplitDBM::operator[](const variable_t x) const { return domains::get_interval(vert_map, g, x, 0); }
+interval_t SplitDBM::operator[](const variable_t x) const { return prevail::get_interval(vert_map, g, x, 0); }
 
-} // namespace crab::domains
+} // namespace prevail

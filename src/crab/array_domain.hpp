@@ -29,7 +29,7 @@
 #include "crab/bitset_domain.hpp"
 #include "crab/variable.hpp"
 
-namespace crab::domains {
+namespace prevail {
 
 // Numerical abstract domain.
 using NumAbsDomain = AddBottom;
@@ -89,4 +89,4 @@ class array_domain_t final {
     void initialize_numbers(int lb, int width);
 };
 
-} // namespace crab::domains
+} // namespace prevail

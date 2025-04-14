@@ -8,7 +8,7 @@
 
 // A linear constraint is of the form:
 //    <linear expression> <operator> 0
-namespace crab {
+namespace prevail {
 
 enum class constraint_kind_t { EQUALS_ZERO, LESS_THAN_OR_EQUALS_ZERO, LESS_THAN_ZERO, NOT_ZERO };
 
@@ -102,4 +102,4 @@ inline std::ostream& operator<<(std::ostream& o, const linear_constraint_t& cons
     return o;
 }
 
-} // namespace crab
+} // namespace prevail

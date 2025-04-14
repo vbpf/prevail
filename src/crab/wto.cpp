@@ -10,7 +10,7 @@
 // where _visit_stack is roughly equivalent to a stack trace in the recursive algorithm.
 // However, this scales much higher since it does not run out of stack memory.
 
-namespace crab {
+namespace prevail {
 
 bool is_component_member(const label_t& label, const cycle_or_label& component) {
     if (const auto plabel = std::get_if<label_t>(&component)) {
@@ -59,7 +59,7 @@ struct visit_args_t {
     std::weak_ptr<wto_cycle_t> containing_cycle;
 
     visit_args_t(const visit_task_type_t t, label_t v, wto_partition_t& p, std::weak_ptr<wto_cycle_t> cc)
-        : type(t), vertex(std::move(v)), partition(p), containing_cycle(std::move(cc)){};
+        : type(t), vertex(std::move(v)), partition(p), containing_cycle(std::move(cc)) {};
 };
 
 struct wto_vertex_data_t {
@@ -308,4 +308,4 @@ const wto_nesting_t& wto_t::nesting(const label_t& label) const {
     }
     return _nesting.at(label);
 }
-} // namespace crab
+} // namespace prevail

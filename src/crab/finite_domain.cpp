@@ -12,14 +12,14 @@
 #include "crab/variable.hpp"
 #include "string_constraints.hpp"
 
-namespace crab::domains {
+namespace prevail {
 
 using NumAbsDomain = SplitDBM;
 
 std::vector<linear_constraint_t> FiniteDomain::assume_bit_cst_interval(Condition::Op op, bool is64,
                                                                        interval_t dst_interval,
                                                                        interval_t src_interval) const {
-    using namespace crab::dsl_syntax;
+    using namespace prevail::dsl_syntax;
     using Op = Condition::Op;
 
     const auto dst_n = dst_interval.singleton();
@@ -51,7 +51,7 @@ std::vector<linear_constraint_t> FiniteDomain::assume_signed_64bit_eq(const vari
                                                                       const interval_t& right_interval,
                                                                       const linear_expression_t& right_svalue,
                                                                       const linear_expression_t& right_uvalue) const {
-    using namespace crab::dsl_syntax;
+    using namespace prevail::dsl_syntax;
     if (right_interval <= interval_t::nonnegative(64) && !right_interval.is_singleton()) {
         return {(left_svalue == right_svalue), (left_uvalue == right_uvalue), eq(left_svalue, left_uvalue)};
     } else {
@@ -62,7 +62,7 @@ std::vector<linear_constraint_t> FiniteDomain::assume_signed_64bit_eq(const vari
 std::vector<linear_constraint_t> FiniteDomain::assume_signed_32bit_eq(const variable_t left_svalue,
                                                                       const variable_t left_uvalue,
                                                                       const interval_t& right_interval) const {
-    using namespace crab::dsl_syntax;
+    using namespace prevail::dsl_syntax;
 
     if (const auto rn = right_interval.singleton()) {
         const auto left_svalue_interval = eval_interval(left_svalue);
@@ -115,8 +115,8 @@ void FiniteDomain::get_signed_intervals(bool is64, const variable_t left_svalue,
                                         const linear_expression_t& right_svalue, interval_t& left_interval,
                                         interval_t& right_interval, interval_t& left_interval_positive,
                                         interval_t& left_interval_negative) const {
-    using crab::interval_t;
-    using namespace crab::dsl_syntax;
+    using prevail::interval_t;
+    using namespace prevail::dsl_syntax;
 
     // Get intervals as 32-bit or 64-bit as appropriate.
     left_interval = eval_interval(left_svalue);
@@ -161,8 +161,8 @@ void FiniteDomain::get_unsigned_intervals(bool is64, const variable_t left_svalu
                                           const linear_expression_t& right_uvalue, interval_t& left_interval,
                                           interval_t& right_interval, interval_t& left_interval_low,
                                           interval_t& left_interval_high) const {
-    using crab::interval_t;
-    using namespace crab::dsl_syntax;
+    using prevail::interval_t;
+    using namespace prevail::dsl_syntax;
 
     // Get intervals as 32-bit or 64-bit as appropriate.
     left_interval = eval_interval(left_uvalue);
@@ -204,8 +204,8 @@ FiniteDomain::assume_signed_64bit_lt(const bool strict, const variable_t left_sv
                                      const interval_t& left_interval_positive, const interval_t& left_interval_negative,
                                      const linear_expression_t& right_svalue, const linear_expression_t& right_uvalue,
                                      const interval_t& right_interval) const {
-    using crab::interval_t;
-    using namespace crab::dsl_syntax;
+    using prevail::interval_t;
+    using namespace prevail::dsl_syntax;
 
     if (right_interval <= interval_t::negative(64)) {
         // Interval can be represented as both an svalue and a uvalue since it fits in [INT_MIN, -1].
@@ -227,8 +227,8 @@ FiniteDomain::assume_signed_32bit_lt(const bool strict, const variable_t left_sv
                                      const interval_t& left_interval_positive, const interval_t& left_interval_negative,
                                      const linear_expression_t& right_svalue, const linear_expression_t& right_uvalue,
                                      const interval_t& right_interval) const {
-    using crab::interval_t;
-    using namespace crab::dsl_syntax;
+    using prevail::interval_t;
+    using namespace prevail::dsl_syntax;
 
     if (right_interval <= interval_t::negative(32)) {
         // Interval can be represented as both an svalue and a uvalue since it fits in [INT_MIN, -1],
@@ -262,8 +262,8 @@ FiniteDomain::assume_signed_64bit_gt(const bool strict, const variable_t left_sv
                                      const interval_t& left_interval_positive, const interval_t& left_interval_negative,
                                      const linear_expression_t& right_svalue, const linear_expression_t& right_uvalue,
                                      const interval_t& right_interval) const {
-    using crab::interval_t;
-    using namespace crab::dsl_syntax;
+    using prevail::interval_t;
+    using namespace prevail::dsl_syntax;
 
     if (right_interval <= interval_t::nonnegative(64)) {
         // Interval can be represented as both an svalue and a uvalue since it fits in [0, INT_MAX].
@@ -293,8 +293,8 @@ FiniteDomain::assume_signed_32bit_gt(const bool strict, const variable_t left_sv
                                      const interval_t& left_interval_positive, const interval_t& left_interval_negative,
                                      const linear_expression_t& right_svalue, const linear_expression_t& right_uvalue,
                                      const interval_t& right_interval) const {
-    using crab::interval_t;
-    using namespace crab::dsl_syntax;
+    using prevail::interval_t;
+    using namespace prevail::dsl_syntax;
 
     if (right_interval <= interval_t::nonnegative(32)) {
         // Interval can be represented as both an svalue and a uvalue since it fits in [0, INT_MAX].
@@ -327,8 +327,8 @@ std::vector<linear_constraint_t>
 FiniteDomain::assume_signed_cst_interval(Condition::Op op, bool is64, variable_t left_svalue, variable_t left_uvalue,
                                          const linear_expression_t& right_svalue,
                                          const linear_expression_t& right_uvalue) const {
-    using crab::interval_t;
-    using namespace crab::dsl_syntax;
+    using prevail::interval_t;
+    using namespace prevail::dsl_syntax;
 
     interval_t left_interval = interval_t::bottom();
     interval_t right_interval = interval_t::bottom();
@@ -394,8 +394,8 @@ FiniteDomain::assume_unsigned_64bit_lt(bool strict, variable_t left_svalue, vari
                                        const interval_t& left_interval_low, const interval_t& left_interval_high,
                                        const linear_expression_t& right_svalue, const linear_expression_t& right_uvalue,
                                        const interval_t& right_interval) const {
-    using crab::interval_t;
-    using namespace crab::dsl_syntax;
+    using prevail::interval_t;
+    using namespace prevail::dsl_syntax;
 
     auto rub = right_interval.ub();
     auto lllb = left_interval_low.truncate_to<uint64_t>().lb();
@@ -443,8 +443,8 @@ std::vector<linear_constraint_t> FiniteDomain::assume_unsigned_32bit_lt(const bo
                                                                         const variable_t left_uvalue,
                                                                         const linear_expression_t& right_svalue,
                                                                         const linear_expression_t& right_uvalue) const {
-    using crab::interval_t;
-    using namespace crab::dsl_syntax;
+    using prevail::interval_t;
+    using namespace prevail::dsl_syntax;
 
     if (eval_interval(left_uvalue) <= interval_t::nonnegative(32) &&
         eval_interval(right_uvalue) <= interval_t::nonnegative(32)) {
@@ -471,8 +471,8 @@ FiniteDomain::assume_unsigned_64bit_gt(const bool strict, const variable_t left_
                                        const interval_t& left_interval_low, const interval_t& left_interval_high,
                                        const linear_expression_t& right_svalue, const linear_expression_t& right_uvalue,
                                        const interval_t& right_interval) const {
-    using crab::interval_t;
-    using namespace crab::dsl_syntax;
+    using prevail::interval_t;
+    using namespace prevail::dsl_syntax;
 
     const auto rlb = right_interval.lb();
     const auto llub = left_interval_low.truncate_to<uint64_t>().ub();
@@ -504,8 +504,8 @@ FiniteDomain::assume_unsigned_32bit_gt(const bool strict, const variable_t left_
                                        const interval_t& left_interval_low, const interval_t& left_interval_high,
                                        const linear_expression_t& right_svalue, const linear_expression_t& right_uvalue,
                                        const interval_t& right_interval) const {
-    using crab::interval_t;
-    using namespace crab::dsl_syntax;
+    using prevail::interval_t;
+    using namespace prevail::dsl_syntax;
 
     if (right_interval <= interval_t::unsigned_high(32)) {
         // Interval can be represented as both an svalue and a uvalue since it fits in [INT_MAX+1, UINT_MAX].
@@ -525,8 +525,8 @@ std::vector<linear_constraint_t>
 FiniteDomain::assume_unsigned_cst_interval(Condition::Op op, bool is64, variable_t left_svalue, variable_t left_uvalue,
                                            const linear_expression_t& right_svalue,
                                            const linear_expression_t& right_uvalue) const {
-    using crab::interval_t;
-    using namespace crab::dsl_syntax;
+    using prevail::interval_t;
+    using namespace prevail::dsl_syntax;
 
     interval_t left_interval = interval_t::bottom();
     interval_t right_interval = interval_t::bottom();
@@ -603,7 +603,7 @@ FiniteDomain::assume_unsigned_cst_interval(Condition::Op op, bool is64, variable
 std::vector<linear_constraint_t> FiniteDomain::assume_cst_imm(const Condition::Op op, const bool is64,
                                                               const variable_t dst_svalue, const variable_t dst_uvalue,
                                                               const int64_t imm) const {
-    using namespace crab::dsl_syntax;
+    using namespace prevail::dsl_syntax;
     using Op = Condition::Op;
     switch (op) {
     case Op::EQ:
@@ -630,7 +630,7 @@ std::vector<linear_constraint_t> FiniteDomain::assume_cst_reg(const Condition::O
                                                               const variable_t dst_svalue, const variable_t dst_uvalue,
                                                               const variable_t src_svalue,
                                                               const variable_t src_uvalue) const {
-    using namespace crab::dsl_syntax;
+    using namespace prevail::dsl_syntax;
     using Op = Condition::Op;
     if (is64) {
         switch (op) {
@@ -709,7 +709,7 @@ void FiniteDomain::apply(binop_t op, variable_t x, variable_t y, variable_t z, i
 }
 
 void FiniteDomain::overflow_bounds(variable_t lhs, int finite_width, bool issigned) {
-    using namespace crab::dsl_syntax;
+    using namespace prevail::dsl_syntax;
     auto interval = eval_interval(lhs);
     if (interval.size() >= interval_t::unsigned_int(finite_width).size()) {
         // Interval covers the full space.
@@ -982,4 +982,4 @@ void FiniteDomain::sign_extend(const variable_t svalue, const variable_t uvalue,
     overflow_bounds(svalue, uvalue, target_width);
 }
 
-} // namespace crab::domains
+} // namespace prevail

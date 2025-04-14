@@ -12,23 +12,23 @@
 #include <stdarg.h>
 #include <string>
 
-namespace crab {
+namespace prevail {
 
-#define CRAB_LOG(TAG, CODE)                                      \
-    do {                                                         \
-        if (crab::CrabLogFlag && crab::CrabLog.count(TAG) > 0) { \
-            CODE;                                                \
-        }                                                        \
+#define CRAB_LOG(TAG, CODE)                                            \
+    do {                                                               \
+        if (prevail::CrabLogFlag && prevail::CrabLog.count(TAG) > 0) { \
+            CODE;                                                      \
+        }                                                              \
     } while (0)
 extern bool CrabLogFlag;
 extern std::set<std::string> CrabLog;
 
 extern unsigned CrabVerbosity;
-#define CRAB_VERBOSE_IF(LEVEL, CODE)        \
-    do {                                    \
-        if (crab::CrabVerbosity >= LEVEL) { \
-            CODE;                           \
-        }                                   \
+#define CRAB_VERBOSE_IF(LEVEL, CODE)           \
+    do {                                       \
+        if (prevail::CrabVerbosity >= LEVEL) { \
+            CODE;                              \
+        }                                      \
     } while (0)
 
 template <typename... ArgTypes>
@@ -43,14 +43,14 @@ void ___print___(std::ostream& os, ArgTypes... args) {
     (void)expand_variadic_pack{0, ((os << args), void(), 0)...};
 }
 
-#define CRAB_ERROR(...)                                                      \
-    do {                                                                     \
-        std::ostringstream os;                                               \
-        os << "CRAB ERROR: ";                                                \
-        crab::___print___(os, __VA_ARGS__);                                  \
-        crab::___print___(os, "; function ", __func__, ", line ", __LINE__); \
-        os << "\n";                                                          \
-        throw std::runtime_error(os.str());                                  \
+#define CRAB_ERROR(...)                                                         \
+    do {                                                                        \
+        std::ostringstream os;                                                  \
+        os << "CRAB ERROR: ";                                                   \
+        prevail::___print___(os, __VA_ARGS__);                                  \
+        prevail::___print___(os, "; function ", __func__, ", line ", __LINE__); \
+        os << "\n";                                                             \
+        throw std::runtime_error(os.str());                                     \
     } while (0)
 
 extern bool CrabWarningFlag;
@@ -58,7 +58,7 @@ void CrabEnableWarningMsg(bool b);
 
 #define CRAB_WARN(...)                           \
     do {                                         \
-        if (crab::CrabWarningFlag) {             \
+        if (prevail::CrabWarningFlag) {          \
             std::cerr << "CRAB WARNING: ";       \
             ___print___(std::cerr, __VA_ARGS__); \
             std::cerr << "\n";                   \
@@ -67,4 +67,4 @@ void CrabEnableWarningMsg(bool b);
 
 constexpr bool CrabSanityCheckFlag = false;
 
-} // end namespace crab
+} // end namespace prevail

@@ -8,7 +8,7 @@
 
 #include "crab_utils/num_safeint.hpp"
 
-namespace crab {
+namespace prevail {
 
 class TreeSMap final {
   public:
@@ -502,4 +502,4 @@ class AdaptGraph final {
     std::vector<vert_id> free_id{};
     std::vector<size_t> free_widx{};
 };
-} // namespace crab
+} // namespace prevail

@@ -234,9 +234,9 @@ struct Unmarshaller {
         throw InvalidInstruction(pc, "unsupported immediate");
     }
 
-    static uint64_t sign_extend(const int32_t imm) { return crab::to_unsigned(int64_t{imm}); }
+    static uint64_t sign_extend(const int32_t imm) { return prevail::to_unsigned(int64_t{imm}); }
 
-    static uint64_t zero_extend(const int32_t imm) { return uint64_t{crab::to_unsigned(imm)}; }
+    static uint64_t zero_extend(const int32_t imm) { return uint64_t{prevail::to_unsigned(imm)}; }
 
     static auto getBinValue(const pc_t pc, const ebpf_inst inst) -> Value {
         if (inst.opcode & INST_SRC_REG) {
@@ -417,8 +417,8 @@ struct Unmarshaller {
     }
 
     [[nodiscard]]
-    auto makeLddw(const ebpf_inst inst, const int32_t next_imm, const vector<ebpf_inst>& insts,
-                  const pc_t pc) const -> Instruction {
+    auto makeLddw(const ebpf_inst inst, const int32_t next_imm, const vector<ebpf_inst>& insts, const pc_t pc) const
+        -> Instruction {
         if (!info.platform->supports_group(bpf_conformance_groups_t::base64)) {
             throw InvalidInstruction{pc, inst.opcode};
         }

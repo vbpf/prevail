@@ -14,7 +14,7 @@
 
 #include "crab_utils/num_big.hpp"
 
-namespace crab {
+namespace prevail {
 
 class safe_i64 {
     // Current implementation is based on
@@ -136,4 +136,4 @@ class safe_i64 {
     int64_t m_num;
 };
 
-} // end namespace crab
+} // end namespace prevail

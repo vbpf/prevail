@@ -8,7 +8,7 @@
 #include "crab/variable.hpp"
 #include "crab_utils/lazy_allocator.hpp"
 
-namespace crab {
+namespace prevail {
 
 variable_t variable_t::make(const std::string& name) {
     const auto it = std::find(names->begin(), names->end(), name);
@@ -201,4 +201,4 @@ std::vector<variable_t> variable_t::get_loop_counters() {
     }
     return res;
 }
-} // end namespace crab
+} // end namespace prevail

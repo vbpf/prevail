@@ -14,7 +14,7 @@
 
 using boost::multiprecision::cpp_int;
 
-namespace crab {
+namespace prevail {
 
 class number_t final {
     cpp_int _n{};
@@ -110,7 +110,7 @@ class number_t final {
     }
 
     // Allow truncating to signed int as needed for finite width operations.
-    // Unlike casting, sign_extend will not throw a crab error if the number doesn't fit.
+    // Unlike casting, sign_extend will not throw a prevail error if the number doesn't fit.
     [[nodiscard]]
     number_t sign_extend(const int width) const {
         using namespace boost::multiprecision;
@@ -132,7 +132,7 @@ class number_t final {
     }
 
     // Allow truncating to unsigned int as needed for finite width operations.
-    // Unlike casting, zero_extend will not throw a crab error if the number doesn't fit.
+    // Unlike casting, zero_extend will not throw a prevail error if the number doesn't fit.
     [[nodiscard]]
     number_t zero_extend(const int width) const {
         using namespace boost::multiprecision;
@@ -286,4 +286,4 @@ bool operator<=(is_enum auto left, const number_t& rhs) { return rhs >= left; }
 template <typename T>
 concept finite_integral = std::integral<T> || std::is_same_v<T, number_t>;
 
-} // namespace crab
+} // namespace prevail

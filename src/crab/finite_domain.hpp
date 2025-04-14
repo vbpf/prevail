@@ -14,7 +14,7 @@
 #include "crab/variable.hpp"
 #include "string_constraints.hpp"
 
-namespace crab::domains {
+namespace prevail {
 class FiniteDomain {
     SplitDBM dom;
 
@@ -248,4 +248,4 @@ class FiniteDomain {
                                                     variable_t dst_uvalue, variable_t src_svalue,
                                                     variable_t src_uvalue) const;
 };
-} // namespace crab::domains
+} // namespace prevail

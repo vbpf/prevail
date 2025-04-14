@@ -17,7 +17,7 @@
 #include "crab/label.hpp"
 #include "crab_utils/debug.hpp"
 struct cfg_builder_t;
-namespace crab {
+namespace prevail {
 
 /// Control-Flow Graph
 class cfg_t final {
@@ -183,4 +183,4 @@ class basic_block_t final {
 
 cfg_t cfg_from_adjacency_list(const std::map<label_t, std::vector<label_t>>& adj_list);
 
-} // end namespace crab
+} // end namespace prevail

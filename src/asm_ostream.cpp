@@ -18,12 +18,12 @@
 #include "platform.hpp"
 #include "spec_type_descriptors.hpp"
 
-using crab::TypeGroup;
+using prevail::TypeGroup;
 using std::optional;
 using std::string;
 using std::vector;
 
-namespace crab {
+namespace prevail {
 
 std::ostream& operator<<(std::ostream& o, const interval_t& interval) {
     if (interval.is_bottom()) {
@@ -69,7 +69,7 @@ string to_string(label_t const& label) {
     return str.str();
 }
 
-} // namespace crab
+} // namespace prevail
 
 struct LineInfoPrinter {
     std::ostream& os;
@@ -108,7 +108,7 @@ void print_jump(std::ostream& o, const std::string& direction, const std::set<la
 void print_program(const Program& prog, std::ostream& os, const bool simplify, const printfunc& prefunc,
                    const printfunc& postfunc) {
     LineInfoPrinter printer{os};
-    for (const crab::basic_block_t& bb : crab::basic_block_t::collect_basic_blocks(prog.cfg(), simplify)) {
+    for (const prevail::basic_block_t& bb : prevail::basic_block_t::collect_basic_blocks(prog.cfg(), simplify)) {
         prefunc(os, bb.first_label());
         print_jump(os, "from", prog.cfg().parents_of(bb.first_label()));
         os << bb.first_label() << ":\n";
@@ -314,10 +314,12 @@ struct AssertionPrinterVisitor {
     }
 
     void operator()(const BoundedLoopCount& a) {
-        _os << crab::variable_t::loop_counter(to_string(a.name)) << " < " << a.limit;
+        _os << prevail::variable_t::loop_counter(to_string(a.name)) << " < " << a.limit;
     }
 
-    static crab::variable_t typereg(const Reg& r) { return crab::variable_t::reg(crab::data_kind_t::types, r.v); }
+    static prevail::variable_t typereg(const Reg& r) {
+        return prevail::variable_t::reg(prevail::data_kind_t::types, r.v);
+    }
 
     void operator()(ValidSize const& a) {
         const auto op = a.can_be_zero ? " >= " : " > ";
@@ -335,7 +337,7 @@ struct AssertionPrinterVisitor {
     }
 
     void operator()(ZeroCtxOffset const& a) {
-        _os << crab::variable_t::reg(crab::data_kind_t::ctx_offsets, a.reg.v) << " == 0";
+        _os << prevail::variable_t::reg(prevail::data_kind_t::ctx_offsets, a.reg.v) << " == 0";
     }
 
     void operator()(Comparable const& a) {
@@ -528,7 +530,9 @@ struct CommandPrinterVisitor {
         print(b.cond);
     }
 
-    void operator()(IncrementLoopCounter const& a) { os_ << crab::variable_t::loop_counter(to_string(a.name)) << "++"; }
+    void operator()(IncrementLoopCounter const& a) {
+        os_ << prevail::variable_t::loop_counter(to_string(a.name)) << "++";
+    }
 };
 // ReSharper restore CppMemberFunctionMayBeConst
 
@@ -592,7 +596,7 @@ void print(const InstructionSeq& insts, std::ostream& out, const std::optional<c
             }
             if (const auto jmp = std::get_if<Jmp>(&ins)) {
                 if (!pc_of_label.contains(jmp->target)) {
-                    throw std::runtime_error(string("Cannot find label ") + crab::to_string(jmp->target));
+                    throw std::runtime_error(string("Cannot find label ") + prevail::to_string(jmp->target));
                 }
                 const pc_t target_pc = pc_of_label.at(jmp->target);
                 visitor(*jmp, target_pc - static_cast<int>(pc) - 1);

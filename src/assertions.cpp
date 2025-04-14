@@ -9,7 +9,7 @@
 #include "crab/cfg.hpp"
 #include "platform.hpp"
 
-using crab::TypeGroup;
+using prevail::TypeGroup;
 using std::string;
 using std::to_string;
 using std::vector;

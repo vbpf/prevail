@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
 
     ebpf_verifier_options_t ebpf_verifier_options;
 
-    crab::CrabEnableWarningMsg(false);
+    prevail::CrabEnableWarningMsg(false);
 
     // Parse command line arguments:
 

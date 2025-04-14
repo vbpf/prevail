@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "crab/interval.hpp"
 
-namespace crab {
+namespace prevail {
 
 static interval_t make_dividend_when_both_nonzero(const interval_t& dividend, const interval_t& divisor) {
     if (dividend.ub() >= 0) {
@@ -406,4 +406,4 @@ interval_t interval_t::zero_extend(const int width) const {
     // [0b1111..., 0b0000...] is in the original range, so the result is [0b0000..., 0b1111...] which is the full
     return full_range;
 }
-} // namespace crab
+} // namespace prevail

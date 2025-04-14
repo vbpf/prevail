@@ -5,7 +5,7 @@
 
 #include <string>
 
-namespace crab {
+namespace prevail {
 
 // data_kind_t is eBPF-specific.
 enum class data_kind_t {
@@ -67,4 +67,4 @@ enum class TypeGroup {
 
 bool is_singleton_type(TypeGroup t);
 std::ostream& operator<<(std::ostream& os, TypeGroup ts);
-} // namespace crab
+} // namespace prevail

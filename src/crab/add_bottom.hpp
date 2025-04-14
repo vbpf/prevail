@@ -6,7 +6,7 @@
 
 #include "crab/finite_domain.hpp"
 
-namespace crab::domains {
+namespace prevail {
 
 class AddBottom final {
     using T = FiniteDomain;
@@ -224,4 +224,4 @@ class AddBottom final {
     }
 }; // class AddBottom
 
-} // namespace crab::domains
+} // namespace prevail
