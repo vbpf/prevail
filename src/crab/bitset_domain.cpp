@@ -4,6 +4,7 @@
 
 #include "bitset_domain.hpp"
 
+namespace prevail {
 std::ostream& operator<<(std::ostream& o, const bitset_domain_t& b) {
     o << "Numbers -> {";
     bool first = true;
@@ -61,3 +62,4 @@ string_invariant bitset_domain_t::to_set() const {
     }
     return string_invariant{result};
 }
+} // namespace prevail

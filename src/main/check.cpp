@@ -19,6 +19,8 @@
 using std::string;
 using std::vector;
 
+using namespace prevail;
+
 static size_t hash(const raw_program& raw_prog) {
     const char* start = reinterpret_cast<const char*>(raw_prog.prog.data());
     const char* end = start + raw_prog.prog.size() * sizeof(ebpf_inst);
@@ -71,7 +73,7 @@ int main(int argc, char** argv) {
 
     ebpf_verifier_options_t ebpf_verifier_options;
 
-    prevail::CrabEnableWarningMsg(false);
+    CrabEnableWarningMsg(false);
 
     // Parse command line arguments:
 

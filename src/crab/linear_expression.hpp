@@ -8,6 +8,7 @@
 #include "crab_utils/num_big.hpp"
 
 namespace prevail {
+
 // A linear expression is of the form: Ax + By + Cz + ... + N.
 // That is, a sum of terms where each term is either a
 // coefficient * variable, or simply a coefficient

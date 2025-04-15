@@ -7,6 +7,8 @@
 
 #include "crab_verifier.hpp"
 
+namespace prevail {
+
 struct TestCase {
     std::string name;
     ebpf_verifier_options_t options{};
@@ -36,10 +38,11 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug = false
 
 struct ConformanceTestResult {
     bool success{};
-    prevail::interval_t r0_value = prevail::interval_t::top();
+    interval_t r0_value = interval_t::top();
 };
 
 ConformanceTestResult run_conformance_test_case(const std::vector<std::byte>& memory_bytes,
                                                 const std::vector<std::byte>& program_bytes, bool debug);
 
 bool run_yaml(const std::string& path);
+} // namespace prevail

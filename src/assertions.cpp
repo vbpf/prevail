@@ -9,11 +9,11 @@
 #include "cfg/cfg.hpp"
 #include "platform.hpp"
 
-using prevail::TypeGroup;
 using std::string;
 using std::to_string;
 using std::vector;
 
+namespace prevail {
 class AssertExtractor {
     program_info info;
     std::optional<label_t> current_label; ///< Pre-simplification label this assert is part of.
@@ -284,8 +284,8 @@ class AssertExtractor {
             }
             return {Assertion{TypeConstraint{ins.dst, TypeGroup::number}}};
         }
-        // For all other binary operations, the destination register must be a number and the source must either be an
-        // immediate or a number.
+            // For all other binary operations, the destination register must be a number and the source must either be
+            // an immediate or a number.
         default:
             if (const auto src = std::get_if<Reg>(&ins.v)) {
                 return {Assertion{TypeConstraint{ins.dst, TypeGroup::number}},
@@ -306,3 +306,4 @@ class AssertExtractor {
 vector<Assertion> get_assertions(Instruction ins, const program_info& info, const std::optional<label_t>& label) {
     return std::visit(AssertExtractor{info, label}, ins);
 }
+} // namespace prevail

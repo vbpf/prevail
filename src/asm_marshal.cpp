@@ -10,6 +10,8 @@
 
 using std::vector;
 
+namespace prevail {
+
 static uint8_t op(const Condition::Op op) {
     using Op = Condition::Op;
     switch (op) {
@@ -296,10 +298,10 @@ struct MarshalVisitor {
 };
 
 vector<ebpf_inst> marshal(const Instruction& ins, const pc_t pc) {
-    return std::visit(MarshalVisitor{prevail::label_to_offset16(pc), prevail::label_to_offset32(pc)}, ins);
+    return std::visit(MarshalVisitor{label_to_offset16(pc), label_to_offset32(pc)}, ins);
 }
 
-int asm_syntax::size(const Instruction& inst) {
+int size(const Instruction& inst) {
     if (const auto pins = std::get_if<Bin>(&inst)) {
         if (pins->lddw) {
             return 2;
@@ -340,3 +342,4 @@ vector<ebpf_inst> marshal(const InstructionSeq& insts) {
     }
     return res;
 }
+} // namespace prevail

@@ -18,7 +18,6 @@
 #include "platform.hpp"
 #include "spec_type_descriptors.hpp"
 
-using prevail::TypeGroup;
 using std::optional;
 using std::string;
 using std::vector;
@@ -69,8 +68,6 @@ string to_string(label_t const& label) {
     return str.str();
 }
 
-} // namespace prevail
-
 struct LineInfoPrinter {
     std::ostream& os;
     std::string previous_source_line;
@@ -108,7 +105,7 @@ void print_jump(std::ostream& o, const std::string& direction, const std::set<la
 void print_program(const Program& prog, std::ostream& os, const bool simplify, const printfunc& prefunc,
                    const printfunc& postfunc) {
     LineInfoPrinter printer{os};
-    for (const prevail::basic_block_t& bb : prevail::basic_block_t::collect_basic_blocks(prog.cfg(), simplify)) {
+    for (const basic_block_t& bb : basic_block_t::collect_basic_blocks(prog.cfg(), simplify)) {
         prefunc(os, bb.first_label());
         print_jump(os, "from", prog.cfg().parents_of(bb.first_label()));
         os << bb.first_label() << ":\n";
@@ -195,7 +192,6 @@ void print_invariants(std::ostream& os, const Program& prog, const bool simplify
         });
 }
 
-namespace asm_syntax {
 std::ostream& operator<<(std::ostream& os, const ArgSingle::Kind kind) {
     switch (kind) {
     case ArgSingle::Kind::ANYTHING: return os << "uint64_t";
@@ -314,12 +310,10 @@ struct AssertionPrinterVisitor {
     }
 
     void operator()(const BoundedLoopCount& a) {
-        _os << prevail::variable_t::loop_counter(to_string(a.name)) << " < " << a.limit;
+        _os << variable_t::loop_counter(to_string(a.name)) << " < " << a.limit;
     }
 
-    static prevail::variable_t typereg(const Reg& r) {
-        return prevail::variable_t::reg(prevail::data_kind_t::types, r.v);
-    }
+    static variable_t typereg(const Reg& r) { return variable_t::reg(data_kind_t::types, r.v); }
 
     void operator()(ValidSize const& a) {
         const auto op = a.can_be_zero ? " >= " : " > ";
@@ -336,9 +330,7 @@ struct AssertionPrinterVisitor {
             << "))";
     }
 
-    void operator()(ZeroCtxOffset const& a) {
-        _os << prevail::variable_t::reg(prevail::data_kind_t::ctx_offsets, a.reg.v) << " == 0";
-    }
+    void operator()(ZeroCtxOffset const& a) { _os << variable_t::reg(data_kind_t::ctx_offsets, a.reg.v) << " == 0"; }
 
     void operator()(Comparable const& a) {
         if (a.or_r2_is_number) {
@@ -530,9 +522,7 @@ struct CommandPrinterVisitor {
         print(b.cond);
     }
 
-    void operator()(IncrementLoopCounter const& a) {
-        os_ << prevail::variable_t::loop_counter(to_string(a.name)) << "++";
-    }
+    void operator()(IncrementLoopCounter const& a) { os_ << variable_t::loop_counter(to_string(a.name)) << "++"; }
 };
 // ReSharper restore CppMemberFunctionMayBeConst
 
@@ -596,7 +586,7 @@ void print(const InstructionSeq& insts, std::ostream& out, const std::optional<c
             }
             if (const auto jmp = std::get_if<Jmp>(&ins)) {
                 if (!pc_of_label.contains(jmp->target)) {
-                    throw std::runtime_error(string("Cannot find label ") + prevail::to_string(jmp->target));
+                    throw std::runtime_error(string("Cannot find label ") + to_string(jmp->target));
                 }
                 const pc_t target_pc = pc_of_label.at(jmp->target);
                 visitor(*jmp, target_pc - static_cast<int>(pc) - 1);
@@ -608,8 +598,6 @@ void print(const InstructionSeq& insts, std::ostream& out, const std::optional<c
         pc += size(ins);
     }
 }
-
-} // namespace asm_syntax
 
 std::ostream& operator<<(std::ostream& o, const EbpfMapDescriptor& desc) {
     return o << "(" << "original_fd = " << desc.original_fd << ", " << "inner_map_fd = " << desc.inner_map_fd << ", "
@@ -630,3 +618,4 @@ std::ostream& operator<<(std::ostream& os, const btf_line_info_t& line_info) {
     os << "; " << line_info.source_line << "\n";
     return os;
 }
+} // namespace prevail

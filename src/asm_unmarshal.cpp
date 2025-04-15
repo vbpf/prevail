@@ -13,6 +13,7 @@
 using std::string;
 using std::vector;
 
+namespace prevail {
 int opcode_to_width(const uint8_t opcode) {
     switch (opcode & INST_SIZE_MASK) {
     case INST_SIZE_B: return 1;
@@ -234,9 +235,9 @@ struct Unmarshaller {
         throw InvalidInstruction(pc, "unsupported immediate");
     }
 
-    static uint64_t sign_extend(const int32_t imm) { return prevail::to_unsigned(int64_t{imm}); }
+    static uint64_t sign_extend(const int32_t imm) { return to_unsigned(int64_t{imm}); }
 
-    static uint64_t zero_extend(const int32_t imm) { return uint64_t{prevail::to_unsigned(imm)}; }
+    static uint64_t zero_extend(const int32_t imm) { return uint64_t{to_unsigned(imm)}; }
 
     static auto getBinValue(const pc_t pc, const ebpf_inst inst) -> Value {
         if (inst.opcode & INST_SRC_REG) {
@@ -819,3 +820,4 @@ Call make_call(const int imm, const ebpf_platform_t& platform) {
     const program_info info{.platform = &platform};
     return Unmarshaller{notes, info}.makeCall(imm);
 }
+} // namespace prevail

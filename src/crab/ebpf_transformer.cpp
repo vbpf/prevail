@@ -19,7 +19,6 @@
 #include "platform.hpp"
 #include "string_constraints.hpp"
 
-using prevail::NumAbsDomain;
 namespace prevail {
 
 class ebpf_transformer final {
@@ -170,7 +169,7 @@ void ebpf_transformer::havoc_subprogram_stack(const std::string& prefix) {
 }
 
 void ebpf_transformer::forget_packet_pointers() {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
 
     for (const variable_t type_variable : variable_t::get_type_variables()) {
         if (type_inv.has_type(m_inv, type_variable, T_PACKET)) {
@@ -185,20 +184,21 @@ void ebpf_transformer::forget_packet_pointers() {
 }
 
 void ebpf_transformer::havoc_offsets(const Reg& reg) { prevail::havoc_offsets(m_inv, reg); }
+
 static linear_constraint_t type_is_pointer(const reg_pack_t& r) {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     return r.type >= T_CTX;
 }
 
 static linear_constraint_t type_is_number(const reg_pack_t& r) {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     return r.type == T_NUM;
 }
 
 static linear_constraint_t type_is_number(const Reg& r) { return type_is_number(reg_pack(r)); }
 
 static linear_constraint_t type_is_not_stack(const reg_pack_t& r) {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     return r.type != T_STACK;
 }
 
@@ -206,7 +206,7 @@ static linear_constraint_t type_is_not_stack(const reg_pack_t& r) {
  */
 static linear_constraint_t assume_cst_offsets_reg(const Condition::Op op, const variable_t dst_offset,
                                                   const variable_t src_offset) {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     using Op = Condition::Op;
     switch (op) {
     case Op::EQ: return eq(dst_offset, src_offset);
@@ -398,7 +398,7 @@ void ebpf_transformer::operator()(const Packet& a) {
 void ebpf_transformer::do_load_stack(NumAbsDomain& inv, const Reg& target_reg, const linear_expression_t& addr,
                                      const int width, const Reg& src_reg) {
     type_inv.assign_type(inv, target_reg, stack.load(inv, data_kind_t::types, addr, width));
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     if (inv.entail(width <= reg_pack(src_reg).stack_numeric_size)) {
         type_inv.assign_type(inv, target_reg, T_NUM);
     }
@@ -437,7 +437,7 @@ void ebpf_transformer::do_load_stack(NumAbsDomain& inv, const Reg& target_reg, c
 
 void ebpf_transformer::do_load_ctx(NumAbsDomain& inv, const Reg& target_reg, const linear_expression_t& addr_vague,
                                    const int width) {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     if (inv.is_bottom()) {
         return;
     }
@@ -521,7 +521,7 @@ void ebpf_transformer::do_load_packet_or_shared(NumAbsDomain& inv, const Reg& ta
 }
 
 void ebpf_transformer::do_load(const Mem& b, const Reg& target_reg) {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
 
     const auto mem_reg = reg_pack(b.access.basereg);
     const int width = b.access.width;
@@ -651,7 +651,7 @@ void ebpf_transformer::do_store_stack(NumAbsDomain& inv, const linear_expression
         const variable_t stack_numeric_size_variable =
             variable_t::kind_var(data_kind_t::stack_numeric_sizes, type_variable);
 
-        using namespace prevail::dsl_syntax;
+        using namespace dsl_syntax;
         // See if the variable's numeric interval overlaps with changed bytes.
         if (m_inv.intersect(dsl_syntax::operator<=(addr, stack_offset_variable + stack_numeric_size_variable)) &&
             m_inv.intersect(operator>=(addr + width, stack_offset_variable))) {
@@ -773,7 +773,7 @@ void ebpf_transformer::operator()(const Atomic& a) {
 }
 
 void ebpf_transformer::operator()(const Call& call) {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     if (m_inv.is_bottom()) {
         return;
     }
@@ -871,7 +871,7 @@ out:
 }
 
 void ebpf_transformer::operator()(const CallLocal& call) {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     if (m_inv.is_bottom()) {
         return;
     }
@@ -883,7 +883,7 @@ void ebpf_transformer::operator()(const CallLocal& call) {
 }
 
 void ebpf_transformer::operator()(const Callx& callx) {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     if (m_inv.is_bottom()) {
         return;
     }
@@ -948,7 +948,7 @@ void ebpf_transformer::operator()(const LoadMapAddress& ins) {
 }
 
 void ebpf_transformer::assign_valid_ptr(const Reg& dst_reg, const bool maybe_null) {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     const reg_pack_t& reg = reg_pack(dst_reg);
     m_inv.havoc(reg.svalue);
     m_inv.havoc(reg.uvalue);
@@ -1063,7 +1063,7 @@ void ebpf_transformer::operator()(const Bin& bin) {
     if (m_inv.is_bottom()) {
         return;
     }
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
 
     auto dst = reg_pack(bin.dst);
     int finite_width = bin.is64 ? 64 : 32;
@@ -1199,7 +1199,7 @@ void ebpf_transformer::operator()(const Bin& bin) {
                                                    src.svalue);
                                         if (dst_type == T_STACK) {
                                             // Reduce the numeric size.
-                                            using namespace prevail::dsl_syntax;
+                                            using namespace dsl_syntax;
                                             if (inv.intersect(src.svalue < 0)) {
                                                 inv.havoc(dst.stack_numeric_size);
                                                 recompute_stack_numeric_size(inv, dst.type);
@@ -1267,7 +1267,7 @@ void ebpf_transformer::operator()(const Bin& bin) {
                         m_inv->sub(dst_offset.value(), src.svalue);
                         if (type_inv.has_type(m_inv, dst.type, T_STACK)) {
                             // Reduce the numeric size.
-                            using namespace prevail::dsl_syntax;
+                            using namespace dsl_syntax;
                             if (m_inv.intersect(src.svalue > 0)) {
                                 m_inv.havoc(dst.stack_numeric_size);
                                 recompute_stack_numeric_size(m_inv, dst.type);

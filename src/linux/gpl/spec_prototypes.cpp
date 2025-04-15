@@ -1,6 +1,7 @@
 #include "platform.hpp"
 #include "spec_type_descriptors.hpp"
 
+namespace prevail {
 #define EBPF_RETURN_TYPE_PTR_TO_SOCK_COMMON_OR_NULL EBPF_RETURN_TYPE_UNSUPPORTED
 #define EBPF_RETURN_TYPE_PTR_TO_SOCKET_OR_NULL EBPF_RETURN_TYPE_UNSUPPORTED
 #define EBPF_RETURN_TYPE_PTR_TO_TCP_SOCKET_OR_NULL EBPF_RETURN_TYPE_UNSUPPORTED
@@ -2294,3 +2295,4 @@ EbpfHelperPrototype get_helper_prototype_linux(const int32_t n) {
     }
     return prototypes[n];
 }
+} // namespace prevail

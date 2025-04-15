@@ -9,13 +9,13 @@
 #define PTYPE(name, descr, native_type, prefixes) {name, descr, 0, prefixes}
 #define PTYPE_PRIVILEGED(name, descr, native_type, prefixes) {name, descr, 0, prefixes, true}
 #endif
+#include "asm_files.hpp"
 #include "crab_verifier.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
 #include "linux_platform.hpp"
 #include "platform.hpp"
 
-#include <asm_files.hpp>
-
+namespace prevail {
 // Map definitions as they appear in an ELF file, so field width matters.
 struct bpf_load_map_def {
     uint32_t type;
@@ -248,3 +248,4 @@ const ebpf_platform_t g_ebpf_platform_linux = {get_program_type_linux,
                                                resolve_inner_map_references_linux,
                                                bpf_conformance_groups_t::default_groups |
                                                    bpf_conformance_groups_t::packet};
+} // namespace prevail

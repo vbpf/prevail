@@ -19,6 +19,8 @@
 #define PRINT_CASE(file) \
     TEST_CASE("Print suite: " file, "[print]") { verify_printed_string(file); }
 
+using namespace prevail;
+
 void verify_printed_string(const std::string& file) {
     std::stringstream generated_output;
     auto raw_progs = read_elf(std::string(TEST_OBJECT_FILE_DIRECTORY) + file + ".o", "", {}, &g_ebpf_platform_linux);

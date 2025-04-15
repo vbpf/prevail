@@ -20,6 +20,7 @@
 using std::string;
 using std::vector;
 
+namespace prevail {
 // The YAML tests for Call depend on Linux prototypes.
 // parse_instruction() in asm_parse.cpp explicitly uses
 // g_ebpf_platform_linux when parsing Call instructions
@@ -138,7 +139,7 @@ static RawTestCase parse_case(const YAML::Node& case_node) {
 }
 
 static InstructionSeq raw_cfg_to_instruction_seq(const vector<std::tuple<string, vector<string>>>& raw_blocks) {
-    std::map<string, prevail::label_t> label_name_to_label;
+    std::map<string, label_t> label_name_to_label;
 
     int label_index = 0;
     for (const auto& [label_name, raw_block] : raw_blocks) {
@@ -418,3 +419,4 @@ void foreach_suite(const string& path, const std::function<void(const TestCase&)
         f(test_case);
     }
 }
+} // namespace prevail

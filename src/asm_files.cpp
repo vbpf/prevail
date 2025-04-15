@@ -16,6 +16,8 @@
 #include "crab_utils/num_safety.hpp"
 #include "platform.hpp"
 
+namespace prevail {
+
 template <typename T>
     requires std::is_trivially_copyable_v<T>
 static std::vector<T> vector_of(const char* data, const ELFIO::Elf_Xword size) {
@@ -646,3 +648,4 @@ std::vector<raw_program> read_elf(std::istream& input_stream, const std::string&
     program_reader.read_programs();
     return std::move(program_reader.raw_programs);
 }
+} // namespace prevail

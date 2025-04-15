@@ -7,6 +7,7 @@
 #include "ebpf_base.h" // for EBPF_TOTAL_STACK_SIZE constant
 #include "string_constraints.hpp"
 
+namespace prevail {
 class bitset_domain_t final {
   private:
     using bits_t = std::bitset<EBPF_TOTAL_STACK_SIZE>;
@@ -122,3 +123,4 @@ class bitset_domain_t final {
         return true;
     }
 };
+} // namespace prevail

@@ -18,10 +18,7 @@
 using std::regex;
 using std::regex_match;
 
-using prevail::linear_constraint_t;
-using prevail::linear_expression_t;
-using prevail::number_t;
-
+namespace prevail {
 #define REG R"_(\s*(r\d\d?)\s*)_"
 #define WREG R"_(\s*([wr]\d\d?)\s*)_"
 #define IMM R"_(\s*\[?([-+]?(?:0x)?[0-9a-f]+)\]?\s*)_"
@@ -279,21 +276,19 @@ static InstructionSeq parse_program(std::istream& is) {
 
 static uint8_t regnum(const std::string& s) { return static_cast<uint8_t>(boost::lexical_cast<uint16_t>(s.substr(1))); }
 
-static prevail::variable_t special_var(const std::string& s) {
+static variable_t special_var(const std::string& s) {
     if (s == "packet_size") {
-        return prevail::variable_t::packet_size();
+        return variable_t::packet_size();
     }
     if (s == "meta_offset") {
-        return prevail::variable_t::meta_offset();
+        return variable_t::meta_offset();
     }
     throw std::runtime_error(std::string() + "Bad special variable: " + s);
 }
 
 std::vector<linear_constraint_t> parse_linear_constraints(const std::set<std::string>& constraints,
-                                                          std::vector<prevail::interval_t>& numeric_ranges) {
-    using namespace prevail::dsl_syntax;
-    using prevail::regkind;
-    using prevail::variable_t;
+                                                          std::vector<interval_t>& numeric_ranges) {
+    using namespace dsl_syntax;
 
     std::vector<linear_constraint_t> res;
     for (const std::string& cst_text : constraints) {
@@ -321,8 +316,8 @@ std::vector<linear_constraint_t> parse_linear_constraints(const std::set<std::st
         } else if (regex_match(cst_text, m,
                                regex(REG DOT "type"
                                              "=" TYPE))) {
-            variable_t d = variable_t::reg(prevail::data_kind_t::types, regnum(m[1]));
-            res.push_back(d == prevail::string_to_type_encoding(m[2]));
+            variable_t d = variable_t::reg(data_kind_t::types, regnum(m[1]));
+            res.push_back(d == string_to_type_encoding(m[2]));
         } else if (regex_match(cst_text, m, regex(REG DOT KIND "=" IMM))) {
             variable_t d = variable_t::reg(regkind(m[2]), regnum(m[1]));
             number_t value;
@@ -352,13 +347,13 @@ std::vector<linear_constraint_t> parse_linear_constraints(const std::set<std::st
         } else if (regex_match(cst_text, m,
                                regex("s" ARRAY_RANGE DOT "type"
                                      "=" TYPE))) {
-            prevail::type_encoding_t type = prevail::string_to_type_encoding(m[3]);
-            if (type == prevail::type_encoding_t::T_NUM) {
+            type_encoding_t type = string_to_type_encoding(m[3]);
+            if (type == T_NUM) {
                 numeric_ranges.emplace_back(signed_number(m[1]), signed_number(m[2]));
             } else {
                 number_t lb = signed_number(m[1]);
                 number_t ub = signed_number(m[2]);
-                variable_t d = variable_t::cell_var(prevail::data_kind_t::types, lb, ub - lb + 1);
+                variable_t d = variable_t::cell_var(data_kind_t::types, lb, ub - lb + 1);
                 res.push_back(d == type);
             }
         } else if (regex_match(cst_text, m,
@@ -366,14 +361,14 @@ std::vector<linear_constraint_t> parse_linear_constraints(const std::set<std::st
                                      "=" IMM))) {
             number_t lb = signed_number(m[1]);
             number_t ub = signed_number(m[2]);
-            variable_t d = variable_t::cell_var(prevail::data_kind_t::svalues, lb, ub - lb + 1);
+            variable_t d = variable_t::cell_var(data_kind_t::svalues, lb, ub - lb + 1);
             res.push_back(d == signed_number(m[3]));
         } else if (regex_match(cst_text, m,
                                regex("s" ARRAY_RANGE DOT "uvalue"
                                      "=" IMM))) {
             number_t lb = signed_number(m[1]);
             number_t ub = signed_number(m[2]);
-            variable_t d = variable_t::cell_var(prevail::data_kind_t::uvalues, lb, ub - lb + 1);
+            variable_t d = variable_t::cell_var(data_kind_t::uvalues, lb, ub - lb + 1);
             res.push_back(d == unsigned_number(m[3]));
         } else {
             throw std::runtime_error(std::string("Unknown constraint: ") + cst_text);
@@ -385,9 +380,9 @@ std::vector<linear_constraint_t> parse_linear_constraints(const std::set<std::st
 // return a-b, taking account potential optional-none
 string_invariant string_invariant::operator-(const string_invariant& b) const {
     if (this->is_bottom()) {
-        return string_invariant::bottom();
+        return bottom();
     }
-    string_invariant res = string_invariant::top();
+    string_invariant res = top();
     for (const std::string& cst : this->value()) {
         if (b.is_bottom() || !b.contains(cst)) {
             res.maybe_inv->insert(cst);
@@ -436,3 +431,4 @@ std::ostream& operator<<(std::ostream& o, const string_invariant& inv) {
     o << "]";
     return o;
 }
+} // namespace prevail

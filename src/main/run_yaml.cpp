@@ -8,6 +8,8 @@
 // Avoid affecting other headers by macros.
 #include "CLI11/CLI11.hpp"
 
+using namespace prevail;
+
 int main(int argc, char** argv) {
     CLI::App app{"Run YAML test cases"};
 

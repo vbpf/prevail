@@ -16,7 +16,6 @@
 #include "crab/ebpf_domain.hpp"
 #include "string_constraints.hpp"
 
-using prevail::NumAbsDomain;
 namespace prevail {
 
 std::optional<variable_t> ebpf_domain_t::get_type_offset_variable(const Reg& reg, const int type) {
@@ -114,7 +113,7 @@ ebpf_domain_t ebpf_domain_t::operator&(const ebpf_domain_t& other) const {
 
 ebpf_domain_t ebpf_domain_t::calculate_constant_limits() {
     ebpf_domain_t inv;
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     for (const int i : {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}) {
         const auto r = reg_pack(i);
         inv.add_constraint(r.svalue <= std::numeric_limits<int32_t>::max());
@@ -292,7 +291,7 @@ std::ostream& operator<<(std::ostream& o, const ebpf_domain_t& dom) {
 }
 
 void ebpf_domain_t::initialize_packet() {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     ebpf_domain_t& inv = *this;
     inv.havoc(variable_t::packet_size());
     inv.havoc(variable_t::meta_offset());
@@ -327,7 +326,7 @@ ebpf_domain_t ebpf_domain_t::from_constraints(const std::set<std::string>& const
 }
 
 ebpf_domain_t ebpf_domain_t::setup_entry(const bool init_r1) {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
 
     ebpf_domain_t inv;
     const auto r10 = reg_pack(R10_STACK_POINTER);

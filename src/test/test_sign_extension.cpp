@@ -7,7 +7,7 @@
 
 #include "crab/interval.hpp"
 
-using prevail::interval_t;
+using namespace prevail;
 
 TEST_CASE("sign_extend 1 bit positive-positive", "[sign_extension]") {
     // no actual sign extension needed

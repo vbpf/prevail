@@ -5,21 +5,19 @@
 /*
  * a CFG to interface with the fixpoint iterators.
  */
-#include <cassert>
 #include <map>
-#include <memory>
 #include <ranges>
 #include <set>
 #include <vector>
 
 #include "cfg/label.hpp"
 #include "crab_utils/debug.hpp"
-struct cfg_builder_t;
+
 namespace prevail {
 
 /// Control-Flow Graph
 class cfg_t final {
-    friend struct ::cfg_builder_t;
+    friend struct cfg_builder_t;
 
     // the choice to use set means that unmarshaling a conditional jump to the same target may be different
     using label_vec_t = std::set<label_t>;

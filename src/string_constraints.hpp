@@ -11,6 +11,7 @@
 #include "crab/interval.hpp"
 #include "crab/linear_constraint.hpp"
 
+namespace prevail {
 struct string_invariant {
     std::optional<std::set<std::string>> maybe_inv{};
 
@@ -54,5 +55,6 @@ struct string_invariant {
     friend std::ostream& operator<<(std::ostream&, const string_invariant& inv);
 };
 
-std::vector<prevail::linear_constraint_t> parse_linear_constraints(const std::set<std::string>& constraints,
-                                                                   std::vector<prevail::interval_t>& numeric_ranges);
+std::vector<linear_constraint_t> parse_linear_constraints(const std::set<std::string>& constraints,
+                                                          std::vector<interval_t>& numeric_ranges);
+} // namespace prevail

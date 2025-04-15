@@ -6,8 +6,6 @@
 
 namespace prevail {
 
-inline namespace iterators {
-
 void thresholds_t::add(const extended_number& v) {
     if (m_thresholds.size() < m_size) {
         if (std::ranges::find(m_thresholds, v) == m_thresholds.end()) {
@@ -93,6 +91,5 @@ std::ostream& operator<<(std::ostream& o, const wto_thresholds_t& t) {
     }
     return o;
 }
-} // namespace iterators
 
 } // namespace prevail

@@ -17,7 +17,6 @@
 #include "program.hpp"
 #include "string_constraints.hpp"
 
-using prevail::NumAbsDomain;
 namespace prevail {
 
 static bool check_require(const NumAbsDomain& inv, const linear_constraint_t& cst) {
@@ -119,25 +118,25 @@ std::vector<std::string> ebpf_domain_check(const ebpf_domain_t& dom, const Asser
 }
 
 static linear_constraint_t type_is_pointer(const reg_pack_t& r) {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     return r.type >= T_CTX;
 }
 
 static linear_constraint_t type_is_number(const reg_pack_t& r) {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     return r.type == T_NUM;
 }
 
 static linear_constraint_t type_is_number(const Reg& r) { return type_is_number(reg_pack(r)); }
 
 static linear_constraint_t type_is_not_stack(const reg_pack_t& r) {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     return r.type != T_STACK;
 }
 
 void ebpf_checker::check_access_stack(NumAbsDomain& inv, const linear_expression_t& lb,
                                       const linear_expression_t& ub) const {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     const variable_t r10_stack_offset = reg_pack(R10_STACK_POINTER).stack_offset;
     const auto interval = inv.eval_interval(r10_stack_offset);
     if (interval.is_singleton()) {
@@ -150,7 +149,7 @@ void ebpf_checker::check_access_stack(NumAbsDomain& inv, const linear_expression
 
 void ebpf_checker::check_access_context(NumAbsDomain& inv, const linear_expression_t& lb,
                                         const linear_expression_t& ub) const {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     require(inv, lb >= 0, "Lower bound must be at least 0");
     require(inv, ub <= thread_local_program_info->type.context_descriptor->size,
             std::string("Upper bound must be at most ") +
@@ -159,7 +158,7 @@ void ebpf_checker::check_access_context(NumAbsDomain& inv, const linear_expressi
 
 void ebpf_checker::check_access_packet(NumAbsDomain& inv, const linear_expression_t& lb, const linear_expression_t& ub,
                                        const std::optional<variable_t> packet_size) const {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     require(inv, lb >= variable_t::meta_offset(), "Lower bound must be at least meta_offset");
     if (packet_size) {
         require(inv, ub <= *packet_size, "Upper bound must be at most packet_size");
@@ -171,13 +170,13 @@ void ebpf_checker::check_access_packet(NumAbsDomain& inv, const linear_expressio
 
 void ebpf_checker::check_access_shared(NumAbsDomain& inv, const linear_expression_t& lb, const linear_expression_t& ub,
                                        const variable_t shared_region_size) const {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     require(inv, lb >= 0, "Lower bound must be at least 0");
     require(inv, ub <= shared_region_size, std::string("Upper bound must be at most ") + shared_region_size.name());
 }
 
 void ebpf_checker::operator()(const Comparable& s) const {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     if (type_inv.same_type(m_inv, s.r1, s.r2)) {
         // Same type. If both are numbers, that's okay. Otherwise:
         const auto inv = m_inv.when(reg_pack(s.r2).type != T_NUM);
@@ -204,7 +203,7 @@ void ebpf_checker::operator()(const Addable& s) const {
 }
 
 void ebpf_checker::operator()(const ValidDivisor& s) const {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     const auto reg = reg_pack(s.reg);
     if (!type_inv.implies_type(m_inv, type_is_pointer(reg), type_is_number(s.reg))) {
         require("Only numbers can be used as divisors");
@@ -230,7 +229,7 @@ void ebpf_checker::operator()(const TypeConstraint& s) const {
 void ebpf_checker::operator()(const BoundedLoopCount& s) const {
     // Enforces an upper bound on loop iterations by checking that the loop counter
     // does not exceed the specified limit
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     const auto counter = variable_t::loop_counter(to_string(s.name));
     require(m_inv, counter <= s.limit, "Loop counter is too large");
 }
@@ -262,7 +261,7 @@ void ebpf_checker::operator()(const FuncConstraint& s) const {
 }
 
 void ebpf_checker::operator()(const ValidSize& s) const {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     const auto r = reg_pack(s.reg);
     require(m_inv, s.can_be_zero ? r.svalue >= 0 : r.svalue > 0, "Invalid size");
 }
@@ -278,7 +277,7 @@ void ebpf_checker::operator()(const ValidCall& s) const {
 }
 
 void ebpf_checker::operator()(const ValidMapKeyValue& s) const {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
 
     const auto fd_type = dom.get_map_type(s.map_fd_reg);
 
@@ -352,7 +351,7 @@ void ebpf_checker::operator()(const ValidMapKeyValue& s) const {
 
 static std::tuple<linear_expression_t, linear_expression_t> lb_ub_access_pair(const ValidAccess& s,
                                                                               const variable_t offset_var) {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     linear_expression_t lb = offset_var + s.offset;
     linear_expression_t ub = std::holds_alternative<Imm>(s.width) ? lb + std::get<Imm>(s.width).v
                                                                   : lb + reg_pack(std::get<Reg>(s.width)).svalue;
@@ -360,7 +359,7 @@ static std::tuple<linear_expression_t, linear_expression_t> lb_ub_access_pair(co
 }
 
 void ebpf_checker::operator()(const ValidAccess& s) const {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
 
     const bool is_comparison_check = s.width == Value{Imm{0}};
 
@@ -435,7 +434,7 @@ void ebpf_checker::operator()(const ValidAccess& s) const {
 }
 
 void ebpf_checker::operator()(const ZeroCtxOffset& s) const {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     const auto reg = reg_pack(s.reg);
     require(m_inv, reg.ctx_offset == 0, "Nonzero context offset");
 }

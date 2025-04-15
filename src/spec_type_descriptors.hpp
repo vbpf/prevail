@@ -10,6 +10,7 @@
 #include "ebpf_base.h"
 #include "ebpf_vm_isa.hpp"
 
+namespace prevail {
 enum class EbpfMapValueType { ANY, MAP, PROGRAM };
 
 struct EbpfMapType {
@@ -76,4 +77,5 @@ void print_map_descriptors(const std::vector<EbpfMapDescriptor>& descriptors, st
 
 std::ostream& operator<<(std::ostream& os, const btf_line_info_t& line_info);
 
-extern thread_local prevail::lazy_allocator<program_info> thread_local_program_info;
+extern thread_local lazy_allocator<program_info> thread_local_program_info;
+} // namespace prevail

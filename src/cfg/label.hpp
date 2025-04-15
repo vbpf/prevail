@@ -12,9 +12,10 @@
 
 #include "crab_utils/num_safety.hpp"
 
+namespace prevail {
+
 constexpr char STACK_FRAME_DELIMITER = '/';
 
-namespace prevail {
 struct label_t {
     std::string stack_frame_prefix; ///< Variable prefix when calling this label.
     int from{};                     ///< Jump source, or simply index of instruction

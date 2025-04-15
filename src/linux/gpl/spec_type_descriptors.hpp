@@ -1,5 +1,6 @@
 #pragma once
 
+namespace prevail {
 constexpr int NMAPS = 64;
 constexpr int NONMAPS = 5;
 constexpr int ALL_TYPES = NMAPS + NONMAPS;
@@ -50,3 +51,5 @@ extern const ebpf_context_descriptor_t g_sock_ops_descr;
 
 // And these were also interchangeable.
 #define g_xdp_descr g_xdp_md
+
+} // namespace prevail

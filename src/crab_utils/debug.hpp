@@ -16,7 +16,7 @@ namespace prevail {
 
 #define CRAB_LOG(TAG, CODE)                                            \
     do {                                                               \
-        if (prevail::CrabLogFlag && prevail::CrabLog.count(TAG) > 0) { \
+        if (CrabLogFlag && CrabLog.count(TAG) > 0) { \
             CODE;                                                      \
         }                                                              \
     } while (0)
@@ -26,7 +26,7 @@ extern std::set<std::string> CrabLog;
 extern unsigned CrabVerbosity;
 #define CRAB_VERBOSE_IF(LEVEL, CODE)           \
     do {                                       \
-        if (prevail::CrabVerbosity >= LEVEL) { \
+        if (CrabVerbosity >= LEVEL) { \
             CODE;                              \
         }                                      \
     } while (0)
@@ -47,8 +47,8 @@ void ___print___(std::ostream& os, ArgTypes... args) {
     do {                                                                        \
         std::ostringstream os;                                                  \
         os << "CRAB ERROR: ";                                                   \
-        prevail::___print___(os, __VA_ARGS__);                                  \
-        prevail::___print___(os, "; function ", __func__, ", line ", __LINE__); \
+        ___print___(os, __VA_ARGS__);                                  \
+        ___print___(os, "; function ", __func__, ", line ", __LINE__); \
         os << "\n";                                                             \
         throw std::runtime_error(os.str());                                     \
     } while (0)
@@ -58,7 +58,7 @@ void CrabEnableWarningMsg(bool b);
 
 #define CRAB_WARN(...)                           \
     do {                                         \
-        if (prevail::CrabWarningFlag) {          \
+        if (CrabWarningFlag) {          \
             std::cerr << "CRAB WARNING: ";       \
             ___print___(std::cerr, __VA_ARGS__); \
             std::cerr << "\n";                   \
