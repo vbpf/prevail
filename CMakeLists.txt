@@ -6,7 +6,7 @@ if (POLICY CMP0167)
     cmake_policy(SET CMP0167 NEW)
 endif ()
 
-project(ebpf_verifier)
+project(prevail)
 
 include(FetchContent)
 
