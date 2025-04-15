@@ -15,6 +15,7 @@
 #include "string_constraints.hpp"
 
 namespace prevail {
+
 class FiniteDomain {
     SplitDBM dom;
 

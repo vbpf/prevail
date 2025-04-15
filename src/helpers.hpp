@@ -4,6 +4,7 @@
 
 #include "ebpf_base.h"
 
+namespace prevail {
 // A helper function's prototype is expressed by this struct.
 struct EbpfHelperPrototype {
     const char* name;
@@ -20,3 +21,4 @@ struct EbpfHelperPrototype {
     // If R1 holds a context, then this holds a pointer to the context descriptor.
     const ebpf_context_descriptor_t* context_descriptor;
 };
+} // namespace prevail

@@ -35,7 +35,6 @@
 #include "crab_utils/num_big.hpp"
 #include "crab_utils/num_safeint.hpp"
 #include "crab_utils/stats.hpp"
-
 #include "string_constraints.hpp"
 
 namespace prevail {
@@ -208,7 +207,7 @@ class SplitDBM final {
     SplitDBM widen(const SplitDBM& o) const;
 
     [[nodiscard]]
-    SplitDBM widening_thresholds(const SplitDBM& o, const iterators::thresholds_t&) const {
+    SplitDBM widening_thresholds(const SplitDBM& o, const thresholds_t&) const {
         // TODO: use thresholds. Threshold is anonymous until used to prevent unused parameter warning.
         return this->widen(o);
     }

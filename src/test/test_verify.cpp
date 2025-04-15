@@ -5,6 +5,8 @@
 
 #include "ebpf_verifier.hpp"
 
+using namespace prevail;
+
 #define FAIL_LOAD_ELF(dirname, filename, sectionname)                                                \
     TEST_CASE("Try loading nonexisting program: " dirname "/" filename, "[elf]") {                   \
         try {                                                                                        \

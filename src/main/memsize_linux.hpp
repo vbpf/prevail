@@ -9,6 +9,7 @@
 #include <string>
 #include <unistd.h>
 
+namespace prevail {
 inline long resident_set_size_kb() {
     std::string _{};
     unsigned long __{};
@@ -22,3 +23,4 @@ inline long resident_set_size_kb() {
     long page_size_kb = sysconf(_SC_PAGE_SIZE) / 1024; // in case x86-64 is configured to use 2MB pages
     return rss * page_size_kb;
 }
+} // namespace prevail

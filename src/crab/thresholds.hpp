@@ -12,8 +12,6 @@
 
 namespace prevail {
 
-inline namespace iterators {
-
 /**
     Class that represents a set of thresholds used by the widening operator
 **/
@@ -68,5 +66,4 @@ class wto_thresholds_t final {
 
 }; // class wto_thresholds_t
 
-} // end namespace iterators
 } // end namespace prevail

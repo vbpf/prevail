@@ -5,6 +5,8 @@
 #include "asm_marshal.hpp"
 #include "asm_unmarshal.hpp"
 
+using namespace prevail;
+
 // Below we define a tample of instruction templates that specify
 // what values each field are allowed to contain.  We first define
 // a set of sentinel values that mean certain types of wildcards.

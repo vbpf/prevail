@@ -12,6 +12,7 @@
 #include "helpers.hpp"
 #include "spec_type_descriptors.hpp"
 
+namespace prevail {
 typedef EbpfProgramType (*ebpf_get_program_type_fn)(const std::string& section, const std::string& path);
 
 typedef EbpfMapType (*ebpf_get_map_type_fn)(uint32_t platform_specific_type);
@@ -54,3 +55,4 @@ struct ebpf_platform_t {
 };
 
 extern const ebpf_platform_t g_ebpf_platform_linux;
+} // namespace prevail

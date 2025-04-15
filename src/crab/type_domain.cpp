@@ -8,12 +8,12 @@
 #include <optional>
 
 #include "crab/array_domain.hpp"
+#include "crab/dsl_syntax.hpp"
 #include "crab/split_dbm.hpp"
 #include "crab/type_domain.hpp"
 #include "crab/type_encoding.hpp"
 #include "crab/variable.hpp"
 #include "crab_utils/debug.hpp"
-#include "crab/dsl_syntax.hpp"
 
 namespace prevail {
 
@@ -274,7 +274,7 @@ NumAbsDomain TypeDomain::join_by_if_else(const NumAbsDomain& inv, const linear_c
 }
 
 static linear_constraint_t eq_types(const Reg& a, const Reg& b) {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     return eq(reg_pack(a).type, reg_pack(b).type);
 }
 
@@ -288,7 +288,7 @@ bool TypeDomain::implies_type(const NumAbsDomain& inv, const linear_constraint_t
 }
 
 bool TypeDomain::is_in_group(const NumAbsDomain& inv, const Reg& r, const TypeGroup group) const {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     const variable_t t = reg_pack(r).type;
     switch (group) {
     case TypeGroup::number: return inv.entail(t == T_NUM);

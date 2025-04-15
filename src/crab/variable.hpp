@@ -3,8 +3,6 @@
 #pragma once
 
 #include <iosfwd>
-#include <iostream>
-#include <memory>
 #include <vector>
 
 #include "crab/type_encoding.hpp"

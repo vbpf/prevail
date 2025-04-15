@@ -33,12 +33,12 @@ inline linear_constraint_t operator>=(const linear_expression_t& e1, const linea
 inline linear_constraint_t operator>(const linear_expression_t& e1, const linear_expression_t& e2) { return e2 < e1; }
 
 inline linear_constraint_t eq(const variable_t a, const variable_t b) {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     return {a - b, constraint_kind_t::EQUALS_ZERO};
 }
 
 inline linear_constraint_t neq(const variable_t a, const variable_t b) {
-    using namespace prevail::dsl_syntax;
+    using namespace dsl_syntax;
     return {a - b, constraint_kind_t::NOT_ZERO};
 }
 

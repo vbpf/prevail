@@ -370,6 +370,6 @@ inline interval_t operator-(const interval_t& x, const number_t& c) { return x -
 
 } // namespace interval_operators
 
-} // namespace prevail
+std::string to_string(const interval_t& interval) noexcept;
 
-std::string to_string(const prevail::interval_t& interval) noexcept;
+} // namespace prevail

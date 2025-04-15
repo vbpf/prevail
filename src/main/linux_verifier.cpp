@@ -12,6 +12,7 @@
 #include "linux_verifier.hpp"
 #include "spec_type_descriptors.hpp"
 
+namespace prevail {
 static int do_bpf(const bpf_cmd cmd, union bpf_attr& attr) { return syscall(321, cmd, &attr, sizeof(attr)); }
 
 /** Run the built-in Linux verifier on a raw eBPF program.
@@ -53,4 +54,5 @@ std::tuple<bool, double> bpf_verify_program(const EbpfProgramType& type, const s
     }
     return {true, seconds};
 }
+} // namespace prevail
 #endif

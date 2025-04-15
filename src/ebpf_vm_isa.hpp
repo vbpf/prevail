@@ -4,6 +4,7 @@
 #include <cinttypes>
 #include <tuple>
 
+namespace prevail {
 // Header describing the Instruction Set Architecture (ISA)
 // for the eBPF virtual machine.
 // See https://github.com/ebpffoundation/ebpf-docs/blob/update/rst/instruction-set.rst
@@ -117,3 +118,4 @@ inline uint64_t merge(const int32_t imm, const int32_t next_imm) {
 inline std::tuple<int32_t, int32_t> split(const uint64_t v) {
     return {static_cast<uint32_t>(v), static_cast<uint32_t>(v >> 32)};
 }
+} // namespace prevail
