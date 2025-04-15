@@ -134,8 +134,8 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++20")
 endif ()
 
-add_library(ebpfverifier ${LIB_SRC})
-target_compile_definitions(ebpfverifier PRIVATE YAML_CPP_STATIC_DEFINE)
+add_library(prevail ${LIB_SRC})
+target_compile_definitions(prevail PRIVATE YAML_CPP_STATIC_DEFINE)
 
 if (VERIFIER_ENABLE_TESTS)
     add_executable(check src/main/check.cpp src/main/linux_verifier.cpp)
@@ -144,7 +144,7 @@ if (VERIFIER_ENABLE_TESTS)
     add_executable(conformance_check src/test/conformance_check.cpp)
 endif ()
 
-target_include_directories(ebpfverifier PRIVATE ${GSL_INCLUDE_DIRS})
+target_include_directories(prevail PRIVATE ${GSL_INCLUDE_DIRS})
 
 if (VERIFIER_ENABLE_TESTS)
     target_include_directories(run_yaml PRIVATE src/test)
@@ -168,10 +168,10 @@ if (VERIFIER_ENABLE_TESTS)
     add_dependencies(tests conformance_check)
 endif ()
 
-target_compile_options(ebpfverifier PRIVATE ${COMMON_FLAGS})
-target_compile_options(ebpfverifier PUBLIC "$<$<CONFIG:DEBUG>:${DEBUG_FLAGS}>")
-target_compile_options(ebpfverifier PUBLIC "$<$<CONFIG:RELEASE>:${RELEASE_FLAGS}>")
-target_compile_options(ebpfverifier PUBLIC "$<$<CONFIG:SANITIZE>:${SANITIZE_FLAGS}>")
+target_compile_options(prevail PRIVATE ${COMMON_FLAGS})
+target_compile_options(prevail PUBLIC "$<$<CONFIG:DEBUG>:${DEBUG_FLAGS}>")
+target_compile_options(prevail PUBLIC "$<$<CONFIG:RELEASE>:${RELEASE_FLAGS}>")
+target_compile_options(prevail PUBLIC "$<$<CONFIG:SANITIZE>:${SANITIZE_FLAGS}>")
 
 add_subdirectory("external/bpf_conformance/external/elfio")
 if (VERIFIER_ENABLE_TESTS)
@@ -181,38 +181,38 @@ add_subdirectory("external/libbtf")
 
 # CMake derives a Visual Studio project GUID from the file path but can be overridden via a property
 # (see https://gitlab.kitware.com/cmake/cmake/-/commit/c85367f4).  Using a non-constant GUID
-# can cause problems if other projects/repos want to reference the ebpfverifier vcxproj file,
+# can cause problems if other projects/repos want to reference the prevail vcxproj file,
 # so we force a constant GUID here.
-set(ebpfverifier_GUID_CMAKE "7d5b4e68-c0fa-3f86-9405-f6400219b440" CACHE INTERNAL "Project GUID")
+set(prevail_GUID_CMAKE "7d5b4e68-c0fa-3f86-9405-f6400219b440" CACHE INTERNAL "Project GUID")
 set(yaml-cpp_GUID_CMAKE "98d56b8a-d8eb-3d98-b8ee-c83696b4d58a" CACHE INTERNAL "Project GUID")
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
-target_link_libraries(ebpfverifier PRIVATE ${YAML_CPP_LIBRARIES})
-target_link_libraries(ebpfverifier PRIVATE libbtf)
-target_link_libraries(ebpfverifier PRIVATE Microsoft.GSL::GSL)
-target_compile_options(ebpfverifier PRIVATE ${COMMON_FLAGS})
+target_link_libraries(prevail PRIVATE ${YAML_CPP_LIBRARIES})
+target_link_libraries(prevail PRIVATE libbtf)
+target_link_libraries(prevail PRIVATE Microsoft.GSL::GSL)
+target_compile_options(prevail PRIVATE ${COMMON_FLAGS})
 
 if (VERIFIER_ENABLE_TESTS)
     target_compile_options(check PRIVATE ${COMMON_FLAGS})
     target_compile_options(check PUBLIC "$<$<CONFIG:DEBUG>:${DEBUG_FLAGS}>")
     target_compile_options(check PUBLIC "$<$<CONFIG:RELEASE>:${RELEASE_FLAGS}>")
     target_compile_options(check PUBLIC "$<$<CONFIG:SANITIZE>:${SANITIZE_FLAGS}>")
-    target_link_libraries(check PRIVATE ebpfverifier)
+    target_link_libraries(check PRIVATE prevail)
 
     message("Boost_LIBRARY_DIRS: ${Boost_LIBRARY_DIRS}")
     target_compile_options(tests PRIVATE ${COMMON_FLAGS})
     target_compile_options(tests PUBLIC "$<$<CONFIG:DEBUG>:${DEBUG_FLAGS}>")
     target_compile_options(tests PUBLIC "$<$<CONFIG:RELEASE>:${RELEASE_FLAGS}>")
     target_compile_options(tests PUBLIC "$<$<CONFIG:SANITIZE>:${SANITIZE_FLAGS}>")
-    target_link_libraries(tests PRIVATE ebpfverifier)
+    target_link_libraries(tests PRIVATE prevail)
     target_link_libraries(tests PRIVATE bpf_conformance)
     target_link_libraries(tests PRIVATE ${CMAKE_DL_LIBS})
     target_link_libraries(tests PRIVATE Threads::Threads)
     target_link_libraries(tests PRIVATE Catch2::Catch2WithMain)
 
-    target_link_libraries(run_yaml PRIVATE ebpfverifier)
+    target_link_libraries(run_yaml PRIVATE prevail)
 
-    target_link_libraries(conformance_check PRIVATE ebpfverifier)
+    target_link_libraries(conformance_check PRIVATE prevail)
 endif ()
