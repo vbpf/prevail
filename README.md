@@ -83,7 +83,7 @@ docker run --privileged -it verifier ebpf-samples/linux/cpustat_kern.o --domain=
 
 ### Example:
 ```
-ebpf-verifier$ ./check ebpf-samples/cilium/bpf_lxc.o 2/1
+$ ./check ebpf-samples/cilium/bpf_lxc.o 2/1
 1,0.008288,4064
 ```
 The output is three comma-separated values:
