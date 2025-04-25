@@ -17,7 +17,7 @@
 
 namespace prevail {
 // Map definitions as they appear in an ELF file, so field width matters.
-struct bpf_load_map_def {
+struct BpfLoadMapDef {
     uint32_t type;
     uint32_t key_size;
     uint32_t value_size;
@@ -149,9 +149,9 @@ void parse_maps_section_linux(std::vector<EbpfMapDescriptor>& map_descriptors, c
                               const size_t map_def_size, const int map_count, const ebpf_platform_t* platform,
                               const ebpf_verifier_options_t options) {
     // Copy map definitions from the ELF section into a local list.
-    auto mapdefs = std::vector<bpf_load_map_def>();
+    auto mapdefs = std::vector<BpfLoadMapDef>();
     for (int i = 0; i < map_count; i++) {
-        bpf_load_map_def def = {0};
+        BpfLoadMapDef def = {0};
         memcpy(&def, data + i * map_def_size, std::min(map_def_size, sizeof(def)));
         mapdefs.emplace_back(def);
     }
@@ -241,7 +241,7 @@ EbpfMapDescriptor& get_map_descriptor_linux(const int map_fd) {
 const ebpf_platform_t g_ebpf_platform_linux = {get_program_type_linux,
                                                get_helper_prototype_linux,
                                                is_helper_usable_linux,
-                                               sizeof(bpf_load_map_def),
+                                               sizeof(BpfLoadMapDef),
                                                parse_maps_section_linux,
                                                get_map_descriptor_linux,
                                                get_map_type_linux,

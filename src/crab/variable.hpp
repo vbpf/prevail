@@ -15,10 +15,10 @@ std::vector<std::string> default_variable_names();
 
 // Wrapper for typed variables used by the abstract domains and linear_constraints.
 // Being a class (instead of a type alias) enables overloading in dsl_syntax
-class variable_t final {
+class Variable final {
     uint64_t _id;
 
-    explicit variable_t(const uint64_t id) : _id(id) {}
+    explicit Variable(const uint64_t id) : _id(id) {}
 
   public:
     [[nodiscard]]
@@ -26,12 +26,12 @@ class variable_t final {
         return _id;
     }
 
-    bool operator==(const variable_t o) const { return _id == o._id; }
+    bool operator==(const Variable o) const { return _id == o._id; }
 
-    bool operator!=(const variable_t o) const { return (!(operator==(o))); }
+    bool operator!=(const Variable o) const { return (!(operator==(o))); }
 
     // for flat_map
-    bool operator<(const variable_t o) const { return _id < o._id; }
+    bool operator<(const Variable o) const { return _id < o._id; }
 
     [[nodiscard]]
     std::string name() const {
@@ -48,35 +48,35 @@ class variable_t final {
         return names->at(_id).find(".uvalue") != std::string::npos;
     }
 
-    friend std::ostream& operator<<(std::ostream& o, const variable_t v) { return o << names->at(v._id); }
+    friend std::ostream& operator<<(std::ostream& o, const Variable v) { return o << names->at(v._id); }
 
     // var_factory portion.
     // This singleton is eBPF-specific, to avoid lifetime issues and/or passing factory explicitly everywhere:
   private:
-    static variable_t make(const std::string& name);
+    static Variable make(const std::string& name);
 
     /**
      * @brief Factory to always return the initial variable names.
      *
      * @tparam[in] T Should always be std::vector<std::string>.
      */
-    static thread_local lazy_allocator<std::vector<std::string>, default_variable_names> names;
+    static thread_local LazyAllocator<std::vector<std::string>, default_variable_names> names;
 
   public:
     static void clear_thread_local_state();
 
-    static std::vector<variable_t> get_type_variables();
-    static variable_t reg(data_kind_t, int);
-    static variable_t stack_frame_var(data_kind_t kind, int i, const std::string& prefix);
-    static variable_t cell_var(data_kind_t array, const number_t& offset, const number_t& size);
-    static variable_t kind_var(data_kind_t kind, variable_t type_variable);
-    static variable_t meta_offset();
-    static variable_t packet_size();
-    static std::vector<variable_t> get_loop_counters();
-    static variable_t loop_counter(const std::string& label);
+    static std::vector<Variable> get_type_variables();
+    static Variable reg(DataKind, int);
+    static Variable stack_frame_var(DataKind kind, int i, const std::string& prefix);
+    static Variable cell_var(DataKind array, const Number& offset, const Number& size);
+    static Variable kind_var(DataKind kind, Variable type_variable);
+    static Variable meta_offset();
+    static Variable packet_size();
+    static std::vector<Variable> get_loop_counters();
+    static Variable loop_counter(const std::string& label);
     [[nodiscard]]
     bool is_in_stack() const;
-    static bool printing_order(const variable_t& a, const variable_t& b);
-}; // class variable_t
+    static bool printing_order(const Variable& a, const Variable& b);
+}; // class Variable
 
 } // namespace prevail

@@ -22,77 +22,77 @@ namespace prevail {
 constexpr int MAX_PACKET_SIZE = 0xffff;
 constexpr int64_t PTR_MAX = std::numeric_limits<int32_t>::max() - MAX_PACKET_SIZE;
 
-class ebpf_domain_t;
+class EbpfDomain;
 
-void ebpf_domain_transform(ebpf_domain_t& inv, const Instruction& ins);
-void ebpf_domain_assume(ebpf_domain_t& dom, const Assertion& assertion);
-std::vector<std::string> ebpf_domain_check(const ebpf_domain_t& dom, const Assertion& assertion);
+void ebpf_domain_transform(EbpfDomain& inv, const Instruction& ins);
+void ebpf_domain_assume(EbpfDomain& dom, const Assertion& assertion);
+std::vector<std::string> ebpf_domain_check(const EbpfDomain& dom, const Assertion& assertion);
 
 // TODO: make this an explicit instruction
-void ebpf_domain_initialize_loop_counter(ebpf_domain_t& dom, const label_t& label);
+void ebpf_domain_initialize_loop_counter(EbpfDomain& dom, const Label& label);
 
-class ebpf_domain_t final {
-    friend class ebpf_checker;
-    friend class ebpf_transformer;
+class EbpfDomain final {
+    friend class EbpfChecker;
+    friend class EbpfTransformer;
 
-    friend std::ostream& operator<<(std::ostream& o, const ebpf_domain_t& dom);
+    friend std::ostream& operator<<(std::ostream& o, const EbpfDomain& dom);
 
   public:
-    ebpf_domain_t();
-    ebpf_domain_t(NumAbsDomain inv, array_domain_t stack);
+    EbpfDomain();
+    EbpfDomain(NumAbsDomain inv, ArrayDomain stack);
 
     // Generic abstract domain operations
-    static ebpf_domain_t top();
-    static ebpf_domain_t bottom();
+    static EbpfDomain top();
+    static EbpfDomain bottom();
     void set_to_top();
     void set_to_bottom();
     [[nodiscard]]
     bool is_bottom() const;
     [[nodiscard]]
     bool is_top() const;
-    bool operator<=(const ebpf_domain_t& other) const;
-    bool operator==(const ebpf_domain_t& other) const;
-    void operator|=(ebpf_domain_t&& other);
-    void operator|=(const ebpf_domain_t& other);
-    ebpf_domain_t operator|(ebpf_domain_t&& other) const;
-    ebpf_domain_t operator|(const ebpf_domain_t& other) const&;
-    ebpf_domain_t operator|(const ebpf_domain_t& other) &&;
-    ebpf_domain_t operator&(const ebpf_domain_t& other) const;
-    ebpf_domain_t widen(const ebpf_domain_t& other, bool to_constants) const;
-    ebpf_domain_t widening_thresholds(const ebpf_domain_t& other, const thresholds_t& ts);
-    ebpf_domain_t narrow(const ebpf_domain_t& other) const;
+    bool operator<=(const EbpfDomain& other) const;
+    bool operator==(const EbpfDomain& other) const;
+    void operator|=(EbpfDomain&& other);
+    void operator|=(const EbpfDomain& other);
+    EbpfDomain operator|(EbpfDomain&& other) const;
+    EbpfDomain operator|(const EbpfDomain& other) const&;
+    EbpfDomain operator|(const EbpfDomain& other) &&;
+    EbpfDomain operator&(const EbpfDomain& other) const;
+    EbpfDomain widen(const EbpfDomain& other, bool to_constants) const;
+    EbpfDomain widening_thresholds(const EbpfDomain& other, const Thresholds& ts);
+    EbpfDomain narrow(const EbpfDomain& other) const;
 
-    static ebpf_domain_t calculate_constant_limits();
-    extended_number get_loop_count_upper_bound() const;
-    interval_t get_r0() const;
+    static EbpfDomain calculate_constant_limits();
+    ExtendedNumber get_loop_count_upper_bound() const;
+    Interval get_r0() const;
 
-    static ebpf_domain_t setup_entry(bool init_r1);
-    static ebpf_domain_t from_constraints(const std::set<std::string>& constraints, bool setup_constraints);
+    static EbpfDomain setup_entry(bool init_r1);
+    static EbpfDomain from_constraints(const std::set<std::string>& constraints, bool setup_constraints);
     void initialize_packet();
 
-    string_invariant to_set() const;
+    StringInvariant to_set() const;
 
   private:
     // private generic domain functions
-    void add_constraint(const linear_constraint_t& cst);
-    void havoc(variable_t var);
+    void add_constraint(const LinearConstraint& cst);
+    void havoc(Variable var);
 
     [[nodiscard]]
     std::optional<uint32_t> get_map_type(const Reg& map_fd_reg) const;
     [[nodiscard]]
     std::optional<uint32_t> get_map_inner_map_fd(const Reg& map_fd_reg) const;
     [[nodiscard]]
-    interval_t get_map_key_size(const Reg& map_fd_reg) const;
+    Interval get_map_key_size(const Reg& map_fd_reg) const;
     [[nodiscard]]
-    interval_t get_map_value_size(const Reg& map_fd_reg) const;
+    Interval get_map_value_size(const Reg& map_fd_reg) const;
     [[nodiscard]]
-    interval_t get_map_max_entries(const Reg& map_fd_reg) const;
+    Interval get_map_max_entries(const Reg& map_fd_reg) const;
 
-    static std::optional<variable_t> get_type_offset_variable(const Reg& reg, int type);
+    static std::optional<Variable> get_type_offset_variable(const Reg& reg, int type);
     [[nodiscard]]
-    std::optional<variable_t> get_type_offset_variable(const Reg& reg, const NumAbsDomain& inv) const;
+    std::optional<Variable> get_type_offset_variable(const Reg& reg, const NumAbsDomain& inv) const;
     [[nodiscard]]
-    std::optional<variable_t> get_type_offset_variable(const Reg& reg) const;
+    std::optional<Variable> get_type_offset_variable(const Reg& reg) const;
 
     bool get_map_fd_range(const Reg& map_fd_reg, int32_t* start_fd, int32_t* end_fd) const;
 
@@ -104,7 +104,7 @@ class ebpf_domain_t final {
     /// Represents the stack as a memory region, i.e., an array of bytes,
     /// allowing mapping to variable in the m_inv numeric domains
     /// while dealing with overlapping byte ranges.
-    array_domain_t stack;
+    ArrayDomain stack;
 
     TypeDomain type_inv;
 };

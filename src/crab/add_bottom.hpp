@@ -127,7 +127,7 @@ class AddBottom final {
     }
 
     [[nodiscard]]
-    AddBottom when(const linear_constraint_t& cst) const {
+    AddBottom when(const LinearConstraint& cst) const {
         if (dom) {
             AddBottom result(*dom);
             if (!result.dom->add_constraint(cst)) {
@@ -138,13 +138,13 @@ class AddBottom final {
         return bottom();
     }
 
-    void havoc(variable_t v) {
+    void havoc(Variable v) {
         if (dom) {
             dom->havoc(v);
         }
     }
 
-    void add_constraint(const linear_constraint_t& cst) {
+    void add_constraint(const LinearConstraint& cst) {
         if (dom) {
             if (!dom->add_constraint(cst)) {
                 dom = {};
@@ -153,14 +153,14 @@ class AddBottom final {
     }
 
     [[nodiscard]]
-    interval_t eval_interval(const linear_expression_t& e) const {
+    Interval eval_interval(const LinearExpression& e) const {
         if (dom) {
             return dom->eval_interval(e);
         }
-        return interval_t::bottom();
+        return Interval::bottom();
     }
 
-    void set(variable_t x, const interval_t& intv) {
+    void set(Variable x, const Interval& intv) {
         if (intv.is_bottom()) {
             dom = {};
         } else if (dom) {
@@ -168,14 +168,14 @@ class AddBottom final {
         }
     }
 
-    void assign(const std::optional<variable_t> x, const linear_expression_t& e) {
+    void assign(const std::optional<Variable> x, const LinearExpression& e) {
         if (x) {
             assign(*x, e);
         }
     }
 
     template <typename V>
-    void assign(variable_t x, const V& value) {
+    void assign(Variable x, const V& value) {
         if (dom) {
             // XXX: maybe needs to return false when becomes bottom
             // is this possible?
@@ -184,7 +184,7 @@ class AddBottom final {
     }
 
     template <typename Op, typename Left, typename Right>
-    void apply(Op op, variable_t x, const Left& left, const Right& right, int finite_width) {
+    void apply(Op op, Variable x, const Left& left, const Right& right, int finite_width) {
         if (dom) {
             dom->apply(op, x, left, right, finite_width);
         }
@@ -192,7 +192,7 @@ class AddBottom final {
 
     // Return true if inv intersects with cst.
     [[nodiscard]]
-    bool intersect(const linear_constraint_t& cst) const {
+    bool intersect(const LinearConstraint& cst) const {
         if (dom) {
             return dom->intersect(cst);
         }
@@ -201,7 +201,7 @@ class AddBottom final {
 
     // Return true if entails rhs.
     [[nodiscard]]
-    bool entail(const linear_constraint_t& cst) const {
+    bool entail(const LinearConstraint& cst) const {
         if (dom) {
             return dom->entail(cst);
         }
@@ -216,11 +216,11 @@ class AddBottom final {
     }
 
     [[nodiscard]]
-    string_invariant to_set() const {
+    StringInvariant to_set() const {
         if (dom) {
             return dom->to_set();
         }
-        return string_invariant::bottom();
+        return StringInvariant::bottom();
     }
 }; // class AddBottom
 

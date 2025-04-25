@@ -6,23 +6,23 @@
 
 namespace prevail {
 
-void thresholds_t::add(const extended_number& v) {
+void Thresholds::add(const ExtendedNumber& v) {
     if (m_thresholds.size() < m_size) {
         if (std::ranges::find(m_thresholds, v) == m_thresholds.end()) {
             const auto ub = std::ranges::upper_bound(m_thresholds, v);
 
             // don't add consecutive thresholds
-            if (v > number_t{0}) {
+            if (v > Number{0}) {
                 auto prev = ub;
                 --prev;
                 if (prev != m_thresholds.begin()) {
-                    if (*prev + number_t{1} == v) {
+                    if (*prev + Number{1} == v) {
                         *prev = v;
                         return;
                     }
                 }
-            } else if (v < number_t{0}) {
-                if (*ub - number_t{1} == v) {
+            } else if (v < Number{0}) {
+                if (*ub - Number{1} == v) {
                     *ub = v;
                     return;
                 }
@@ -33,10 +33,10 @@ void thresholds_t::add(const extended_number& v) {
     }
 }
 
-std::ostream& operator<<(std::ostream& o, const thresholds_t& t) {
+std::ostream& operator<<(std::ostream& o, const Thresholds& t) {
     o << "{";
     for (auto it = t.m_thresholds.begin(), et = t.m_thresholds.end(); it != et;) {
-        extended_number b(*it);
+        ExtendedNumber b(*it);
         o << b;
         ++it;
         if (it != t.m_thresholds.end()) {
@@ -47,25 +47,25 @@ std::ostream& operator<<(std::ostream& o, const thresholds_t& t) {
     return o;
 }
 
-void wto_thresholds_t::get_thresholds(const label_t& label, thresholds_t& thresholds) const {}
+void WtoThresholds::get_thresholds(const Label& label, Thresholds& thresholds) const {}
 
-void wto_thresholds_t::operator()(const label_t& vertex) {
+void WtoThresholds::operator()(const Label& vertex) {
     if (m_stack.empty()) {
         return;
     }
 
-    const label_t head = m_stack.back();
+    const Label head = m_stack.back();
     const auto it = m_head_to_thresholds.find(head);
     if (it != m_head_to_thresholds.end()) {
-        thresholds_t& thresholds = it->second;
+        Thresholds& thresholds = it->second;
         get_thresholds(vertex, thresholds);
     } else {
         CRAB_ERROR("No head found while gathering thresholds");
     }
 }
 
-void wto_thresholds_t::operator()(const std::shared_ptr<wto_cycle_t>& cycle) {
-    thresholds_t thresholds(m_max_size);
+void WtoThresholds::operator()(const std::shared_ptr<WtoCycle>& cycle) {
+    Thresholds thresholds(m_max_size);
     const auto& head = cycle->head();
     get_thresholds(head, thresholds);
 
@@ -85,7 +85,7 @@ void wto_thresholds_t::operator()(const std::shared_ptr<wto_cycle_t>& cycle) {
     m_stack.pop_back();
 }
 
-std::ostream& operator<<(std::ostream& o, const wto_thresholds_t& t) {
+std::ostream& operator<<(std::ostream& o, const WtoThresholds& t) {
     for (const auto& [label, th] : t.m_head_to_thresholds) {
         o << to_string(label) << "=" << th << "\n";
     }

@@ -12,15 +12,15 @@
 #include "crab/linear_constraint.hpp"
 
 namespace prevail {
-struct string_invariant {
+struct StringInvariant {
     std::optional<std::set<std::string>> maybe_inv{};
 
-    string_invariant() = default;
+    StringInvariant() = default;
 
-    explicit string_invariant(std::set<std::string> inv) : maybe_inv(std::move(inv)) {};
+    explicit StringInvariant(std::set<std::string> inv) : maybe_inv(std::move(inv)) {};
 
-    string_invariant(const string_invariant& inv) = default;
-    string_invariant& operator=(const string_invariant& inv) = default;
+    StringInvariant(const StringInvariant& inv) = default;
+    StringInvariant& operator=(const StringInvariant& inv) = default;
 
     [[nodiscard]]
     bool is_bottom() const {
@@ -31,8 +31,8 @@ struct string_invariant {
         return maybe_inv && maybe_inv->empty();
     }
 
-    static string_invariant top() { return string_invariant{{}}; }
-    static string_invariant bottom() { return string_invariant{}; }
+    static StringInvariant top() { return StringInvariant{{}}; }
+    static StringInvariant bottom() { return StringInvariant{}; }
 
     [[nodiscard]]
     const std::set<std::string>& value() const {
@@ -42,19 +42,19 @@ struct string_invariant {
         return *maybe_inv;
     }
 
-    string_invariant operator-(const string_invariant& b) const;
-    string_invariant operator+(const string_invariant& b) const;
+    StringInvariant operator-(const StringInvariant& b) const;
+    StringInvariant operator+(const StringInvariant& b) const;
 
-    bool operator==(const string_invariant& other) const { return maybe_inv == other.maybe_inv; }
+    bool operator==(const StringInvariant& other) const { return maybe_inv == other.maybe_inv; }
 
     [[nodiscard]]
     bool contains(const std::string& item) const {
         return maybe_inv.value().contains(item);
     }
 
-    friend std::ostream& operator<<(std::ostream&, const string_invariant& inv);
+    friend std::ostream& operator<<(std::ostream&, const StringInvariant& inv);
 };
 
-std::vector<linear_constraint_t> parse_linear_constraints(const std::set<std::string>& constraints,
-                                                          std::vector<interval_t>& numeric_ranges);
+std::vector<LinearConstraint> parse_linear_constraints(const std::set<std::string>& constraints,
+                                                       std::vector<Interval>& numeric_ranges);
 } // namespace prevail

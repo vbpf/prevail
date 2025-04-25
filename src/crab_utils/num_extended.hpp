@@ -11,11 +11,11 @@
 
 namespace prevail {
 
-class extended_number final {
+class ExtendedNumber final {
     bool _is_infinite;
-    number_t _n;
+    Number _n;
 
-    extended_number(const bool is_infinite, const number_t& n) : _is_infinite(is_infinite), _n(n) {
+    ExtendedNumber(const bool is_infinite, const Number& n) : _is_infinite(is_infinite), _n(n) {
         if (is_infinite) {
             if (n > 0) {
                 _n = 1;
@@ -26,11 +26,11 @@ class extended_number final {
     }
 
   public:
-    static extended_number plus_infinity() { return extended_number(true, 1); }
+    static ExtendedNumber plus_infinity() { return ExtendedNumber(true, 1); }
 
-    static extended_number minus_infinity() { return extended_number(true, -1); }
+    static ExtendedNumber minus_infinity() { return ExtendedNumber(true, -1); }
 
-    explicit extended_number(const std::string& s) : _n(1) {
+    explicit ExtendedNumber(const std::string& s) : _n(1) {
         if (s == "+oo") {
             _is_infinite = true;
         } else if (s == "-oo") {
@@ -38,16 +38,16 @@ class extended_number final {
             _n = -1;
         } else {
             _is_infinite = false;
-            _n = number_t(s);
+            _n = Number(s);
         }
     }
 
-    extended_number(number_t n) : _is_infinite(false), _n(std::move(n)) {}
-    extended_number(std::integral auto n) : _is_infinite(false), _n{n} {}
+    ExtendedNumber(Number n) : _is_infinite(false), _n(std::move(n)) {}
+    ExtendedNumber(std::integral auto n) : _is_infinite(false), _n{n} {}
 
-    extended_number(const extended_number& o) = default;
+    ExtendedNumber(const ExtendedNumber& o) = default;
 
-    extended_number(extended_number&&) noexcept = default;
+    ExtendedNumber(ExtendedNumber&&) noexcept = default;
 
     template <std::integral T>
     T narrow() const {
@@ -62,9 +62,9 @@ class extended_number final {
         return static_cast<T>(narrow<std::underlying_type_t<T>>());
     }
 
-    extended_number& operator=(extended_number&&) noexcept = default;
+    ExtendedNumber& operator=(ExtendedNumber&&) noexcept = default;
 
-    extended_number& operator=(const extended_number& o) {
+    ExtendedNumber& operator=(const ExtendedNumber& o) {
         if (this != &o) {
             _is_infinite = o._is_infinite;
             _n = o._n;
@@ -92,12 +92,12 @@ class extended_number final {
         return (is_infinite() && _n < 0);
     }
 
-    extended_number operator-() const { return extended_number(_is_infinite, -_n); }
+    ExtendedNumber operator-() const { return ExtendedNumber(_is_infinite, -_n); }
 
-    extended_number operator+(const extended_number& x) const {
+    ExtendedNumber operator+(const ExtendedNumber& x) const {
         if (is_finite()) {
             if (x.is_finite()) {
-                return extended_number(_n + x._n);
+                return ExtendedNumber(_n + x._n);
             }
             return x;
         }
@@ -107,26 +107,26 @@ class extended_number final {
         CRAB_ERROR("Bound: undefined operation -oo + +oo");
     }
 
-    extended_number& operator+=(const extended_number& x) { return operator=(operator+(x)); }
+    ExtendedNumber& operator+=(const ExtendedNumber& x) { return operator=(operator+(x)); }
 
-    extended_number operator-(const extended_number& x) const { return operator+(x.operator-()); }
+    ExtendedNumber operator-(const ExtendedNumber& x) const { return operator+(x.operator-()); }
 
-    extended_number& operator-=(const extended_number& x) { return operator=(operator-(x)); }
+    ExtendedNumber& operator-=(const ExtendedNumber& x) { return operator=(operator-(x)); }
 
-    extended_number operator*(const extended_number& x) const {
+    ExtendedNumber operator*(const ExtendedNumber& x) const {
         if (x._n == 0) {
             return x;
         } else if (_n == 0) {
             return *this;
         } else {
-            return extended_number(_is_infinite || x._is_infinite, _n * x._n);
+            return ExtendedNumber(_is_infinite || x._is_infinite, _n * x._n);
         }
     }
 
-    extended_number& operator*=(const extended_number& x) { return operator=(operator*(x)); }
+    ExtendedNumber& operator*=(const ExtendedNumber& x) { return operator=(operator*(x)); }
 
   private:
-    extended_number AbsDiv(const extended_number& x, extended_number (*f)(number_t, number_t)) const {
+    ExtendedNumber AbsDiv(const ExtendedNumber& x, ExtendedNumber (*f)(Number, Number)) const {
         if (x._n == 0) {
             CRAB_ERROR("Bound: division by zero");
         }
@@ -134,7 +134,7 @@ class extended_number final {
             if (is_infinite()) {
                 CRAB_ERROR("Bound: inf / inf");
             }
-            return number_t{0};
+            return Number{0};
         }
         if (is_infinite()) {
             return *this;
@@ -143,46 +143,46 @@ class extended_number final {
     }
 
   public:
-    extended_number operator/(const extended_number& x) const {
-        return AbsDiv(x, [](number_t dividend, number_t divisor) { return extended_number{dividend / divisor}; });
+    ExtendedNumber operator/(const ExtendedNumber& x) const {
+        return AbsDiv(x, [](Number dividend, Number divisor) { return ExtendedNumber{dividend / divisor}; });
     }
 
-    extended_number operator%(const extended_number& x) const {
-        return AbsDiv(x, [](number_t dividend, number_t divisor) { return extended_number{dividend % divisor}; });
+    ExtendedNumber operator%(const ExtendedNumber& x) const {
+        return AbsDiv(x, [](Number dividend, Number divisor) { return ExtendedNumber{dividend % divisor}; });
     }
 
     [[nodiscard]]
-    extended_number udiv(const extended_number& x) const {
+    ExtendedNumber udiv(const ExtendedNumber& x) const {
         using M = uint64_t;
-        return AbsDiv(x, [](number_t dividend, number_t divisor) {
-            dividend = dividend >= 0 ? dividend : number_t{dividend.cast_to<M>()};
-            divisor = divisor >= 0 ? divisor : number_t{divisor.cast_to<M>()};
-            return extended_number{dividend / divisor};
+        return AbsDiv(x, [](Number dividend, Number divisor) {
+            dividend = dividend >= 0 ? dividend : Number{dividend.cast_to<M>()};
+            divisor = divisor >= 0 ? divisor : Number{divisor.cast_to<M>()};
+            return ExtendedNumber{dividend / divisor};
         });
     }
 
     [[nodiscard]]
-    extended_number urem(const extended_number& x) const {
+    ExtendedNumber urem(const ExtendedNumber& x) const {
         using M = uint64_t;
-        return AbsDiv(x, [](number_t dividend, number_t divisor) {
-            dividend = dividend >= 0 ? dividend : number_t{dividend.cast_to<M>()};
-            divisor = divisor >= 0 ? divisor : number_t{divisor.cast_to<M>()};
-            return extended_number{dividend % divisor};
+        return AbsDiv(x, [](Number dividend, Number divisor) {
+            dividend = dividend >= 0 ? dividend : Number{dividend.cast_to<M>()};
+            divisor = divisor >= 0 ? divisor : Number{divisor.cast_to<M>()};
+            return ExtendedNumber{dividend % divisor};
         });
     }
 
-    extended_number& operator/=(const extended_number& x) { return operator=(operator/(x)); }
+    ExtendedNumber& operator/=(const ExtendedNumber& x) { return operator=(operator/(x)); }
 
-    bool operator<(const extended_number& x) const { return !operator>=(x); }
+    bool operator<(const ExtendedNumber& x) const { return !operator>=(x); }
 
-    bool operator>(const extended_number& x) const { return !operator<=(x); }
+    bool operator>(const ExtendedNumber& x) const { return !operator<=(x); }
 
-    bool operator==(const extended_number& x) const { return (_is_infinite == x._is_infinite && _n == x._n); }
+    bool operator==(const ExtendedNumber& x) const { return (_is_infinite == x._is_infinite && _n == x._n); }
 
-    bool operator!=(const extended_number& x) const { return !operator==(x); }
+    bool operator!=(const ExtendedNumber& x) const { return !operator==(x); }
 
     [[nodiscard]]
-    number_t sign_extend(const int width) const {
+    Number sign_extend(const int width) const {
         if (is_infinite()) {
             CRAB_ERROR("Bound: infinity cannot be sign_extended");
         }
@@ -190,7 +190,7 @@ class extended_number final {
     }
 
     [[nodiscard]]
-    number_t zero_extend(const int width) const {
+    Number zero_extend(const int width) const {
         if (is_infinite()) {
             CRAB_ERROR("Bound: infinity cannot be zero_extended");
         }
@@ -201,7 +201,7 @@ class extended_number final {
      *	results include up to 20% improvements in performance in the octagon domain
      *	over a more naive implementation.
      */
-    bool operator<=(const extended_number& x) const {
+    bool operator<=(const ExtendedNumber& x) const {
         if (_is_infinite xor x._is_infinite) {
             if (_is_infinite) {
                 return _n < 0;
@@ -211,7 +211,7 @@ class extended_number final {
         return _n <= x._n;
     }
 
-    bool operator>=(const extended_number& x) const {
+    bool operator>=(const ExtendedNumber& x) const {
         if (_is_infinite xor x._is_infinite) {
             if (_is_infinite) {
                 return _n > 0;
@@ -222,8 +222,8 @@ class extended_number final {
     }
 
     [[nodiscard]]
-    extended_number abs() const {
-        if (operator>=(number_t{0})) {
+    ExtendedNumber abs() const {
+        if (operator>=(Number{0})) {
             return *this;
         } else {
             return operator-();
@@ -231,7 +231,7 @@ class extended_number final {
     }
 
     [[nodiscard]]
-    std::optional<number_t> number() const {
+    std::optional<Number> number() const {
         if (is_infinite()) {
             return {};
         } else {
@@ -239,7 +239,7 @@ class extended_number final {
         }
     }
 
-    friend std::ostream& operator<<(std::ostream& o, const extended_number& b) {
+    friend std::ostream& operator<<(std::ostream& o, const ExtendedNumber& b) {
         if (b.is_plus_infinity()) {
             o << "+oo";
         } else if (b.is_minus_infinity()) {
@@ -250,6 +250,6 @@ class extended_number final {
         return o;
     }
 
-}; // class extended_number
+}; // class ExtendedNumber
 
 } // namespace prevail

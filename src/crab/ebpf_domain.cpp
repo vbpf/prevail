@@ -18,8 +18,8 @@
 
 namespace prevail {
 
-std::optional<variable_t> ebpf_domain_t::get_type_offset_variable(const Reg& reg, const int type) {
-    reg_pack_t r = reg_pack(reg);
+std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg, const int type) {
+    RegPack r = reg_pack(reg);
     switch (type) {
     case T_CTX: return r.ctx_offset;
     case T_MAP:
@@ -31,52 +31,50 @@ std::optional<variable_t> ebpf_domain_t::get_type_offset_variable(const Reg& reg
     }
 }
 
-std::optional<variable_t> ebpf_domain_t::get_type_offset_variable(const Reg& reg, const NumAbsDomain& inv) const {
+std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg, const NumAbsDomain& inv) const {
     return get_type_offset_variable(reg, type_inv.get_type(inv, reg_pack(reg).type));
 }
 
-std::optional<variable_t> ebpf_domain_t::get_type_offset_variable(const Reg& reg) const {
+std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg) const {
     return get_type_offset_variable(reg, m_inv);
 }
 
-string_invariant ebpf_domain_t::to_set() const { return m_inv.to_set() + stack.to_set(); }
+StringInvariant EbpfDomain::to_set() const { return m_inv.to_set() + stack.to_set(); }
 
-ebpf_domain_t ebpf_domain_t::top() {
-    ebpf_domain_t abs;
+EbpfDomain EbpfDomain::top() {
+    EbpfDomain abs;
     abs.set_to_top();
     return abs;
 }
 
-ebpf_domain_t ebpf_domain_t::bottom() {
-    ebpf_domain_t abs;
+EbpfDomain EbpfDomain::bottom() {
+    EbpfDomain abs;
     abs.set_to_bottom();
     return abs;
 }
 
-ebpf_domain_t::ebpf_domain_t() : m_inv(NumAbsDomain::top()) {}
+EbpfDomain::EbpfDomain() : m_inv(NumAbsDomain::top()) {}
 
-ebpf_domain_t::ebpf_domain_t(NumAbsDomain inv, array_domain_t stack) : m_inv(std::move(inv)), stack(std::move(stack)) {}
+EbpfDomain::EbpfDomain(NumAbsDomain inv, ArrayDomain stack) : m_inv(std::move(inv)), stack(std::move(stack)) {}
 
-void ebpf_domain_t::set_to_top() {
+void EbpfDomain::set_to_top() {
     m_inv.set_to_top();
     stack.set_to_top();
 }
 
-void ebpf_domain_t::set_to_bottom() { m_inv.set_to_bottom(); }
+void EbpfDomain::set_to_bottom() { m_inv.set_to_bottom(); }
 
-bool ebpf_domain_t::is_bottom() const { return m_inv.is_bottom(); }
+bool EbpfDomain::is_bottom() const { return m_inv.is_bottom(); }
 
-bool ebpf_domain_t::is_top() const { return m_inv.is_top() && stack.is_top(); }
+bool EbpfDomain::is_top() const { return m_inv.is_top() && stack.is_top(); }
 
-bool ebpf_domain_t::operator<=(const ebpf_domain_t& other) const {
-    return m_inv <= other.m_inv && stack <= other.stack;
-}
+bool EbpfDomain::operator<=(const EbpfDomain& other) const { return m_inv <= other.m_inv && stack <= other.stack; }
 
-bool ebpf_domain_t::operator==(const ebpf_domain_t& other) const {
+bool EbpfDomain::operator==(const EbpfDomain& other) const {
     return stack == other.stack && m_inv <= other.m_inv && other.m_inv <= m_inv;
 }
 
-void ebpf_domain_t::operator|=(ebpf_domain_t&& other) {
+void EbpfDomain::operator|=(EbpfDomain&& other) {
     if (is_bottom()) {
         *this = std::move(other);
         return;
@@ -90,29 +88,29 @@ void ebpf_domain_t::operator|=(ebpf_domain_t&& other) {
     stack |= std::move(other.stack);
 }
 
-void ebpf_domain_t::operator|=(const ebpf_domain_t& other) {
-    ebpf_domain_t tmp{other};
+void EbpfDomain::operator|=(const EbpfDomain& other) {
+    EbpfDomain tmp{other};
     operator|=(std::move(tmp));
 }
 
-ebpf_domain_t ebpf_domain_t::operator|(ebpf_domain_t&& other) const {
-    return ebpf_domain_t(m_inv | std::move(other.m_inv), stack | other.stack);
+EbpfDomain EbpfDomain::operator|(EbpfDomain&& other) const {
+    return EbpfDomain(m_inv | std::move(other.m_inv), stack | other.stack);
 }
 
-ebpf_domain_t ebpf_domain_t::operator|(const ebpf_domain_t& other) const& {
-    return ebpf_domain_t(m_inv | other.m_inv, stack | other.stack);
+EbpfDomain EbpfDomain::operator|(const EbpfDomain& other) const& {
+    return EbpfDomain(m_inv | other.m_inv, stack | other.stack);
 }
 
-ebpf_domain_t ebpf_domain_t::operator|(const ebpf_domain_t& other) && {
-    return ebpf_domain_t(other.m_inv | std::move(m_inv), other.stack | stack);
+EbpfDomain EbpfDomain::operator|(const EbpfDomain& other) && {
+    return EbpfDomain(other.m_inv | std::move(m_inv), other.stack | stack);
 }
 
-ebpf_domain_t ebpf_domain_t::operator&(const ebpf_domain_t& other) const {
-    return ebpf_domain_t(m_inv & other.m_inv, stack & other.stack);
+EbpfDomain EbpfDomain::operator&(const EbpfDomain& other) const {
+    return EbpfDomain(m_inv & other.m_inv, stack & other.stack);
 }
 
-ebpf_domain_t ebpf_domain_t::calculate_constant_limits() {
-    ebpf_domain_t inv;
+EbpfDomain EbpfDomain::calculate_constant_limits() {
+    EbpfDomain inv;
     using namespace dsl_syntax;
     for (const int i : {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}) {
         const auto r = reg_pack(i);
@@ -124,10 +122,10 @@ ebpf_domain_t ebpf_domain_t::calculate_constant_limits() {
         inv.add_constraint(r.stack_offset >= 0);
         inv.add_constraint(r.shared_offset <= r.shared_region_size);
         inv.add_constraint(r.shared_offset >= 0);
-        inv.add_constraint(r.packet_offset <= variable_t::packet_size());
+        inv.add_constraint(r.packet_offset <= Variable::packet_size());
         inv.add_constraint(r.packet_offset >= 0);
         if (thread_local_options.cfg_opts.check_for_termination) {
-            for (const variable_t counter : variable_t::get_loop_counters()) {
+            for (const Variable counter : Variable::get_loop_counters()) {
                 inv.add_constraint(counter <= std::numeric_limits<int32_t>::max());
                 inv.add_constraint(counter >= 0);
                 inv.add_constraint(counter <= r.svalue);
@@ -137,29 +135,29 @@ ebpf_domain_t ebpf_domain_t::calculate_constant_limits() {
     return inv;
 }
 
-static const ebpf_domain_t constant_limits = ebpf_domain_t::calculate_constant_limits();
+static const EbpfDomain constant_limits = EbpfDomain::calculate_constant_limits();
 
-ebpf_domain_t ebpf_domain_t::widen(const ebpf_domain_t& other, const bool to_constants) const {
-    ebpf_domain_t res{m_inv.widen(other.m_inv), stack | other.stack};
+EbpfDomain EbpfDomain::widen(const EbpfDomain& other, const bool to_constants) const {
+    EbpfDomain res{m_inv.widen(other.m_inv), stack | other.stack};
     if (to_constants) {
         return res & constant_limits;
     }
     return res;
 }
 
-ebpf_domain_t ebpf_domain_t::narrow(const ebpf_domain_t& other) const {
-    return ebpf_domain_t(m_inv.narrow(other.m_inv), stack & other.stack);
+EbpfDomain EbpfDomain::narrow(const EbpfDomain& other) const {
+    return EbpfDomain(m_inv.narrow(other.m_inv), stack & other.stack);
 }
 
-void ebpf_domain_t::add_constraint(const linear_constraint_t& cst) { m_inv.add_constraint(cst); }
+void EbpfDomain::add_constraint(const LinearConstraint& cst) { m_inv.add_constraint(cst); }
 
-void ebpf_domain_t::havoc(const variable_t var) { m_inv.havoc(var); }
+void EbpfDomain::havoc(const Variable var) { m_inv.havoc(var); }
 
 // Get the start and end of the range of possible map fd values.
 // In the future, it would be cleaner to use a set rather than an interval
 // for map fds.
-bool ebpf_domain_t::get_map_fd_range(const Reg& map_fd_reg, int32_t* start_fd, int32_t* end_fd) const {
-    const interval_t& map_fd_interval = m_inv.eval_interval(reg_pack(map_fd_reg).map_fd);
+bool EbpfDomain::get_map_fd_range(const Reg& map_fd_reg, int32_t* start_fd, int32_t* end_fd) const {
+    const Interval& map_fd_interval = m_inv.eval_interval(reg_pack(map_fd_reg).map_fd);
     const auto lb = map_fd_interval.lb().number();
     const auto ub = map_fd_interval.ub().number();
     if (!lb || !lb->fits<int32_t>() || !ub || !ub->fits<int32_t>()) {
@@ -174,7 +172,7 @@ bool ebpf_domain_t::get_map_fd_range(const Reg& map_fd_reg, int32_t* start_fd, i
 }
 
 // All maps in the range must have the same type for us to use it.
-std::optional<uint32_t> ebpf_domain_t::get_map_type(const Reg& map_fd_reg) const {
+std::optional<uint32_t> EbpfDomain::get_map_type(const Reg& map_fd_reg) const {
     int32_t start_fd, end_fd;
     if (!get_map_fd_range(map_fd_reg, &start_fd, &end_fd)) {
         return std::optional<uint32_t>();
@@ -196,7 +194,7 @@ std::optional<uint32_t> ebpf_domain_t::get_map_type(const Reg& map_fd_reg) const
 }
 
 // All maps in the range must have the same inner map fd for us to use it.
-std::optional<uint32_t> ebpf_domain_t::get_map_inner_map_fd(const Reg& map_fd_reg) const {
+std::optional<uint32_t> EbpfDomain::get_map_inner_map_fd(const Reg& map_fd_reg) const {
     int start_fd, end_fd;
     if (!get_map_fd_range(map_fd_reg, &start_fd, &end_fd)) {
         return {};
@@ -218,70 +216,70 @@ std::optional<uint32_t> ebpf_domain_t::get_map_inner_map_fd(const Reg& map_fd_re
 }
 
 // We can deal with a range of key sizes.
-interval_t ebpf_domain_t::get_map_key_size(const Reg& map_fd_reg) const {
+Interval EbpfDomain::get_map_key_size(const Reg& map_fd_reg) const {
     int start_fd, end_fd;
     if (!get_map_fd_range(map_fd_reg, &start_fd, &end_fd)) {
-        return interval_t::top();
+        return Interval::top();
     }
 
-    interval_t result = interval_t::bottom();
+    Interval result = Interval::bottom();
     for (int map_fd = start_fd; map_fd <= end_fd; map_fd++) {
         if (const EbpfMapDescriptor* map = &thread_local_program_info->platform->get_map_descriptor(map_fd)) {
-            result = result | interval_t{map->key_size};
+            result = result | Interval{map->key_size};
         } else {
-            return interval_t::top();
+            return Interval::top();
         }
     }
     return result;
 }
 
 // We can deal with a range of value sizes.
-interval_t ebpf_domain_t::get_map_value_size(const Reg& map_fd_reg) const {
+Interval EbpfDomain::get_map_value_size(const Reg& map_fd_reg) const {
     int start_fd, end_fd;
     if (!get_map_fd_range(map_fd_reg, &start_fd, &end_fd)) {
-        return interval_t::top();
+        return Interval::top();
     }
 
-    interval_t result = interval_t::bottom();
+    Interval result = Interval::bottom();
     for (int map_fd = start_fd; map_fd <= end_fd; map_fd++) {
         if (const EbpfMapDescriptor* map = &thread_local_program_info->platform->get_map_descriptor(map_fd)) {
-            result = result | interval_t(map->value_size);
+            result = result | Interval(map->value_size);
         } else {
-            return interval_t::top();
+            return Interval::top();
         }
     }
     return result;
 }
 
 // We can deal with a range of max_entries values.
-interval_t ebpf_domain_t::get_map_max_entries(const Reg& map_fd_reg) const {
+Interval EbpfDomain::get_map_max_entries(const Reg& map_fd_reg) const {
     int start_fd, end_fd;
     if (!get_map_fd_range(map_fd_reg, &start_fd, &end_fd)) {
-        return interval_t::top();
+        return Interval::top();
     }
 
-    interval_t result = interval_t::bottom();
+    Interval result = Interval::bottom();
     for (int map_fd = start_fd; map_fd <= end_fd; map_fd++) {
         if (const EbpfMapDescriptor* map = &thread_local_program_info->platform->get_map_descriptor(map_fd)) {
-            result = result | interval_t(map->max_entries);
+            result = result | Interval(map->max_entries);
         } else {
-            return interval_t::top();
+            return Interval::top();
         }
     }
     return result;
 }
 
-extended_number ebpf_domain_t::get_loop_count_upper_bound() const {
-    extended_number ub{0};
-    for (const variable_t counter : variable_t::get_loop_counters()) {
+ExtendedNumber EbpfDomain::get_loop_count_upper_bound() const {
+    ExtendedNumber ub{0};
+    for (const Variable counter : Variable::get_loop_counters()) {
         ub = std::max(ub, m_inv.eval_interval(counter).ub());
     }
     return ub;
 }
 
-interval_t ebpf_domain_t::get_r0() const { return m_inv.eval_interval(reg_pack(R0_RETURN_VALUE).svalue); }
+Interval EbpfDomain::get_r0() const { return m_inv.eval_interval(reg_pack(R0_RETURN_VALUE).svalue); }
 
-std::ostream& operator<<(std::ostream& o, const ebpf_domain_t& dom) {
+std::ostream& operator<<(std::ostream& o, const EbpfDomain& dom) {
     if (dom.is_bottom()) {
         o << "_|_";
     } else {
@@ -290,33 +288,33 @@ std::ostream& operator<<(std::ostream& o, const ebpf_domain_t& dom) {
     return o;
 }
 
-void ebpf_domain_t::initialize_packet() {
+void EbpfDomain::initialize_packet() {
     using namespace dsl_syntax;
-    ebpf_domain_t& inv = *this;
-    inv.havoc(variable_t::packet_size());
-    inv.havoc(variable_t::meta_offset());
+    EbpfDomain& inv = *this;
+    inv.havoc(Variable::packet_size());
+    inv.havoc(Variable::meta_offset());
 
-    inv.add_constraint(0 <= variable_t::packet_size());
-    inv.add_constraint(variable_t::packet_size() < MAX_PACKET_SIZE);
+    inv.add_constraint(0 <= Variable::packet_size());
+    inv.add_constraint(Variable::packet_size() < MAX_PACKET_SIZE);
     const auto info = *thread_local_program_info;
     if (info.type.context_descriptor->meta >= 0) {
-        inv.add_constraint(variable_t::meta_offset() <= 0);
-        inv.add_constraint(variable_t::meta_offset() >= -4098);
+        inv.add_constraint(Variable::meta_offset() <= 0);
+        inv.add_constraint(Variable::meta_offset() >= -4098);
     } else {
-        inv.m_inv.assign(variable_t::meta_offset(), 0);
+        inv.m_inv.assign(Variable::meta_offset(), 0);
     }
 }
 
-ebpf_domain_t ebpf_domain_t::from_constraints(const std::set<std::string>& constraints, const bool setup_constraints) {
-    ebpf_domain_t inv;
+EbpfDomain EbpfDomain::from_constraints(const std::set<std::string>& constraints, const bool setup_constraints) {
+    EbpfDomain inv;
     if (setup_constraints) {
         inv = setup_entry(false);
     }
-    auto numeric_ranges = std::vector<interval_t>();
+    auto numeric_ranges = std::vector<Interval>();
     for (const auto& cst : parse_linear_constraints(constraints, numeric_ranges)) {
         inv.add_constraint(cst);
     }
-    for (const interval_t& range : numeric_ranges) {
+    for (const Interval& range : numeric_ranges) {
         const int start = range.lb().narrow<int>();
         const int width = 1 + range.finite_size()->narrow<int>();
         inv.stack.initialize_numbers(start, width);
@@ -325,10 +323,10 @@ ebpf_domain_t ebpf_domain_t::from_constraints(const std::set<std::string>& const
     return inv;
 }
 
-ebpf_domain_t ebpf_domain_t::setup_entry(const bool init_r1) {
+EbpfDomain EbpfDomain::setup_entry(const bool init_r1) {
     using namespace dsl_syntax;
 
-    ebpf_domain_t inv;
+    EbpfDomain inv;
     const auto r10 = reg_pack(R10_STACK_POINTER);
     constexpr Reg r10_reg{R10_STACK_POINTER};
     inv.m_inv.add_constraint(EBPF_TOTAL_STACK_SIZE <= r10.svalue);

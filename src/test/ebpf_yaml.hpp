@@ -12,9 +12,9 @@ namespace prevail {
 struct TestCase {
     std::string name;
     ebpf_verifier_options_t options{};
-    string_invariant assumed_pre_invariant;
+    StringInvariant assumed_pre_invariant;
     InstructionSeq instruction_seq;
-    string_invariant expected_post_invariant;
+    StringInvariant expected_post_invariant;
     std::set<std::string> expected_messages;
 };
 
@@ -28,7 +28,7 @@ struct Diff {
 };
 
 struct Failure {
-    Diff<string_invariant> invariant;
+    Diff<StringInvariant> invariant;
     Diff<std::set<std::string>> messages;
 };
 
@@ -38,7 +38,7 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug = false
 
 struct ConformanceTestResult {
     bool success{};
-    interval_t r0_value = interval_t::top();
+    Interval r0_value = Interval::top();
 };
 
 ConformanceTestResult run_conformance_test_case(const std::vector<std::byte>& memory_bytes,
