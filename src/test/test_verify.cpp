@@ -26,7 +26,7 @@ FAIL_LOAD_ELF("invalid", "badsymsize.o", "xdp_redirect_map")
     TEST_CASE("Try unmarshalling bad program: " dirname "/" filename " " sectionname, "[unmarshal]") {            \
         auto raw_progs = read_elf("ebpf-samples/" dirname "/" filename, sectionname, {}, &g_ebpf_platform_linux); \
         REQUIRE(raw_progs.size() == 1);                                                                           \
-        raw_program raw_prog = raw_progs.back();                                                                  \
+        RawProgram raw_prog = raw_progs.back();                                                                   \
         std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog);                            \
         REQUIRE(std::holds_alternative<std::string>(prog_or_error));                                              \
     }
@@ -39,7 +39,7 @@ FAIL_UNMARSHAL("invalid", "invalid-lddw.o", ".text")
     TEST_CASE("Try analyze bad program: " dirname "/" filename " " sectionname, "[cfg]") {                        \
         auto raw_progs = read_elf("ebpf-samples/" dirname "/" filename, sectionname, {}, &g_ebpf_platform_linux); \
         REQUIRE(raw_progs.size() == 1);                                                                           \
-        raw_program raw_prog = raw_progs.back();                                                                  \
+        RawProgram raw_prog = raw_progs.back();                                                                   \
         std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog);                            \
         const auto inst_seq = std::get_if<InstructionSeq>(&prog_or_error);                                        \
         REQUIRE(inst_seq != nullptr);                                                                             \
@@ -119,7 +119,7 @@ FAIL_ANALYZE("build", "badmapptr.o", "test")
         platform.supported_conformance_groups &= ~bpf_conformance_groups_t::packet;                  \
         auto raw_progs = read_elf("ebpf-samples/" dirname "/" filename, sectionname, {}, &platform); \
         REQUIRE(raw_progs.size() == 1);                                                              \
-        raw_program raw_prog = raw_progs.back();                                                     \
+        RawProgram raw_prog = raw_progs.back();                                                      \
         std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog);               \
         REQUIRE(std::holds_alternative<std::string>(prog_or_error));                                 \
     }
@@ -607,7 +607,7 @@ TEST_SECTION_LEGACY("cilium", "bpf_lxc.o", "2/10")
 TEST_SECTION("cilium", "bpf_lxc.o", "2/11")
 TEST_SECTION("cilium", "bpf_lxc.o", "2/12")
 
-void test_analyze_thread(const Program* prog, program_info* info, bool* res) {
+void test_analyze_thread(const Program* prog, ProgramInfo* info, bool* res) {
     thread_local_program_info.set(*info);
     *res = verify(*prog);
 }
@@ -616,7 +616,7 @@ void test_analyze_thread(const Program* prog, program_info* info, bool* res) {
 TEST_CASE("multithreading", "[verify][multithreading]") {
     auto raw_progs1 = read_elf("ebpf-samples/bpf_cilium_test/bpf_netdev.o", "2/1", {}, &g_ebpf_platform_linux);
     REQUIRE(raw_progs1.size() == 1);
-    raw_program raw_prog1 = raw_progs1.back();
+    RawProgram raw_prog1 = raw_progs1.back();
     auto prog_or_error1 = unmarshal(raw_prog1);
     auto inst_seq1 = std::get_if<InstructionSeq>(&prog_or_error1);
     REQUIRE(inst_seq1 != nullptr);
@@ -624,7 +624,7 @@ TEST_CASE("multithreading", "[verify][multithreading]") {
 
     auto raw_progs2 = read_elf("ebpf-samples/bpf_cilium_test/bpf_netdev.o", "2/2", {}, &g_ebpf_platform_linux);
     REQUIRE(raw_progs2.size() == 1);
-    raw_program raw_prog2 = raw_progs2.back();
+    RawProgram raw_prog2 = raw_progs2.back();
     auto prog_or_error2 = unmarshal(raw_prog2);
     auto inst_seq2 = std::get_if<InstructionSeq>(&prog_or_error2);
     REQUIRE(inst_seq2 != nullptr);

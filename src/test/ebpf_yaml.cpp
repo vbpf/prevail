@@ -85,12 +85,12 @@ std::set<string> operator-(const std::set<string>& a, const std::set<string>& b)
     return res;
 }
 
-static string_invariant read_invariant(const vector<string>& raw_invariant) {
+static StringInvariant read_invariant(const vector<string>& raw_invariant) {
     const std::set<string> res = vector_to_set(raw_invariant);
     if (res == std::set<string>{"_|_"}) {
-        return string_invariant{};
+        return StringInvariant{};
     }
-    return string_invariant{res};
+    return StringInvariant{res};
 }
 
 struct RawTestCase {
@@ -139,7 +139,7 @@ static RawTestCase parse_case(const YAML::Node& case_node) {
 }
 
 static InstructionSeq raw_cfg_to_instruction_seq(const vector<std::tuple<string, vector<string>>>& raw_blocks) {
-    std::map<string, label_t> label_name_to_label;
+    std::map<string, Label> label_name_to_label;
 
     int label_index = 0;
     for (const auto& [label_name, raw_block] : raw_blocks) {
@@ -243,12 +243,12 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
     ebpf_context_descriptor_t context_descriptor{64, 0, 4, -1};
     EbpfProgramType program_type = make_program_type(test_case.name, &context_descriptor);
 
-    program_info info{&g_platform_test, {}, program_type};
+    ProgramInfo info{&g_platform_test, {}, program_type};
     thread_local_options = test_case.options;
     try {
         const Program prog = Program::from_sequence(test_case.instruction_seq, info, test_case.options);
         const Invariants invariants = analyze(prog, test_case.assumed_pre_invariant);
-        const string_invariant actual_last_invariant = invariants.invariant_at(label_t::exit);
+        const StringInvariant actual_last_invariant = invariants.invariant_at(Label::exit);
         const std::set<string> actual_messages = invariants.check_assertions(prog).all_messages();
 
         if (actual_last_invariant == test_case.expected_post_invariant &&
@@ -261,12 +261,12 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
         };
     } catch (InvalidControlFlow& ex) {
         const std::set<string> actual_messages{ex.what()};
-        if (test_case.expected_post_invariant == string_invariant::top() &&
+        if (test_case.expected_post_invariant == StringInvariant::top() &&
             actual_messages == test_case.expected_messages) {
             return {};
         }
         return Failure{
-            .invariant = make_diff(string_invariant::top(), test_case.expected_post_invariant),
+            .invariant = make_diff(StringInvariant::top(), test_case.expected_post_invariant),
             .messages = make_diff(actual_messages, test_case.expected_messages),
         };
     }
@@ -299,7 +299,7 @@ void add_stack_variable(std::set<std::string>& more, int& offset, const std::vec
     offset += size;
 }
 
-string_invariant stack_contents_invariant(const std::vector<std::byte>& memory_bytes) {
+StringInvariant stack_contents_invariant(const std::vector<std::byte>& memory_bytes) {
     std::set<std::string> more = {"r1.type=stack",
                                   "r1.stack_offset=" + std::to_string(EBPF_TOTAL_STACK_SIZE - memory_bytes.size()),
                                   "r1.stack_numeric_size=" + std::to_string(memory_bytes.size()),
@@ -322,7 +322,7 @@ string_invariant stack_contents_invariant(const std::vector<std::byte>& memory_b
         add_stack_variable<int64_t>(more, offset, memory_bytes);
     }
 
-    return string_invariant(more);
+    return StringInvariant(more);
 }
 
 ConformanceTestResult run_conformance_test_case(const std::vector<std::byte>& memory_bytes,
@@ -330,10 +330,10 @@ ConformanceTestResult run_conformance_test_case(const std::vector<std::byte>& me
     ebpf_context_descriptor_t context_descriptor{64, -1, -1, -1};
     EbpfProgramType program_type = make_program_type("conformance_check", &context_descriptor);
 
-    program_info info{&g_platform_test, {}, program_type};
+    ProgramInfo info{&g_platform_test, {}, program_type};
 
-    auto insts = vector_of<ebpf_inst>(program_bytes);
-    string_invariant pre_invariant = string_invariant::top();
+    auto insts = vector_of<EbpfInst>(program_bytes);
+    StringInvariant pre_invariant = StringInvariant::top();
 
     if (!memory_bytes.empty()) {
         if (memory_bytes.size() > EBPF_TOTAL_STACK_SIZE) {
@@ -342,7 +342,7 @@ ConformanceTestResult run_conformance_test_case(const std::vector<std::byte>& me
         }
         pre_invariant = pre_invariant + stack_contents_invariant(memory_bytes);
     }
-    raw_program raw_prog{.prog = insts};
+    RawProgram raw_prog{.prog = insts};
     ebpf_platform_t platform = g_ebpf_platform_linux;
     platform.supported_conformance_groups |= bpf_conformance_groups_t::callx;
     raw_prog.info.platform = &platform;

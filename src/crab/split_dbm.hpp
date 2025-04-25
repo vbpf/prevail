@@ -39,43 +39,43 @@
 
 namespace prevail {
 
-enum class arith_binop_t { ADD, SUB, MUL, SDIV, UDIV, SREM, UREM };
-enum class bitwise_binop_t { AND, OR, XOR, SHL, LSHR, ASHR };
-using binop_t = std::variant<arith_binop_t, bitwise_binop_t>;
+enum class ArithBinOp { ADD, SUB, MUL, SDIV, UDIV, SREM, UREM };
+enum class BitwiseBinOp { AND, OR, XOR, SHL, LSHR, ASHR };
+using BinOp = std::variant<ArithBinOp, BitwiseBinOp>;
 
 class SplitDBM final {
   public:
-    using graph_t = AdaptGraph;
-    using Weight = graph_t::Weight;
-    using vert_id = graph_t::vert_id;
-    using vert_map_t = boost::container::flat_map<variable_t, vert_id>;
+    using Graph = AdaptGraph;
+    using Weight = Graph::Weight;
+    using VertId = Graph::VertId;
+    using VertMap = boost::container::flat_map<Variable, VertId>;
 
   private:
-    using variable_vector_t = std::vector<variable_t>;
+    using VariableVector = std::vector<Variable>;
 
-    using rev_map_t = std::vector<std::optional<variable_t>>;
+    using RevMap = std::vector<std::optional<Variable>>;
     // < <x, y>, k> == x - y <= k.
-    using diffcst_t = std::pair<std::pair<variable_t, variable_t>, Weight>;
-    using vert_set_t = std::unordered_set<vert_id>;
-    friend class vert_set_wrap_t;
+    using diffcst_t = std::pair<std::pair<Variable, Variable>, Weight>;
+    using VertSet = std::unordered_set<VertId>;
+    friend class VertSetWrap;
 
-    vert_map_t vert_map; // Mapping from variables to vertices
-    rev_map_t rev_map;
-    graph_t g;                     // The underlying relation graph
+    VertMap vert_map; // Mapping from variables to vertices
+    RevMap rev_map;
+    Graph g;                       // The underlying relation graph
     std::vector<Weight> potential; // Stored potential for the vertex
-    vert_set_t unstable;
+    VertSet unstable;
 
-    vert_id get_vert(variable_t v);
+    VertId get_vert(Variable v);
     // Evaluate the potential value of a variable.
     [[nodiscard]]
-    Weight pot_value(variable_t v) const;
+    Weight pot_value(Variable v) const;
 
     // Evaluate an expression under the chosen potentials
     [[nodiscard]]
-    bool eval_expression_overflow(const linear_expression_t& e, Weight& out) const;
+    bool eval_expression_overflow(const LinearExpression& e, Weight& out) const;
 
     [[nodiscard]]
-    interval_t compute_residual(const linear_expression_t& e, variable_t pivot) const;
+    Interval compute_residual(const LinearExpression& e, Variable pivot) const;
 
     /**
      *  Turn an assignment into a set of difference constraints.
@@ -90,46 +90,44 @@ class SplitDBM final {
      *     x - v <= lb((a-1)*x + b*y + k)
      *     y - v <= lb(a*x + (b-1)*y + k)
      **/
-    void diffcsts_of_assign(variable_t x, const linear_expression_t& exp,
+    void diffcsts_of_assign(Variable x, const LinearExpression& exp,
                             /* if true then process the upper
                                bounds, else the lower bounds */
                             bool extract_upper_bounds,
                             /* foreach {v, k} \in diff_csts we have
                                the difference constraint v - k <= k */
-                            std::vector<std::pair<variable_t, Weight>>& diff_csts) const;
+                            std::vector<std::pair<Variable, Weight>>& diff_csts) const;
 
     // Turn an assignment into a set of difference constraints.
-    void diffcsts_of_assign(variable_t x, const linear_expression_t& exp,
-                            std::vector<std::pair<variable_t, Weight>>& lb,
-                            std::vector<std::pair<variable_t, Weight>>& ub) const;
+    void diffcsts_of_assign(Variable x, const LinearExpression& exp, std::vector<std::pair<Variable, Weight>>& lb,
+                            std::vector<std::pair<Variable, Weight>>& ub) const;
 
     /**
      * Turn a linear inequality into a set of difference
      * constraints.
      **/
-    void diffcsts_of_lin_leq(const linear_expression_t& exp,
+    void diffcsts_of_lin_leq(const LinearExpression& exp,
                              /* difference constraints */
                              std::vector<diffcst_t>& csts,
                              /* x >= lb for each {x,lb} in lbs */
-                             std::vector<std::pair<variable_t, Weight>>& lbs,
+                             std::vector<std::pair<Variable, Weight>>& lbs,
                              /* x <= ub for each {x,ub} in ubs */
-                             std::vector<std::pair<variable_t, Weight>>& ubs) const;
+                             std::vector<std::pair<Variable, Weight>>& ubs) const;
 
-    bool add_linear_leq(const linear_expression_t& exp);
+    bool add_linear_leq(const LinearExpression& exp);
 
     // x != n
-    bool add_univar_disequation(variable_t x, const number_t& n);
+    bool add_univar_disequation(Variable x, const Number& n);
 
     [[nodiscard]]
-    interval_t get_interval(variable_t x, int finite_width) const;
+    Interval get_interval(Variable x, int finite_width) const;
 
     // Restore potential after an edge addition
-    bool repair_potential(vert_id src, vert_id dest);
+    bool repair_potential(VertId src, VertId dest);
 
     void normalize();
 
-    SplitDBM(vert_map_t&& _vert_map, rev_map_t&& _rev_map, graph_t&& _g, std::vector<Weight>&& _potential,
-             vert_set_t&& _unstable)
+    SplitDBM(VertMap&& _vert_map, RevMap&& _rev_map, Graph&& _g, std::vector<Weight>&& _potential, VertSet&& _unstable)
         : vert_map(std::move(_vert_map)), rev_map(std::move(_rev_map)), g(std::move(_g)),
           potential(std::move(_potential)), unstable(std::move(_unstable)) {
 
@@ -207,7 +205,7 @@ class SplitDBM final {
     SplitDBM widen(const SplitDBM& o) const;
 
     [[nodiscard]]
-    SplitDBM widening_thresholds(const SplitDBM& o, const thresholds_t&) const {
+    SplitDBM widening_thresholds(const SplitDBM& o, const Thresholds&) const {
         // TODO: use thresholds. Threshold is anonymous until used to prevent unused parameter warning.
         return this->widen(o);
     }
@@ -217,18 +215,18 @@ class SplitDBM final {
     [[nodiscard]]
     SplitDBM narrow(const SplitDBM& o) const;
 
-    void assign(variable_t lhs, const linear_expression_t& e);
+    void assign(Variable lhs, const LinearExpression& e);
 
-    void assign(std::optional<variable_t> x, const linear_expression_t& e) {
+    void assign(std::optional<Variable> x, const LinearExpression& e) {
         if (x) {
             assign(*x, e);
         }
     }
-    void assign(variable_t x, signed long long int n) { assign(x, linear_expression_t(n)); }
+    void assign(Variable x, signed long long int n) { assign(x, LinearExpression(n)); }
 
-    void assign(variable_t x, variable_t v) { assign(x, linear_expression_t{v}); }
+    void assign(Variable x, Variable v) { assign(x, LinearExpression{v}); }
 
-    void assign(variable_t x, const std::optional<linear_expression_t>& e) {
+    void assign(Variable x, const std::optional<LinearExpression>& e) {
         if (e) {
             assign(x, *e);
         } else {
@@ -236,35 +234,35 @@ class SplitDBM final {
         }
     }
 
-    void havoc(variable_t v);
+    void havoc(Variable v);
 
-    void apply(arith_binop_t op, variable_t x, variable_t y, variable_t z, int finite_width);
+    void apply(ArithBinOp op, Variable x, Variable y, Variable z, int finite_width);
 
-    void apply(arith_binop_t op, variable_t x, variable_t y, const number_t& k, int finite_width);
+    void apply(ArithBinOp op, Variable x, Variable y, const Number& k, int finite_width);
 
     // bitwise_operators_api
-    void apply(bitwise_binop_t op, variable_t x, variable_t y, variable_t z, int finite_width);
+    void apply(BitwiseBinOp op, Variable x, Variable y, Variable z, int finite_width);
 
-    void apply(bitwise_binop_t op, variable_t x, variable_t y, const number_t& k, int finite_width);
+    void apply(BitwiseBinOp op, Variable x, Variable y, const Number& k, int finite_width);
 
-    void apply(binop_t op, variable_t x, variable_t y, const number_t& z, int finite_width) {
+    void apply(BinOp op, Variable x, Variable y, const Number& z, int finite_width) {
         std::visit([&](auto top) { apply(top, x, y, z, finite_width); }, op);
     }
 
-    void apply(binop_t op, variable_t x, variable_t y, variable_t z, int finite_width) {
+    void apply(BinOp op, Variable x, Variable y, Variable z, int finite_width) {
         std::visit([&](auto top) { apply(top, x, y, z, finite_width); }, op);
     }
 
-    bool add_constraint(const linear_constraint_t& cst);
+    bool add_constraint(const LinearConstraint& cst);
 
     [[nodiscard]]
-    interval_t eval_interval(const linear_expression_t& e) const;
+    Interval eval_interval(const LinearExpression& e) const;
 
-    interval_t operator[](variable_t x) const;
+    Interval operator[](Variable x) const;
 
-    void set(variable_t x, const interval_t& intv);
+    void set(Variable x, const Interval& intv);
 
-    void forget(const variable_vector_t& variables);
+    void forget(const VariableVector& variables);
 
     // return number of vertices and edges
     [[nodiscard]]
@@ -274,13 +272,13 @@ class SplitDBM final {
 
   private:
     [[nodiscard]]
-    bool entail_aux(const linear_constraint_t& cst) const {
+    bool entail_aux(const LinearConstraint& cst) const {
         // copy is necessary
         return !SplitDBM(*this).add_constraint(cst.negate());
     }
 
     [[nodiscard]]
-    bool intersect_aux(const linear_constraint_t& cst) const {
+    bool intersect_aux(const LinearConstraint& cst) const {
         // copy is necessary
         return SplitDBM(*this).add_constraint(cst);
     }
@@ -288,15 +286,15 @@ class SplitDBM final {
   public:
     // Return true if inv intersects with cst.
     [[nodiscard]]
-    bool intersect(const linear_constraint_t& cst) const;
+    bool intersect(const LinearConstraint& cst) const;
 
     // Return true if entails rhs.
     [[nodiscard]]
-    bool entail(const linear_constraint_t& rhs) const;
+    bool entail(const LinearConstraint& rhs) const;
 
     friend std::ostream& operator<<(std::ostream& o, const SplitDBM& dom);
     [[nodiscard]]
-    string_invariant to_set() const;
+    StringInvariant to_set() const;
 
   public:
     static void clear_thread_local_state();

@@ -8,15 +8,15 @@
 #include "string_constraints.hpp"
 
 namespace prevail {
-class bitset_domain_t final {
+class BitsetDomain final {
   private:
     using bits_t = std::bitset<EBPF_TOTAL_STACK_SIZE>;
     bits_t non_numerical_bytes;
 
   public:
-    bitset_domain_t() { non_numerical_bytes.set(); }
+    BitsetDomain() { non_numerical_bytes.set(); }
 
-    bitset_domain_t(bits_t non_numerical_bytes) : non_numerical_bytes{non_numerical_bytes} {}
+    BitsetDomain(bits_t non_numerical_bytes) : non_numerical_bytes{non_numerical_bytes} {}
 
     void set_to_top() { non_numerical_bytes.set(); }
 
@@ -33,33 +33,29 @@ class bitset_domain_t final {
     }
 
     [[nodiscard]]
-    string_invariant to_set() const;
+    StringInvariant to_set() const;
 
-    bool operator<=(const bitset_domain_t& other) const {
+    bool operator<=(const BitsetDomain& other) const {
         return (non_numerical_bytes | other.non_numerical_bytes) == other.non_numerical_bytes;
     }
 
-    bool operator==(const bitset_domain_t& other) const { return non_numerical_bytes == other.non_numerical_bytes; }
+    bool operator==(const BitsetDomain& other) const { return non_numerical_bytes == other.non_numerical_bytes; }
 
-    void operator|=(const bitset_domain_t& other) { non_numerical_bytes |= other.non_numerical_bytes; }
+    void operator|=(const BitsetDomain& other) { non_numerical_bytes |= other.non_numerical_bytes; }
 
-    bitset_domain_t operator|(bitset_domain_t&& other) const { return non_numerical_bytes | other.non_numerical_bytes; }
+    BitsetDomain operator|(BitsetDomain&& other) const { return non_numerical_bytes | other.non_numerical_bytes; }
 
-    bitset_domain_t operator|(const bitset_domain_t& other) const {
-        return non_numerical_bytes | other.non_numerical_bytes;
-    }
+    BitsetDomain operator|(const BitsetDomain& other) const { return non_numerical_bytes | other.non_numerical_bytes; }
 
-    bitset_domain_t operator&(const bitset_domain_t& other) const {
-        return non_numerical_bytes & other.non_numerical_bytes;
-    }
+    BitsetDomain operator&(const BitsetDomain& other) const { return non_numerical_bytes & other.non_numerical_bytes; }
 
     [[nodiscard]]
-    bitset_domain_t widen(const bitset_domain_t& other) const {
+    BitsetDomain widen(const BitsetDomain& other) const {
         return non_numerical_bytes | other.non_numerical_bytes;
     }
 
     [[nodiscard]]
-    bitset_domain_t narrow(const bitset_domain_t& other) const {
+    BitsetDomain narrow(const BitsetDomain& other) const {
         return non_numerical_bytes & other.non_numerical_bytes;
     }
 
@@ -103,7 +99,7 @@ class bitset_domain_t final {
         }
     }
 
-    friend std::ostream& operator<<(std::ostream& o, const bitset_domain_t& array);
+    friend std::ostream& operator<<(std::ostream& o, const BitsetDomain& array);
 
     // Test whether all values in the range [lb,ub) are numerical.
     [[nodiscard]]

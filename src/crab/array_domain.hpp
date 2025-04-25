@@ -36,13 +36,13 @@ using NumAbsDomain = AddBottom;
 
 void clear_thread_local_state();
 
-class array_domain_t final {
-    bitset_domain_t num_bytes;
+class ArrayDomain final {
+    BitsetDomain num_bytes;
 
   public:
-    array_domain_t() = default;
+    ArrayDomain() = default;
 
-    explicit array_domain_t(const bitset_domain_t& num_bytes) : num_bytes(num_bytes) {}
+    explicit ArrayDomain(const BitsetDomain& num_bytes) : num_bytes(num_bytes) {}
 
     void set_to_top();
     void set_to_bottom();
@@ -51,40 +51,39 @@ class array_domain_t final {
     [[nodiscard]]
     bool is_top() const;
 
-    bool operator<=(const array_domain_t& other) const;
-    bool operator==(const array_domain_t& other) const;
+    bool operator<=(const ArrayDomain& other) const;
+    bool operator==(const ArrayDomain& other) const;
 
-    void operator|=(const array_domain_t& other);
+    void operator|=(const ArrayDomain& other);
 
-    array_domain_t operator|(const array_domain_t& other) const;
-    array_domain_t operator&(const array_domain_t& other) const;
-    array_domain_t widen(const array_domain_t& other) const;
-    array_domain_t widening_thresholds(const array_domain_t& other, const thresholds_t& ts) const;
-    array_domain_t narrow(const array_domain_t& other) const;
+    ArrayDomain operator|(const ArrayDomain& other) const;
+    ArrayDomain operator&(const ArrayDomain& other) const;
+    ArrayDomain widen(const ArrayDomain& other) const;
+    ArrayDomain widening_thresholds(const ArrayDomain& other, const Thresholds& ts) const;
+    ArrayDomain narrow(const ArrayDomain& other) const;
 
-    friend std::ostream& operator<<(std::ostream& o, const array_domain_t& dom);
+    friend std::ostream& operator<<(std::ostream& o, const ArrayDomain& dom);
     [[nodiscard]]
-    string_invariant to_set() const;
+    StringInvariant to_set() const;
 
-    bool all_num(const NumAbsDomain& inv, const linear_expression_t& lb, const linear_expression_t& ub) const;
+    bool all_num(const NumAbsDomain& inv, const LinearExpression& lb, const LinearExpression& ub) const;
     [[nodiscard]]
-    int min_all_num_size(const NumAbsDomain& inv, variable_t offset) const;
+    int min_all_num_size(const NumAbsDomain& inv, Variable offset) const;
 
-    std::optional<linear_expression_t> load(const NumAbsDomain& inv, data_kind_t kind, const linear_expression_t& i,
-                                            int width) const;
-    std::optional<variable_t> store(NumAbsDomain& inv, data_kind_t kind, const linear_expression_t& idx,
-                                    const linear_expression_t& elem_size, const linear_expression_t& val);
-    std::optional<variable_t> store_type(NumAbsDomain& inv, const linear_expression_t& idx,
-                                         const linear_expression_t& elem_size, const linear_expression_t& val);
-    void havoc(NumAbsDomain& inv, data_kind_t kind, const linear_expression_t& idx,
-               const linear_expression_t& elem_size);
+    std::optional<LinearExpression> load(const NumAbsDomain& inv, DataKind kind, const LinearExpression& i,
+                                         int width) const;
+    std::optional<Variable> store(NumAbsDomain& inv, DataKind kind, const LinearExpression& idx,
+                                  const LinearExpression& elem_size, const LinearExpression& val);
+    std::optional<Variable> store_type(NumAbsDomain& inv, const LinearExpression& idx,
+                                       const LinearExpression& elem_size, const LinearExpression& val);
+    void havoc(NumAbsDomain& inv, DataKind kind, const LinearExpression& idx, const LinearExpression& elem_size);
 
     // Perform array stores over an array segment
-    void store_numbers(const NumAbsDomain& inv, variable_t _idx, variable_t _width);
+    void store_numbers(const NumAbsDomain& inv, Variable _idx, Variable _width);
 
-    void split_number_var(NumAbsDomain& inv, data_kind_t kind, const linear_expression_t& i,
-                          const linear_expression_t& elem_size) const;
-    void split_cell(NumAbsDomain& inv, data_kind_t kind, int cell_start_index, unsigned int len) const;
+    void split_number_var(NumAbsDomain& inv, DataKind kind, const LinearExpression& i,
+                          const LinearExpression& elem_size) const;
+    void split_cell(NumAbsDomain& inv, DataKind kind, int cell_start_index, unsigned int len) const;
 
     void initialize_numbers(int lb, int width);
 };

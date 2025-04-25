@@ -20,7 +20,7 @@ static int do_bpf(const bpf_cmd cmd, union bpf_attr& attr) { return syscall(321,
  *  \return A pair (passed, elapsed_secs)
  */
 
-std::tuple<bool, double> bpf_verify_program(const EbpfProgramType& type, const std::vector<ebpf_inst>& raw_prog,
+std::tuple<bool, double> bpf_verify_program(const EbpfProgramType& type, const std::vector<EbpfInst>& raw_prog,
                                             ebpf_verifier_options_t* options) {
     std::vector<char> buf(options->verbosity_opts.print_failures ? 1000000 : 10);
     buf[0] = 0;

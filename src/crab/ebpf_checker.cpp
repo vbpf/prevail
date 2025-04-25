@@ -19,7 +19,7 @@
 
 namespace prevail {
 
-static bool check_require(const NumAbsDomain& inv, const linear_constraint_t& cst) {
+static bool check_require(const NumAbsDomain& inv, const LinearConstraint& cst) {
     if (inv.is_bottom()) {
         return true;
     }
@@ -37,11 +37,11 @@ static bool check_require(const NumAbsDomain& inv, const linear_constraint_t& cs
     return false;
 }
 
-using OnRequire = std::function<void(NumAbsDomain&, const linear_constraint_t&, const std::string&)>;
+using OnRequire = std::function<void(NumAbsDomain&, const LinearConstraint&, const std::string&)>;
 
-class ebpf_checker final {
+class EbpfChecker final {
   public:
-    explicit ebpf_checker(ebpf_domain_t& dom, const Assertion& assertion, const OnRequire& on_require)
+    explicit EbpfChecker(EbpfDomain& dom, const Assertion& assertion, const OnRequire& on_require)
         : assertion{assertion}, on_require{on_require}, dom(dom), m_inv(dom.m_inv), stack(dom.stack),
           type_inv(dom.type_inv) {}
 
@@ -63,81 +63,80 @@ class ebpf_checker final {
   private:
     std::string create_warning(const std::string& s) const { return s + " (" + to_string(assertion) + ")"; }
 
-    void require(NumAbsDomain& inv, const linear_constraint_t& cst, const std::string& msg) const {
+    void require(NumAbsDomain& inv, const LinearConstraint& cst, const std::string& msg) const {
         on_require(inv, cst, create_warning(msg));
     }
 
-    void require(const std::string& msg) const { require(m_inv, linear_constraint_t::false_const(), msg); }
+    void require(const std::string& msg) const { require(m_inv, LinearConstraint::false_const(), msg); }
 
     // memory check / load / store
-    void check_access_stack(NumAbsDomain& inv, const linear_expression_t& lb, const linear_expression_t& ub) const;
-    void check_access_context(NumAbsDomain& inv, const linear_expression_t& lb, const linear_expression_t& ub) const;
-    void check_access_packet(NumAbsDomain& inv, const linear_expression_t& lb, const linear_expression_t& ub,
-                             std::optional<variable_t> packet_size) const;
-    void check_access_shared(NumAbsDomain& inv, const linear_expression_t& lb, const linear_expression_t& ub,
-                             variable_t shared_region_size) const;
+    void check_access_stack(NumAbsDomain& inv, const LinearExpression& lb, const LinearExpression& ub) const;
+    void check_access_context(NumAbsDomain& inv, const LinearExpression& lb, const LinearExpression& ub) const;
+    void check_access_packet(NumAbsDomain& inv, const LinearExpression& lb, const LinearExpression& ub,
+                             std::optional<Variable> packet_size) const;
+    void check_access_shared(NumAbsDomain& inv, const LinearExpression& lb, const LinearExpression& ub,
+                             Variable shared_region_size) const;
 
   public:
   private:
     const Assertion assertion;
     const OnRequire on_require;
 
-    ebpf_domain_t& dom;
+    EbpfDomain& dom;
     // shorthands:
     NumAbsDomain& m_inv;
-    array_domain_t& stack;
+    ArrayDomain& stack;
     TypeDomain& type_inv;
 };
 
-void ebpf_domain_assume(ebpf_domain_t& dom, const Assertion& assertion) {
+void ebpf_domain_assume(EbpfDomain& dom, const Assertion& assertion) {
     if (dom.is_bottom()) {
         return;
     }
-    ebpf_checker{dom, assertion,
-                 [](NumAbsDomain& inv, const linear_constraint_t& cst, const std::string&) {
-                     // avoid redundant errors
-                     inv.add_constraint(cst);
-                 }}
+    EbpfChecker{dom, assertion,
+                [](NumAbsDomain& inv, const LinearConstraint& cst, const std::string&) {
+                    // avoid redundant errors
+                    inv.add_constraint(cst);
+                }}
         .visit(assertion);
 }
 
-std::vector<std::string> ebpf_domain_check(const ebpf_domain_t& dom, const Assertion& assertion) {
+std::vector<std::string> ebpf_domain_check(const EbpfDomain& dom, const Assertion& assertion) {
     if (dom.is_bottom()) {
         return {};
     }
-    ebpf_domain_t copy = dom;
+    EbpfDomain copy = dom;
     std::vector<std::string> warnings;
-    ebpf_checker checker{copy, assertion,
-                         [&warnings](const NumAbsDomain& inv, const linear_constraint_t& cst, const std::string& msg) {
-                             if (!check_require(inv, cst)) {
-                                 warnings.push_back(msg);
-                             }
-                         }};
+    EbpfChecker checker{copy, assertion,
+                        [&warnings](const NumAbsDomain& inv, const LinearConstraint& cst, const std::string& msg) {
+                            if (!check_require(inv, cst)) {
+                                warnings.push_back(msg);
+                            }
+                        }};
     checker.visit(assertion);
     return warnings;
 }
 
-static linear_constraint_t type_is_pointer(const reg_pack_t& r) {
+static LinearConstraint type_is_pointer(const RegPack& r) {
     using namespace dsl_syntax;
     return r.type >= T_CTX;
 }
 
-static linear_constraint_t type_is_number(const reg_pack_t& r) {
+static LinearConstraint type_is_number(const RegPack& r) {
     using namespace dsl_syntax;
     return r.type == T_NUM;
 }
 
-static linear_constraint_t type_is_number(const Reg& r) { return type_is_number(reg_pack(r)); }
+static LinearConstraint type_is_number(const Reg& r) { return type_is_number(reg_pack(r)); }
 
-static linear_constraint_t type_is_not_stack(const reg_pack_t& r) {
+static LinearConstraint type_is_not_stack(const RegPack& r) {
     using namespace dsl_syntax;
     return r.type != T_STACK;
 }
 
-void ebpf_checker::check_access_stack(NumAbsDomain& inv, const linear_expression_t& lb,
-                                      const linear_expression_t& ub) const {
+void EbpfChecker::check_access_stack(NumAbsDomain& inv, const LinearExpression& lb, const LinearExpression& ub) const {
     using namespace dsl_syntax;
-    const variable_t r10_stack_offset = reg_pack(R10_STACK_POINTER).stack_offset;
+    const Variable r10_stack_offset = reg_pack(R10_STACK_POINTER).stack_offset;
     const auto interval = inv.eval_interval(r10_stack_offset);
     if (interval.is_singleton()) {
         const int64_t stack_offset = interval.singleton()->cast_to<int64_t>();
@@ -147,8 +146,8 @@ void ebpf_checker::check_access_stack(NumAbsDomain& inv, const linear_expression
     require(inv, ub <= EBPF_TOTAL_STACK_SIZE, "Upper bound must be at most EBPF_TOTAL_STACK_SIZE");
 }
 
-void ebpf_checker::check_access_context(NumAbsDomain& inv, const linear_expression_t& lb,
-                                        const linear_expression_t& ub) const {
+void EbpfChecker::check_access_context(NumAbsDomain& inv, const LinearExpression& lb,
+                                       const LinearExpression& ub) const {
     using namespace dsl_syntax;
     require(inv, lb >= 0, "Lower bound must be at least 0");
     require(inv, ub <= thread_local_program_info->type.context_descriptor->size,
@@ -156,10 +155,10 @@ void ebpf_checker::check_access_context(NumAbsDomain& inv, const linear_expressi
                 std::to_string(thread_local_program_info->type.context_descriptor->size));
 }
 
-void ebpf_checker::check_access_packet(NumAbsDomain& inv, const linear_expression_t& lb, const linear_expression_t& ub,
-                                       const std::optional<variable_t> packet_size) const {
+void EbpfChecker::check_access_packet(NumAbsDomain& inv, const LinearExpression& lb, const LinearExpression& ub,
+                                      const std::optional<Variable> packet_size) const {
     using namespace dsl_syntax;
-    require(inv, lb >= variable_t::meta_offset(), "Lower bound must be at least meta_offset");
+    require(inv, lb >= Variable::meta_offset(), "Lower bound must be at least meta_offset");
     if (packet_size) {
         require(inv, ub <= *packet_size, "Upper bound must be at most packet_size");
     } else {
@@ -168,14 +167,14 @@ void ebpf_checker::check_access_packet(NumAbsDomain& inv, const linear_expressio
     }
 }
 
-void ebpf_checker::check_access_shared(NumAbsDomain& inv, const linear_expression_t& lb, const linear_expression_t& ub,
-                                       const variable_t shared_region_size) const {
+void EbpfChecker::check_access_shared(NumAbsDomain& inv, const LinearExpression& lb, const LinearExpression& ub,
+                                      const Variable shared_region_size) const {
     using namespace dsl_syntax;
     require(inv, lb >= 0, "Lower bound must be at least 0");
     require(inv, ub <= shared_region_size, std::string("Upper bound must be at most ") + shared_region_size.name());
 }
 
-void ebpf_checker::operator()(const Comparable& s) const {
+void EbpfChecker::operator()(const Comparable& s) const {
     using namespace dsl_syntax;
     if (type_inv.same_type(m_inv, s.r1, s.r2)) {
         // Same type. If both are numbers, that's okay. Otherwise:
@@ -196,13 +195,13 @@ void ebpf_checker::operator()(const Comparable& s) const {
     };
 }
 
-void ebpf_checker::operator()(const Addable& s) const {
+void EbpfChecker::operator()(const Addable& s) const {
     if (!type_inv.implies_type(m_inv, type_is_pointer(reg_pack(s.ptr)), type_is_number(s.num))) {
         require("Only numbers can be added to pointers");
     }
 }
 
-void ebpf_checker::operator()(const ValidDivisor& s) const {
+void EbpfChecker::operator()(const ValidDivisor& s) const {
     using namespace dsl_syntax;
     const auto reg = reg_pack(s.reg);
     if (!type_inv.implies_type(m_inv, type_is_pointer(reg), type_is_number(s.reg))) {
@@ -214,32 +213,32 @@ void ebpf_checker::operator()(const ValidDivisor& s) const {
     }
 }
 
-void ebpf_checker::operator()(const ValidStore& s) const {
+void EbpfChecker::operator()(const ValidStore& s) const {
     if (!type_inv.implies_type(m_inv, type_is_not_stack(reg_pack(s.mem)), type_is_number(s.val))) {
         require("Only numbers can be stored to externally-visible regions");
     }
 }
 
-void ebpf_checker::operator()(const TypeConstraint& s) const {
+void EbpfChecker::operator()(const TypeConstraint& s) const {
     if (!type_inv.is_in_group(m_inv, s.reg, s.types)) {
         require("Invalid type");
     }
 }
 
-void ebpf_checker::operator()(const BoundedLoopCount& s) const {
+void EbpfChecker::operator()(const BoundedLoopCount& s) const {
     // Enforces an upper bound on loop iterations by checking that the loop counter
     // does not exceed the specified limit
     using namespace dsl_syntax;
-    const auto counter = variable_t::loop_counter(to_string(s.name));
+    const auto counter = Variable::loop_counter(to_string(s.name));
     require(m_inv, counter <= s.limit, "Loop counter is too large");
 }
 
-void ebpf_checker::operator()(const FuncConstraint& s) const {
+void EbpfChecker::operator()(const FuncConstraint& s) const {
     // Look up the helper function id.
     if (!m_inv) {
         return;
     }
-    const reg_pack_t& reg = reg_pack(s.reg);
+    const RegPack& reg = reg_pack(s.reg);
     const auto src_interval = m_inv.eval_interval(reg.svalue);
     if (const auto sn = src_interval.singleton()) {
         if (sn->fits<int32_t>()) {
@@ -252,7 +251,7 @@ void ebpf_checker::operator()(const FuncConstraint& s) const {
             const Call call = make_call(imm, *thread_local_program_info->platform);
             for (const Assertion& sub_assertion : get_assertions(call, *thread_local_program_info, {})) {
                 // TODO: create explicit sub assertions elsewhere
-                ebpf_checker{dom, sub_assertion, on_require}.visit(sub_assertion);
+                EbpfChecker{dom, sub_assertion, on_require}.visit(sub_assertion);
             }
             return;
         }
@@ -260,13 +259,13 @@ void ebpf_checker::operator()(const FuncConstraint& s) const {
     require("callx helper function id is not a valid singleton");
 }
 
-void ebpf_checker::operator()(const ValidSize& s) const {
+void EbpfChecker::operator()(const ValidSize& s) const {
     using namespace dsl_syntax;
     const auto r = reg_pack(s.reg);
     require(m_inv, s.can_be_zero ? r.svalue >= 0 : r.svalue > 0, "Invalid size");
 }
 
-void ebpf_checker::operator()(const ValidCall& s) const {
+void EbpfChecker::operator()(const ValidCall& s) const {
     if (!s.stack_frame_prefix.empty()) {
         const EbpfHelperPrototype proto = thread_local_program_info->platform->get_helper_prototype(s.func);
         if (proto.return_type == EBPF_RETURN_TYPE_INTEGER_OR_NO_RETURN_IF_SUCCEED) {
@@ -276,7 +275,7 @@ void ebpf_checker::operator()(const ValidCall& s) const {
     }
 }
 
-void ebpf_checker::operator()(const ValidMapKeyValue& s) const {
+void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
     using namespace dsl_syntax;
 
     const auto fd_type = dom.get_map_type(s.map_fd_reg);
@@ -299,29 +298,28 @@ void ebpf_checker::operator()(const ValidMapKeyValue& s) const {
         width = value_size->narrow<int>();
     }
 
-    m_inv = type_inv.join_over_types(m_inv, s.access_reg, [&](NumAbsDomain& inv, type_encoding_t access_reg_type) {
+    m_inv = type_inv.join_over_types(m_inv, s.access_reg, [&](NumAbsDomain& inv, TypeEncoding access_reg_type) {
         if (access_reg_type == T_STACK) {
-            variable_t lb = access_reg.stack_offset;
-            linear_expression_t ub = lb + width;
+            Variable lb = access_reg.stack_offset;
+            LinearExpression ub = lb + width;
             if (!stack.all_num(inv, lb, ub)) {
                 auto lb_is = inv.eval_interval(lb).lb().number();
                 std::string lb_s = lb_is && lb_is->fits<int32_t>() ? std::to_string(lb_is->narrow<int32_t>()) : "-oo";
                 auto ub_is = inv.eval_interval(ub).ub().number();
                 std::string ub_s = ub_is && ub_is->fits<int32_t>() ? std::to_string(ub_is->narrow<int32_t>()) : "oo";
-                require(inv, linear_constraint_t::false_const(),
+                require(inv, LinearConstraint::false_const(),
                         "Illegal map update with a non-numerical value [" + lb_s + "-" + ub_s + ")");
             } else if (thread_local_options.strict && fd_type.has_value()) {
                 EbpfMapType map_type = thread_local_program_info->platform->get_map_type(*fd_type);
                 if (map_type.is_array) {
                     // Get offset value.
-                    variable_t key_ptr = access_reg.stack_offset;
-                    std::optional<number_t> offset = inv.eval_interval(key_ptr).singleton();
+                    Variable key_ptr = access_reg.stack_offset;
+                    std::optional<Number> offset = inv.eval_interval(key_ptr).singleton();
                     if (!offset.has_value()) {
                         require("Pointer must be a singleton");
                     } else if (s.key) {
                         // Look up the value pointed to by the key pointer.
-                        variable_t key_value =
-                            variable_t::cell_var(data_kind_t::svalues, offset.value(), sizeof(uint32_t));
+                        Variable key_value = Variable::cell_var(DataKind::svalues, offset.value(), sizeof(uint32_t));
 
                         if (auto max_entries = dom.get_map_max_entries(s.map_fd_reg).lb().number()) {
                             require(inv, key_value < *max_entries, "Array index overflow");
@@ -333,13 +331,13 @@ void ebpf_checker::operator()(const ValidMapKeyValue& s) const {
                 }
             }
         } else if (access_reg_type == T_PACKET) {
-            variable_t lb = access_reg.packet_offset;
-            linear_expression_t ub = lb + width;
+            Variable lb = access_reg.packet_offset;
+            LinearExpression ub = lb + width;
             check_access_packet(inv, lb, ub, {});
             // Packet memory is both readable and writable.
         } else if (access_reg_type == T_SHARED) {
-            variable_t lb = access_reg.shared_offset;
-            linear_expression_t ub = lb + width;
+            Variable lb = access_reg.shared_offset;
+            LinearExpression ub = lb + width;
             check_access_shared(inv, lb, ub, access_reg.shared_region_size);
             require(inv, access_reg.svalue > 0, "Possible null access");
             // Shared memory is zero-initialized when created so is safe to read and write.
@@ -349,28 +347,27 @@ void ebpf_checker::operator()(const ValidMapKeyValue& s) const {
     });
 }
 
-static std::tuple<linear_expression_t, linear_expression_t> lb_ub_access_pair(const ValidAccess& s,
-                                                                              const variable_t offset_var) {
+static std::tuple<LinearExpression, LinearExpression> lb_ub_access_pair(const ValidAccess& s,
+                                                                        const Variable offset_var) {
     using namespace dsl_syntax;
-    linear_expression_t lb = offset_var + s.offset;
-    linear_expression_t ub = std::holds_alternative<Imm>(s.width) ? lb + std::get<Imm>(s.width).v
-                                                                  : lb + reg_pack(std::get<Reg>(s.width)).svalue;
+    LinearExpression lb = offset_var + s.offset;
+    LinearExpression ub = std::holds_alternative<Imm>(s.width) ? lb + std::get<Imm>(s.width).v
+                                                               : lb + reg_pack(std::get<Reg>(s.width)).svalue;
     return {lb, ub};
 }
 
-void ebpf_checker::operator()(const ValidAccess& s) const {
+void EbpfChecker::operator()(const ValidAccess& s) const {
     using namespace dsl_syntax;
 
     const bool is_comparison_check = s.width == Value{Imm{0}};
 
     const auto reg = reg_pack(s.reg);
     // join_over_types instead of simple iteration is only needed for assume-assert
-    m_inv = type_inv.join_over_types(m_inv, s.reg, [&](NumAbsDomain& inv, type_encoding_t type) {
+    m_inv = type_inv.join_over_types(m_inv, s.reg, [&](NumAbsDomain& inv, TypeEncoding type) {
         switch (type) {
         case T_PACKET: {
             auto [lb, ub] = lb_ub_access_pair(s, reg.packet_offset);
-            check_access_packet(inv, lb, ub,
-                                is_comparison_check ? std::optional<variable_t>{} : variable_t::packet_size());
+            check_access_packet(inv, lb, ub, is_comparison_check ? std::optional<Variable>{} : Variable::packet_size());
             // if within bounds, it can never be null
             // Context memory is both readable and writable.
             break;
@@ -433,7 +430,7 @@ void ebpf_checker::operator()(const ValidAccess& s) const {
     });
 }
 
-void ebpf_checker::operator()(const ZeroCtxOffset& s) const {
+void EbpfChecker::operator()(const ZeroCtxOffset& s) const {
     using namespace dsl_syntax;
     const auto reg = reg_pack(s.reg);
     require(m_inv, reg.ctx_offset == 0, "Nonzero context offset");

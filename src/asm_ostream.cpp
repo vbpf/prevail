@@ -24,7 +24,7 @@ using std::vector;
 
 namespace prevail {
 
-std::ostream& operator<<(std::ostream& o, const interval_t& interval) {
+std::ostream& operator<<(std::ostream& o, const Interval& interval) {
     if (interval.is_bottom()) {
         o << "_|_";
     } else {
@@ -32,21 +32,21 @@ std::ostream& operator<<(std::ostream& o, const interval_t& interval) {
     }
     return o;
 }
-std::ostream& operator<<(std::ostream& o, const number_t& z) { return o << z._n.str(); }
+std::ostream& operator<<(std::ostream& o, const Number& z) { return o << z._n.str(); }
 
-std::string number_t::to_string() const { return _n.str(); }
+std::string Number::to_string() const { return _n.str(); }
 
-std::string interval_t::to_string() const {
+std::string Interval::to_string() const {
     std::ostringstream s;
     s << *this;
     return s.str();
 }
 
-std::ostream& operator<<(std::ostream& os, const label_t& label) {
-    if (label == label_t::entry) {
+std::ostream& operator<<(std::ostream& os, const Label& label) {
+    if (label == Label::entry) {
         return os << "entry";
     }
-    if (label == label_t::exit) {
+    if (label == Label::exit) {
         return os << "exit";
     }
     if (!label.stack_frame_prefix.empty()) {
@@ -62,7 +62,7 @@ std::ostream& operator<<(std::ostream& os, const label_t& label) {
     return os;
 }
 
-string to_string(label_t const& label) {
+string to_string(Label const& label) {
     std::stringstream str;
     str << label;
     return str.str();
@@ -72,7 +72,7 @@ struct LineInfoPrinter {
     std::ostream& os;
     std::string previous_source_line;
 
-    void print_line_info(const label_t& label) {
+    void print_line_info(const Label& label) {
         if (thread_local_options.verbosity_opts.print_line_info) {
             const auto& line_info_map = thread_local_program_info.get().line_info;
             const auto& line_info = line_info_map.find(label.from);
@@ -85,7 +85,7 @@ struct LineInfoPrinter {
     }
 };
 
-void print_jump(std::ostream& o, const std::string& direction, const std::set<label_t>& labels) {
+void print_jump(std::ostream& o, const std::string& direction, const std::set<Label>& labels) {
     auto [it, et] = std::pair{labels.begin(), labels.end()};
     if (it != et) {
         o << "  " << direction << " ";
@@ -105,11 +105,11 @@ void print_jump(std::ostream& o, const std::string& direction, const std::set<la
 void print_program(const Program& prog, std::ostream& os, const bool simplify, const printfunc& prefunc,
                    const printfunc& postfunc) {
     LineInfoPrinter printer{os};
-    for (const basic_block_t& bb : basic_block_t::collect_basic_blocks(prog.cfg(), simplify)) {
+    for (const BasicBlock& bb : BasicBlock::collect_basic_blocks(prog.cfg(), simplify)) {
         prefunc(os, bb.first_label());
         print_jump(os, "from", prog.cfg().parents_of(bb.first_label()));
         os << bb.first_label() << ":\n";
-        for (const label_t& label : bb) {
+        for (const Label& label : bb) {
             printer.print_line_info(label);
             for (const auto& pre : prog.assertions_at(label)) {
                 os << "  " << "assert " << pre << ";\n";
@@ -122,7 +122,7 @@ void print_program(const Program& prog, std::ostream& os, const bool simplify, c
     os << "\n";
 }
 
-static void nop(std::ostream&, const label_t&) {}
+static void nop(std::ostream&, const Label&) {}
 
 void print_program(const Program& prog, std::ostream& os, const bool simplify) {
     print_program(prog, os, simplify, nop, nop);
@@ -140,7 +140,7 @@ void print_dot(const Program& prog, std::ostream& out) {
         out << prog.instruction_at(label) << "\\l";
 
         out << "\"];\n";
-        for (const label_t& next : prog.cfg().children_of(label)) {
+        for (const Label& next : prog.cfg().children_of(label)) {
             out << "    \"" << label << "\" -> \"" << next << "\";\n";
         }
         out << "\n";
@@ -184,10 +184,10 @@ void print_all_messages(std::ostream& os, const Report& report) {
 void print_invariants(std::ostream& os, const Program& prog, const bool simplify, const Invariants& invariants) {
     print_program(
         prog, os, simplify,
-        [&](std::ostream& os, const label_t& label) -> void {
+        [&](std::ostream& os, const Label& label) -> void {
             os << "\nPre-invariant : " << invariants.invariants.at(label).pre << "\n";
         },
-        [&](std::ostream& os, const label_t& label) -> void {
+        [&](std::ostream& os, const Label& label) -> void {
             os << "\nPost-invariant : " << invariants.invariants.at(label).post << "\n";
         });
 }
@@ -309,11 +309,9 @@ struct AssertionPrinterVisitor {
         }
     }
 
-    void operator()(const BoundedLoopCount& a) {
-        _os << variable_t::loop_counter(to_string(a.name)) << " < " << a.limit;
-    }
+    void operator()(const BoundedLoopCount& a) { _os << Variable::loop_counter(to_string(a.name)) << " < " << a.limit; }
 
-    static variable_t typereg(const Reg& r) { return variable_t::reg(data_kind_t::types, r.v); }
+    static Variable typereg(const Reg& r) { return Variable::reg(DataKind::types, r.v); }
 
     void operator()(ValidSize const& a) {
         const auto op = a.can_be_zero ? " >= " : " > ";
@@ -330,7 +328,7 @@ struct AssertionPrinterVisitor {
             << "))";
     }
 
-    void operator()(ZeroCtxOffset const& a) { _os << variable_t::reg(data_kind_t::ctx_offsets, a.reg.v) << " == 0"; }
+    void operator()(ZeroCtxOffset const& a) { _os << Variable::reg(DataKind::ctx_offsets, a.reg.v) << " == 0"; }
 
     void operator()(Comparable const& a) {
         if (a.or_r2_is_number) {
@@ -522,7 +520,7 @@ struct CommandPrinterVisitor {
         print(b.cond);
     }
 
-    void operator()(IncrementLoopCounter const& a) { os_ << variable_t::loop_counter(to_string(a.name)) << "++"; }
+    void operator()(IncrementLoopCounter const& a) { os_ << Variable::loop_counter(to_string(a.name)) << "++"; }
 };
 // ReSharper restore CppMemberFunctionMayBeConst
 
@@ -549,8 +547,8 @@ string to_string(Assertion const& constraint) {
 }
 
 auto get_labels(const InstructionSeq& insts) {
-    pc_t pc = 0;
-    std::map<label_t, pc_t> pc_of_label;
+    Pc pc = 0;
+    std::map<Label, Pc> pc_of_label;
     for (const auto& [label, inst, _] : insts) {
         pc_of_label[label] = pc;
         pc += size(inst);
@@ -558,10 +556,10 @@ auto get_labels(const InstructionSeq& insts) {
     return pc_of_label;
 }
 
-void print(const InstructionSeq& insts, std::ostream& out, const std::optional<const label_t>& label_to_print,
+void print(const InstructionSeq& insts, std::ostream& out, const std::optional<const Label>& label_to_print,
            const bool print_line_info) {
     const auto pc_of_label = get_labels(insts);
-    pc_t pc = 0;
+    Pc pc = 0;
     std::string previous_source;
     CommandPrinterVisitor visitor{out};
     for (const LabeledInstruction& labeled_inst : insts) {
@@ -588,7 +586,7 @@ void print(const InstructionSeq& insts, std::ostream& out, const std::optional<c
                 if (!pc_of_label.contains(jmp->target)) {
                     throw std::runtime_error(string("Cannot find label ") + to_string(jmp->target));
                 }
-                const pc_t target_pc = pc_of_label.at(jmp->target);
+                const Pc target_pc = pc_of_label.at(jmp->target);
                 visitor(*jmp, target_pc - static_cast<int>(pc) - 1);
             } else {
                 std::visit(visitor, ins);

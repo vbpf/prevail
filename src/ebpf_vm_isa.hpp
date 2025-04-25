@@ -10,13 +10,13 @@ namespace prevail {
 // See https://github.com/ebpffoundation/ebpf-docs/blob/update/rst/instruction-set.rst
 // for documentation.
 
-struct ebpf_inst {
+struct EbpfInst {
     std::uint8_t opcode;
     std::uint8_t dst : 4; //< Destination register
     std::uint8_t src : 4; //< Source register
     std::int16_t offset;
     std::int32_t imm; //< Immediate constant
-    constexpr bool operator==(const ebpf_inst&) const = default;
+    constexpr bool operator==(const EbpfInst&) const = default;
 };
 
 enum {

@@ -125,7 +125,7 @@ struct Condition {
 
 struct Jmp {
     std::optional<Condition> cond;
-    label_t target;
+    Label target;
     bool operator==(const Jmp&) const = default;
 };
 
@@ -171,7 +171,7 @@ struct Call {
 
 /// Call a "function" (macro) within the same program.
 struct CallLocal {
-    label_t target;
+    Label target;
     std::string stack_frame_prefix; ///< Variable prefix to be used within the call.
     bool operator==(const CallLocal& other) const noexcept = default;
 };
@@ -251,14 +251,14 @@ struct Assume {
 };
 
 struct IncrementLoopCounter {
-    label_t name;
+    Label name;
     bool operator==(const IncrementLoopCounter&) const = default;
 };
 
 using Instruction = std::variant<Undefined, Bin, Un, LoadMapFd, Call, CallLocal, Callx, Exit, Jmp, Mem, Packet, Atomic,
                                  Assume, IncrementLoopCounter, LoadMapAddress>;
 
-using LabeledInstruction = std::tuple<label_t, Instruction, std::optional<btf_line_info_t>>;
+using LabeledInstruction = std::tuple<Label, Instruction, std::optional<btf_line_info_t>>;
 using InstructionSeq = std::vector<LabeledInstruction>;
 
 /// Condition check whether something is a valid size.
@@ -348,7 +348,7 @@ struct ZeroCtxOffset {
 };
 
 struct BoundedLoopCount {
-    label_t name;
+    Label name;
     bool operator==(const BoundedLoopCount&) const = default;
     // Maximum number of loop iterations allowed during verification.
     // This prevents infinite loops while allowing reasonable bounded loops.
@@ -377,13 +377,13 @@ inline std::ostream& operator<<(std::ostream& os, Value const& a) {
 std::ostream& operator<<(std::ostream& os, const Assertion& a);
 std::string to_string(const Assertion& constraint);
 
-void print(const InstructionSeq& insts, std::ostream& out, const std::optional<const label_t>& label_to_print,
+void print(const InstructionSeq& insts, std::ostream& out, const std::optional<const Label>& label_to_print,
            bool print_line_info = false);
 
 int size(const Instruction& inst);
 
 template <class... Ts>
-struct overloaded : Ts... {
+struct Overloaded : Ts... {
     using Ts::operator()...;
 };
 

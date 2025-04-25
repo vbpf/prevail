@@ -19,9 +19,9 @@ namespace prevail {
  *  \param[out] notes is a vector for storing errors and warnings.
  *  \return a sequence of instructions if successful, an error string otherwise.
  */
-std::variant<InstructionSeq, std::string> unmarshal(const raw_program& raw_prog,
+std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog,
                                                     std::vector<std::vector<std::string>>& notes);
-std::variant<InstructionSeq, std::string> unmarshal(const raw_program& raw_prog);
+std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog);
 
 Call make_call(int func, const ebpf_platform_t& platform);
 } // namespace prevail

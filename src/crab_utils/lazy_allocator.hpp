@@ -15,7 +15,7 @@ namespace prevail {
  * The caller can provide a custom factory to create the object in a specific way.
  */
 template <typename T, T (*factory)() = nullptr>
-class lazy_allocator {
+class LazyAllocator {
     std::optional<T> _value;
 
   public:

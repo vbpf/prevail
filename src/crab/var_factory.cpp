@@ -10,13 +10,13 @@
 
 namespace prevail {
 
-variable_t variable_t::make(const std::string& name) {
+Variable Variable::make(const std::string& name) {
     const auto it = std::find(names->begin(), names->end(), name);
     if (it == names->end()) {
         names->emplace_back(name);
-        return variable_t(names->size() - 1);
+        return Variable(names->size() - 1);
     }
-    return variable_t(std::distance(names->begin(), it));
+    return Variable(std::distance(names->begin(), it));
 }
 
 std::vector<std::string> default_variable_names() {
@@ -136,17 +136,15 @@ std::vector<std::string> default_variable_names() {
     };
 }
 
-thread_local lazy_allocator<std::vector<std::string>, default_variable_names> variable_t::names;
+thread_local LazyAllocator<std::vector<std::string>, default_variable_names> Variable::names;
 
-void variable_t::clear_thread_local_state() { names.clear(); }
+void Variable::clear_thread_local_state() { names.clear(); }
 
-variable_t variable_t::reg(const data_kind_t kind, const int i) {
-    return make("r" + std::to_string(i) + "." + name_of(kind));
-}
+Variable Variable::reg(const DataKind kind, const int i) { return make("r" + std::to_string(i) + "." + name_of(kind)); }
 
-std::ostream& operator<<(std::ostream& o, const data_kind_t& s) { return o << name_of(s); }
+std::ostream& operator<<(std::ostream& o, const DataKind& s) { return o << name_of(s); }
 
-static std::string mk_scalar_name(const data_kind_t kind, const number_t& o, const number_t& size) {
+static std::string mk_scalar_name(const DataKind kind, const Number& o, const Number& size) {
     std::stringstream os;
     os << "s" << "[" << o;
     if (size != 1) {
@@ -156,30 +154,30 @@ static std::string mk_scalar_name(const data_kind_t kind, const number_t& o, con
     return os.str();
 }
 
-variable_t variable_t::stack_frame_var(const data_kind_t kind, const int i, const std::string& prefix) {
+Variable Variable::stack_frame_var(const DataKind kind, const int i, const std::string& prefix) {
     return make(prefix + STACK_FRAME_DELIMITER + "r" + std::to_string(i) + "." + name_of(kind));
 }
 
-variable_t variable_t::cell_var(const data_kind_t array, const number_t& offset, const number_t& size) {
+Variable Variable::cell_var(const DataKind array, const Number& offset, const Number& size) {
     return make(mk_scalar_name(array, offset.cast_to<uint64_t>(), size));
 }
 
 // Given a type variable, get the associated variable of a given kind.
-variable_t variable_t::kind_var(const data_kind_t kind, const variable_t type_variable) {
+Variable Variable::kind_var(const DataKind kind, const Variable type_variable) {
     const std::string name = type_variable.name();
     return make(name.substr(0, name.rfind('.') + 1) + name_of(kind));
 }
 
-variable_t variable_t::meta_offset() { return make("meta_offset"); }
-variable_t variable_t::packet_size() { return make("packet_size"); }
-variable_t variable_t::loop_counter(const std::string& label) { return make("pc[" + label + "]"); }
+Variable Variable::meta_offset() { return make("meta_offset"); }
+Variable Variable::packet_size() { return make("packet_size"); }
+Variable Variable::loop_counter(const std::string& label) { return make("pc[" + label + "]"); }
 
 static bool ends_with(const std::string& str, const std::string& suffix) {
     return str.size() >= suffix.size() && 0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix);
 }
 
-std::vector<variable_t> variable_t::get_type_variables() {
-    std::vector<variable_t> res;
+std::vector<Variable> Variable::get_type_variables() {
+    std::vector<Variable> res;
     for (const std::string& name : *names) {
         if (ends_with(name, ".type")) {
             res.push_back(make(name));
@@ -188,12 +186,12 @@ std::vector<variable_t> variable_t::get_type_variables() {
     return res;
 }
 
-bool variable_t::is_in_stack() const { return this->name()[0] == 's'; }
+bool Variable::is_in_stack() const { return this->name()[0] == 's'; }
 
-bool variable_t::printing_order(const variable_t& a, const variable_t& b) { return a.name() < b.name(); }
+bool Variable::printing_order(const Variable& a, const Variable& b) { return a.name() < b.name(); }
 
-std::vector<variable_t> variable_t::get_loop_counters() {
-    std::vector<variable_t> res;
+std::vector<Variable> Variable::get_loop_counters() {
+    std::vector<Variable> res;
     for (const std::string& name : *names) {
         if (name.find("pc") == 0) {
             res.push_back(make(name));

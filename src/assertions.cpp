@@ -15,8 +15,8 @@ using std::vector;
 
 namespace prevail {
 class AssertExtractor {
-    program_info info;
-    std::optional<label_t> current_label; ///< Pre-simplification label this assert is part of.
+    ProgramInfo info;
+    std::optional<Label> current_label; ///< Pre-simplification label this assert is part of.
 
     static Imm imm(const Value& v) { return std::get<Imm>(v); }
 
@@ -34,7 +34,7 @@ class AssertExtractor {
     }
 
   public:
-    explicit AssertExtractor(program_info info, std::optional<label_t> label)
+    explicit AssertExtractor(ProgramInfo info, std::optional<Label> label)
         : info{std::move(info)}, current_label(label) {}
 
     vector<Assertion> operator()(const Undefined&) const {
@@ -303,7 +303,7 @@ class AssertExtractor {
 /// compare numbers and pointers, or pointers to potentially distinct memory
 /// regions. The verifier will use these assertions to treat the program as
 /// unsafe unless it can prove that the assertions can never fail.
-vector<Assertion> get_assertions(Instruction ins, const program_info& info, const std::optional<label_t>& label) {
+vector<Assertion> get_assertions(Instruction ins, const ProgramInfo& info, const std::optional<Label>& label) {
     return std::visit(AssertExtractor{info, label}, ins);
 }
 } // namespace prevail
