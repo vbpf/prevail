@@ -389,40 +389,17 @@ class AdaptGraph final {
 
     const Weight& edge_val(VertId s, VertId d) const { return _ws[*_succs[s].lookup(d)]; }
 
-    class MutValRef {
-      public:
-        MutValRef() : w(nullptr) {}
-        operator Weight() const {
-            assert(w);
-            return *w;
-        }
-        [[nodiscard]]
-        Weight get() const {
-            assert(w);
-            return *w;
-        }
-        void operator=(Weight* _w) { w = _w; }
-        void operator=(Weight _w) {
-            assert(w);
-            *w = _w;
-        }
-
-      private:
-        Weight* w;
-    };
-
-    bool lookup(VertId s, VertId d, MutValRef* w) {
+    Weight* lookup(VertId s, VertId d) {
         if (const auto idx = _succs[s].lookup(d)) {
-            *w = &_ws[*idx];
-            return true;
+            return &_ws[*idx];
         }
-        return false;
+        return {};
     }
 
     [[nodiscard]]
-    std::optional<Weight> lookup(VertId s, VertId d) const {
+    const Weight* lookup(VertId s, VertId d) const {
         if (const auto idx = _succs[s].lookup(d)) {
-            return _ws[*idx];
+            return &_ws[*idx];
         }
         return {};
     }

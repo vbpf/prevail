@@ -26,7 +26,6 @@ class GraphPerm {
     using VertId = typename G::VertId;
     constexpr static VertId invalid_vert = std::numeric_limits<VertId>::max();
     using Weight = typename G::Weight;
-    using MutValRef = typename G::MutValRef;
 
     GraphPerm(const std::vector<VertId>& _perm, G& _g) : g{_g}, perm{_perm}, inv(_g.size(), invalid_vert) {
         for (unsigned int vi = 0; vi < perm.size(); vi++) {
@@ -46,16 +45,9 @@ class GraphPerm {
         return g.elem(perm[x], perm[y]);
     }
 
-    bool lookup(VertId x, VertId y, MutValRef* w) {
+    const Weight* lookup(VertId x, VertId y) const {
         if (perm[x] > g.size() || perm[y] > g.size()) {
-            return false;
-        }
-        return g.lookup(perm[x], perm[y], w);
-    }
-
-    std::optional<Weight> lookup(VertId x, VertId y) const {
-        if (perm[x] > g.size() || perm[y] > g.size()) {
-            return {};
+            return nullptr;
         }
         return g.lookup(perm[x], perm[y]);
     }
@@ -286,16 +278,22 @@ class SubGraph {
     using GNeighbourConstRange = typename G::NeighbourConstRange;
     using GENeighbourConstRange = typename G::ENeighbourConstRange;
 
-    using MutValRef = typename G::MutValRef;
-
     SubGraph(G& _g, VertId _v_ex) : g(_g), v_ex(_v_ex) {}
 
     bool elem(VertId x, VertId y) const { return x != v_ex && y != v_ex && g.elem(x, y); }
 
-    bool lookup(VertId x, VertId y, MutValRef* w) { return x != v_ex && y != v_ex && g.lookup(x, y, w); }
+    Weight* lookup(VertId x, VertId y) {
+        if (x == v_ex || y == v_ex) {
+            return nullptr;
+        }
+        return g.lookup(x, y);
+    }
 
-    std::optional<Weight> lookup(VertId x, VertId y) const {
-        return (x != v_ex && y != v_ex) ? g.lookup(x, y) : std::optional<Weight>{};
+    const Weight* lookup(VertId x, VertId y) const {
+        if (x == v_ex || y == v_ex) {
+            return nullptr;
+        }
+        return g.lookup(x, y);
     }
 
     Weight edge_val(VertId x, VertId y) const { return g.edge_val(x, y); }
@@ -442,15 +440,14 @@ class GraphRev {
   public:
     using VertId = typename G::VertId;
     using Weight = typename G::Weight;
-    using MutValRef = typename G::MutValRef;
 
     explicit GraphRev(G& _g) : g(_g) {}
 
     // Check whether an edge is live
     bool elem(VertId x, VertId y) const { return g.elem(y, x); }
 
-    bool lookup(VertId x, VertId y, MutValRef* w) { return g.lookup(y, x, w); }
-    std::optional<Weight> lookup(VertId x, VertId y) const { return g.lookup(y, x); }
+    Weight* lookup(VertId x, VertId y) { return g.lookup(y, x); }
+    const Weight* lookup(VertId x, VertId y) const { return g.lookup(y, x); }
 
     // Precondition: elem(x, y) is true.
     Weight edge_val(VertId x, VertId y) const { return g.edge_val(y, x); }
@@ -482,12 +479,11 @@ class GraphOps {
   public:
     // The following code assumes VertId is an integer.
     using Graph = AdaptGraph;
-    using Weight = typename Graph::Weight;
-    using VertId = typename Graph::VertId;
+    using Weight = Graph::Weight;
+    using VertId = Graph::VertId;
     using WeightVector = std::vector<Weight>;
 
     using PotentialFunction = std::function<Weight(VertId)>;
-    using MutValRef = typename Graph::MutValRef;
 
     using EdgeVector = std::vector<std::tuple<VertId, VertId, Weight>>;
 
@@ -573,12 +569,11 @@ class GraphOps {
         Graph g;
         g.growTo(sz);
 
-        MutValRef wr;
         for (const VertId s : l.verts()) {
             for (const auto e : l.e_succs(s)) {
                 const VertId d = e.vert;
-                if (r.lookup(s, d, &wr)) {
-                    g.add_edge(s, std::max(e.val, static_cast<Weight>(wr)), d);
+                if (Weight* pw = r.lookup(s, d)) {
+                    g.add_edge(s, std::max(e.val, *pw), d);
                 }
             }
         }
@@ -590,15 +585,14 @@ class GraphOps {
         assert(l.size() == r.size());
         Graph g(Graph::copy(l));
 
-        MutValRef wg;
         for (VertId s : r.verts()) {
             for (const auto e : r.e_succs(s)) {
-                if (!g.lookup(s, e.vert, &wg)) {
-                    g.add_edge(s, e.val, e.vert);
-                } else {
-                    if (e.val < wg) {
-                        wg = e.val;
+                if (Weight* pw = g.lookup(s, e.vert)) {
+                    if (e.val < *pw) {
+                        *pw = e.val;
                     }
+                } else {
+                    g.add_edge(s, e.val, e.vert);
                 }
             }
         }
@@ -1118,12 +1112,11 @@ class GraphOps {
 
             assert(g_excl.succs(se).begin() != g_excl.succs(se).end());
             if (se != jj) {
-                typename Graph::MutValRef w;
-                if (g_excl.lookup(se, jj, &w)) {
-                    if (w.get() <= wt_sij) {
+                if (Weight* pw = g_excl.lookup(se, jj)) {
+                    if (*pw <= wt_sij) {
                         continue;
                     }
-                    w = wt_sij;
+                    *pw = wt_sij;
                 } else {
                     g_excl.add_edge(se, wt_sij, jj);
                 }
@@ -1136,12 +1129,11 @@ class GraphOps {
             VertId de = edge.vert;
             Weight wt_ijd = edge.val + c;
             if (de != ii) {
-                typename Graph::MutValRef w;
-                if (g_excl.lookup(ii, de, &w)) {
-                    if (w.get() <= wt_ijd) {
+                if (Weight* pw = g_excl.lookup(ii, de)) {
+                    if (*pw <= wt_ijd) {
                         continue;
                     }
-                    w = wt_ijd;
+                    *pw = wt_ijd;
                 } else {
                     g_excl.add_edge(ii, wt_ijd, de);
                 }
@@ -1153,12 +1145,11 @@ class GraphOps {
             Weight wt_sij = c + p1;
             for (const auto& [de, p2] : dest_dec) {
                 Weight wt_sijd = wt_sij + p2;
-                typename Graph::MutValRef w;
-                if (g.lookup(se, de, &w)) {
-                    if (w.get() <= wt_sijd) {
+                if (Weight* pw = g.lookup(se, de)) {
+                    if (*pw <= wt_sijd) {
                         continue;
                     }
-                    w = wt_sijd;
+                    *pw = wt_sijd;
                 } else {
                     g.add_edge(se, wt_sijd, de);
                 }
