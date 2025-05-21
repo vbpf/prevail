@@ -385,9 +385,9 @@ bool SplitDBM::operator<=(const SplitDBM& o) const {
     if (vert_map.size() < o.vert_map.size()) {
         return false;
     }
-
+    constexpr VertId INVALID_VERT = std::numeric_limits<VertId>::max();
     // Set up a mapping from o to this.
-    std::vector<unsigned int> vert_renaming(o.g.size(), -1);
+    std::vector vert_renaming(o.g.size(), INVALID_VERT);
     vert_renaming[0] = 0;
     for (const auto& [v, n] : o.vert_map) {
         if (o.g.succs(n).size() == 0 && o.g.preds(n).size() == 0) {
@@ -408,11 +408,11 @@ bool SplitDBM::operator<=(const SplitDBM& o) const {
             continue;
         }
 
-        assert(vert_renaming[ox] != (unsigned)-1);
+        assert(vert_renaming[ox] != INVALID_VERT);
         VertId x = vert_renaming[ox];
         for (const auto edge : o.g.e_succs(ox)) {
             VertId oy = edge.vert;
-            assert(vert_renaming[oy] != (unsigned)-1);
+            assert(vert_renaming[oy] != INVALID_VERT);
             VertId y = vert_renaming[oy];
             Weight ow = edge.val;
 
