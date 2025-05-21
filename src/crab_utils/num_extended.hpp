@@ -126,7 +126,7 @@ class ExtendedNumber final {
     ExtendedNumber& operator*=(const ExtendedNumber& x) { return operator=(operator*(x)); }
 
   private:
-    ExtendedNumber AbsDiv(const ExtendedNumber& x, ExtendedNumber (*f)(Number, Number)) const {
+    ExtendedNumber AbsDiv(const ExtendedNumber& x, ExtendedNumber (*f)(const Number&, const Number&)) const {
         if (x._n == 0) {
             CRAB_ERROR("Bound: division by zero");
         }
@@ -144,30 +144,30 @@ class ExtendedNumber final {
 
   public:
     ExtendedNumber operator/(const ExtendedNumber& x) const {
-        return AbsDiv(x, [](Number dividend, Number divisor) { return ExtendedNumber{dividend / divisor}; });
+        return AbsDiv(x,
+                      [](const Number& dividend, const Number& divisor) { return ExtendedNumber{dividend / divisor}; });
     }
 
     ExtendedNumber operator%(const ExtendedNumber& x) const {
-        return AbsDiv(x, [](Number dividend, Number divisor) { return ExtendedNumber{dividend % divisor}; });
+        return AbsDiv(x,
+                      [](const Number& dividend, const Number& divisor) { return ExtendedNumber{dividend % divisor}; });
     }
 
     [[nodiscard]]
     ExtendedNumber udiv(const ExtendedNumber& x) const {
         using M = uint64_t;
-        return AbsDiv(x, [](Number dividend, Number divisor) {
-            dividend = dividend >= 0 ? dividend : Number{dividend.cast_to<M>()};
-            divisor = divisor >= 0 ? divisor : Number{divisor.cast_to<M>()};
-            return ExtendedNumber{dividend / divisor};
+        return AbsDiv(x, [](const Number& dividend, const Number& divisor) {
+            return ExtendedNumber{(dividend >= 0 ? dividend : Number{dividend.cast_to<M>()}) /
+                                  (divisor >= 0 ? divisor : Number{divisor.cast_to<M>()})};
         });
     }
 
     [[nodiscard]]
     ExtendedNumber urem(const ExtendedNumber& x) const {
         using M = uint64_t;
-        return AbsDiv(x, [](Number dividend, Number divisor) {
-            dividend = dividend >= 0 ? dividend : Number{dividend.cast_to<M>()};
-            divisor = divisor >= 0 ? divisor : Number{divisor.cast_to<M>()};
-            return ExtendedNumber{dividend % divisor};
+        return AbsDiv(x, [](const Number& dividend, const Number& divisor) {
+            return ExtendedNumber{(dividend >= 0 ? dividend : Number{dividend.cast_to<M>()}) %
+                                  (divisor >= 0 ? divisor : Number{divisor.cast_to<M>()})};
         });
     }
 
