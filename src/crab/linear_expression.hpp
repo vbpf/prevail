@@ -11,7 +11,7 @@ namespace prevail {
 
 // A linear expression is of the form: Ax + By + Cz + ... + N.
 // That is, a sum of terms where each term is either a
-// coefficient * variable, or simply a coefficient
+// coefficient * variable or simply a coefficient
 // (of which there is only one such term).
 class LinearExpression final {
 
@@ -30,7 +30,7 @@ class LinearExpression final {
         if (it == _variable_terms.end()) {
             return 0;
         }
-        return (*it).second;
+        return it->second;
     }
 
   public:
