@@ -2085,7 +2085,7 @@ constexpr EbpfHelperPrototype bpf_loop_proto = {
 
 #define FN(x) bpf_##x##_proto
 // keep this on a round line
-const EbpfHelperPrototype prototypes[] = {
+constexpr EbpfHelperPrototype prototypes[] = {
     FN(unspec),
     FN(map_lookup_elem),
     FN(map_update_elem),
