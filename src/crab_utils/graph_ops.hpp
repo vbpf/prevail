@@ -1101,7 +1101,7 @@ class GraphOps {
   public:
     static void close_over_edge(Graph& g, VertId ii, VertId jj) {
         assert(ii != 0 && jj != 0);
-        SubGraph<Graph> g_excl(g, 0);
+        SubGraph g_excl(g, 0);
 
         Weight c = g_excl.edge_val(ii, jj);
 
