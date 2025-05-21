@@ -48,7 +48,7 @@ static std::string make_opcode_message(const char* msg, const uint8_t opcode) {
     return oss.str();
 }
 
-struct InvalidInstruction : std::invalid_argument {
+struct InvalidInstruction final : std::invalid_argument {
     size_t pc;
     explicit InvalidInstruction(const size_t pc, const char* what) : std::invalid_argument{what}, pc{pc} {}
     InvalidInstruction(const size_t pc, const std::string& what) : std::invalid_argument{what}, pc{pc} {}
@@ -56,7 +56,7 @@ struct InvalidInstruction : std::invalid_argument {
         : std::invalid_argument{make_opcode_message("bad instruction", opcode)}, pc{pc} {}
 };
 
-struct UnsupportedMemoryMode : std::invalid_argument {
+struct UnsupportedMemoryMode final : std::invalid_argument {
     explicit UnsupportedMemoryMode(const char* what) : std::invalid_argument{what} {}
 };
 
