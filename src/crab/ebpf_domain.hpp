@@ -59,7 +59,7 @@ class EbpfDomain final {
     EbpfDomain operator|(const EbpfDomain& other) &&;
     EbpfDomain operator&(const EbpfDomain& other) const;
     EbpfDomain widen(const EbpfDomain& other, bool to_constants) const;
-    EbpfDomain widening_thresholds(const EbpfDomain& other, const Thresholds& ts);
+    EbpfDomain widening_thresholds(const EbpfDomain& other, const Thresholds&) const;
     EbpfDomain narrow(const EbpfDomain& other) const;
 
     static EbpfDomain calculate_constant_limits();

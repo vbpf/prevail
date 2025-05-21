@@ -173,7 +173,7 @@ class Interval final {
     }
 
     template <typename Thresholds>
-    Interval widening_thresholds(Interval x, const Thresholds& ts) {
+    Interval widening_thresholds(Interval x, const Thresholds& ts) const {
         if (is_bottom()) {
             return x;
         } else if (x.is_bottom()) {
