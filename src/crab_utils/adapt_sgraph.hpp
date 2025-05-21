@@ -460,7 +460,7 @@ class AdaptGraph final {
     }
 
     // XXX: g cannot be marked const for complicated reasons
-    friend std::ostream& operator<<(std::ostream& o, AdaptGraph& g) {
+    friend std::ostream& operator<<(std::ostream& o, const AdaptGraph& g) {
         o << "[|";
         bool first = true;
         for (const VertId v : g.verts()) {

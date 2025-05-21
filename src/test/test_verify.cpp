@@ -607,7 +607,7 @@ TEST_SECTION_LEGACY("cilium", "bpf_lxc.o", "2/10")
 TEST_SECTION("cilium", "bpf_lxc.o", "2/11")
 TEST_SECTION("cilium", "bpf_lxc.o", "2/12")
 
-void test_analyze_thread(const Program* prog, ProgramInfo* info, bool* res) {
+static void test_analyze_thread(const Program* prog, const ProgramInfo* info, bool* res) {
     thread_local_program_info.set(*info);
     *res = verify(*prog);
 }
