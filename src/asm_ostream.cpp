@@ -470,7 +470,7 @@ struct CommandPrinterVisitor {
 
     void print(Deref const& access) {
         const string sign = access.offset < 0 ? " - " : " + ";
-        int offset = std::abs(access.offset); // what about INT_MIN?
+        const int offset = std::abs(access.offset); // what about INT_MIN?
         os_ << "*(" << size(access.width) << " *)";
         os_ << "(" << access.basereg << sign << offset << ")";
     }

@@ -26,7 +26,7 @@ class LinearExpression final {
     // Get the coefficient for a given variable, which is 0 if it has no term in the expression.
     [[nodiscard]]
     Number coefficient_of(const Variable& variable) const {
-        auto it = _variable_terms.find(variable);
+        const auto it = _variable_terms.find(variable);
         if (it == _variable_terms.end()) {
             return 0;
         }
@@ -155,7 +155,7 @@ inline std::ostream& operator<<(std::ostream& o, const LinearExpression& express
     expression.output_variable_terms(o);
 
     // Output the constant term.
-    Number constant = expression.constant_term();
+    const Number constant = expression.constant_term();
     if (constant < 0) {
         o << constant;
     } else if (constant > 0) {

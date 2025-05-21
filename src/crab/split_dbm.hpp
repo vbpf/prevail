@@ -134,7 +134,7 @@ class SplitDBM final {
         CrabStats::count("SplitDBM.count.copy");
         ScopedCrabStats __st__("SplitDBM.copy");
 
-        CRAB_LOG("zones-split-size", auto p = size();
+        CRAB_LOG("zones-split-size", const auto p = size();
                  std::cout << "#nodes = " << p.first << " #edges=" << p.second << "\n";);
 
         assert(g.size() > 0);
