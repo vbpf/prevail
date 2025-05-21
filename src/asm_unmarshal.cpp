@@ -56,10 +56,6 @@ struct InvalidInstruction final : std::invalid_argument {
         : std::invalid_argument{make_opcode_message("bad instruction", opcode)}, pc{pc} {}
 };
 
-struct UnsupportedMemoryMode final : std::invalid_argument {
-    explicit UnsupportedMemoryMode(const char* what) : std::invalid_argument{what} {}
-};
-
 static auto getMemIsLoad(const uint8_t opcode) -> bool {
     switch (opcode & INST_CLS_MASK) {
     case INST_CLS_LD:
