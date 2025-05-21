@@ -60,7 +60,7 @@ class BitsetDomain final {
     }
 
     [[nodiscard]]
-    std::pair<bool, bool> uniformity(size_t lb, int width) const {
+    std::pair<bool, bool> uniformity(const size_t lb, int width) const {
         width = std::min(width, static_cast<int>(EBPF_TOTAL_STACK_SIZE - lb));
         bool only_num = true;
         bool only_non_num = true;
@@ -77,7 +77,7 @@ class BitsetDomain final {
 
     // Get the number of bytes, starting at lb, known to be numbers.
     [[nodiscard]]
-    int all_num_width(size_t lb) const {
+    int all_num_width(const size_t lb) const {
         size_t ub = lb;
         while ((ub < EBPF_TOTAL_STACK_SIZE) && !non_numerical_bytes[ub]) {
             ub++;
@@ -85,14 +85,14 @@ class BitsetDomain final {
         return static_cast<int>(ub - lb);
     }
 
-    void reset(size_t lb, int n) {
+    void reset(const size_t lb, int n) {
         n = std::min(n, static_cast<int>((EBPF_TOTAL_STACK_SIZE - lb)));
         for (int i = 0; i < n; i++) {
             non_numerical_bytes.reset(lb + i);
         }
     }
 
-    void havoc(size_t lb, int width) {
+    void havoc(const size_t lb, int width) {
         width = std::min(width, static_cast<int>(EBPF_TOTAL_STACK_SIZE - lb));
         for (int i = 0; i < width; i++) {
             non_numerical_bytes.set(lb + i);

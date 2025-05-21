@@ -134,7 +134,7 @@ static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const 
     // Get the label of the node to go to on returning from the macro.
     Label exit_to_label = builder.prog.cfg().get_child(caller_label);
 
-    // Construct the variable prefix to use for the new stack frame,
+    // Construct the variable prefix to use for the new stack frame
     // and store a copy in the CallLocal instruction since the instruction-specific
     // labels may only exist until the CFG is simplified.
     const std::string stack_frame_prefix = to_string(caller_label);
@@ -219,7 +219,7 @@ static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const 
 static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const bool must_have_exit) {
     CfgBuilder builder;
 
-    // First add all instructions to the CFG without connecting
+    // First, add all instructions to the CFG without connecting
     for (const auto& [label, inst, _] : insts) {
         if (std::holds_alternative<Undefined>(inst)) {
             continue;
