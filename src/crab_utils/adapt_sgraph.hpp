@@ -123,7 +123,7 @@ class TreeSMap final {
 
     [[nodiscard]]
     std::optional<Val> lookup(Key k) const {
-        auto v = map.find(k);
+        const auto v = map.find(k);
         if (v != map.end()) {
             return {v->second};
         }
@@ -353,7 +353,7 @@ class AdaptGraph final {
         edge_count -= _succs[v].size();
         _succs[v].clear();
 
-        for (TreeSMap::Key k : _preds[v].keys()) {
+        for (const TreeSMap::Key k : _preds[v].keys()) {
             _succs[k].remove(v);
         }
         edge_count -= _preds[v].size();
@@ -365,7 +365,7 @@ class AdaptGraph final {
 
     void clear_edges() {
         _ws.clear();
-        for (VertId v : verts()) {
+        for (const VertId v : verts()) {
             _succs[v].clear();
             _preds[v].clear();
         }
@@ -412,7 +412,7 @@ class AdaptGraph final {
     };
 
     bool lookup(VertId s, VertId d, MutValRef* w) {
-        if (auto idx = _succs[s].lookup(d)) {
+        if (const auto idx = _succs[s].lookup(d)) {
             *w = &_ws[*idx];
             return true;
         }
@@ -421,7 +421,7 @@ class AdaptGraph final {
 
     [[nodiscard]]
     std::optional<Weight> lookup(VertId s, VertId d) const {
-        if (auto idx = _succs[s].lookup(d)) {
+        if (const auto idx = _succs[s].lookup(d)) {
             return _ws[*idx];
         }
         return {};
@@ -444,7 +444,7 @@ class AdaptGraph final {
     }
 
     void update_edge(VertId s, Weight w, VertId d) {
-        if (auto idx = _succs[s].lookup(d)) {
+        if (const auto idx = _succs[s].lookup(d)) {
             _ws[*idx] = std::min(_ws[*idx], w);
         } else {
             add_edge(s, w, d);
@@ -452,7 +452,7 @@ class AdaptGraph final {
     }
 
     void set_edge(VertId s, Weight w, VertId d) {
-        if (auto idx = _succs[s].lookup(d)) {
+        if (const auto idx = _succs[s].lookup(d)) {
             _ws[*idx] = w;
         } else {
             add_edge(s, w, d);
@@ -463,7 +463,7 @@ class AdaptGraph final {
     friend std::ostream& operator<<(std::ostream& o, AdaptGraph& g) {
         o << "[|";
         bool first = true;
-        for (VertId v : g.verts()) {
+        for (const VertId v : g.verts()) {
             auto it = g.e_succs(v).begin();
             auto end = g.e_succs(v).end();
 

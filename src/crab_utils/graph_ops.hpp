@@ -675,7 +675,7 @@ class GraphOps {
         const size_t sz = x.size();
         grow_scratch(sz);
 
-        for (VertId v : x.verts()) {
+        for (const VertId v : x.verts()) {
             vert_marks->at(v) = 0;
         }
         for (VertId v : x.verts()) {
@@ -686,7 +686,7 @@ class GraphOps {
             }
         }
 
-        for (VertId v : x.verts()) {
+        for (const VertId v : x.verts()) {
             vert_marks->at(v) = 0;
         }
     }
@@ -722,7 +722,7 @@ class GraphOps {
             auto next_head = dual_queue->begin() + sz;
             auto next_tail = next_head;
 
-            for (VertId v : scc) {
+            for (const VertId v : scc) {
                 *qtail = v;
                 vert_marks->at(v) = BF_SCC | BF_QUEUED;
                 ++qtail;
@@ -738,7 +738,7 @@ class GraphOps {
                     Weight s_pot = potentials[s];
 
                     for (const auto e : g.e_succs(s)) {
-                        VertId d = e.vert;
+                        const VertId d = e.vert;
                         Weight sd_pot = s_pot + e.val;
                         if (sd_pot < potentials[d]) {
                             potentials[d] = sd_pot;
@@ -763,10 +763,10 @@ class GraphOps {
                 VertId s = *--qtail;
                 Weight s_pot = potentials[s];
                 for (const auto e : g.e_succs(s)) {
-                    VertId d = e.vert;
+                    const VertId d = e.vert;
                     if (s_pot + e.val < potentials[d]) {
                         // Cleanup vertex marks
-                        for (VertId v : g.verts()) {
+                        for (const VertId v : g.verts()) {
                             vert_marks->at(v) = BF_NONE;
                         }
                         return false;
@@ -984,7 +984,7 @@ class GraphOps {
         // assert(src < (int) sz && dest < (int) sz);
         grow_scratch(sz);
 
-        for (VertId vi : g.verts()) {
+        for (const VertId vi : g.verts()) {
             dists->at(vi) = Weight(0);
             dists_alt->at(vi) = p[vi];
         }
@@ -1004,7 +1004,7 @@ class GraphOps {
             dists_alt->at(es) = p[es] + dists->at(es);
 
             for (const auto e : g.e_succs(es)) {
-                VertId ed = e.vert;
+                const VertId ed = e.vert;
                 if (dists_alt->at(ed) == p[ed]) {
                     Weight gnext_ed = dists_alt->at(es) + e.val - dists_alt->at(ed);
                     if (gnext_ed < dists->at(ed)) {
@@ -1022,7 +1022,7 @@ class GraphOps {
             return false;
         }
 
-        for (VertId v : g.verts()) {
+        for (const VertId v : g.verts()) {
             p[v] = dists_alt->at(v);
         }
 
@@ -1056,7 +1056,7 @@ class GraphOps {
     static void close_after_assign_fwd(const auto& g, const PotentialFunction& p, VertId v,
                                        std::vector<std::tuple<VertId, Weight>>& aux) {
         // Initialize the queue and distances.
-        for (VertId u : g.verts()) {
+        for (const VertId u : g.verts()) {
             vert_marks->at(u) = 0;
         }
 
@@ -1065,7 +1065,7 @@ class GraphOps {
         auto adj_head = dual_queue->begin();
         auto adj_tail = adj_head;
         for (const auto e : g.e_succs(v)) {
-            VertId d = e.vert;
+            const VertId d = e.vert;
             vert_marks->at(d) = BF_QUEUED;
             dists->at(d) = e.val;
             //        assert(p(v) + dists->at(d) - p(d) >= Weight(0));
@@ -1083,7 +1083,7 @@ class GraphOps {
 
             Weight d_wt = dists->at(d);
             for (const auto edge : g.e_succs(d)) {
-                VertId e = edge.vert;
+                const VertId e = edge.vert;
                 Weight e_wt = d_wt + edge.val;
                 if (!vert_marks->at(e)) {
                     dists->at(e) = e_wt;
