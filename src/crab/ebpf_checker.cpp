@@ -270,7 +270,6 @@ void EbpfChecker::operator()(const ValidCall& s) const {
         const EbpfHelperPrototype proto = thread_local_program_info->platform->get_helper_prototype(s.func);
         if (proto.return_type == EBPF_RETURN_TYPE_INTEGER_OR_NO_RETURN_IF_SUCCEED) {
             require("tail call not supported in subprogram");
-            return;
         }
     }
 }
