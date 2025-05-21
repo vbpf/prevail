@@ -48,7 +48,7 @@ static std::optional<bpf_conformance_groups_t> _get_conformance_group_by_name(co
 
 static std::set<std::string> _get_conformance_group_names() {
     std::set<std::string> result;
-    for (const auto& [name, _] : _conformance_groups) {
+    for (const auto& name : _conformance_groups | std::views::keys) {
         result.insert(name);
     }
     return result;
