@@ -99,7 +99,7 @@ class BitsetDomain final {
         }
     }
 
-    friend std::ostream& operator<<(std::ostream& o, const BitsetDomain& array);
+    friend std::ostream& operator<<(std::ostream& o, const BitsetDomain& b);
 
     // Test whether all values in the range [lb,ub) are numerical.
     [[nodiscard]]
