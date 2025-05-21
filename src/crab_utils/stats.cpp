@@ -78,7 +78,7 @@ void Stopwatch::Print(std::ostream& out) const {
     const long time = getTimeElapsed();
     const long h = time / 3600000000L;
     const long m = time / 60000000L - h * 60;
-    const float s = ((float)time / 1000000L) - m * 60 - h * 3600;
+    const float s = (static_cast<float>(time) / 1000000L) - m * 60 - h * 3600;
 
     if (h > 0) {
         out << h << "h";

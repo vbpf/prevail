@@ -61,7 +61,7 @@ class BitsetDomain final {
 
     [[nodiscard]]
     std::pair<bool, bool> uniformity(size_t lb, int width) const {
-        width = std::min(width, (int)(EBPF_TOTAL_STACK_SIZE - lb));
+        width = std::min(width, static_cast<int>(EBPF_TOTAL_STACK_SIZE - lb));
         bool only_num = true;
         bool only_non_num = true;
         for (int j = 0; j < width; j++) {
@@ -82,18 +82,18 @@ class BitsetDomain final {
         while ((ub < EBPF_TOTAL_STACK_SIZE) && !non_numerical_bytes[ub]) {
             ub++;
         }
-        return (int)(ub - lb);
+        return static_cast<int>(ub - lb);
     }
 
     void reset(size_t lb, int n) {
-        n = std::min(n, (int)(EBPF_TOTAL_STACK_SIZE - lb));
+        n = std::min(n, static_cast<int>((EBPF_TOTAL_STACK_SIZE - lb)));
         for (int i = 0; i < n; i++) {
             non_numerical_bytes.reset(lb + i);
         }
     }
 
     void havoc(size_t lb, int width) {
-        width = std::min(width, (int)(EBPF_TOTAL_STACK_SIZE - lb));
+        width = std::min(width, static_cast<int>(EBPF_TOTAL_STACK_SIZE - lb));
         for (int i = 0; i < width; i++) {
             non_numerical_bytes.set(lb + i);
         }
@@ -106,8 +106,8 @@ class BitsetDomain final {
     bool all_num(int32_t lb, int32_t ub) const {
         assert(lb < ub);
         lb = std::max(lb, 0);
-        ub = std::min(ub, (int)EBPF_TOTAL_STACK_SIZE);
-        if (lb < 0 || ub > (int)non_numerical_bytes.size()) {
+        ub = std::min(ub, EBPF_TOTAL_STACK_SIZE);
+        if (lb < 0 || ub > static_cast<int>(non_numerical_bytes.size())) {
             return false;
         }
 
