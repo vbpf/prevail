@@ -63,7 +63,7 @@ struct VisitArgs {
     std::weak_ptr<WtoCycle> containing_cycle;
 
     VisitArgs(const VisitTaskType t, Label v, WtoPartition& p, std::weak_ptr<WtoCycle> cc)
-        : type(t), vertex(std::move(v)), partition(p), containing_cycle(std::move(cc)) {};
+        : type(t), vertex(std::move(v)), partition(p), containing_cycle(std::move(cc)) {}
 };
 
 struct WtoVertexData {

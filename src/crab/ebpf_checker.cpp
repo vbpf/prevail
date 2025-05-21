@@ -192,7 +192,7 @@ void EbpfChecker::operator()(const Comparable& s) const {
         // _Maybe_ different types, so r2 must be a number.
         // We checked in a previous assertion that r1 is a pointer or a number.
         require(m_inv, reg_pack(s.r2).type == T_NUM, "Cannot subtract pointers to different regions");
-    };
+    }
 }
 
 void EbpfChecker::operator()(const Addable& s) const {

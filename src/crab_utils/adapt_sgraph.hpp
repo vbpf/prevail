@@ -158,7 +158,7 @@ class AdaptGraph final {
     using Weight = Number; // previously template
     using VertId = unsigned int;
 
-    AdaptGraph() : edge_count(0) {}
+    AdaptGraph() = default;
 
     AdaptGraph(AdaptGraph&& o) noexcept = default;
 
