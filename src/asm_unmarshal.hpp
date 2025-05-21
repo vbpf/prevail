@@ -23,5 +23,5 @@ std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog,
                                                     std::vector<std::vector<std::string>>& notes);
 std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog);
 
-Call make_call(int func, const ebpf_platform_t& platform);
+Call make_call(int imm, const ebpf_platform_t& platform);
 } // namespace prevail

@@ -125,7 +125,7 @@ class FiniteDomain {
     void bitwise_and(Variable lhss, Variable lhsu, const Number& op2);
     void bitwise_or(Variable lhss, Variable lhsu, Variable op2, int finite_width);
     void bitwise_or(Variable lhss, Variable lhsu, const Number& op2);
-    void bitwise_xor(Variable lhsss, Variable lhsu, Variable op2, int finite_width);
+    void bitwise_xor(Variable lhss, Variable lhsu, Variable op2, int finite_width);
     void bitwise_xor(Variable lhss, Variable lhsu, const Number& op2);
     void shl_overflow(Variable lhss, Variable lhsu, Variable op2);
     void shl_overflow(Variable lhss, Variable lhsu, const Number& op2);

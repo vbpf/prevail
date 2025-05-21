@@ -34,7 +34,7 @@ class Thresholds final {
         return m_thresholds.size();
     }
 
-    void add(const ExtendedNumber& v1);
+    void add(const ExtendedNumber& v);
 
     friend std::ostream& operator<<(std::ostream& o, const Thresholds& t);
 };
