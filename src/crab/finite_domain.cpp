@@ -517,7 +517,7 @@ FiniteDomain::assume_unsigned_32bit_gt(const bool strict, const Variable left_sv
     } else {
         // We can't directly compare the uvalues since they may differ in high order bits.
         return {};
-    };
+    }
 }
 
 std::vector<LinearConstraint> FiniteDomain::assume_unsigned_cst_interval(Condition::Op op, bool is64,
