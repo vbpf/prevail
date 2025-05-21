@@ -2083,7 +2083,7 @@ constexpr EbpfHelperPrototype bpf_loop_proto = {
         },
 };
 
-#define FN(x) bpf_## x## _proto
+#define FN(x) bpf_##x##_proto
 // keep this on a round line
 constexpr EbpfHelperPrototype prototypes[] = {
     FN(unspec),
@@ -2276,7 +2276,7 @@ constexpr EbpfHelperPrototype prototypes[] = {
 };
 
 bool is_helper_usable_linux(const int32_t n) {
-    if (n >= static_cast<int>(sizeof(prototypes) / sizeof(prototypes[0])) || n < 0) {
+    if (n >= static_cast<int>(std::size(prototypes)) || n < 0) {
         return false;
     }
 

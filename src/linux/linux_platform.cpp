@@ -133,7 +133,7 @@ static const EbpfMapType linux_map_types[] = {
 
 EbpfMapType get_map_type_linux(uint32_t platform_specific_type) {
     const uint32_t index = platform_specific_type;
-    if ((index == 0) || (index >= sizeof(linux_map_types) / sizeof(linux_map_types[0]))) {
+    if (index == 0 || index >= std::size(linux_map_types)) {
         return linux_map_types[0];
     }
     EbpfMapType type = linux_map_types[index];
