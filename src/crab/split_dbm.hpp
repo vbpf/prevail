@@ -28,7 +28,6 @@
 
 #include "crab/interval.hpp"
 #include "crab/linear_constraint.hpp"
-#include "crab/thresholds.hpp"
 #include "crab/variable.hpp"
 #include "crab_utils/adapt_sgraph.hpp"
 #include "crab_utils/debug.hpp"
@@ -203,12 +202,6 @@ class SplitDBM final {
 
     [[nodiscard]]
     SplitDBM widen(const SplitDBM& o) const;
-
-    [[nodiscard]]
-    SplitDBM widening_thresholds(const SplitDBM& o, const Thresholds&) const {
-        // TODO: use thresholds. Threshold is anonymous until used to prevent unused parameter warning.
-        return this->widen(o);
-    }
 
     std::optional<SplitDBM> meet(const SplitDBM& o) const;
 

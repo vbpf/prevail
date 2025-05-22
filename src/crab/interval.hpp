@@ -9,7 +9,6 @@
 #pragma once
 
 #include <optional>
-#include <utility>
 
 #include "crab_utils/num_big.hpp"
 #include "crab_utils/num_extended.hpp"
@@ -169,19 +168,6 @@ class Interval final {
             return *this;
         } else {
             return Interval{x._lb < _lb ? Bound::minus_infinity() : _lb, _ub < x._ub ? Bound::plus_infinity() : _ub};
-        }
-    }
-
-    template <typename Thresholds>
-    Interval widening_thresholds(Interval x, const Thresholds& ts) const {
-        if (is_bottom()) {
-            return x;
-        } else if (x.is_bottom()) {
-            return *this;
-        } else {
-            const Bound lb = x._lb < _lb ? ts.get_prev(x._lb) : _lb;
-            const Bound ub = _ub < x._ub ? ts.get_next(x._ub) : _ub;
-            return Interval{lb, ub};
         }
     }
 

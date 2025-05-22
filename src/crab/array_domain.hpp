@@ -59,7 +59,6 @@ class ArrayDomain final {
     ArrayDomain operator|(const ArrayDomain& other) const;
     ArrayDomain operator&(const ArrayDomain& other) const;
     ArrayDomain widen(const ArrayDomain& other) const;
-    ArrayDomain widening_thresholds(const ArrayDomain& other, const Thresholds& ts) const;
     ArrayDomain narrow(const ArrayDomain& other) const;
 
     friend std::ostream& operator<<(std::ostream& o, const ArrayDomain& dom);
