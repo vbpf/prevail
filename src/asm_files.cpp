@@ -236,7 +236,7 @@ static elf_global_data parse_btf_section(const parse_params_t& parse_params, con
     if (!btf_section) {
         return {};
     }
-    const libbtf::btf_type_data btf_data = vector_of<std::byte>(*btf_section);
+    const libbtf::btf_type_data btf_data(vector_of<std::byte>(*btf_section), false);
     if (parse_params.options.verbosity_opts.dump_btf_types_json) {
         dump_btf_types(btf_data, parse_params.path);
     }
