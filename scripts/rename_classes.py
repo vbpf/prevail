@@ -63,7 +63,6 @@ CLASS_MAPPING = {
     "variable_t": "Variable",
     "reg_pack_t": "RegPack",  # Structure for register components
     "cell_t": "Cell",  # Used in array domain
-    "thresholds_t": "Thresholds",  # Used in widening
     "string_invariant": "StringInvariant",  # Represents string-based invariants
     "variable_terms_t": "VariableTerms",  # Part of linear expression
     "variable_vector_t": "VariableVector",  # Vector of variables

@@ -855,10 +855,6 @@ ArrayDomain ArrayDomain::operator&(const ArrayDomain& other) const { return Arra
 
 ArrayDomain ArrayDomain::widen(const ArrayDomain& other) const { return ArrayDomain(num_bytes | other.num_bytes); }
 
-ArrayDomain ArrayDomain::widening_thresholds(const ArrayDomain& other, const Thresholds&) const {
-    return widen(other);
-}
-
 ArrayDomain ArrayDomain::narrow(const ArrayDomain& other) const { return ArrayDomain(num_bytes & other.num_bytes); }
 
 std::ostream& operator<<(std::ostream& o, const ArrayDomain& dom) { return o << dom.num_bytes; }

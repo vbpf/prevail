@@ -10,7 +10,6 @@
 #include "crab/interval.hpp"
 #include "crab/linear_constraint.hpp"
 #include "crab/split_dbm.hpp"
-#include "crab/thresholds.hpp"
 #include "crab/variable.hpp"
 #include "string_constraints.hpp"
 
@@ -56,12 +55,6 @@ class FiniteDomain {
     [[nodiscard]]
     FiniteDomain widen(const FiniteDomain& o) const {
         return FiniteDomain{dom.widen(o.dom)};
-    }
-
-    [[nodiscard]]
-    FiniteDomain widening_thresholds(const FiniteDomain& o, const Thresholds& ts) const {
-        // TODO: use thresholds
-        return this->widen(o);
     }
 
     std::optional<FiniteDomain> meet(const FiniteDomain& o) const {

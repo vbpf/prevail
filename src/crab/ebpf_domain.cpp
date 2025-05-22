@@ -145,10 +145,6 @@ EbpfDomain EbpfDomain::widen(const EbpfDomain& other, const bool to_constants) c
     return res;
 }
 
-EbpfDomain EbpfDomain::widening_thresholds(const EbpfDomain& other, const Thresholds&) const {
-    return widen(other, false);
-}
-
 EbpfDomain EbpfDomain::narrow(const EbpfDomain& other) const {
     return EbpfDomain(m_inv.narrow(other.m_inv), stack & other.stack);
 }
