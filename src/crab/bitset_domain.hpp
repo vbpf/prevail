@@ -16,7 +16,7 @@ class BitsetDomain final {
   public:
     BitsetDomain() { non_numerical_bytes.set(); }
 
-    BitsetDomain(const bits_t& non_numerical_bytes) : non_numerical_bytes{non_numerical_bytes} {}
+    explicit BitsetDomain(const bits_t& non_numerical_bytes) : non_numerical_bytes{non_numerical_bytes} {}
 
     void set_to_top() { non_numerical_bytes.set(); }
 
@@ -43,20 +43,26 @@ class BitsetDomain final {
 
     void operator|=(const BitsetDomain& other) { non_numerical_bytes |= other.non_numerical_bytes; }
 
-    BitsetDomain operator|(BitsetDomain&& other) const { return non_numerical_bytes | other.non_numerical_bytes; }
+    BitsetDomain operator|(BitsetDomain&& other) const {
+        return BitsetDomain{non_numerical_bytes | other.non_numerical_bytes};
+    }
 
-    BitsetDomain operator|(const BitsetDomain& other) const { return non_numerical_bytes | other.non_numerical_bytes; }
+    BitsetDomain operator|(const BitsetDomain& other) const {
+        return BitsetDomain{non_numerical_bytes | other.non_numerical_bytes};
+    }
 
-    BitsetDomain operator&(const BitsetDomain& other) const { return non_numerical_bytes & other.non_numerical_bytes; }
+    BitsetDomain operator&(const BitsetDomain& other) const {
+        return BitsetDomain{non_numerical_bytes & other.non_numerical_bytes};
+    }
 
     [[nodiscard]]
     BitsetDomain widen(const BitsetDomain& other) const {
-        return non_numerical_bytes | other.non_numerical_bytes;
+        return BitsetDomain{non_numerical_bytes | other.non_numerical_bytes};
     }
 
     [[nodiscard]]
     BitsetDomain narrow(const BitsetDomain& other) const {
-        return non_numerical_bytes & other.non_numerical_bytes;
+        return BitsetDomain{non_numerical_bytes & other.non_numerical_bytes};
     }
 
     [[nodiscard]]
