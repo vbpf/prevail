@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) Prevail Verifier contributors.
+# SPDX-License-Identifier: MIT
 """
 Class Name Renaming Script
 
@@ -97,14 +99,9 @@ CLASS_MAPPING = {
     "g_e_neighbour_const_range": "GENeighbourConstRange",
     "g_neighbour_const_range": "GNeighbourConstRange",
     "neighbour_const_range": "NeighbourConstRange",
-    "neighbour_range": "NeighbourRange",
-    "fwd_edge_const_iter": "FwdEdgeConstIter",  # Iterator for forward edges
-    "fwd_edge_range": "FwdEdgeRange",
-    "rev_edge_const_iter": "RevEdgeConstIter",  # Iterator for reverse edges
-    "rev_edge_range": "RevEdgeRange",
     "rev_map_t": "RevMap",  # Mapping vertex ID to variable
-    "elt_iter_t": "EltIter",  # Iterator for elements in sparse map
-    "elt_range_t": "EltRange",
+    "elt_iter_t": "ValueIterator",  # Iterator for elements in sparse map
+    "elt_range_t": "ValueRange",
     "patricia_tree_t": "PatriciaTree",  # Underlying structure for OffsetMap
     "adj_const_iterator": "AdjConstIterator",
     "adj_iterator": "AdjIterator",
@@ -112,9 +109,9 @@ CLASS_MAPPING = {
     "const_adj_list": "ConstAdjList",
     "e_adj_const_iterator": "EAdjConstIterator",
     "e_adj_iterator": "EAdjIterator",
-    "elt_const_range_t": "EltConstRange",
+    "elt_const_range_t": "ValueConstRange",
     "key_const_range_t": "KeyConstRange",
-    "key_iter_t": "KeyIter",
+    "key_iter_t": "KeyIterator",
     "vert_const_range": "VertConstRange",
     "vert_set_wrap_t": "VertSetWrap",  # Wrapper for VertSet
 
