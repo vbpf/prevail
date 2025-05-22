@@ -18,26 +18,26 @@ class TreeSMap final {
     col map;
 
   public:
-    using EltIter = col::const_iterator;
+    using ValueIterator = col::const_iterator;
     [[nodiscard]]
     size_t size() const {
         return map.size();
     }
 
-    class KeyIter {
+    class KeyIterator {
       public:
-        KeyIter() = default;
-        explicit KeyIter(const col::const_iterator& _e) : e(_e) {}
+        KeyIterator() = default;
+        explicit KeyIterator(const col::const_iterator& _e) : e(_e) {}
 
         /// return canonical empty iterator
-        static KeyIter empty_iterator() {
-            static KeyIter empty_iter;
+        static KeyIterator empty_iterator() {
+            static KeyIterator empty_iter;
             return empty_iter;
         }
 
         Key operator*() const { return e->first; }
-        bool operator!=(const KeyIter& o) const { return e != o.e; }
-        KeyIter& operator++() {
+        bool operator!=(const KeyIterator& o) const { return e != o.e; }
+        KeyIterator& operator++() {
             ++e;
             return *this;
         }
@@ -47,7 +47,7 @@ class TreeSMap final {
 
     class KeyConstRange {
       public:
-        using iterator = KeyIter;
+        using iterator = KeyIterator;
 
         explicit KeyConstRange(const col& c) : c{c} {}
         [[nodiscard]]
@@ -56,20 +56,20 @@ class TreeSMap final {
         }
 
         [[nodiscard]]
-        KeyIter begin() const {
-            return KeyIter(c.cbegin());
+        KeyIterator begin() const {
+            return KeyIterator(c.cbegin());
         }
         [[nodiscard]]
-        KeyIter end() const {
-            return KeyIter(c.cend());
+        KeyIterator end() const {
+            return KeyIterator(c.cend());
         }
 
         const col& c;
     };
 
-    class EltRange {
+    class ValueRange {
       public:
-        EltRange(const col& c) : c{c} {}
+        explicit ValueRange(const col& c) : c{c} {}
         [[nodiscard]]
         size_t size() const {
             return c.size();
@@ -87,9 +87,9 @@ class TreeSMap final {
         const col& c;
     };
 
-    class EltConstRange {
+    class ValueConstRange {
       public:
-        EltConstRange(const col& c) : c{c} {}
+        explicit ValueConstRange(const col& c) : c{c} {}
         [[nodiscard]]
         size_t size() const {
             return c.size();
@@ -108,9 +108,10 @@ class TreeSMap final {
     };
 
     [[nodiscard]]
-    EltRange elts() const {
-        return EltRange(map);
+    ValueRange values() const {
+        return ValueRange(map);
     }
+
     [[nodiscard]]
     KeyConstRange keys() const {
         return KeyConstRange(map);
@@ -223,48 +224,48 @@ class AdaptGraph final {
         return VertConstRange{is_free};
     }
 
-    struct edge_const_iter {
+    struct EdgeConstIterator {
         struct EdgeRef {
             VertId vert{};
             Weight val;
         };
 
-        TreeSMap::EltIter it{};
+        TreeSMap::ValueIterator it{};
         const std::vector<Weight>* ws{};
 
-        edge_const_iter(const TreeSMap::EltIter& _it, const std::vector<Weight>& _ws) : it(_it), ws(&_ws) {}
-        edge_const_iter(const edge_const_iter& o) = default;
-        edge_const_iter& operator=(const edge_const_iter& o) = default;
-        edge_const_iter() = default;
+        EdgeConstIterator(const TreeSMap::ValueIterator& _it, const std::vector<Weight>& _ws) : it(_it), ws(&_ws) {}
+        EdgeConstIterator(const EdgeConstIterator& o) = default;
+        EdgeConstIterator& operator=(const EdgeConstIterator& o) = default;
+        EdgeConstIterator() = default;
 
         /// return canonical empty iterator
-        static edge_const_iter empty_iterator() {
-            static edge_const_iter empty_iter;
+        static EdgeConstIterator empty_iterator() {
+            static EdgeConstIterator empty_iter;
             return empty_iter;
         }
 
         EdgeRef operator*() const { return EdgeRef{it->first, (*ws)[it->second]}; }
-        edge_const_iter operator++() {
+        EdgeConstIterator operator++() {
             ++it;
             return *this;
         }
-        bool operator!=(const edge_const_iter& o) const { return it != o.it; }
+        bool operator!=(const EdgeConstIterator& o) const { return it != o.it; }
     };
 
-    struct edge_const_range_t {
-        using EltRange = TreeSMap::EltRange;
-        using iterator = edge_const_iter;
+    struct EdgeConstRange {
+        using ValueRange = TreeSMap::ValueRange;
+        using iterator = EdgeConstIterator;
 
-        EltRange r;
+        ValueRange r;
         const std::vector<Weight>& ws;
 
         [[nodiscard]]
-        edge_const_iter begin() const {
-            return edge_const_iter(r.begin(), ws);
+        EdgeConstIterator begin() const {
+            return EdgeConstIterator(r.begin(), ws);
         }
         [[nodiscard]]
-        edge_const_iter end() const {
-            return edge_const_iter(r.end(), ws);
+        EdgeConstIterator end() const {
+            return EdgeConstIterator(r.end(), ws);
         }
         [[nodiscard]]
         size_t size() const {
@@ -272,12 +273,8 @@ class AdaptGraph final {
         }
     };
 
-    using FwdEdgeConstIter = edge_const_iter;
-    using RevEdgeConstIter = edge_const_iter;
-
     using AdjRange = TreeSMap::KeyConstRange;
     using AdjConstRange = TreeSMap::KeyConstRange;
-    using NeighbourRange = AdjRange;
     using NeighbourConstRange = AdjConstRange;
 
     [[nodiscard]]
@@ -289,19 +286,16 @@ class AdaptGraph final {
         return _preds[v].keys();
     }
 
-    using FwdEdgeRange = edge_const_range_t;
-    using RevEdgeRange = edge_const_range_t;
-
     [[nodiscard]]
-    edge_const_range_t e_succs(VertId v) const {
-        return {_succs[v].elts(), _ws};
+    EdgeConstRange e_succs(VertId v) const {
+        return {_succs[v].values(), _ws};
     }
     [[nodiscard]]
-    edge_const_range_t e_preds(VertId v) const {
-        return {_preds[v].elts(), _ws};
+    EdgeConstRange e_preds(VertId v) const {
+        return {_preds[v].values(), _ws};
     }
 
-    using ENeighbourConstRange = edge_const_range_t;
+    using ENeighbourConstRange = EdgeConstRange;
 
     // Management
     [[nodiscard]]
@@ -346,7 +340,7 @@ class AdaptGraph final {
             return;
         }
 
-        for (const auto& [key, val] : _succs[v].elts()) {
+        for (const auto& [key, val] : _succs[v].values()) {
             free_widx.push_back(val);
             _preds[key].remove(v);
         }
