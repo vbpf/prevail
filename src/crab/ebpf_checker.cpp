@@ -77,7 +77,6 @@ class EbpfChecker final {
     void check_access_shared(NumAbsDomain& inv, const LinearExpression& lb, const LinearExpression& ub,
                              Variable shared_region_size) const;
 
-  public:
   private:
     const Assertion assertion;
     const OnRequire on_require;
