@@ -183,7 +183,7 @@ void resolve_inner_map_references_linux(std::vector<EbpfMapDescriptor>& map_desc
 }
 
 #if __linux__
-static int do_bpf(const bpf_cmd cmd, union bpf_attr& attr) { return syscall(321, cmd, &attr, sizeof(attr)); }
+static int do_bpf(const bpf_cmd cmd, bpf_attr& attr) { return syscall(321, cmd, &attr, sizeof(attr)); }
 #endif
 
 /** Try to allocate a Linux map.
@@ -198,7 +198,7 @@ static int create_map_linux(const uint32_t map_type, const uint32_t key_size, co
     }
 
 #if __linux__
-    union bpf_attr attr{};
+    bpf_attr attr{};
     memset(&attr, '\0', sizeof(attr));
     attr.map_type = map_type;
     attr.key_size = key_size;
