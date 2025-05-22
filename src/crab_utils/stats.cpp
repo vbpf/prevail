@@ -35,7 +35,7 @@ long Stopwatch::systemTime() const {
 
     return (long)total_us;
 #else
-    struct rusage ru;
+    rusage ru;
     getrusage(RUSAGE_SELF, &ru);
     const long r = ru.ru_utime.tv_sec * 1000000L + ru.ru_utime.tv_usec;
     return r;
