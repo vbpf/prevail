@@ -9,8 +9,8 @@
 
 #include <boost/multiprecision/cpp_int.hpp>
 
-#include "crab_utils/num_safety.hpp"
 #include "crab_utils/debug.hpp"
+#include "crab_utils/num_safety.hpp"
 
 using boost::multiprecision::cpp_int;
 

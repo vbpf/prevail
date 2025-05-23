@@ -311,10 +311,10 @@ struct AssertionPrinterVisitor {
     }
 
     void operator()(const BoundedLoopCount& a) {
-        _os << VariableRegistry::loop_counter(to_string(a.name)) << " < " << a.limit;
+        _os << variable_registry->loop_counter(to_string(a.name)) << " < " << a.limit;
     }
 
-    static Variable typereg(const Reg& r) { return VariableRegistry::reg(DataKind::types, r.v); }
+    static Variable typereg(const Reg& r) { return variable_registry->reg(DataKind::types, r.v); }
 
     void operator()(ValidSize const& a) {
         const auto op = a.can_be_zero ? " >= " : " > ";
@@ -331,7 +331,9 @@ struct AssertionPrinterVisitor {
             << "))";
     }
 
-    void operator()(ZeroCtxOffset const& a) { _os << VariableRegistry::reg(DataKind::ctx_offsets, a.reg.v) << " == 0"; }
+    void operator()(ZeroCtxOffset const& a) {
+        _os << variable_registry->reg(DataKind::ctx_offsets, a.reg.v) << " == 0";
+    }
 
     void operator()(Comparable const& a) {
         if (a.or_r2_is_number) {
@@ -523,7 +525,9 @@ struct CommandPrinterVisitor {
         print(b.cond);
     }
 
-    void operator()(IncrementLoopCounter const& a) { os_ << VariableRegistry::loop_counter(to_string(a.name)) << "++"; }
+    void operator()(IncrementLoopCounter const& a) {
+        os_ << variable_registry->loop_counter(to_string(a.name)) << "++";
+    }
 };
 // ReSharper restore CppMemberFunctionMayBeConst
 

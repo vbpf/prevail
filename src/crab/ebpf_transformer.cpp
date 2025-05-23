@@ -134,9 +134,9 @@ void EbpfTransformer::save_callee_saved_registers(const std::string& prefix) {
     // copies of the states of r6 through r9.
     for (int r = R6; r <= R9; r++) {
         for (const DataKind kind : iterate_kinds()) {
-            const Variable src_var = VariableRegistry::reg(kind, r);
+            const Variable src_var = variable_registry->reg(kind, r);
             if (!m_inv.eval_interval(src_var).is_top()) {
-                m_inv.assign(VariableRegistry::stack_frame_var(kind, r, prefix), src_var);
+                m_inv.assign(variable_registry->stack_frame_var(kind, r, prefix), src_var);
             }
         }
     }
@@ -145,11 +145,11 @@ void EbpfTransformer::save_callee_saved_registers(const std::string& prefix) {
 void EbpfTransformer::restore_callee_saved_registers(const std::string& prefix) {
     for (int r = R6; r <= R9; r++) {
         for (const DataKind kind : iterate_kinds()) {
-            const Variable src_var = VariableRegistry::stack_frame_var(kind, r, prefix);
+            const Variable src_var = variable_registry->stack_frame_var(kind, r, prefix);
             if (!m_inv.eval_interval(src_var).is_top()) {
-                m_inv.assign(VariableRegistry::reg(kind, r), src_var);
+                m_inv.assign(variable_registry->reg(kind, r), src_var);
             } else {
-                m_inv.havoc(VariableRegistry::reg(kind, r));
+                m_inv.havoc(variable_registry->reg(kind, r));
             }
             m_inv.havoc(src_var);
         }
@@ -171,12 +171,12 @@ void EbpfTransformer::havoc_subprogram_stack(const std::string& prefix) {
 void EbpfTransformer::forget_packet_pointers() {
     using namespace dsl_syntax;
 
-    for (const Variable type_variable : VariableRegistry::get_type_variables()) {
+    for (const Variable type_variable : variable_registry->get_type_variables()) {
         if (type_inv.has_type(m_inv, type_variable, T_PACKET)) {
-            m_inv.havoc(VariableRegistry::kind_var(DataKind::types, type_variable));
-            m_inv.havoc(VariableRegistry::kind_var(DataKind::packet_offsets, type_variable));
-            m_inv.havoc(VariableRegistry::kind_var(DataKind::svalues, type_variable));
-            m_inv.havoc(VariableRegistry::kind_var(DataKind::uvalues, type_variable));
+            m_inv.havoc(variable_registry->kind_var(DataKind::types, type_variable));
+            m_inv.havoc(variable_registry->kind_var(DataKind::packet_offsets, type_variable));
+            m_inv.havoc(variable_registry->kind_var(DataKind::svalues, type_variable));
+            m_inv.havoc(variable_registry->kind_var(DataKind::uvalues, type_variable));
         }
     }
 
@@ -481,11 +481,11 @@ void EbpfTransformer::do_load_ctx(NumAbsDomain& inv, const Reg& target_reg, cons
         }
     } else if (addr == desc->end) {
         if (width == offset_width) {
-            inv.assign(target.packet_offset, VariableRegistry::packet_size());
+            inv.assign(target.packet_offset, variable_registry->packet_size());
         }
     } else if (addr == desc->meta) {
         if (width == offset_width) {
-            inv.assign(target.packet_offset, VariableRegistry::meta_offset());
+            inv.assign(target.packet_offset, variable_registry->meta_offset());
         }
     } else {
         if (may_touch_ptr) {
@@ -642,13 +642,13 @@ void EbpfTransformer::do_store_stack(NumAbsDomain& inv, const LinearExpression& 
     // stack_numeric_size holds the number of continuous bytes starting from stack_offset that are known to be numeric.
     auto updated_lb = m_inv.eval_interval(addr).lb();
     auto updated_ub = m_inv.eval_interval(addr).ub() + width;
-    for (const Variable type_variable : VariableRegistry::get_type_variables()) {
+    for (const Variable type_variable : variable_registry->get_type_variables()) {
         if (!type_inv.has_type(inv, type_variable, T_STACK)) {
             continue;
         }
-        const Variable stack_offset_variable = VariableRegistry::kind_var(DataKind::stack_offsets, type_variable);
+        const Variable stack_offset_variable = variable_registry->kind_var(DataKind::stack_offsets, type_variable);
         const Variable stack_numeric_size_variable =
-            VariableRegistry::kind_var(DataKind::stack_numeric_sizes, type_variable);
+            variable_registry->kind_var(DataKind::stack_numeric_sizes, type_variable);
 
         using namespace dsl_syntax;
         // See if the variable's numeric interval overlaps with changed bytes.
@@ -963,7 +963,7 @@ void EbpfTransformer::assign_valid_ptr(const Reg& dst_reg, const bool maybe_null
 // try to recompute the stack_numeric_size.
 void EbpfTransformer::recompute_stack_numeric_size(NumAbsDomain& inv, const Variable type_variable) const {
     const Variable stack_numeric_size_variable =
-        VariableRegistry::kind_var(DataKind::stack_numeric_sizes, type_variable);
+        variable_registry->kind_var(DataKind::stack_numeric_sizes, type_variable);
 
     if (!inv.eval_interval(stack_numeric_size_variable).is_top()) {
         return;
@@ -971,7 +971,7 @@ void EbpfTransformer::recompute_stack_numeric_size(NumAbsDomain& inv, const Vari
 
     if (type_inv.has_type(inv, type_variable, T_STACK)) {
         const int numeric_size =
-            stack.min_all_num_size(inv, VariableRegistry::kind_var(DataKind::stack_offsets, type_variable));
+            stack.min_all_num_size(inv, variable_registry->kind_var(DataKind::stack_offsets, type_variable));
         if (numeric_size > 0) {
             inv.assign(stack_numeric_size_variable, numeric_size);
         }
@@ -1212,7 +1212,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
                                               finite_width);
                         } else {
                             // We ignore the cases here that do not match the assumption described
-                            // above.  Joining bottom with another results will leave the other
+                            // above.  Joining bottom with another result will leave the other
                             // results unchanged.
                             inv.set_to_bottom();
                         }
@@ -1437,14 +1437,14 @@ void EbpfTransformer::operator()(const Bin& bin) {
 }
 
 void EbpfTransformer::initialize_loop_counter(const Label& label) {
-    m_inv.assign(VariableRegistry::loop_counter(to_string(label)), 0);
+    m_inv.assign(variable_registry->loop_counter(to_string(label)), 0);
 }
 
 void EbpfTransformer::operator()(const IncrementLoopCounter& ins) {
     if (m_inv.is_bottom()) {
         return;
     }
-    const auto counter = VariableRegistry::loop_counter(to_string(ins.name));
+    const auto counter = variable_registry->loop_counter(to_string(ins.name));
     m_inv->add(counter, 1);
 }
 

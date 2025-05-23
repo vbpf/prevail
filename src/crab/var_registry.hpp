@@ -11,43 +11,38 @@
 
 namespace prevail {
 
-std::vector<std::string> default_variable_names();
-
 // This singleton is eBPF-specific, to avoid lifetime issues and/or passing factory explicitly everywhere.
-// The state is VariableRegistry::names.
 class VariableRegistry final {
-    static Variable make(const std::string& name);
-
-    /**
-     * @brief Factory to always return the initial variable names.
-     *
-     * @tparam[in] T Should always be std::vector<std::string>.
-     */
-    static thread_local LazyAllocator<std::vector<std::string>, default_variable_names> names;
+    Variable make(const std::string& name);
+    std::vector<std::string> names;
 
   public:
-    static void clear_thread_local_state();
+    VariableRegistry();
 
     [[nodiscard]]
-    static std::string name(const Variable& v);
+    std::string name(const Variable& v) const;
 
     [[nodiscard]]
-    static bool is_type(const Variable& v);
+    bool is_type(const Variable& v) const;
 
     [[nodiscard]]
-    static bool is_unsigned(const Variable& v);
+    bool is_unsigned(const Variable& v) const;
 
-    static std::vector<Variable> get_type_variables();
-    static Variable reg(DataKind, int);
-    static Variable stack_frame_var(DataKind kind, int i, const std::string& prefix);
-    static Variable cell_var(DataKind array, const Number& offset, const Number& size);
-    static Variable kind_var(DataKind kind, Variable type_variable);
-    static Variable meta_offset();
-    static Variable packet_size();
-    static std::vector<Variable> get_loop_counters();
-    static Variable loop_counter(const std::string& label);
-    static bool is_in_stack(const Variable& v);
+    [[nodiscard]]
+    bool is_in_stack(const Variable& v) const;
+
+    std::vector<Variable> get_type_variables();
+    Variable reg(DataKind, int);
+    Variable stack_frame_var(DataKind kind, int i, const std::string& prefix);
+    Variable cell_var(DataKind array, const Number& offset, const Number& size);
+    Variable kind_var(DataKind kind, Variable type_variable);
+    Variable meta_offset();
+    Variable packet_size();
+    std::vector<Variable> get_loop_counters();
+    Variable loop_counter(const std::string& label);
     static bool printing_order(const Variable& a, const Variable& b);
 };
+
+extern thread_local LazyAllocator<VariableRegistry> variable_registry;
 
 } // namespace prevail
