@@ -7,10 +7,10 @@
 #include <functional>
 #include <optional>
 
+#include "arith/variable.hpp"
 #include "asm_syntax.hpp" // for Reg
 #include "crab/array_domain.hpp"
 #include "crab/type_encoding.hpp"
-#include "crab/variable.hpp"
 
 namespace prevail {
 

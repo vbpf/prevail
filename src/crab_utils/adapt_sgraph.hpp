@@ -4,7 +4,7 @@
 
 #include <boost/container/flat_map.hpp>
 
-#include "crab_utils/num_safeint.hpp"
+#include "arith/num_safeint.hpp"
 
 namespace prevail {
 

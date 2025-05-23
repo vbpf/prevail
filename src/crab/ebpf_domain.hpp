@@ -5,9 +5,9 @@
 // This file is eBPF-specific, not derived from CRAB.
 #include <optional>
 
+#include "arith/variable.hpp"
 #include "crab/array_domain.hpp"
 #include "crab/type_domain.hpp"
-#include "crab/variable.hpp"
 #include "string_constraints.hpp"
 
 namespace prevail {

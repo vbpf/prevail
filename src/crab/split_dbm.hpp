@@ -26,13 +26,13 @@
 
 #include <boost/container/flat_map.hpp>
 
+#include "arith/linear_constraint.hpp"
+#include "arith/num_big.hpp"
+#include "arith/num_safeint.hpp"
+#include "arith/variable.hpp"
 #include "crab/interval.hpp"
-#include "crab/linear_constraint.hpp"
-#include "crab/variable.hpp"
 #include "crab_utils/adapt_sgraph.hpp"
 #include "crab_utils/debug.hpp"
-#include "crab_utils/num_big.hpp"
-#include "crab_utils/num_safeint.hpp"
 #include "crab_utils/stats.hpp"
 #include "string_constraints.hpp"
 
