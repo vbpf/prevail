@@ -201,12 +201,12 @@ std::string VariableRegistry::name(const Variable& v) const { return names.at(v.
 
 [[nodiscard]]
 bool VariableRegistry::is_type(const Variable& v) const {
-    return name(v).find(".type") != std::string::npos;
+    return name(v).ends_with(".type");
 }
 
 [[nodiscard]]
 bool VariableRegistry::is_unsigned(const Variable& v) const {
-    return name(v).find(".uvalue") != std::string::npos;
+    return name(v).ends_with(".uvalue");
 }
 
 bool VariableRegistry::is_in_stack(const Variable& v) const { return name(v)[0] == 's'; }
@@ -218,7 +218,7 @@ bool VariableRegistry::printing_order(const Variable& a, const Variable& b) {
 std::vector<Variable> VariableRegistry::get_loop_counters() {
     std::vector<Variable> res;
     for (const std::string& name : names) {
-        if (name.find("pc") == 0) {
+        if (name.starts_with("pc")) {
             res.push_back(make(name));
         }
     }

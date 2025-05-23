@@ -3,8 +3,8 @@
 #include "stats.hpp"
 
 #include <algorithm>
-#include <iostream>
 #include <optional>
+#include <ostream>
 #ifdef _WIN32
 #include <windows.h>
 #undef max
