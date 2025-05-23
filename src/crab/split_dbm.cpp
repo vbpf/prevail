@@ -1128,7 +1128,7 @@ static std::string to_string(const Variable vd, const Variable vs, const SplitDB
         } else if (w.operator<(0)) {
             elem << vs << "=" << vd << "+" << -w;
         } else {
-            const auto [left, right] = std::minmax(vs, vd, VariableRegistry::printing_order);
+            const auto [left, right] = std::minmax(vs, vd, variable_registry->printing_order);
             elem << left << "=" << right;
         }
     } else {
@@ -1153,7 +1153,7 @@ StringInvariant SplitDBM::to_set() const {
             const Variable vd = *rev_map.at(d);
             const Weight w = g_excl.edge_val(s, d);
             if (w == 0) {
-                least = std::min(least, vd, VariableRegistry::printing_order);
+                least = std::min(least, vd, variable_registry->printing_order);
             } else {
                 diff_csts.emplace(vd, vs, w);
             }
@@ -1167,7 +1167,7 @@ StringInvariant SplitDBM::to_set() const {
         if (vs == least) {
             representatives.insert(least);
         } else {
-            result.insert(VariableRegistry::name(vs) + "=" + VariableRegistry::name(least));
+            result.insert(variable_registry->name(vs) + "=" + variable_registry->name(least));
         }
     }
 
@@ -1205,10 +1205,10 @@ StringInvariant SplitDBM::to_set() const {
 
         std::stringstream elem;
         elem << variable;
-        if (VariableRegistry::is_type(variable)) {
+        if (variable_registry->is_type(variable)) {
             auto [lb, ub] = v_out.bound(T_UNINIT, T_MAX);
             if (lb == ub) {
-                if (VariableRegistry::is_in_stack(variable) && lb == T_NUM) {
+                if (variable_registry->is_in_stack(variable) && lb == T_NUM) {
                     // no need to show this
                     continue;
                 }
@@ -1350,12 +1350,12 @@ static Interval get_interval(const SplitDBM::VertMap& m, const SplitDBM::Graph& 
     ExtendedNumber lb = ExtendedNumber::minus_infinity();
     ExtendedNumber ub = ExtendedNumber::plus_infinity();
     if (r.elem(v, 0)) {
-        lb = VariableRegistry::is_unsigned(x) ? (-Number(r.edge_val(v, 0))).zero_extend(finite_width)
-                                              : (-Number(r.edge_val(v, 0))).sign_extend(finite_width);
+        lb = variable_registry->is_unsigned(x) ? (-Number(r.edge_val(v, 0))).zero_extend(finite_width)
+                                               : (-Number(r.edge_val(v, 0))).sign_extend(finite_width);
     }
     if (r.elem(0, v)) {
-        ub = VariableRegistry::is_unsigned(x) ? Number(r.edge_val(0, v)).zero_extend(finite_width)
-                                              : Number(r.edge_val(0, v)).sign_extend(finite_width);
+        ub = variable_registry->is_unsigned(x) ? Number(r.edge_val(0, v)).zero_extend(finite_width)
+                                               : Number(r.edge_val(0, v)).sign_extend(finite_width);
     }
     return {lb, ub};
 }

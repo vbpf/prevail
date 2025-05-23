@@ -100,7 +100,7 @@ Report Invariants::check_assertions(const Program& prog) const {
 
 void ebpf_verifier_clear_before_analysis() {
     clear_thread_local_state();
-    VariableRegistry::clear_thread_local_state();
+    variable_registry.clear();
 }
 
 void ebpf_verifier_clear_thread_local_state() {

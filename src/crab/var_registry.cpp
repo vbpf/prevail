@@ -12,15 +12,15 @@
 namespace prevail {
 
 Variable VariableRegistry::make(const std::string& name) {
-    const auto it = std::find(names->begin(), names->end(), name);
-    if (it == names->end()) {
-        names->emplace_back(name);
-        return Variable(names->size() - 1);
+    const auto it = std::ranges::find(names, name);
+    if (it == names.end()) {
+        names.emplace_back(name);
+        return Variable(names.size() - 1);
     }
-    return Variable(std::distance(names->begin(), it));
+    return Variable(std::distance(names.begin(), it));
 }
 
-std::vector<std::string> default_variable_names() {
+static std::vector<std::string> default_variable_names() {
     return std::vector<std::string>{
         "r0.svalue",
         "r0.uvalue",
@@ -132,16 +132,14 @@ std::vector<std::string> default_variable_names() {
         "r10.type",
         "r10.shared_region_size",
         "r10.stack_numeric_size",
-        "data_size",
-        "meta_size",
     };
 }
 
-thread_local LazyAllocator<std::vector<std::string>, default_variable_names> VariableRegistry::names;
+VariableRegistry::VariableRegistry() : names(default_variable_names()) {}
 
-void VariableRegistry::clear_thread_local_state() { names.clear(); }
+thread_local LazyAllocator<VariableRegistry> variable_registry;
 
-std::ostream& operator<<(std::ostream& o, const Variable& v) { return o << VariableRegistry::name(v); }
+std::ostream& operator<<(std::ostream& o, const Variable& v) { return o << variable_registry->name(v); }
 
 std::ostream& operator<<(std::ostream& o, const DataKind& s) { return o << name_of(s); }
 
@@ -183,7 +181,7 @@ static bool ends_with(const std::string& str, const std::string& suffix) {
 
 std::vector<Variable> VariableRegistry::get_type_variables() {
     std::vector<Variable> res;
-    for (const std::string& name : *names) {
+    for (const std::string& name : names) {
         if (ends_with(name, ".type")) {
             res.push_back(make(name));
         }
@@ -191,25 +189,27 @@ std::vector<Variable> VariableRegistry::get_type_variables() {
     return res;
 }
 
-std::string VariableRegistry::name(const Variable& v) { return names->at(v._id); }
+std::string VariableRegistry::name(const Variable& v) const { return names.at(v._id); }
 
 [[nodiscard]]
-bool VariableRegistry::is_type(const Variable& v) {
+bool VariableRegistry::is_type(const Variable& v) const {
     return name(v).find(".type") != std::string::npos;
 }
 
 [[nodiscard]]
-bool VariableRegistry::is_unsigned(const Variable& v) {
+bool VariableRegistry::is_unsigned(const Variable& v) const {
     return name(v).find(".uvalue") != std::string::npos;
 }
 
-bool VariableRegistry::is_in_stack(const Variable& v) { return name(v)[0] == 's'; }
+bool VariableRegistry::is_in_stack(const Variable& v) const { return name(v)[0] == 's'; }
 
-bool VariableRegistry::printing_order(const Variable& a, const Variable& b) { return name(a) < name(b); }
+bool VariableRegistry::printing_order(const Variable& a, const Variable& b) {
+    return variable_registry->name(a) < variable_registry->name(b);
+}
 
 std::vector<Variable> VariableRegistry::get_loop_counters() {
     std::vector<Variable> res;
-    for (const std::string& name : *names) {
+    for (const std::string& name : names) {
         if (name.find("pc") == 0) {
             res.push_back(make(name));
         }

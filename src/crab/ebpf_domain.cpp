@@ -123,10 +123,10 @@ EbpfDomain EbpfDomain::calculate_constant_limits() {
         inv.add_constraint(r.stack_offset >= 0);
         inv.add_constraint(r.shared_offset <= r.shared_region_size);
         inv.add_constraint(r.shared_offset >= 0);
-        inv.add_constraint(r.packet_offset <= VariableRegistry::packet_size());
+        inv.add_constraint(r.packet_offset <= variable_registry->packet_size());
         inv.add_constraint(r.packet_offset >= 0);
         if (thread_local_options.cfg_opts.check_for_termination) {
-            for (const Variable counter : VariableRegistry::get_loop_counters()) {
+            for (const Variable counter : variable_registry->get_loop_counters()) {
                 inv.add_constraint(counter <= std::numeric_limits<int32_t>::max());
                 inv.add_constraint(counter >= 0);
                 inv.add_constraint(counter <= r.svalue);
@@ -272,7 +272,7 @@ Interval EbpfDomain::get_map_max_entries(const Reg& map_fd_reg) const {
 
 ExtendedNumber EbpfDomain::get_loop_count_upper_bound() const {
     ExtendedNumber ub{0};
-    for (const Variable counter : VariableRegistry::get_loop_counters()) {
+    for (const Variable counter : variable_registry->get_loop_counters()) {
         ub = std::max(ub, m_inv.eval_interval(counter).ub());
     }
     return ub;
@@ -292,17 +292,17 @@ std::ostream& operator<<(std::ostream& o, const EbpfDomain& dom) {
 void EbpfDomain::initialize_packet() {
     using namespace dsl_syntax;
     EbpfDomain& inv = *this;
-    inv.havoc(VariableRegistry::packet_size());
-    inv.havoc(VariableRegistry::meta_offset());
+    inv.havoc(variable_registry->packet_size());
+    inv.havoc(variable_registry->meta_offset());
 
-    inv.add_constraint(0 <= VariableRegistry::packet_size());
-    inv.add_constraint(VariableRegistry::packet_size() < MAX_PACKET_SIZE);
+    inv.add_constraint(0 <= variable_registry->packet_size());
+    inv.add_constraint(variable_registry->packet_size() < MAX_PACKET_SIZE);
     const auto info = *thread_local_program_info;
     if (info.type.context_descriptor->meta >= 0) {
-        inv.add_constraint(VariableRegistry::meta_offset() <= 0);
-        inv.add_constraint(VariableRegistry::meta_offset() >= -4098);
+        inv.add_constraint(variable_registry->meta_offset() <= 0);
+        inv.add_constraint(variable_registry->meta_offset() >= -4098);
     } else {
-        inv.m_inv.assign(VariableRegistry::meta_offset(), 0);
+        inv.m_inv.assign(variable_registry->meta_offset(), 0);
     }
 }
 

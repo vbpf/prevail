@@ -123,16 +123,16 @@ TypeEncoding string_to_type_encoding(const std::string& s) {
 }
 RegPack reg_pack(const int i) {
     return {
-        VariableRegistry::reg(DataKind::svalues, i),
-        VariableRegistry::reg(DataKind::uvalues, i),
-        VariableRegistry::reg(DataKind::ctx_offsets, i),
-        VariableRegistry::reg(DataKind::map_fds, i),
-        VariableRegistry::reg(DataKind::packet_offsets, i),
-        VariableRegistry::reg(DataKind::shared_offsets, i),
-        VariableRegistry::reg(DataKind::stack_offsets, i),
-        VariableRegistry::reg(DataKind::types, i),
-        VariableRegistry::reg(DataKind::shared_region_sizes, i),
-        VariableRegistry::reg(DataKind::stack_numeric_sizes, i),
+        variable_registry->reg(DataKind::svalues, i),
+        variable_registry->reg(DataKind::uvalues, i),
+        variable_registry->reg(DataKind::ctx_offsets, i),
+        variable_registry->reg(DataKind::map_fds, i),
+        variable_registry->reg(DataKind::packet_offsets, i),
+        variable_registry->reg(DataKind::shared_offsets, i),
+        variable_registry->reg(DataKind::stack_offsets, i),
+        variable_registry->reg(DataKind::types, i),
+        variable_registry->reg(DataKind::shared_region_sizes, i),
+        variable_registry->reg(DataKind::stack_numeric_sizes, i),
     };
 }
 
@@ -141,7 +141,7 @@ void TypeDomain::add_extra_invariant(const NumAbsDomain& dst, std::map<Variable,
                                      const NumAbsDomain& src) const {
     const bool dst_has_type = has_type(dst, type_variable, type);
     const bool src_has_type = has_type(src, type_variable, type);
-    Variable v = VariableRegistry::kind_var(kind, type_variable);
+    Variable v = variable_registry->kind_var(kind, type_variable);
 
     // If type is contained in exactly one of dst or src,
     // we need to remember the value.
@@ -179,7 +179,7 @@ void TypeDomain::selectively_join_based_on_type(NumAbsDomain& dst, NumAbsDomain&
 
     std::map<Variable, Interval> extra_invariants;
     if (!dst.is_bottom()) {
-        for (const Variable v : VariableRegistry::get_type_variables()) {
+        for (const Variable v : variable_registry->get_type_variables()) {
             add_extra_invariant(dst, extra_invariants, v, T_CTX, DataKind::ctx_offsets, src);
             add_extra_invariant(dst, extra_invariants, v, T_MAP, DataKind::map_fds, src);
             add_extra_invariant(dst, extra_invariants, v, T_MAP_PROGRAMS, DataKind::map_fds, src);
