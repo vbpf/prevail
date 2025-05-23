@@ -4,6 +4,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <sstream>
 #include <sys/stat.h>
 #include <vector>
 
