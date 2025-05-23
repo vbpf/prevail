@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "stats.hpp"
 
+#include <algorithm>
 #include <iostream>
 #include <optional>
 #ifdef _WIN32
