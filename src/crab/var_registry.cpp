@@ -4,6 +4,7 @@
  * Factories for variable names.
  */
 
+#include "crab/var_registry.hpp"
 #include "arith/variable.hpp"
 #include "cfg/label.hpp"
 #include "crab_utils/lazy_allocator.hpp"
@@ -145,11 +146,11 @@ std::ostream& operator<<(std::ostream& o, const Variable& v) { return o << Varia
 std::ostream& operator<<(std::ostream& o, const DataKind& s) { return o << name_of(s); }
 
 Variable VariableRegistry::reg(const DataKind kind, const int i) {
-    return VariableRegistry::make("r" + std::to_string(i) + "." + name_of(kind));
+    return make("r" + std::to_string(i) + "." + name_of(kind));
 }
 
 Variable VariableRegistry::stack_frame_var(const DataKind kind, const int i, const std::string& prefix) {
-    return VariableRegistry::make(prefix + STACK_FRAME_DELIMITER + "r" + std::to_string(i) + "." + name_of(kind));
+    return make(prefix + STACK_FRAME_DELIMITER + "r" + std::to_string(i) + "." + name_of(kind));
 }
 
 static std::string mk_scalar_name(const DataKind kind, const Number& o, const Number& size) {
@@ -163,20 +164,18 @@ static std::string mk_scalar_name(const DataKind kind, const Number& o, const Nu
 }
 
 Variable VariableRegistry::cell_var(const DataKind array, const Number& offset, const Number& size) {
-    return VariableRegistry::make(mk_scalar_name(array, offset.cast_to<uint64_t>(), size));
+    return make(mk_scalar_name(array, offset.cast_to<uint64_t>(), size));
 }
 
 // Given a type variable, get the associated variable of a given kind.
 Variable VariableRegistry::kind_var(const DataKind kind, const Variable type_variable) {
     const std::string name = VariableRegistry::name(type_variable);
-    return VariableRegistry::make(name.substr(0, name.rfind('.') + 1) + name_of(kind));
+    return make(name.substr(0, name.rfind('.') + 1) + name_of(kind));
 }
 
-Variable VariableRegistry::meta_offset() { return VariableRegistry::make("meta_offset"); }
-Variable VariableRegistry::packet_size() { return VariableRegistry::make("packet_size"); }
-Variable VariableRegistry::loop_counter(const std::string& label) {
-    return VariableRegistry::make("pc[" + label + "]");
-}
+Variable VariableRegistry::meta_offset() { return make("meta_offset"); }
+Variable VariableRegistry::packet_size() { return make("packet_size"); }
+Variable VariableRegistry::loop_counter(const std::string& label) { return make("pc[" + label + "]"); }
 
 static bool ends_with(const std::string& str, const std::string& suffix) {
     return str.size() >= suffix.size() && 0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix);
@@ -184,9 +183,9 @@ static bool ends_with(const std::string& str, const std::string& suffix) {
 
 std::vector<Variable> VariableRegistry::get_type_variables() {
     std::vector<Variable> res;
-    for (const std::string& name : *VariableRegistry::names) {
+    for (const std::string& name : *names) {
         if (ends_with(name, ".type")) {
-            res.push_back(VariableRegistry::make(name));
+            res.push_back(make(name));
         }
     }
     return res;
@@ -196,23 +195,23 @@ std::string VariableRegistry::name(const Variable& v) { return names->at(v._id);
 
 [[nodiscard]]
 bool VariableRegistry::is_type(const Variable& v) {
-    return names->at(v._id).find(".type") != std::string::npos;
+    return name(v).find(".type") != std::string::npos;
 }
 
 [[nodiscard]]
 bool VariableRegistry::is_unsigned(const Variable& v) {
-    return names->at(v._id).find(".uvalue") != std::string::npos;
+    return name(v).find(".uvalue") != std::string::npos;
 }
 
-bool VariableRegistry::is_in_stack(const Variable& v) { return VariableRegistry::name(v)[0] == 's'; }
+bool VariableRegistry::is_in_stack(const Variable& v) { return name(v)[0] == 's'; }
 
 bool VariableRegistry::printing_order(const Variable& a, const Variable& b) { return name(a) < name(b); }
 
 std::vector<Variable> VariableRegistry::get_loop_counters() {
     std::vector<Variable> res;
-    for (const std::string& name : *VariableRegistry::names) {
+    for (const std::string& name : *names) {
         if (name.find("pc") == 0) {
-            res.push_back(VariableRegistry::make(name));
+            res.push_back(make(name));
         }
     }
     return res;

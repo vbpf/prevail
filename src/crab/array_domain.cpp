@@ -15,6 +15,7 @@
 #include "arith/dsl_syntax.hpp"
 #include "config.hpp"
 #include "crab/array_domain.hpp"
+#include "crab/var_registry.hpp"
 #include "crab_utils/num_safety.hpp"
 #include "spec_type_descriptors.hpp"
 

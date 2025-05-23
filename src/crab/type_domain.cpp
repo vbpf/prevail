@@ -13,6 +13,7 @@
 #include "crab/split_dbm.hpp"
 #include "crab/type_domain.hpp"
 #include "crab/type_encoding.hpp"
+#include "crab/var_registry.hpp"
 #include "crab_utils/debug.hpp"
 
 namespace prevail {

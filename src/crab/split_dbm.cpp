@@ -5,6 +5,7 @@
 #include <gsl/narrow>
 
 #include "crab/split_dbm.hpp"
+#include "crab/var_registry.hpp"
 #include "crab_utils/debug.hpp"
 #include "crab_utils/graph_ops.hpp"
 #include "crab_utils/stats.hpp"
