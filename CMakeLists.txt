@@ -126,7 +126,11 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
         "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     set(COMMON_FLAGS -Wall -Wfatal-errors -DSIZEOF_VOID_P=8 -DSIZEOF_LONG=8)
 
-    set(RELEASE_FLAGS -O2 -flto=auto -ffat-lto-objects)
+    if (NOT WIN32 AND NOT APPLE)
+        set(RELEASE_FLAGS -O2 -flto=auto -ffat-lto-objects)
+    else ()
+        set(RELEASE_FLAGS -O2 -flto=auto)
+    endif ()
 
     set(DEBUG_FLAGS -O0 -g3 -fno-omit-frame-pointer)
 
