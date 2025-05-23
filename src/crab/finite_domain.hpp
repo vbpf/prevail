@@ -4,13 +4,12 @@
 
 #include <optional>
 #include <utility>
-#include <variant>
 
+#include "arith/linear_constraint.hpp"
+#include "arith/variable.hpp"
 #include "asm_syntax.hpp" // for Condition::Op
 #include "crab/interval.hpp"
-#include "crab/linear_constraint.hpp"
 #include "crab/split_dbm.hpp"
-#include "crab/variable.hpp"
 #include "string_constraints.hpp"
 
 namespace prevail {

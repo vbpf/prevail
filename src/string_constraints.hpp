@@ -8,8 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "arith/linear_constraint.hpp"
 #include "crab/interval.hpp"
-#include "crab/linear_constraint.hpp"
 
 namespace prevail {
 struct StringInvariant {

@@ -4,8 +4,8 @@
 
 #include <map>
 
-#include "crab/variable.hpp"
-#include "crab_utils/num_big.hpp"
+#include "num_big.hpp"
+#include "variable.hpp"
 
 namespace prevail {
 

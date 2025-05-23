@@ -9,10 +9,10 @@
 
 #include "boost/endian/conversion.hpp"
 
+#include "arith/dsl_syntax.hpp"
 #include "asm_unmarshal.hpp"
 #include "config.hpp"
 #include "crab/array_domain.hpp"
-#include "crab/dsl_syntax.hpp"
 #include "crab/ebpf_domain.hpp"
 #include "string_constraints.hpp"
 
@@ -122,10 +122,10 @@ EbpfDomain EbpfDomain::calculate_constant_limits() {
         inv.add_constraint(r.stack_offset >= 0);
         inv.add_constraint(r.shared_offset <= r.shared_region_size);
         inv.add_constraint(r.shared_offset >= 0);
-        inv.add_constraint(r.packet_offset <= Variable::packet_size());
+        inv.add_constraint(r.packet_offset <= VariableRegistry::packet_size());
         inv.add_constraint(r.packet_offset >= 0);
         if (thread_local_options.cfg_opts.check_for_termination) {
-            for (const Variable counter : Variable::get_loop_counters()) {
+            for (const Variable counter : VariableRegistry::get_loop_counters()) {
                 inv.add_constraint(counter <= std::numeric_limits<int32_t>::max());
                 inv.add_constraint(counter >= 0);
                 inv.add_constraint(counter <= r.svalue);
@@ -271,7 +271,7 @@ Interval EbpfDomain::get_map_max_entries(const Reg& map_fd_reg) const {
 
 ExtendedNumber EbpfDomain::get_loop_count_upper_bound() const {
     ExtendedNumber ub{0};
-    for (const Variable counter : Variable::get_loop_counters()) {
+    for (const Variable counter : VariableRegistry::get_loop_counters()) {
         ub = std::max(ub, m_inv.eval_interval(counter).ub());
     }
     return ub;
@@ -291,17 +291,17 @@ std::ostream& operator<<(std::ostream& o, const EbpfDomain& dom) {
 void EbpfDomain::initialize_packet() {
     using namespace dsl_syntax;
     EbpfDomain& inv = *this;
-    inv.havoc(Variable::packet_size());
-    inv.havoc(Variable::meta_offset());
+    inv.havoc(VariableRegistry::packet_size());
+    inv.havoc(VariableRegistry::meta_offset());
 
-    inv.add_constraint(0 <= Variable::packet_size());
-    inv.add_constraint(Variable::packet_size() < MAX_PACKET_SIZE);
+    inv.add_constraint(0 <= VariableRegistry::packet_size());
+    inv.add_constraint(VariableRegistry::packet_size() < MAX_PACKET_SIZE);
     const auto info = *thread_local_program_info;
     if (info.type.context_descriptor->meta >= 0) {
-        inv.add_constraint(Variable::meta_offset() <= 0);
-        inv.add_constraint(Variable::meta_offset() >= -4098);
+        inv.add_constraint(VariableRegistry::meta_offset() <= 0);
+        inv.add_constraint(VariableRegistry::meta_offset() >= -4098);
     } else {
-        inv.m_inv.assign(Variable::meta_offset(), 0);
+        inv.m_inv.assign(VariableRegistry::meta_offset(), 0);
     }
 }
 

@@ -25,9 +25,9 @@
 
 #include <optional>
 
+#include "arith/variable.hpp"
 #include "crab/add_bottom.hpp"
 #include "crab/bitset_domain.hpp"
-#include "crab/variable.hpp"
 
 namespace prevail {
 

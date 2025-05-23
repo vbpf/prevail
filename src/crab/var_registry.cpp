@@ -4,13 +4,13 @@
  * Factories for variable names.
  */
 
+#include "arith/variable.hpp"
 #include "cfg/label.hpp"
-#include "crab/variable.hpp"
 #include "crab_utils/lazy_allocator.hpp"
 
 namespace prevail {
 
-Variable Variable::make(const std::string& name) {
+Variable VariableRegistry::make(const std::string& name) {
     const auto it = std::find(names->begin(), names->end(), name);
     if (it == names->end()) {
         names->emplace_back(name);
@@ -136,13 +136,21 @@ std::vector<std::string> default_variable_names() {
     };
 }
 
-thread_local LazyAllocator<std::vector<std::string>, default_variable_names> Variable::names;
+thread_local LazyAllocator<std::vector<std::string>, default_variable_names> VariableRegistry::names;
 
-void Variable::clear_thread_local_state() { names.clear(); }
+void VariableRegistry::clear_thread_local_state() { names.clear(); }
 
-Variable Variable::reg(const DataKind kind, const int i) { return make("r" + std::to_string(i) + "." + name_of(kind)); }
+std::ostream& operator<<(std::ostream& o, const Variable& v) { return o << VariableRegistry::name(v); }
 
 std::ostream& operator<<(std::ostream& o, const DataKind& s) { return o << name_of(s); }
+
+Variable VariableRegistry::reg(const DataKind kind, const int i) {
+    return VariableRegistry::make("r" + std::to_string(i) + "." + name_of(kind));
+}
+
+Variable VariableRegistry::stack_frame_var(const DataKind kind, const int i, const std::string& prefix) {
+    return VariableRegistry::make(prefix + STACK_FRAME_DELIMITER + "r" + std::to_string(i) + "." + name_of(kind));
+}
 
 static std::string mk_scalar_name(const DataKind kind, const Number& o, const Number& size) {
     std::stringstream os;
@@ -154,47 +162,57 @@ static std::string mk_scalar_name(const DataKind kind, const Number& o, const Nu
     return os.str();
 }
 
-Variable Variable::stack_frame_var(const DataKind kind, const int i, const std::string& prefix) {
-    return make(prefix + STACK_FRAME_DELIMITER + "r" + std::to_string(i) + "." + name_of(kind));
-}
-
-Variable Variable::cell_var(const DataKind array, const Number& offset, const Number& size) {
-    return make(mk_scalar_name(array, offset.cast_to<uint64_t>(), size));
+Variable VariableRegistry::cell_var(const DataKind array, const Number& offset, const Number& size) {
+    return VariableRegistry::make(mk_scalar_name(array, offset.cast_to<uint64_t>(), size));
 }
 
 // Given a type variable, get the associated variable of a given kind.
-Variable Variable::kind_var(const DataKind kind, const Variable type_variable) {
-    const std::string name = type_variable.name();
-    return make(name.substr(0, name.rfind('.') + 1) + name_of(kind));
+Variable VariableRegistry::kind_var(const DataKind kind, const Variable type_variable) {
+    const std::string name = VariableRegistry::name(type_variable);
+    return VariableRegistry::make(name.substr(0, name.rfind('.') + 1) + name_of(kind));
 }
 
-Variable Variable::meta_offset() { return make("meta_offset"); }
-Variable Variable::packet_size() { return make("packet_size"); }
-Variable Variable::loop_counter(const std::string& label) { return make("pc[" + label + "]"); }
+Variable VariableRegistry::meta_offset() { return VariableRegistry::make("meta_offset"); }
+Variable VariableRegistry::packet_size() { return VariableRegistry::make("packet_size"); }
+Variable VariableRegistry::loop_counter(const std::string& label) {
+    return VariableRegistry::make("pc[" + label + "]");
+}
 
 static bool ends_with(const std::string& str, const std::string& suffix) {
     return str.size() >= suffix.size() && 0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix);
 }
 
-std::vector<Variable> Variable::get_type_variables() {
+std::vector<Variable> VariableRegistry::get_type_variables() {
     std::vector<Variable> res;
-    for (const std::string& name : *names) {
+    for (const std::string& name : *VariableRegistry::names) {
         if (ends_with(name, ".type")) {
-            res.push_back(make(name));
+            res.push_back(VariableRegistry::make(name));
         }
     }
     return res;
 }
 
-bool Variable::is_in_stack() const { return this->name()[0] == 's'; }
+std::string VariableRegistry::name(const Variable& v) { return names->at(v._id); }
 
-bool Variable::printing_order(const Variable& a, const Variable& b) { return a.name() < b.name(); }
+[[nodiscard]]
+bool VariableRegistry::is_type(const Variable& v) {
+    return names->at(v._id).find(".type") != std::string::npos;
+}
 
-std::vector<Variable> Variable::get_loop_counters() {
+[[nodiscard]]
+bool VariableRegistry::is_unsigned(const Variable& v) {
+    return names->at(v._id).find(".uvalue") != std::string::npos;
+}
+
+bool VariableRegistry::is_in_stack(const Variable& v) { return VariableRegistry::name(v)[0] == 's'; }
+
+bool VariableRegistry::printing_order(const Variable& a, const Variable& b) { return name(a) < name(b); }
+
+std::vector<Variable> VariableRegistry::get_loop_counters() {
     std::vector<Variable> res;
-    for (const std::string& name : *names) {
+    for (const std::string& name : *VariableRegistry::names) {
         if (name.find("pc") == 0) {
-            res.push_back(make(name));
+            res.push_back(VariableRegistry::make(name));
         }
     }
     return res;

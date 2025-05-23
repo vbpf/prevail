@@ -5,7 +5,7 @@
 #include <map>
 #include <string>
 
-#include "crab/variable.hpp"
+#include "arith/variable.hpp"
 #include "crab_utils/lazy_allocator.hpp"
 
 namespace prevail {

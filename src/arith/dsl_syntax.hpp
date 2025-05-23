@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include "crab/linear_constraint.hpp"
+#include "linear_constraint.hpp"
 
 namespace prevail::dsl_syntax {
 
