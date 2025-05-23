@@ -172,7 +172,11 @@ Variable VariableRegistry::cell_var(const DataKind array, const Number& offset, 
 // Given a type variable, get the associated variable of a given kind.
 Variable VariableRegistry::kind_var(const DataKind kind, const Variable type_variable) {
     const std::string name = VariableRegistry::name(type_variable);
-    return make(name.substr(0, name.rfind('.') + 1) + name_of(kind));
+    const auto dot_pos = name.rfind('.');
+    if (dot_pos == std::string::npos) {
+        CRAB_ERROR("Variable name '", name, "' does not contain a dot");
+    }
+    return make(name.substr(0, dot_pos + 1) + name_of(kind));
 }
 
 Variable VariableRegistry::meta_offset() { return make("meta_offset"); }
