@@ -13,6 +13,7 @@
 #include "crab/fwd_analyzer.hpp"
 #include "crab/interval.hpp"
 #include "crab/type_encoding.hpp"
+#include "crab/var_registry.hpp"
 #include "crab_verifier.hpp"
 #include "helpers.hpp"
 #include "platform.hpp"

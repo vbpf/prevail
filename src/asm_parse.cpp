@@ -12,6 +12,7 @@
 #include "asm_parse.hpp"
 #include "asm_unmarshal.hpp"
 #include "crab/type_encoding.hpp"
+#include "crab/var_registry.hpp"
 #include "platform.hpp"
 #include "string_constraints.hpp"
 

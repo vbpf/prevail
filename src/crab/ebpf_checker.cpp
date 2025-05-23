@@ -13,6 +13,7 @@
 #include "config.hpp"
 #include "crab/array_domain.hpp"
 #include "crab/ebpf_domain.hpp"
+#include "crab/var_registry.hpp"
 #include "platform.hpp"
 #include "program.hpp"
 #include "string_constraints.hpp"

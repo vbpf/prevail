@@ -15,6 +15,7 @@
 #include "config.hpp"
 #include "crab/array_domain.hpp"
 #include "crab/ebpf_domain.hpp"
+#include "crab/var_registry.hpp"
 #include "crab_utils/num_safety.hpp"
 #include "platform.hpp"
 #include "string_constraints.hpp"
