@@ -132,6 +132,10 @@ static std::vector<std::string> default_variable_names() {
         "r10.type",
         "r10.shared_region_size",
         "r10.stack_numeric_size",
+        "data_size",
+        "meta_size",
+        "meta_offset",
+        "packet_size",
     };
 }
 
