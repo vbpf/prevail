@@ -4,18 +4,19 @@
 #include <cinttypes>
 #include <tuple>
 
+namespace prevail {
 // Header describing the Instruction Set Architecture (ISA)
 // for the eBPF virtual machine.
 // See https://github.com/ebpffoundation/ebpf-docs/blob/update/rst/instruction-set.rst
 // for documentation.
 
-struct ebpf_inst {
+struct EbpfInst {
     std::uint8_t opcode;
     std::uint8_t dst : 4; //< Destination register
     std::uint8_t src : 4; //< Source register
     std::int16_t offset;
     std::int32_t imm; //< Immediate constant
-    constexpr bool operator==(const ebpf_inst&) const = default;
+    constexpr bool operator==(const EbpfInst&) const = default;
 };
 
 enum {
@@ -117,3 +118,4 @@ inline uint64_t merge(const int32_t imm, const int32_t next_imm) {
 inline std::tuple<int32_t, int32_t> split(const uint64_t v) {
     return {static_cast<uint32_t>(v), static_cast<uint32_t>(v >> 32)};
 }
+} // namespace prevail

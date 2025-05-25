@@ -5,10 +5,9 @@
 #include <map>
 #include <string>
 
-#include "crab/variable.hpp"
 #include "crab_utils/lazy_allocator.hpp"
 
-namespace crab {
+namespace prevail {
 
 class Stopwatch {
     long started;
@@ -36,8 +35,8 @@ class CrabStats {
     /// Controls whether statistics collection is active.
     /// When false, all statistics methods become no-ops for better performance.
     static constexpr bool enabled = false;
-    static thread_local lazy_allocator<std::map<std::string, unsigned>> counters;
-    static thread_local lazy_allocator<std::map<std::string, Stopwatch>> sw;
+    static thread_local LazyAllocator<std::map<std::string, unsigned>> counters;
+    static thread_local LazyAllocator<std::map<std::string, Stopwatch>> sw;
 
   public:
     static void clear_thread_local_state();
@@ -83,4 +82,4 @@ class ScopedCrabStats {
     explicit ScopedCrabStats(const std::string& name, bool reset = false);
     ~ScopedCrabStats();
 };
-} // namespace crab
+} // namespace prevail

@@ -7,14 +7,14 @@
 #include "crab/ebpf_domain.hpp"
 #include "program.hpp"
 
-namespace crab {
+namespace prevail {
 
-struct invariant_map_pair {
-    ebpf_domain_t pre;
-    ebpf_domain_t post;
+struct InvariantMapPair {
+    EbpfDomain pre;
+    EbpfDomain post;
 };
-using invariant_table_t = std::map<label_t, invariant_map_pair>;
+using InvariantTable = std::map<Label, InvariantMapPair>;
 
-invariant_table_t run_forward_analyzer(const Program& prog, ebpf_domain_t entry_inv);
+InvariantTable run_forward_analyzer(const Program& prog, EbpfDomain entry_inv);
 
-} // namespace crab
+} // namespace prevail

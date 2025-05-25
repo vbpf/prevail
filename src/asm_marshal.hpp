@@ -7,5 +7,9 @@
 #include "asm_syntax.hpp"
 #include "ebpf_vm_isa.hpp"
 
-std::vector<ebpf_inst> marshal(const Instruction& ins, pc_t pc);
+namespace prevail {
+
+std::vector<EbpfInst> marshal(const Instruction& ins, Pc pc);
 // TODO marshal to ostream?
+
+} // namespace prevail

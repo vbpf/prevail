@@ -7,15 +7,16 @@
 #include "ebpf_base.h" // for EBPF_TOTAL_STACK_SIZE constant
 #include "string_constraints.hpp"
 
-class bitset_domain_t final {
+namespace prevail {
+class BitsetDomain final {
   private:
     using bits_t = std::bitset<EBPF_TOTAL_STACK_SIZE>;
     bits_t non_numerical_bytes;
 
   public:
-    bitset_domain_t() { non_numerical_bytes.set(); }
+    BitsetDomain() { non_numerical_bytes.set(); }
 
-    bitset_domain_t(bits_t non_numerical_bytes) : non_numerical_bytes{non_numerical_bytes} {}
+    explicit BitsetDomain(const bits_t& non_numerical_bytes) : non_numerical_bytes{non_numerical_bytes} {}
 
     void set_to_top() { non_numerical_bytes.set(); }
 
@@ -32,46 +33,48 @@ class bitset_domain_t final {
     }
 
     [[nodiscard]]
-    string_invariant to_set() const;
+    StringInvariant to_set() const;
 
-    bool operator<=(const bitset_domain_t& other) const {
+    bool operator<=(const BitsetDomain& other) const {
         return (non_numerical_bytes | other.non_numerical_bytes) == other.non_numerical_bytes;
     }
 
-    bool operator==(const bitset_domain_t& other) const { return non_numerical_bytes == other.non_numerical_bytes; }
+    bool operator==(const BitsetDomain& other) const { return non_numerical_bytes == other.non_numerical_bytes; }
 
-    void operator|=(const bitset_domain_t& other) { non_numerical_bytes |= other.non_numerical_bytes; }
+    void operator|=(const BitsetDomain& other) { non_numerical_bytes |= other.non_numerical_bytes; }
 
-    bitset_domain_t operator|(bitset_domain_t&& other) const { return non_numerical_bytes | other.non_numerical_bytes; }
-
-    bitset_domain_t operator|(const bitset_domain_t& other) const {
-        return non_numerical_bytes | other.non_numerical_bytes;
+    BitsetDomain operator|(BitsetDomain&& other) const {
+        return BitsetDomain{non_numerical_bytes | other.non_numerical_bytes};
     }
 
-    bitset_domain_t operator&(const bitset_domain_t& other) const {
-        return non_numerical_bytes & other.non_numerical_bytes;
+    BitsetDomain operator|(const BitsetDomain& other) const {
+        return BitsetDomain{non_numerical_bytes | other.non_numerical_bytes};
     }
 
-    [[nodiscard]]
-    bitset_domain_t widen(const bitset_domain_t& other) const {
-        return non_numerical_bytes | other.non_numerical_bytes;
+    BitsetDomain operator&(const BitsetDomain& other) const {
+        return BitsetDomain{non_numerical_bytes & other.non_numerical_bytes};
     }
 
     [[nodiscard]]
-    bitset_domain_t narrow(const bitset_domain_t& other) const {
-        return non_numerical_bytes & other.non_numerical_bytes;
+    BitsetDomain widen(const BitsetDomain& other) const {
+        return BitsetDomain{non_numerical_bytes | other.non_numerical_bytes};
     }
 
     [[nodiscard]]
-    std::pair<bool, bool> uniformity(size_t lb, int width) const {
-        width = std::min(width, (int)(EBPF_TOTAL_STACK_SIZE - lb));
+    BitsetDomain narrow(const BitsetDomain& other) const {
+        return BitsetDomain{non_numerical_bytes & other.non_numerical_bytes};
+    }
+
+    [[nodiscard]]
+    std::pair<bool, bool> uniformity(const size_t lb, int width) const {
+        width = std::min(width, static_cast<int>(EBPF_TOTAL_STACK_SIZE - lb));
         bool only_num = true;
         bool only_non_num = true;
         for (int j = 0; j < width; j++) {
             if (lb + j >= non_numerical_bytes.size()) {
                 throw std::runtime_error("bitset index out of range");
             }
-            bool b = non_numerical_bytes[lb + j];
+            const bool b = non_numerical_bytes[lb + j];
             only_num &= !b;
             only_non_num &= b;
         }
@@ -80,37 +83,37 @@ class bitset_domain_t final {
 
     // Get the number of bytes, starting at lb, known to be numbers.
     [[nodiscard]]
-    int all_num_width(size_t lb) const {
+    int all_num_width(const size_t lb) const {
         size_t ub = lb;
         while ((ub < EBPF_TOTAL_STACK_SIZE) && !non_numerical_bytes[ub]) {
             ub++;
         }
-        return (int)(ub - lb);
+        return static_cast<int>(ub - lb);
     }
 
-    void reset(size_t lb, int n) {
-        n = std::min(n, (int)(EBPF_TOTAL_STACK_SIZE - lb));
+    void reset(const size_t lb, int n) {
+        n = std::min(n, static_cast<int>((EBPF_TOTAL_STACK_SIZE - lb)));
         for (int i = 0; i < n; i++) {
             non_numerical_bytes.reset(lb + i);
         }
     }
 
-    void havoc(size_t lb, int width) {
-        width = std::min(width, (int)(EBPF_TOTAL_STACK_SIZE - lb));
+    void havoc(const size_t lb, int width) {
+        width = std::min(width, static_cast<int>(EBPF_TOTAL_STACK_SIZE - lb));
         for (int i = 0; i < width; i++) {
             non_numerical_bytes.set(lb + i);
         }
     }
 
-    friend std::ostream& operator<<(std::ostream& o, const bitset_domain_t& array);
+    friend std::ostream& operator<<(std::ostream& o, const BitsetDomain& b);
 
     // Test whether all values in the range [lb,ub) are numerical.
     [[nodiscard]]
     bool all_num(int32_t lb, int32_t ub) const {
         assert(lb < ub);
         lb = std::max(lb, 0);
-        ub = std::min(ub, (int)EBPF_TOTAL_STACK_SIZE);
-        if (lb < 0 || ub > (int)non_numerical_bytes.size()) {
+        ub = std::min(ub, EBPF_TOTAL_STACK_SIZE);
+        if (lb < 0 || ub > static_cast<int>(non_numerical_bytes.size())) {
             return false;
         }
 
@@ -122,3 +125,4 @@ class bitset_domain_t final {
         return true;
     }
 };
+} // namespace prevail

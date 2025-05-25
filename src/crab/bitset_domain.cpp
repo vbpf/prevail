@@ -1,9 +1,11 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
-#include "bitset_domain.hpp"
 #include <ostream>
 
-std::ostream& operator<<(std::ostream& o, const bitset_domain_t& b) {
+#include "bitset_domain.hpp"
+
+namespace prevail {
+std::ostream& operator<<(std::ostream& o, const BitsetDomain& b) {
     o << "Numbers -> {";
     bool first = true;
     for (int i = -EBPF_TOTAL_STACK_SIZE; i < 0; i++) {
@@ -31,12 +33,12 @@ std::ostream& operator<<(std::ostream& o, const bitset_domain_t& b) {
     return o;
 }
 
-string_invariant bitset_domain_t::to_set() const {
+StringInvariant BitsetDomain::to_set() const {
     if (this->is_bottom()) {
-        return string_invariant::bottom();
+        return StringInvariant::bottom();
     }
     if (this->is_top()) {
-        return string_invariant::top();
+        return StringInvariant::top();
     }
 
     std::set<std::string> result;
@@ -58,5 +60,6 @@ string_invariant bitset_domain_t::to_set() const {
         result.insert(value);
         i = j;
     }
-    return string_invariant{result};
+    return StringInvariant{result};
 }
+} // namespace prevail

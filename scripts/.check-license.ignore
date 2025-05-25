@@ -17,10 +17,10 @@ counter
 ebpf-samples
 
 # Files using Apache-2.0 license
+src/arith/num_extended.hpp
+src/arith/num_safeint.hpp
 src/crab/array_domain.cpp
 src/crab/array_domain.hpp
-src/crab/cfg.hpp
-src/crab/cfg_bgl.hpp
 src/crab/fwd_analyzer.cpp
 src/crab/fwd_analyzer.hpp
 src/crab/interval.cpp
@@ -34,8 +34,6 @@ src/crab_utils/debug.cpp
 src/crab_utils/debug.hpp
 src/crab_utils/graph_ops.cpp
 src/crab_utils/graph_ops.hpp
-src/crab_utils/num_safeint.hpp
-src/crab_utils/num_extended.hpp
 src/crab_utils/stats.cpp
 src/crab_utils/stats.hpp
 

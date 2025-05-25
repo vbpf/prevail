@@ -7,21 +7,19 @@
 
 #include <boost/lexical_cast.hpp>
 
+#include "arith/dsl_syntax.hpp"
+#include "arith/linear_constraint.hpp"
 #include "asm_parse.hpp"
 #include "asm_unmarshal.hpp"
-#include "crab/dsl_syntax.hpp"
-#include "crab/linear_constraint.hpp"
 #include "crab/type_encoding.hpp"
+#include "crab/var_registry.hpp"
 #include "platform.hpp"
 #include "string_constraints.hpp"
 
 using std::regex;
 using std::regex_match;
 
-using crab::linear_constraint_t;
-using crab::linear_expression_t;
-using crab::number_t;
-
+namespace prevail {
 #define REG R"_(\s*(r\d\d?)\s*)_"
 #define WREG R"_(\s*([wr]\d\d?)\s*)_"
 #define IMM R"_(\s*\[?([-+]?(?:0x)?[0-9a-f]+)\]?\s*)_"
@@ -117,9 +115,9 @@ static Imm imm(const std::string& s, const bool lddw) {
     }
 }
 
-static number_t signed_number(const std::string& s) { return std::stoll(s); }
+static Number signed_number(const std::string& s) { return std::stoll(s); }
 
-static number_t unsigned_number(const std::string& s) { return std::stoull(s); }
+static Number unsigned_number(const std::string& s) { return std::stoull(s); }
 
 static Value reg_or_imm(const std::string& s) {
     if (s.at(0) == 'w' || s.at(0) == 'r') {
@@ -139,7 +137,7 @@ static Deref deref(const std::string& width, const std::string& basereg, const s
     };
 }
 
-Instruction parse_instruction(const std::string& line, const std::map<std::string, label_t>& label_name_to_label) {
+Instruction parse_instruction(const std::string& line, const std::map<std::string, Label>& label_name_to_label) {
     // treat ";" as a comment
     std::string text = line.substr(0, line.find(';'));
     const size_t end = text.find_last_not_of(' ');
@@ -244,14 +242,14 @@ Instruction parse_instruction(const std::string& line, const std::map<std::strin
 [[maybe_unused]]
 static InstructionSeq parse_program(std::istream& is) {
     std::string line;
-    std::vector<label_t> pc_to_label;
+    std::vector<Label> pc_to_label;
     InstructionSeq labeled_insts;
-    const std::set<label_t> seen_labels;
-    std::optional<label_t> next_label;
+    const std::set<Label> seen_labels;
+    std::optional<Label> next_label;
     while (std::getline(is, line)) {
         std::smatch m;
         if (regex_search(line, m, regex(LABEL ":"))) {
-            next_label = label_t(boost::lexical_cast<int>(m[1]));
+            next_label = Label(boost::lexical_cast<int>(m[1]));
             if (seen_labels.contains(*next_label)) {
                 throw std::invalid_argument("duplicate labels");
             }
@@ -269,7 +267,7 @@ static InstructionSeq parse_program(std::istream& is) {
         }
 
         if (!next_label) {
-            next_label = label_t(static_cast<int>(labeled_insts.size()));
+            next_label = Label(static_cast<int>(labeled_insts.size()));
         }
         labeled_insts.emplace_back(*next_label, ins, std::optional<btf_line_info_t>());
         next_label = {};
@@ -279,53 +277,51 @@ static InstructionSeq parse_program(std::istream& is) {
 
 static uint8_t regnum(const std::string& s) { return static_cast<uint8_t>(boost::lexical_cast<uint16_t>(s.substr(1))); }
 
-static crab::variable_t special_var(const std::string& s) {
+static Variable special_var(const std::string& s) {
     if (s == "packet_size") {
-        return crab::variable_t::packet_size();
+        return variable_registry->packet_size();
     }
     if (s == "meta_offset") {
-        return crab::variable_t::meta_offset();
+        return variable_registry->meta_offset();
     }
     throw std::runtime_error(std::string() + "Bad special variable: " + s);
 }
 
-std::vector<linear_constraint_t> parse_linear_constraints(const std::set<std::string>& constraints,
-                                                          std::vector<crab::interval_t>& numeric_ranges) {
-    using namespace crab::dsl_syntax;
-    using crab::regkind;
-    using crab::variable_t;
+std::vector<LinearConstraint> parse_linear_constraints(const std::set<std::string>& constraints,
+                                                       std::vector<Interval>& numeric_ranges) {
+    using namespace dsl_syntax;
 
-    std::vector<linear_constraint_t> res;
+    std::vector<LinearConstraint> res;
     for (const std::string& cst_text : constraints) {
         std::smatch m;
         if (regex_match(cst_text, m, regex(SPECIAL_VAR "=" IMM))) {
             res.push_back(special_var(m[1]) == signed_number(m[2]));
         } else if (regex_match(cst_text, m, regex(SPECIAL_VAR "=" INTERVAL))) {
-            variable_t d = special_var(m[1]);
-            number_t lb{signed_number(m[2])};
-            number_t ub{signed_number(m[3])};
+            Variable d = special_var(m[1]);
+            Number lb{signed_number(m[2])};
+            Number ub{signed_number(m[3])};
             res.push_back(lb <= d);
             res.push_back(d <= ub);
         } else if (regex_match(cst_text, m, regex(SPECIAL_VAR "=" REG DOT KIND))) {
-            linear_expression_t d = special_var(m[1]);
-            linear_expression_t s = variable_t::reg(regkind(m[3]), regnum(m[2]));
+            LinearExpression d = special_var(m[1]);
+            LinearExpression s = variable_registry->reg(regkind(m[3]), regnum(m[2]));
             res.push_back(d == s);
         } else if (regex_match(cst_text, m, regex(REG DOT KIND "=" SPECIAL_VAR))) {
-            linear_expression_t d = variable_t::reg(regkind(m[2]), regnum(m[1]));
-            linear_expression_t s = special_var(m[3]);
+            LinearExpression d = variable_registry->reg(regkind(m[2]), regnum(m[1]));
+            LinearExpression s = special_var(m[3]);
             res.push_back(d == s);
         } else if (regex_match(cst_text, m, regex(REG DOT KIND "=" REG DOT KIND))) {
-            linear_expression_t d = variable_t::reg(regkind(m[2]), regnum(m[1]));
-            linear_expression_t s = variable_t::reg(regkind(m[4]), regnum(m[3]));
+            LinearExpression d = variable_registry->reg(regkind(m[2]), regnum(m[1]));
+            LinearExpression s = variable_registry->reg(regkind(m[4]), regnum(m[3]));
             res.push_back(d == s);
         } else if (regex_match(cst_text, m,
                                regex(REG DOT "type"
                                              "=" TYPE))) {
-            variable_t d = variable_t::reg(crab::data_kind_t::types, regnum(m[1]));
-            res.push_back(d == crab::string_to_type_encoding(m[2]));
+            Variable d = variable_registry->reg(DataKind::types, regnum(m[1]));
+            res.push_back(d == string_to_type_encoding(m[2]));
         } else if (regex_match(cst_text, m, regex(REG DOT KIND "=" IMM))) {
-            variable_t d = variable_t::reg(regkind(m[2]), regnum(m[1]));
-            number_t value;
+            Variable d = variable_registry->reg(regkind(m[2]), regnum(m[1]));
+            Number value;
             if (m[2] == "uvalue") {
                 value = unsigned_number(m[3]);
             } else {
@@ -333,8 +329,8 @@ std::vector<linear_constraint_t> parse_linear_constraints(const std::set<std::st
             }
             res.push_back(d == value);
         } else if (regex_match(cst_text, m, regex(REG DOT KIND "=" INTERVAL))) {
-            variable_t d = variable_t::reg(regkind(m[2]), regnum(m[1]));
-            number_t lb, ub;
+            Variable d = variable_registry->reg(regkind(m[2]), regnum(m[1]));
+            Number lb, ub;
             if (m[2] == "uvalue") {
                 lb = unsigned_number(m[3]);
                 ub = unsigned_number(m[4]);
@@ -345,35 +341,35 @@ std::vector<linear_constraint_t> parse_linear_constraints(const std::set<std::st
             res.push_back(lb <= d);
             res.push_back(d <= ub);
         } else if (regex_match(cst_text, m, regex(REG DOT KIND "-" REG DOT KIND "<=" IMM))) {
-            variable_t d = variable_t::reg(regkind(m[2]), regnum(m[1]));
-            variable_t s = variable_t::reg(regkind(m[4]), regnum(m[3]));
-            number_t diff = signed_number(m[5]);
+            Variable d = variable_registry->reg(regkind(m[2]), regnum(m[1]));
+            Variable s = variable_registry->reg(regkind(m[4]), regnum(m[3]));
+            Number diff = signed_number(m[5]);
             res.push_back(d - s <= diff);
         } else if (regex_match(cst_text, m,
                                regex("s" ARRAY_RANGE DOT "type"
                                      "=" TYPE))) {
-            crab::type_encoding_t type = crab::string_to_type_encoding(m[3]);
-            if (type == crab::type_encoding_t::T_NUM) {
+            TypeEncoding type = string_to_type_encoding(m[3]);
+            if (type == T_NUM) {
                 numeric_ranges.emplace_back(signed_number(m[1]), signed_number(m[2]));
             } else {
-                number_t lb = signed_number(m[1]);
-                number_t ub = signed_number(m[2]);
-                variable_t d = variable_t::cell_var(crab::data_kind_t::types, lb, ub - lb + 1);
+                Number lb = signed_number(m[1]);
+                Number ub = signed_number(m[2]);
+                Variable d = variable_registry->cell_var(DataKind::types, lb, ub - lb + 1);
                 res.push_back(d == type);
             }
         } else if (regex_match(cst_text, m,
                                regex("s" ARRAY_RANGE DOT "svalue"
                                      "=" IMM))) {
-            number_t lb = signed_number(m[1]);
-            number_t ub = signed_number(m[2]);
-            variable_t d = variable_t::cell_var(crab::data_kind_t::svalues, lb, ub - lb + 1);
+            Number lb = signed_number(m[1]);
+            Number ub = signed_number(m[2]);
+            Variable d = variable_registry->cell_var(DataKind::svalues, lb, ub - lb + 1);
             res.push_back(d == signed_number(m[3]));
         } else if (regex_match(cst_text, m,
                                regex("s" ARRAY_RANGE DOT "uvalue"
                                      "=" IMM))) {
-            number_t lb = signed_number(m[1]);
-            number_t ub = signed_number(m[2]);
-            variable_t d = variable_t::cell_var(crab::data_kind_t::uvalues, lb, ub - lb + 1);
+            Number lb = signed_number(m[1]);
+            Number ub = signed_number(m[2]);
+            Variable d = variable_registry->cell_var(DataKind::uvalues, lb, ub - lb + 1);
             res.push_back(d == unsigned_number(m[3]));
         } else {
             throw std::runtime_error(std::string("Unknown constraint: ") + cst_text);
@@ -383,11 +379,11 @@ std::vector<linear_constraint_t> parse_linear_constraints(const std::set<std::st
 }
 
 // return a-b, taking account potential optional-none
-string_invariant string_invariant::operator-(const string_invariant& b) const {
+StringInvariant StringInvariant::operator-(const StringInvariant& b) const {
     if (this->is_bottom()) {
-        return string_invariant::bottom();
+        return bottom();
     }
-    string_invariant res = string_invariant::top();
+    StringInvariant res = top();
     for (const std::string& cst : this->value()) {
         if (b.is_bottom() || !b.contains(cst)) {
             res.maybe_inv->insert(cst);
@@ -397,11 +393,11 @@ string_invariant string_invariant::operator-(const string_invariant& b) const {
 }
 
 // return a+b, taking account potential optional-none
-string_invariant string_invariant::operator+(const string_invariant& b) const {
+StringInvariant StringInvariant::operator+(const StringInvariant& b) const {
     if (this->is_bottom()) {
         return b;
     }
-    string_invariant res = *this;
+    StringInvariant res = *this;
     for (const std::string& cst : b.value()) {
         if (res.is_bottom() || !res.contains(cst)) {
             res.maybe_inv->insert(cst);
@@ -410,7 +406,7 @@ string_invariant string_invariant::operator+(const string_invariant& b) const {
     return res;
 }
 
-std::ostream& operator<<(std::ostream& o, const string_invariant& inv) {
+std::ostream& operator<<(std::ostream& o, const StringInvariant& inv) {
     if (inv.is_bottom()) {
         return o << "_|_";
     }
@@ -436,3 +432,4 @@ std::ostream& operator<<(std::ostream& o, const string_invariant& inv) {
     o << "]";
     return o;
 }
+} // namespace prevail

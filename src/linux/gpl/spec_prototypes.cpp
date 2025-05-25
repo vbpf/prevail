@@ -1,6 +1,7 @@
 #include "platform.hpp"
 #include "spec_type_descriptors.hpp"
 
+namespace prevail {
 #define EBPF_RETURN_TYPE_PTR_TO_SOCK_COMMON_OR_NULL EBPF_RETURN_TYPE_UNSUPPORTED
 #define EBPF_RETURN_TYPE_PTR_TO_SOCKET_OR_NULL EBPF_RETURN_TYPE_UNSUPPORTED
 #define EBPF_RETURN_TYPE_PTR_TO_TCP_SOCKET_OR_NULL EBPF_RETURN_TYPE_UNSUPPORTED
@@ -2084,7 +2085,7 @@ constexpr EbpfHelperPrototype bpf_loop_proto = {
 
 #define FN(x) bpf_##x##_proto
 // keep this on a round line
-const EbpfHelperPrototype prototypes[] = {
+constexpr EbpfHelperPrototype prototypes[] = {
     FN(unspec),
     FN(map_lookup_elem),
     FN(map_update_elem),
@@ -2275,7 +2276,7 @@ const EbpfHelperPrototype prototypes[] = {
 };
 
 bool is_helper_usable_linux(const int32_t n) {
-    if (n >= (int)(sizeof(prototypes) / sizeof(prototypes[0])) || n < 0) {
+    if (n >= static_cast<int>(std::size(prototypes)) || n < 0) {
         return false;
     }
 
@@ -2294,3 +2295,4 @@ EbpfHelperPrototype get_helper_prototype_linux(const int32_t n) {
     }
     return prototypes[n];
 }
+} // namespace prevail

@@ -5,10 +5,10 @@
 
 #include <string>
 
-namespace crab {
+namespace prevail {
 
-// data_kind_t is eBPF-specific.
-enum class data_kind_t {
+// DataKind is eBPF-specific.
+enum class DataKind {
     types,
     svalues,
     uvalues,
@@ -20,16 +20,16 @@ enum class data_kind_t {
     shared_region_sizes,
     stack_numeric_sizes
 };
-constexpr auto KIND_MIN = data_kind_t::types;
-constexpr auto KIND_MAX = data_kind_t::stack_numeric_sizes;
+constexpr auto KIND_MIN = DataKind::types;
+constexpr auto KIND_MAX = DataKind::stack_numeric_sizes;
 
-std::string name_of(data_kind_t kind);
-data_kind_t regkind(const std::string& s);
-std::vector<data_kind_t> iterate_kinds(data_kind_t lb = KIND_MIN, data_kind_t ub = KIND_MAX);
-std::ostream& operator<<(std::ostream& o, const data_kind_t& s);
+std::string name_of(DataKind kind);
+DataKind regkind(const std::string& s);
+std::vector<DataKind> iterate_kinds(DataKind lb = KIND_MIN, DataKind ub = KIND_MAX);
+std::ostream& operator<<(std::ostream& o, const DataKind& s);
 
-// The exact numbers are taken advantage of in ebpf_domain_t
-enum type_encoding_t {
+// The exact numbers are taken advantage of in EbpfDomain
+enum TypeEncoding {
     T_UNINIT = -7,
     T_MAP_PROGRAMS = -6,
     T_MAP = -5,
@@ -40,14 +40,14 @@ enum type_encoding_t {
     T_SHARED = 0
 };
 
-constexpr type_encoding_t T_MIN = T_UNINIT;
-constexpr type_encoding_t T_MAX = T_SHARED;
+constexpr TypeEncoding T_MIN = T_UNINIT;
+constexpr TypeEncoding T_MAX = T_SHARED;
 
-std::vector<type_encoding_t> iterate_types(type_encoding_t lb, type_encoding_t ub);
-std::string typeset_to_string(const std::vector<type_encoding_t>& items);
+std::vector<TypeEncoding> iterate_types(TypeEncoding lb, TypeEncoding ub);
+std::string typeset_to_string(const std::vector<TypeEncoding>& items);
 
-std::ostream& operator<<(std::ostream& os, type_encoding_t s);
-type_encoding_t string_to_type_encoding(const std::string& s);
+std::ostream& operator<<(std::ostream& os, TypeEncoding s);
+TypeEncoding string_to_type_encoding(const std::string& s);
 
 enum class TypeGroup {
     number,
@@ -67,4 +67,4 @@ enum class TypeGroup {
 
 bool is_singleton_type(TypeGroup t);
 std::ostream& operator<<(std::ostream& os, TypeGroup ts);
-} // namespace crab
+} // namespace prevail

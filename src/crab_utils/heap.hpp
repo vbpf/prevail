@@ -25,7 +25,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include <gsl/narrow>
 
-namespace crab {
+namespace prevail {
 
 // A heap implementation with support for decrease/increase key.
 class Heap {
@@ -121,4 +121,4 @@ class Heap {
         return x;
     }
 };
-} // namespace crab
+} // namespace prevail

@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "stats.hpp"
 
+#include <algorithm>
+#include <optional>
+#include <ostream>
 #ifdef _WIN32
 #include <windows.h>
 #undef max
@@ -10,10 +13,10 @@
 #include <sys/time.h>
 #endif
 
-namespace crab {
+namespace prevail {
 
-thread_local lazy_allocator<std::map<std::string, unsigned>> CrabStats::counters;
-thread_local lazy_allocator<std::map<std::string, Stopwatch>> CrabStats::sw;
+thread_local LazyAllocator<std::map<std::string, unsigned>> CrabStats::counters;
+thread_local LazyAllocator<std::map<std::string, Stopwatch>> CrabStats::sw;
 
 void CrabStats::clear_thread_local_state() {
     counters.clear();
@@ -34,7 +37,7 @@ long Stopwatch::systemTime() const {
 
     return (long)total_us;
 #else
-    struct rusage ru;
+    rusage ru;
     getrusage(RUSAGE_SELF, &ru);
     const long r = ru.ru_utime.tv_sec * 1000000L + ru.ru_utime.tv_usec;
     return r;
@@ -77,7 +80,7 @@ void Stopwatch::Print(std::ostream& out) const {
     const long time = getTimeElapsed();
     const long h = time / 3600000000L;
     const long m = time / 60000000L - h * 60;
-    const float s = ((float)time / 1000000L) - m * 60 - h * 3600;
+    const float s = (static_cast<float>(time) / 1000000L) - m * 60 - h * 3600;
 
     if (h > 0) {
         out << h << "h";
@@ -134,4 +137,4 @@ ScopedCrabStats::ScopedCrabStats(const std::string& name, const bool reset) : m_
 
 ScopedCrabStats::~ScopedCrabStats() { CrabStats::stop(m_name); }
 
-} // namespace crab
+} // namespace prevail

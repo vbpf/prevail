@@ -7,37 +7,36 @@
 #include <climits>
 #include <functional>
 #include <limits>
-#include <ostream>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include "crab_utils/num_safety.hpp"
 
+namespace prevail {
+
 constexpr char STACK_FRAME_DELIMITER = '/';
 
-namespace crab {
-struct label_t {
+struct Label {
     std::string stack_frame_prefix; ///< Variable prefix when calling this label.
     int from{};                     ///< Jump source, or simply index of instruction
     int to{};                       ///< Jump target or -1
     std::string special_label;      ///< Special label for special instructions.
 
-    explicit label_t(const int index, const int to = -1, std::string stack_frame_prefix = {}) noexcept
+    explicit Label(const int index, const int to = -1, std::string stack_frame_prefix = {}) noexcept
         : stack_frame_prefix(std::move(stack_frame_prefix)), from(index), to(to) {}
 
-    static label_t make_jump(const label_t& src_label, const label_t& target_label) {
-        return label_t{src_label.from, target_label.from, target_label.stack_frame_prefix};
+    static Label make_jump(const Label& src_label, const Label& target_label) {
+        return Label{src_label.from, target_label.from, target_label.stack_frame_prefix};
     }
 
-    static label_t make_increment_counter(const label_t& label) {
+    static Label make_increment_counter(const Label& label) {
         // XXX: This is a hack to increment the loop counter.
-        label_t res{label.from, label.to, label.stack_frame_prefix};
+        Label res{label.from, label.to, label.stack_frame_prefix};
         res.special_label = "counter";
         return res;
     }
 
-    std::strong_ordering operator<=>(const label_t& other) const = default;
+    std::strong_ordering operator<=>(const Label& other) const = default;
 
     // no hash; intended for use in ordered containers.
 
@@ -57,22 +56,22 @@ struct label_t {
         return gsl::narrow<int>(2 + std::ranges::count(stack_frame_prefix, STACK_FRAME_DELIMITER));
     }
 
-    static const label_t entry;
-    static const label_t exit;
+    static const Label entry;
+    static const Label exit;
 };
 
-inline const label_t label_t::entry{-1};
-inline const label_t label_t::exit{INT_MAX};
+inline const Label Label::entry{-1};
+inline const Label Label::exit{INT_MAX};
 
-std::ostream& operator<<(std::ostream& os, const label_t& label);
-std::string to_string(label_t const& label);
+std::ostream& operator<<(std::ostream& os, const Label& label);
+std::string to_string(Label const& label);
 
 // cpu=v4 supports 32-bit PC offsets so we need a large enough type.
-using pc_t = uint32_t;
+using Pc = uint32_t;
 
 // We use a 16-bit offset whenever it fits in 16 bits.
-inline std::function<int16_t(label_t)> label_to_offset16(const pc_t pc) {
-    return [=](const label_t& label) {
+inline std::function<int16_t(Label)> label_to_offset16(const Pc pc) {
+    return [=](const Label& label) {
         const int64_t offset = label.from - gsl::narrow<int64_t>(pc) - 1;
         const bool is16 =
             std::numeric_limits<int16_t>::min() <= offset && offset <= std::numeric_limits<int16_t>::max();
@@ -82,8 +81,8 @@ inline std::function<int16_t(label_t)> label_to_offset16(const pc_t pc) {
 
 // We use the JA32 opcode with the offset in 'imm' when the offset
 // of an unconditional jump doesn't fit in an int16_t.
-inline std::function<int32_t(label_t)> label_to_offset32(const pc_t pc) {
-    return [=](const label_t& label) {
+inline std::function<int32_t(Label)> label_to_offset32(const Pc pc) {
+    return [=](const Label& label) {
         const int64_t offset = label.from - gsl::narrow<int64_t>(pc) - 1;
         const bool is16 =
             std::numeric_limits<int16_t>::min() <= offset && offset <= std::numeric_limits<int16_t>::max();
@@ -91,4 +90,4 @@ inline std::function<int32_t(label_t)> label_to_offset32(const pc_t pc) {
     };
 }
 
-} // namespace crab
+} // namespace prevail

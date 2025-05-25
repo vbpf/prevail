@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+namespace prevail {
 struct prepare_cfg_options {
     /// When true, verifies that the program terminates.
     bool check_for_termination = false;
@@ -57,3 +58,4 @@ struct ebpf_verifier_stats_t {
 };
 
 extern thread_local ebpf_verifier_options_t thread_local_options;
+} // namespace prevail

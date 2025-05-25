@@ -4,17 +4,16 @@
 
 #include <optional>
 #include <utility>
-#include <variant>
 
+#include "arith/linear_constraint.hpp"
+#include "arith/variable.hpp"
 #include "asm_syntax.hpp" // for Condition::Op
 #include "crab/interval.hpp"
-#include "crab/linear_constraint.hpp"
 #include "crab/split_dbm.hpp"
-#include "crab/thresholds.hpp"
-#include "crab/variable.hpp"
 #include "string_constraints.hpp"
 
-namespace crab::domains {
+namespace prevail {
+
 class FiniteDomain {
     SplitDBM dom;
 
@@ -57,12 +56,6 @@ class FiniteDomain {
         return FiniteDomain{dom.widen(o.dom)};
     }
 
-    [[nodiscard]]
-    FiniteDomain widening_thresholds(const FiniteDomain& o, const thresholds_t& ts) const {
-        // TODO: use thresholds
-        return this->widen(o);
-    }
-
     std::optional<FiniteDomain> meet(const FiniteDomain& o) const {
         const auto res = dom.meet(o.dom);
         if (!res) {
@@ -76,72 +69,70 @@ class FiniteDomain {
         return FiniteDomain{dom.narrow(o.dom)};
     }
 
-    interval_t eval_interval(const variable_t& v) const { return dom.eval_interval(v); }
-    interval_t eval_interval(const linear_expression_t& exp) const { return dom.eval_interval(exp); }
+    Interval eval_interval(const Variable& v) const { return dom.eval_interval(v); }
+    Interval eval_interval(const LinearExpression& exp) const { return dom.eval_interval(exp); }
 
-    void assign(variable_t x, const std::optional<linear_expression_t>& e);
-    void assign(variable_t x, variable_t e);
-    void assign(variable_t x, const linear_expression_t& e);
-    void assign(variable_t x, int64_t e);
+    void assign(Variable x, const std::optional<LinearExpression>& e);
+    void assign(Variable x, Variable e);
+    void assign(Variable x, const LinearExpression& e);
+    void assign(Variable x, int64_t e);
 
-    void apply(arith_binop_t op, variable_t x, variable_t y, const number_t& z, int finite_width);
-    void apply(arith_binop_t op, variable_t x, variable_t y, variable_t z, int finite_width);
-    void apply(bitwise_binop_t op, variable_t x, variable_t y, variable_t z, int finite_width);
-    void apply(bitwise_binop_t op, variable_t x, variable_t y, const number_t& k, int finite_width);
-    void apply(binop_t op, variable_t x, variable_t y, const number_t& z, int finite_width);
-    void apply(binop_t op, variable_t x, variable_t y, variable_t z, int finite_width);
-    void apply(const binop_t& op, const variable_t x, const variable_t y, const variable_t z) { apply(op, x, y, z, 0); }
+    void apply(ArithBinOp op, Variable x, Variable y, const Number& z, int finite_width);
+    void apply(ArithBinOp op, Variable x, Variable y, Variable z, int finite_width);
+    void apply(BitwiseBinOp op, Variable x, Variable y, Variable z, int finite_width);
+    void apply(BitwiseBinOp op, Variable x, Variable y, const Number& k, int finite_width);
+    void apply(BinOp op, Variable x, Variable y, const Number& z, int finite_width);
+    void apply(BinOp op, Variable x, Variable y, Variable z, int finite_width);
+    void apply(const BinOp& op, const Variable x, const Variable y, const Variable z) { apply(op, x, y, z, 0); }
 
-    void overflow_bounds(variable_t lhs, int finite_width, bool issigned);
-    void overflow_bounds(variable_t svalue, variable_t uvalue, int finite_width);
+    void overflow_bounds(Variable lhs, int finite_width, bool issigned);
+    void overflow_bounds(Variable svalue, Variable uvalue, int finite_width);
 
-    void apply_signed(const binop_t& op, variable_t xs, variable_t xu, variable_t y, const number_t& z,
-                      int finite_width);
-    void apply_signed(const binop_t& op, variable_t xs, variable_t xu, variable_t y, variable_t z, int finite_width);
-    void apply_unsigned(const binop_t& op, variable_t xs, variable_t xu, variable_t y, const number_t& z,
-                        int finite_width);
-    void apply_unsigned(const binop_t& op, variable_t xs, variable_t xu, variable_t y, variable_t z, int finite_width);
+    void apply_signed(const BinOp& op, Variable xs, Variable xu, Variable y, const Number& z, int finite_width);
+    void apply_signed(const BinOp& op, Variable xs, Variable xu, Variable y, Variable z, int finite_width);
+    void apply_unsigned(const BinOp& op, Variable xs, Variable xu, Variable y, const Number& z, int finite_width);
+    void apply_unsigned(const BinOp& op, Variable xs, Variable xu, Variable y, Variable z, int finite_width);
 
-    void add(variable_t lhs, variable_t op2);
-    void add(variable_t lhs, const number_t& op2);
-    void sub(variable_t lhs, variable_t op2);
-    void sub(variable_t lhs, const number_t& op2);
-    void add_overflow(variable_t lhss, variable_t lhsu, variable_t op2, int finite_width);
-    void add_overflow(variable_t lhss, variable_t lhsu, const number_t& op2, int finite_width);
-    void sub_overflow(variable_t lhss, variable_t lhsu, variable_t op2, int finite_width);
-    void sub_overflow(variable_t lhss, variable_t lhsu, const number_t& op2, int finite_width);
-    void neg(variable_t lhss, variable_t lhsu, int finite_width);
-    void mul(variable_t lhss, variable_t lhsu, variable_t op2, int finite_width);
-    void mul(variable_t lhss, variable_t lhsu, const number_t& op2, int finite_width);
-    void sdiv(variable_t lhss, variable_t lhsu, variable_t op2, int finite_width);
-    void sdiv(variable_t lhss, variable_t lhsu, const number_t& op2, int finite_width);
-    void udiv(variable_t lhss, variable_t lhsu, variable_t op2, int finite_width);
-    void udiv(variable_t lhss, variable_t lhsu, const number_t& op2, int finite_width);
-    void srem(variable_t lhss, variable_t lhsu, variable_t op2, int finite_width);
-    void srem(variable_t lhss, variable_t lhsu, const number_t& op2, int finite_width);
-    void urem(variable_t lhss, variable_t lhsu, variable_t op2, int finite_width);
-    void urem(variable_t lhss, variable_t lhsu, const number_t& op2, int finite_width);
+    void add(Variable lhs, Variable op2);
+    void add(Variable lhs, const Number& op2);
+    void sub(Variable lhs, Variable op2);
+    void sub(Variable lhs, const Number& op2);
+    void add_overflow(Variable lhss, Variable lhsu, Variable op2, int finite_width);
+    void add_overflow(Variable lhss, Variable lhsu, const Number& op2, int finite_width);
+    void sub_overflow(Variable lhss, Variable lhsu, Variable op2, int finite_width);
+    void sub_overflow(Variable lhss, Variable lhsu, const Number& op2, int finite_width);
+    void neg(Variable lhss, Variable lhsu, int finite_width);
+    void mul(Variable lhss, Variable lhsu, Variable op2, int finite_width);
+    void mul(Variable lhss, Variable lhsu, const Number& op2, int finite_width);
+    void sdiv(Variable lhss, Variable lhsu, Variable op2, int finite_width);
+    void sdiv(Variable lhss, Variable lhsu, const Number& op2, int finite_width);
+    void udiv(Variable lhss, Variable lhsu, Variable op2, int finite_width);
+    void udiv(Variable lhss, Variable lhsu, const Number& op2, int finite_width);
+    void srem(Variable lhss, Variable lhsu, Variable op2, int finite_width);
+    void srem(Variable lhss, Variable lhsu, const Number& op2, int finite_width);
+    void urem(Variable lhss, Variable lhsu, Variable op2, int finite_width);
+    void urem(Variable lhss, Variable lhsu, const Number& op2, int finite_width);
 
-    void bitwise_and(variable_t lhss, variable_t lhsu, variable_t op2, int finite_width);
-    void bitwise_and(variable_t lhss, variable_t lhsu, const number_t& op2);
-    void bitwise_or(variable_t lhss, variable_t lhsu, variable_t op2, int finite_width);
-    void bitwise_or(variable_t lhss, variable_t lhsu, const number_t& op2);
-    void bitwise_xor(variable_t lhsss, variable_t lhsu, variable_t op2, int finite_width);
-    void bitwise_xor(variable_t lhss, variable_t lhsu, const number_t& op2);
-    void shl_overflow(variable_t lhss, variable_t lhsu, variable_t op2);
-    void shl_overflow(variable_t lhss, variable_t lhsu, const number_t& op2);
-    void shl(variable_t svalue, variable_t uvalue, int imm, int finite_width);
-    void lshr(variable_t svalue, variable_t uvalue, int imm, int finite_width);
-    void ashr(variable_t svalue, variable_t uvalue, const linear_expression_t& right_svalue, int finite_width);
-    void sign_extend(variable_t svalue, variable_t uvalue, const linear_expression_t& right_svalue, int target_width,
+    void bitwise_and(Variable lhss, Variable lhsu, Variable op2, int finite_width);
+    void bitwise_and(Variable lhss, Variable lhsu, const Number& op2);
+    void bitwise_or(Variable lhss, Variable lhsu, Variable op2, int finite_width);
+    void bitwise_or(Variable lhss, Variable lhsu, const Number& op2);
+    void bitwise_xor(Variable lhss, Variable lhsu, Variable op2, int finite_width);
+    void bitwise_xor(Variable lhss, Variable lhsu, const Number& op2);
+    void shl_overflow(Variable lhss, Variable lhsu, Variable op2);
+    void shl_overflow(Variable lhss, Variable lhsu, const Number& op2);
+    void shl(Variable svalue, Variable uvalue, int imm, int finite_width);
+    void lshr(Variable svalue, Variable uvalue, int imm, int finite_width);
+    void ashr(Variable svalue, Variable uvalue, const LinearExpression& right_svalue, int finite_width);
+    void sign_extend(Variable svalue, Variable uvalue, const LinearExpression& right_svalue, int target_width,
                      int source_width);
 
-    bool add_constraint(const linear_constraint_t& cst) { return dom.add_constraint(cst); }
+    bool add_constraint(const LinearConstraint& cst) { return dom.add_constraint(cst); }
 
-    void set(const variable_t x, const interval_t& intv) { dom.set(x, intv); }
+    void set(const Variable x, const Interval& intv) { dom.set(x, intv); }
 
     /// Forget everything we know about the value of a variable.
-    void havoc(variable_t v) { dom.havoc(v); }
+    void havoc(Variable v) { dom.havoc(v); }
 
     [[nodiscard]]
     std::pair<std::size_t, std::size_t> size() const {
@@ -150,102 +141,94 @@ class FiniteDomain {
 
     // Return true if inv intersects with cst.
     [[nodiscard]]
-    bool intersect(const linear_constraint_t& cst) const {
+    bool intersect(const LinearConstraint& cst) const {
         return dom.intersect(cst);
     }
 
     // Return true if entails rhs.
     [[nodiscard]]
-    bool entail(const linear_constraint_t& rhs) const {
+    bool entail(const LinearConstraint& rhs) const {
         return dom.entail(rhs);
     }
 
     friend std::ostream& operator<<(std::ostream& o, const FiniteDomain& dom) { return o << dom.dom; }
 
     [[nodiscard]]
-    string_invariant to_set() const {
+    StringInvariant to_set() const {
         return dom.to_set();
     }
 
     static void clear_thread_local_state() { SplitDBM::clear_thread_local_state(); }
 
   private:
-    std::vector<linear_constraint_t> assume_signed_64bit_eq(variable_t left_svalue, variable_t left_uvalue,
-                                                            const interval_t& right_interval,
-                                                            const linear_expression_t& right_svalue,
-                                                            const linear_expression_t& right_uvalue) const;
-    std::vector<linear_constraint_t> assume_signed_32bit_eq(variable_t left_svalue, variable_t left_uvalue,
-                                                            const interval_t& right_interval) const;
+    std::vector<LinearConstraint> assume_signed_64bit_eq(Variable left_svalue, Variable left_uvalue,
+                                                         const Interval& right_interval,
+                                                         const LinearExpression& right_svalue,
+                                                         const LinearExpression& right_uvalue) const;
+    std::vector<LinearConstraint> assume_signed_32bit_eq(Variable left_svalue, Variable left_uvalue,
+                                                         const Interval& right_interval) const;
 
-    std::vector<linear_constraint_t> assume_bit_cst_interval(Condition::Op op, bool is64, interval_t dst_interval,
-                                                             interval_t src_interval) const;
+    std::vector<LinearConstraint> assume_bit_cst_interval(Condition::Op op, bool is64, Interval dst_interval,
+                                                          Interval src_interval) const;
 
-    void get_unsigned_intervals(bool is64, variable_t left_svalue, variable_t left_uvalue,
-                                const linear_expression_t& right_uvalue, interval_t& left_interval,
-                                interval_t& right_interval, interval_t& left_interval_low,
-                                interval_t& left_interval_high) const;
-    std::vector<linear_constraint_t> assume_signed_64bit_lt(bool strict, variable_t left_svalue, variable_t left_uvalue,
-                                                            const interval_t& left_interval_positive,
-                                                            const interval_t& left_interval_negative,
-                                                            const linear_expression_t& right_svalue,
-                                                            const linear_expression_t& right_uvalue,
-                                                            const interval_t& right_interval) const;
-    std::vector<linear_constraint_t> assume_signed_32bit_lt(bool strict, variable_t left_svalue, variable_t left_uvalue,
-                                                            const interval_t& left_interval_positive,
-                                                            const interval_t& left_interval_negative,
-                                                            const linear_expression_t& right_svalue,
-                                                            const linear_expression_t& right_uvalue,
-                                                            const interval_t& right_interval) const;
-    std::vector<linear_constraint_t> assume_signed_64bit_gt(bool strict, variable_t left_svalue, variable_t left_uvalue,
-                                                            const interval_t& left_interval_positive,
-                                                            const interval_t& left_interval_negative,
-                                                            const linear_expression_t& right_svalue,
-                                                            const linear_expression_t& right_uvalue,
-                                                            const interval_t& right_interval) const;
-    std::vector<linear_constraint_t> assume_signed_32bit_gt(bool strict, variable_t left_svalue, variable_t left_uvalue,
-                                                            const interval_t& left_interval_positive,
-                                                            const interval_t& left_interval_negative,
-                                                            const linear_expression_t& right_svalue,
-                                                            const linear_expression_t& right_uvalue,
-                                                            const interval_t& right_interval) const;
-    std::vector<linear_constraint_t> assume_signed_cst_interval(Condition::Op op, bool is64, variable_t left_svalue,
-                                                                variable_t left_uvalue,
-                                                                const linear_expression_t& right_svalue,
-                                                                const linear_expression_t& right_uvalue) const;
-    std::vector<linear_constraint_t>
-    assume_unsigned_64bit_lt(bool strict, variable_t left_svalue, variable_t left_uvalue,
-                             const interval_t& left_interval_low, const interval_t& left_interval_high,
-                             const linear_expression_t& right_svalue, const linear_expression_t& right_uvalue,
-                             const interval_t& right_interval) const;
-    std::vector<linear_constraint_t> assume_unsigned_32bit_lt(bool strict, variable_t left_svalue,
-                                                              variable_t left_uvalue,
-                                                              const linear_expression_t& right_svalue,
-                                                              const linear_expression_t& right_uvalue) const;
-    std::vector<linear_constraint_t>
-    assume_unsigned_64bit_gt(bool strict, variable_t left_svalue, variable_t left_uvalue,
-                             const interval_t& left_interval_low, const interval_t& left_interval_high,
-                             const linear_expression_t& right_svalue, const linear_expression_t& right_uvalue,
-                             const interval_t& right_interval) const;
-    std::vector<linear_constraint_t>
-    assume_unsigned_32bit_gt(bool strict, variable_t left_svalue, variable_t left_uvalue,
-                             const interval_t& left_interval_low, const interval_t& left_interval_high,
-                             const linear_expression_t& right_svalue, const linear_expression_t& right_uvalue,
-                             const interval_t& right_interval) const;
-    std::vector<linear_constraint_t> assume_unsigned_cst_interval(Condition::Op op, bool is64, variable_t left_svalue,
-                                                                  variable_t left_uvalue,
-                                                                  const linear_expression_t& right_svalue,
-                                                                  const linear_expression_t& right_uvalue) const;
+    void get_unsigned_intervals(bool is64, Variable left_svalue, Variable left_uvalue,
+                                const LinearExpression& right_uvalue, Interval& left_interval, Interval& right_interval,
+                                Interval& left_interval_low, Interval& left_interval_high) const;
+    std::vector<LinearConstraint> assume_signed_64bit_lt(bool strict, Variable left_svalue, Variable left_uvalue,
+                                                         const Interval& left_interval_positive,
+                                                         const Interval& left_interval_negative,
+                                                         const LinearExpression& right_svalue,
+                                                         const LinearExpression& right_uvalue,
+                                                         const Interval& right_interval) const;
+    std::vector<LinearConstraint> assume_signed_32bit_lt(bool strict, Variable left_svalue, Variable left_uvalue,
+                                                         const Interval& left_interval_positive,
+                                                         const Interval& left_interval_negative,
+                                                         const LinearExpression& right_svalue,
+                                                         const LinearExpression& right_uvalue,
+                                                         const Interval& right_interval) const;
+    std::vector<LinearConstraint> assume_signed_64bit_gt(bool strict, Variable left_svalue, Variable left_uvalue,
+                                                         const Interval& left_interval_positive,
+                                                         const Interval& left_interval_negative,
+                                                         const LinearExpression& right_svalue,
+                                                         const LinearExpression& right_uvalue,
+                                                         const Interval& right_interval) const;
+    std::vector<LinearConstraint> assume_signed_32bit_gt(bool strict, Variable left_svalue, Variable left_uvalue,
+                                                         const Interval& left_interval_positive,
+                                                         const Interval& left_interval_negative,
+                                                         const LinearExpression& right_svalue,
+                                                         const LinearExpression& right_uvalue,
+                                                         const Interval& right_interval) const;
+    std::vector<LinearConstraint> assume_signed_cst_interval(Condition::Op op, bool is64, Variable left_svalue,
+                                                             Variable left_uvalue, const LinearExpression& right_svalue,
+                                                             const LinearExpression& right_uvalue) const;
+    std::vector<LinearConstraint>
+    assume_unsigned_64bit_lt(bool strict, Variable left_svalue, Variable left_uvalue, const Interval& left_interval_low,
+                             const Interval& left_interval_high, const LinearExpression& right_svalue,
+                             const LinearExpression& right_uvalue, const Interval& right_interval) const;
+    std::vector<LinearConstraint> assume_unsigned_32bit_lt(bool strict, Variable left_svalue, Variable left_uvalue,
+                                                           const LinearExpression& right_svalue,
+                                                           const LinearExpression& right_uvalue) const;
+    std::vector<LinearConstraint>
+    assume_unsigned_64bit_gt(bool strict, Variable left_svalue, Variable left_uvalue, const Interval& left_interval_low,
+                             const Interval& left_interval_high, const LinearExpression& right_svalue,
+                             const LinearExpression& right_uvalue, const Interval& right_interval) const;
+    std::vector<LinearConstraint>
+    assume_unsigned_32bit_gt(bool strict, Variable left_svalue, Variable left_uvalue, const Interval& left_interval_low,
+                             const Interval& left_interval_high, const LinearExpression& right_svalue,
+                             const LinearExpression& right_uvalue, const Interval& right_interval) const;
+    std::vector<LinearConstraint> assume_unsigned_cst_interval(Condition::Op op, bool is64, Variable left_svalue,
+                                                               Variable left_uvalue,
+                                                               const LinearExpression& right_svalue,
+                                                               const LinearExpression& right_uvalue) const;
 
-    void get_signed_intervals(bool is64, variable_t left_svalue, variable_t left_uvalue,
-                              const linear_expression_t& right_svalue, interval_t& left_interval,
-                              interval_t& right_interval, interval_t& left_interval_positive,
-                              interval_t& left_interval_negative) const;
+    void get_signed_intervals(bool is64, Variable left_svalue, Variable left_uvalue,
+                              const LinearExpression& right_svalue, Interval& left_interval, Interval& right_interval,
+                              Interval& left_interval_positive, Interval& left_interval_negative) const;
 
   public:
-    std::vector<linear_constraint_t> assume_cst_imm(Condition::Op op, bool is64, variable_t dst_svalue,
-                                                    variable_t dst_uvalue, int64_t imm) const;
-    std::vector<linear_constraint_t> assume_cst_reg(Condition::Op op, bool is64, variable_t dst_svalue,
-                                                    variable_t dst_uvalue, variable_t src_svalue,
-                                                    variable_t src_uvalue) const;
+    std::vector<LinearConstraint> assume_cst_imm(Condition::Op op, bool is64, Variable dst_svalue, Variable dst_uvalue,
+                                                 int64_t imm) const;
+    std::vector<LinearConstraint> assume_cst_reg(Condition::Op op, bool is64, Variable dst_svalue, Variable dst_uvalue,
+                                                 Variable src_svalue, Variable src_uvalue) const;
 };
-} // namespace crab::domains
+} // namespace prevail

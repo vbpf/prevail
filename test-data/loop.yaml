@@ -215,7 +215,7 @@ post:
   - r3.svalue=pc[7]
   - r4.svalue=pc[7]
   - r4.uvalue=pc[7]
-  - meta_offset=[-oo, 0]
+  - meta_offset=[-4098, 0]
   - packet_size=[1, 65534]
   - pc[7]=[1, 255]
   - r0.type=number

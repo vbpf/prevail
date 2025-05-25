@@ -7,6 +7,8 @@
 
 // TODO: move out of this framework
 
+using namespace prevail;
+
 #define YAML_CASE(path)                                                     \
     TEST_CASE("YAML suite: " path, "[yaml]") {                              \
         foreach_suite(path, [&](const TestCase& test_case) {                \

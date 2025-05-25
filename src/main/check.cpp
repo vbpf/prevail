@@ -19,16 +19,18 @@
 using std::string;
 using std::vector;
 
-static size_t hash(const raw_program& raw_prog) {
+using namespace prevail;
+
+static size_t hash(const RawProgram& raw_prog) {
     const char* start = reinterpret_cast<const char*>(raw_prog.prog.data());
-    const char* end = start + raw_prog.prog.size() * sizeof(ebpf_inst);
+    const char* end = start + raw_prog.prog.size() * sizeof(EbpfInst);
     return boost::hash_range(start, end);
 }
 
 template <void(on_exit)()>
-struct at_scope_exit {
-    at_scope_exit() = default;
-    ~at_scope_exit() { on_exit(); }
+struct AtScopeExit {
+    AtScopeExit() = default;
+    ~AtScopeExit() { on_exit(); }
 };
 
 static const std::map<std::string, bpf_conformance_groups_t> _conformance_groups = {
@@ -46,18 +48,18 @@ static std::optional<bpf_conformance_groups_t> _get_conformance_group_by_name(co
 
 static std::set<std::string> _get_conformance_group_names() {
     std::set<std::string> result;
-    for (const auto& [name, _] : _conformance_groups) {
+    for (const auto& name : _conformance_groups | std::views::keys) {
         result.insert(name);
     }
     return result;
 }
 
-static std::optional<raw_program> find_program(vector<raw_program>& raw_progs, const std::string& desired_program) {
+static std::optional<RawProgram> find_program(vector<RawProgram>& raw_progs, const std::string& desired_program) {
     if (desired_program.empty() && raw_progs.size() == 1) {
         // Select the last program section.
         return raw_progs.back();
     }
-    for (raw_program current_program : raw_progs) {
+    for (RawProgram current_program : raw_progs) {
         if (current_program.function_name == desired_program) {
             return current_program;
         }
@@ -67,11 +69,11 @@ static std::optional<raw_program> find_program(vector<raw_program>& raw_progs, c
 
 int main(int argc, char** argv) {
     // Always call ebpf_verifier_clear_thread_local_state on scope exit.
-    at_scope_exit<ebpf_verifier_clear_thread_local_state> clear_thread_local_state;
+    AtScopeExit<ebpf_verifier_clear_thread_local_state> clear_thread_local_state;
 
     ebpf_verifier_options_t ebpf_verifier_options;
 
-    crab::CrabEnableWarningMsg(false);
+    CrabEnableWarningMsg(false);
 
     // Parse command line arguments:
 
@@ -194,7 +196,7 @@ int main(int argc, char** argv) {
     }
 
     // Read a set of raw program sections from an ELF file.
-    vector<raw_program> raw_progs;
+    vector<RawProgram> raw_progs;
     try {
         raw_progs = read_elf(filename, desired_section, ebpf_verifier_options, &platform);
     } catch (std::runtime_error& e) {
@@ -202,7 +204,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    std::optional<raw_program> found_prog = find_program(raw_progs, desired_program);
+    std::optional<RawProgram> found_prog = find_program(raw_progs, desired_program);
     if (list || !found_prog) {
         if (!list) {
             std::cout << "please specify a program\n";
@@ -213,13 +215,13 @@ int main(int argc, char** argv) {
             // of possibilities.
             raw_progs = read_elf(filename, string(), ebpf_verifier_options, &platform);
         }
-        for (const raw_program& raw_prog : raw_progs) {
+        for (const RawProgram& raw_prog : raw_progs) {
             std::cout << "section=" << raw_prog.section_name << " function=" << raw_prog.function_name << std::endl;
         }
         std::cout << "\n";
         return list ? 0 : 64;
     }
-    raw_program raw_prog = *found_prog;
+    RawProgram raw_prog = *found_prog;
 
     // Convert the raw program section to a set of instructions.
     std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog);
@@ -239,7 +241,7 @@ int main(int argc, char** argv) {
         // Convert the instruction sequence to a control-flow graph.
         try {
             const auto verbosity = ebpf_verifier_options.verbosity_opts;
-            const Program prog = Program::from_sequence(inst_seq, raw_prog.info, ebpf_verifier_options.cfg_opts);
+            const Program prog = Program::from_sequence(inst_seq, raw_prog.info, ebpf_verifier_options);
             if (domain == "cfg") {
                 print_program(prog, std::cout, verbosity.simplify);
                 return 0;
@@ -277,7 +279,7 @@ int main(int argc, char** argv) {
         return !res;
     } else if (domain == "stats") {
         // Convert the instruction sequence to a control-flow graph.
-        const Program prog = Program::from_sequence(inst_seq, raw_prog.info, ebpf_verifier_options.cfg_opts);
+        const Program prog = Program::from_sequence(inst_seq, raw_prog.info, ebpf_verifier_options);
 
         // Just print eBPF program stats.
         auto stats = collect_stats(prog);

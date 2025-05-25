@@ -30,6 +30,9 @@ jobs:
         with:
           submodules: 'recursive'
 
+      - name: Set repository name
+        run: echo "REPO_NAME=${GITHUB_REPOSITORY#*/}" >> $GITHUB_ENV
+
       - name: Build
         run: |
           mkdir build
@@ -43,7 +46,7 @@ jobs:
       - name: Generate code coverage report
         run: |
           mkdir coverage
-          lcov --ignore-errors all --capture --directory build --include '*/ebpf-verifier/src/*' --output-file coverage/lcov.info
+          lcov --ignore-errors all --capture --directory build --include "*/${REPO_NAME}/src/*" --output-file coverage/lcov.info
 
       - name: Coveralls Parallel
         uses: coverallsapp/github-action@master

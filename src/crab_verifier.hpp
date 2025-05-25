@@ -8,9 +8,10 @@
 #include "spec_type_descriptors.hpp"
 #include "string_constraints.hpp"
 
+namespace prevail {
 class Report final {
-    std::map<label_t, std::vector<std::string>> warnings;
-    std::map<label_t, std::vector<std::string>> reachability;
+    std::map<Label, std::vector<std::string>> warnings;
+    std::map<Label, std::vector<std::string>> reachability;
     friend class Invariants;
 
   public:
@@ -50,18 +51,18 @@ class Report final {
 };
 
 class Invariants final {
-    crab::invariant_table_t invariants;
+    InvariantTable invariants;
 
   public:
-    explicit Invariants(crab::invariant_table_t&& invariants) : invariants(std::move(invariants)) {}
+    explicit Invariants(InvariantTable&& invariants) : invariants(std::move(invariants)) {}
     Invariants(Invariants&& invariants) = default;
     Invariants(const Invariants& invariants) = default;
 
-    bool is_valid_after(const label_t& label, const string_invariant& state) const;
+    bool is_valid_after(const Label& label, const StringInvariant& state) const;
 
-    string_invariant invariant_at(const label_t& label) const;
+    StringInvariant invariant_at(const Label& label) const;
 
-    crab::interval_t exit_value() const;
+    Interval exit_value() const;
 
     int max_loop_count() const;
     bool verified(const Program& prog) const;
@@ -71,7 +72,7 @@ class Invariants final {
 };
 
 Invariants analyze(const Program& prog);
-Invariants analyze(const Program& prog, const string_invariant& entry_invariant);
+Invariants analyze(const Program& prog, const StringInvariant& entry_invariant);
 inline bool verify(const Program& prog) { return analyze(prog).verified(prog); }
 
 int create_map_crab(const EbpfMapType& map_type, uint32_t key_size, uint32_t value_size, uint32_t max_entries,
@@ -80,3 +81,4 @@ int create_map_crab(const EbpfMapType& map_type, uint32_t key_size, uint32_t val
 EbpfMapDescriptor* find_map_descriptor(int map_fd);
 
 void ebpf_verifier_clear_thread_local_state();
+} // namespace prevail

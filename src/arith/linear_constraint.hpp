@@ -8,25 +8,25 @@
 
 // A linear constraint is of the form:
 //    <linear expression> <operator> 0
-namespace crab {
+namespace prevail {
 
-enum class constraint_kind_t { EQUALS_ZERO, LESS_THAN_OR_EQUALS_ZERO, LESS_THAN_ZERO, NOT_ZERO };
+enum class ConstraintKind { EQUALS_ZERO, LESS_THAN_OR_EQUALS_ZERO, LESS_THAN_ZERO, NOT_ZERO };
 
-class linear_constraint_t final {
+class LinearConstraint final {
   private:
-    linear_expression_t _expression = linear_expression_t(0);
-    constraint_kind_t _constraint_kind;
+    LinearExpression _expression = LinearExpression(0);
+    ConstraintKind _constraint_kind;
 
   public:
-    linear_constraint_t(linear_expression_t expression, constraint_kind_t constraint_kind)
+    LinearConstraint(LinearExpression expression, ConstraintKind constraint_kind)
         : _expression(std::move(expression)), _constraint_kind(constraint_kind) {}
 
     [[nodiscard]]
-    const linear_expression_t& expression() const {
+    const LinearExpression& expression() const {
         return _expression;
     }
     [[nodiscard]]
-    constraint_kind_t kind() const {
+    ConstraintKind kind() const {
         return _constraint_kind;
     }
 
@@ -36,12 +36,12 @@ class linear_constraint_t final {
         if (!_expression.is_constant()) {
             return false;
         }
-        const number_t constant = _expression.constant_term();
+        const Number constant = _expression.constant_term();
         switch (_constraint_kind) {
-        case constraint_kind_t::EQUALS_ZERO: return constant == 0;
-        case constraint_kind_t::LESS_THAN_OR_EQUALS_ZERO: return constant <= 0;
-        case constraint_kind_t::LESS_THAN_ZERO: return constant < 0;
-        case constraint_kind_t::NOT_ZERO: return constant != 0;
+        case ConstraintKind::EQUALS_ZERO: return constant == 0;
+        case ConstraintKind::LESS_THAN_OR_EQUALS_ZERO: return constant <= 0;
+        case ConstraintKind::LESS_THAN_ZERO: return constant < 0;
+        case ConstraintKind::NOT_ZERO: return constant != 0;
         default: throw std::exception();
         }
     }
@@ -57,29 +57,25 @@ class linear_constraint_t final {
 
     // Construct the logical NOT of this constraint.
     [[nodiscard]]
-    linear_constraint_t negate() const {
+    LinearConstraint negate() const {
         switch (_constraint_kind) {
-        case constraint_kind_t::NOT_ZERO: return linear_constraint_t(_expression, constraint_kind_t::EQUALS_ZERO);
-        case constraint_kind_t::EQUALS_ZERO: return linear_constraint_t(_expression, constraint_kind_t::NOT_ZERO);
-        case constraint_kind_t::LESS_THAN_ZERO:
-            return linear_constraint_t(_expression.negate(), constraint_kind_t::LESS_THAN_OR_EQUALS_ZERO);
-        case constraint_kind_t::LESS_THAN_OR_EQUALS_ZERO:
-            return linear_constraint_t(_expression.negate(), constraint_kind_t::LESS_THAN_ZERO);
+        case ConstraintKind::NOT_ZERO: return LinearConstraint(_expression, ConstraintKind::EQUALS_ZERO);
+        case ConstraintKind::EQUALS_ZERO: return LinearConstraint(_expression, ConstraintKind::NOT_ZERO);
+        case ConstraintKind::LESS_THAN_ZERO:
+            return LinearConstraint(_expression.negate(), ConstraintKind::LESS_THAN_OR_EQUALS_ZERO);
+        case ConstraintKind::LESS_THAN_OR_EQUALS_ZERO:
+            return LinearConstraint(_expression.negate(), ConstraintKind::LESS_THAN_ZERO);
         default: throw std::exception();
         }
     }
 
-    static linear_constraint_t false_const() {
-        return linear_constraint_t{linear_expression_t(0), constraint_kind_t::NOT_ZERO};
-    }
+    static LinearConstraint false_const() { return LinearConstraint{LinearExpression(0), ConstraintKind::NOT_ZERO}; }
 
-    static linear_constraint_t true_const() {
-        return linear_constraint_t{linear_expression_t(0), constraint_kind_t::EQUALS_ZERO};
-    }
+    static LinearConstraint true_const() { return LinearConstraint{LinearExpression(0), ConstraintKind::EQUALS_ZERO}; }
 };
 
 // Output a linear constraint to a stream.
-inline std::ostream& operator<<(std::ostream& o, const linear_constraint_t& constraint) {
+inline std::ostream& operator<<(std::ostream& o, const LinearConstraint& constraint) {
     if (constraint.is_contradiction()) {
         o << "false";
     } else if (constraint.is_tautology()) {
@@ -102,4 +98,4 @@ inline std::ostream& operator<<(std::ostream& o, const linear_constraint_t& cons
     return o;
 }
 
-} // namespace crab
+} // namespace prevail

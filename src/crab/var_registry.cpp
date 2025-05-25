@@ -4,22 +4,23 @@
  * Factories for variable names.
  */
 
-#include "crab/label.hpp"
-#include "crab/variable.hpp"
+#include "crab/var_registry.hpp"
+#include "arith/variable.hpp"
+#include "cfg/label.hpp"
 #include "crab_utils/lazy_allocator.hpp"
 
-namespace crab {
+namespace prevail {
 
-variable_t variable_t::make(const std::string& name) {
-    const auto it = std::find(names->begin(), names->end(), name);
-    if (it == names->end()) {
-        names->emplace_back(name);
-        return variable_t(names->size() - 1);
+Variable VariableRegistry::make(const std::string& name) {
+    const auto it = std::ranges::find(names, name);
+    if (it == names.end()) {
+        names.emplace_back(name);
+        return Variable(names.size() - 1);
     }
-    return variable_t(std::distance(names->begin(), it));
+    return Variable(std::distance(names.begin(), it));
 }
 
-std::vector<std::string> default_variable_names() {
+static std::vector<std::string> default_variable_names() {
     return std::vector<std::string>{
         "r0.svalue",
         "r0.uvalue",
@@ -133,20 +134,28 @@ std::vector<std::string> default_variable_names() {
         "r10.stack_numeric_size",
         "data_size",
         "meta_size",
+        "meta_offset",
+        "packet_size",
     };
 }
 
-thread_local lazy_allocator<std::vector<std::string>, default_variable_names> variable_t::names;
+VariableRegistry::VariableRegistry() : names(default_variable_names()) {}
 
-void variable_t::clear_thread_local_state() { names.clear(); }
+thread_local LazyAllocator<VariableRegistry> variable_registry;
 
-variable_t variable_t::reg(const data_kind_t kind, const int i) {
+std::ostream& operator<<(std::ostream& o, const Variable& v) { return o << variable_registry->name(v); }
+
+std::ostream& operator<<(std::ostream& o, const DataKind& s) { return o << name_of(s); }
+
+Variable VariableRegistry::reg(const DataKind kind, const int i) {
     return make("r" + std::to_string(i) + "." + name_of(kind));
 }
 
-std::ostream& operator<<(std::ostream& o, const data_kind_t& s) { return o << name_of(s); }
+Variable VariableRegistry::stack_frame_var(const DataKind kind, const int i, const std::string& prefix) {
+    return make(prefix + STACK_FRAME_DELIMITER + "r" + std::to_string(i) + "." + name_of(kind));
+}
 
-static std::string mk_scalar_name(const data_kind_t kind, const number_t& o, const number_t& size) {
+static std::string mk_scalar_name(const DataKind kind, const Number& o, const Number& size) {
     std::stringstream os;
     os << "s" << "[" << o;
     if (size != 1) {
@@ -156,31 +165,31 @@ static std::string mk_scalar_name(const data_kind_t kind, const number_t& o, con
     return os.str();
 }
 
-variable_t variable_t::stack_frame_var(const data_kind_t kind, const int i, const std::string& prefix) {
-    return make(prefix + STACK_FRAME_DELIMITER + "r" + std::to_string(i) + "." + name_of(kind));
-}
-
-variable_t variable_t::cell_var(const data_kind_t array, const number_t& offset, const number_t& size) {
+Variable VariableRegistry::cell_var(const DataKind array, const Number& offset, const Number& size) {
     return make(mk_scalar_name(array, offset.cast_to<uint64_t>(), size));
 }
 
 // Given a type variable, get the associated variable of a given kind.
-variable_t variable_t::kind_var(const data_kind_t kind, const variable_t type_variable) {
-    const std::string name = type_variable.name();
-    return make(name.substr(0, name.rfind('.') + 1) + name_of(kind));
+Variable VariableRegistry::kind_var(const DataKind kind, const Variable type_variable) {
+    const std::string name = VariableRegistry::name(type_variable);
+    const auto dot_pos = name.rfind('.');
+    if (dot_pos == std::string::npos) {
+        CRAB_ERROR("Variable name '", name, "' does not contain a dot");
+    }
+    return make(name.substr(0, dot_pos + 1) + name_of(kind));
 }
 
-variable_t variable_t::meta_offset() { return make("meta_offset"); }
-variable_t variable_t::packet_size() { return make("packet_size"); }
-variable_t variable_t::loop_counter(const std::string& label) { return make("pc[" + label + "]"); }
+Variable VariableRegistry::meta_offset() { return make("meta_offset"); }
+Variable VariableRegistry::packet_size() { return make("packet_size"); }
+Variable VariableRegistry::loop_counter(const std::string& label) { return make("pc[" + label + "]"); }
 
 static bool ends_with(const std::string& str, const std::string& suffix) {
     return str.size() >= suffix.size() && 0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix);
 }
 
-std::vector<variable_t> variable_t::get_type_variables() {
-    std::vector<variable_t> res;
-    for (const std::string& name : *names) {
+std::vector<Variable> VariableRegistry::get_type_variables() {
+    std::vector<Variable> res;
+    for (const std::string& name : names) {
         if (ends_with(name, ".type")) {
             res.push_back(make(name));
         }
@@ -188,17 +197,31 @@ std::vector<variable_t> variable_t::get_type_variables() {
     return res;
 }
 
-bool variable_t::is_in_stack() const { return this->name()[0] == 's'; }
+std::string VariableRegistry::name(const Variable& v) const { return names.at(v._id); }
 
-bool variable_t::printing_order(const variable_t& a, const variable_t& b) { return a.name() < b.name(); }
+[[nodiscard]]
+bool VariableRegistry::is_type(const Variable& v) const {
+    return name(v).ends_with(".type");
+}
 
-std::vector<variable_t> variable_t::get_loop_counters() {
-    std::vector<variable_t> res;
-    for (const std::string& name : *names) {
-        if (name.find("pc") == 0) {
+[[nodiscard]]
+bool VariableRegistry::is_unsigned(const Variable& v) const {
+    return name(v).ends_with(".uvalue");
+}
+
+bool VariableRegistry::is_in_stack(const Variable& v) const { return name(v)[0] == 's'; }
+
+bool VariableRegistry::printing_order(const Variable& a, const Variable& b) {
+    return variable_registry->name(a) < variable_registry->name(b);
+}
+
+std::vector<Variable> VariableRegistry::get_loop_counters() {
+    std::vector<Variable> res;
+    for (const std::string& name : names) {
+        if (name.starts_with("pc")) {
             res.push_back(make(name));
         }
     }
     return res;
 }
-} // end namespace crab
+} // end namespace prevail

@@ -466,7 +466,7 @@ post:
 messages:
   - "0: Invalid type (r5.type == number)"
 
-# Issue: https://github.com/vbpf/ebpf-verifier/issues/754
+# Issue: https://github.com/vbpf/prevail/issues/754
 # Should these tests fail?
 ---
 test-case: Read uninitialized stack range - aligned

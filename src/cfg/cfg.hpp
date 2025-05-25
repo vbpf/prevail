@@ -1,34 +1,30 @@
 // Copyright (c) Prevail Verifier contributors.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: MIT
 #pragma once
 
 /*
  * a CFG to interface with the fixpoint iterators.
  */
-#include <cassert>
 #include <map>
-#include <memory>
 #include <ranges>
 #include <set>
-#include <variant>
 #include <vector>
 
-#include "config.hpp"
-#include "crab/label.hpp"
+#include "cfg/label.hpp"
 #include "crab_utils/debug.hpp"
-struct cfg_builder_t;
-namespace crab {
+
+namespace prevail {
 
 /// Control-Flow Graph
-class cfg_t final {
-    friend struct ::cfg_builder_t;
+class Cfg final {
+    friend struct CfgBuilder;
 
     // the choice to use set means that unmarshaling a conditional jump to the same target may be different
-    using label_vec_t = std::set<label_t>;
+    using LabelVec = std::set<Label>;
 
-    struct adjacent_t final {
-        label_vec_t parents;
-        label_vec_t children;
+    struct Adjacent final {
+        LabelVec parents;
+        LabelVec children;
 
         [[nodiscard]]
         size_t in_degree() const {
@@ -41,21 +37,21 @@ class cfg_t final {
         }
     };
 
-    std::map<label_t, adjacent_t> neighbours{{label_t::entry, adjacent_t{}}, {label_t::exit, adjacent_t{}}};
+    std::map<Label, Adjacent> neighbours{{Label::entry, Adjacent{}}, {Label::exit, Adjacent{}}};
 
     // Helpers
     [[nodiscard]]
-    bool has_one_child(const label_t& label) const {
+    bool has_one_child(const Label& label) const {
         return out_degree(label) == 1;
     }
 
     [[nodiscard]]
-    bool has_one_parent(const label_t& label) const {
+    bool has_one_parent(const Label& label) const {
         return in_degree(label) == 1;
     }
 
     [[nodiscard]]
-    adjacent_t& get_node(const label_t& _label) {
+    Adjacent& get_node(const Label& _label) {
         const auto it = neighbours.find(_label);
         if (it == neighbours.end()) {
             CRAB_ERROR("Label ", to_string(_label), " not found in the CFG: ");
@@ -64,7 +60,7 @@ class cfg_t final {
     }
 
     [[nodiscard]]
-    const adjacent_t& get_node(const label_t& _label) const {
+    const Adjacent& get_node(const Label& _label) const {
         const auto it = neighbours.find(_label);
         if (it == neighbours.end()) {
             CRAB_ERROR("Label ", to_string(_label), " not found in the CFG: ");
@@ -74,22 +70,22 @@ class cfg_t final {
 
   public:
     [[nodiscard]]
-    label_t exit_label() const {
-        return label_t::exit;
+    Label exit_label() const {
+        return Label::exit;
     }
 
     [[nodiscard]]
-    label_t entry_label() const {
-        return label_t::entry;
+    Label entry_label() const {
+        return Label::entry;
     }
 
     [[nodiscard]]
-    const label_vec_t& children_of(const label_t& _label) const {
+    const LabelVec& children_of(const Label& _label) const {
         return get_node(_label).children;
     }
 
     [[nodiscard]]
-    const label_vec_t& parents_of(const label_t& _label) const {
+    const LabelVec& parents_of(const Label& _label) const {
         return get_node(_label).parents;
     }
 
@@ -105,7 +101,7 @@ class cfg_t final {
     }
 
     [[nodiscard]]
-    label_t get_child(const label_t& label) const {
+    Label get_child(const Label& label) const {
         if (!has_one_child(label)) {
             CRAB_ERROR("Label ", to_string(label), " does not have a single child");
         }
@@ -113,7 +109,7 @@ class cfg_t final {
     }
 
     [[nodiscard]]
-    label_t get_parent(const label_t& label) const {
+    Label get_parent(const Label& label) const {
         if (!has_one_parent(label)) {
             CRAB_ERROR("Label ", to_string(label), " does not have a single parent");
         }
@@ -121,48 +117,48 @@ class cfg_t final {
     }
 
     [[nodiscard]]
-    bool contains(const label_t& label) const {
+    bool contains(const Label& label) const {
         return neighbours.contains(label);
     }
 
     [[nodiscard]]
-    int num_siblings(const label_t& label) const {
+    int num_siblings(const Label& label) const {
         return get_node(get_parent(label)).out_degree();
     }
 
     [[nodiscard]]
-    int in_degree(const label_t& label) const {
+    int in_degree(const Label& label) const {
         return get_node(label).in_degree();
     }
 
     [[nodiscard]]
-    int out_degree(const label_t& label) const {
+    int out_degree(const Label& label) const {
         return get_node(label).out_degree();
     }
 };
 
-class basic_block_t final {
-    using stmt_list_t = std::vector<label_t>;
-    using const_iterator = stmt_list_t::const_iterator;
+class BasicBlock final {
+    using StmtList = std::vector<Label>;
+    using const_iterator = StmtList::const_iterator;
 
-    stmt_list_t m_ts;
+    StmtList m_ts;
 
   public:
-    std::strong_ordering operator<=>(const basic_block_t& other) const { return first_label() <=> other.first_label(); }
+    std::strong_ordering operator<=>(const BasicBlock& other) const { return first_label() <=> other.first_label(); }
 
-    static std::set<basic_block_t> collect_basic_blocks(const cfg_t& cfg, bool simplify);
+    static std::set<BasicBlock> collect_basic_blocks(const Cfg& cfg, bool simplify);
 
-    explicit basic_block_t(const label_t& first_label) : m_ts{first_label} {}
-    basic_block_t(basic_block_t&&) noexcept = default;
-    basic_block_t(const basic_block_t&) = default;
+    explicit BasicBlock(const Label& first_label) : m_ts{first_label} {}
+    BasicBlock(BasicBlock&&) noexcept = default;
+    BasicBlock(const BasicBlock&) = default;
 
     [[nodiscard]]
-    label_t first_label() const {
+    Label first_label() const {
         return m_ts.front();
     }
 
     [[nodiscard]]
-    label_t last_label() const {
+    Label last_label() const {
         return m_ts.back();
     }
 
@@ -181,6 +177,6 @@ class basic_block_t final {
     }
 };
 
-cfg_t cfg_from_adjacency_list(const std::map<label_t, std::vector<label_t>>& adj_list);
+Cfg cfg_from_adjacency_list(const std::map<Label, std::vector<Label>>& AdjList);
 
-} // end namespace crab
+} // end namespace prevail

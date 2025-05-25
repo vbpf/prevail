@@ -13,6 +13,7 @@
 using std::string;
 using std::vector;
 
+namespace prevail {
 int opcode_to_width(const uint8_t opcode) {
     switch (opcode & INST_SIZE_MASK) {
     case INST_SIZE_B: return 1;
@@ -47,16 +48,12 @@ static std::string make_opcode_message(const char* msg, const uint8_t opcode) {
     return oss.str();
 }
 
-struct InvalidInstruction : std::invalid_argument {
+struct InvalidInstruction final : std::invalid_argument {
     size_t pc;
     explicit InvalidInstruction(const size_t pc, const char* what) : std::invalid_argument{what}, pc{pc} {}
     InvalidInstruction(const size_t pc, const std::string& what) : std::invalid_argument{what}, pc{pc} {}
     InvalidInstruction(const size_t pc, const uint8_t opcode)
         : std::invalid_argument{make_opcode_message("bad instruction", opcode)}, pc{pc} {}
-};
-
-struct UnsupportedMemoryMode : std::invalid_argument {
-    explicit UnsupportedMemoryMode(const char* what) : std::invalid_argument{what} {}
 };
 
 static auto getMemIsLoad(const uint8_t opcode) -> bool {
@@ -85,16 +82,16 @@ static Instruction shift32(const Reg dst, const Bin::Op op) {
 
 struct Unmarshaller {
     vector<vector<string>>& notes;
-    const program_info& info;
+    const ProgramInfo& info;
     // ReSharper disable once CppMemberFunctionMayBeConst
     void note(const string& what) { notes.back().emplace_back(what); }
     // ReSharper disable once CppMemberFunctionMayBeConst
     void note_next_pc() { notes.emplace_back(); }
-    explicit Unmarshaller(vector<vector<string>>& notes, const program_info& info) : notes{notes}, info{info} {
+    explicit Unmarshaller(vector<vector<string>>& notes, const ProgramInfo& info) : notes{notes}, info{info} {
         note_next_pc();
     }
 
-    auto getAluOp(const size_t pc, const ebpf_inst inst) -> std::variant<Bin::Op, Un::Op> {
+    auto getAluOp(const size_t pc, const EbpfInst inst) -> std::variant<Bin::Op, Un::Op> {
         // First handle instructions that support a non-zero offset.
         const bool is64 = (inst.opcode & INST_CLS_MASK) == INST_CLS_ALU64;
         switch (inst.opcode & INST_ALU_OP_MASK) {
@@ -219,7 +216,7 @@ struct Unmarshaller {
         }
     }
 
-    static auto getAtomicOp(const size_t pc, const ebpf_inst inst) -> Atomic::Op {
+    static auto getAtomicOp(const size_t pc, const EbpfInst inst) -> Atomic::Op {
         switch (const auto op = gsl::narrow<Atomic::Op>(inst.imm & ~INST_FETCH)) {
         case Atomic::Op::XCHG:
         case Atomic::Op::CMPXCHG:
@@ -234,11 +231,11 @@ struct Unmarshaller {
         throw InvalidInstruction(pc, "unsupported immediate");
     }
 
-    static uint64_t sign_extend(const int32_t imm) { return crab::to_unsigned(int64_t{imm}); }
+    static uint64_t sign_extend(const int32_t imm) { return to_unsigned(int64_t{imm}); }
 
-    static uint64_t zero_extend(const int32_t imm) { return uint64_t{crab::to_unsigned(imm)}; }
+    static uint64_t zero_extend(const int32_t imm) { return uint64_t{to_unsigned(imm)}; }
 
-    static auto getBinValue(const pc_t pc, const ebpf_inst inst) -> Value {
+    static auto getBinValue(const Pc pc, const EbpfInst inst) -> Value {
         if (inst.opcode & INST_SRC_REG) {
             if (inst.imm != 0) {
                 throw InvalidInstruction(pc, make_opcode_message("nonzero imm for", inst.opcode));
@@ -275,7 +272,7 @@ struct Unmarshaller {
         }
     }
 
-    auto makeMemOp(const pc_t pc, const ebpf_inst inst) -> Instruction {
+    auto makeMemOp(const Pc pc, const EbpfInst inst) -> Instruction {
         if (inst.dst > R10_STACK_POINTER || inst.src > R10_STACK_POINTER) {
             throw InvalidInstruction(pc, "bad register");
         }
@@ -382,7 +379,7 @@ struct Unmarshaller {
         }
     }
 
-    auto makeAluOp(const size_t pc, const ebpf_inst inst) -> Instruction {
+    auto makeAluOp(const size_t pc, const EbpfInst inst) -> Instruction {
         const bool is64 = (inst.opcode & INST_CLS_MASK) == INST_CLS_ALU64;
         if (!info.platform->supports_group(is64 ? bpf_conformance_groups_t::base64
                                                 : bpf_conformance_groups_t::base32)) {
@@ -395,7 +392,7 @@ struct Unmarshaller {
             throw InvalidInstruction(pc, "bad register");
         }
         return std::visit(
-            overloaded{[&](const Un::Op op) -> Instruction { return Un{.op = op, .dst = Reg{inst.dst}, .is64 = is64}; },
+            Overloaded{[&](const Un::Op op) -> Instruction { return Un{.op = op, .dst = Reg{inst.dst}, .is64 = is64}; },
                        [&](const Bin::Op op) -> Instruction {
                            Bin res{
                                .op = op,
@@ -417,15 +414,15 @@ struct Unmarshaller {
     }
 
     [[nodiscard]]
-    auto makeLddw(const ebpf_inst inst, const int32_t next_imm, const vector<ebpf_inst>& insts,
-                  const pc_t pc) const -> Instruction {
+    auto makeLddw(const EbpfInst inst, const int32_t next_imm, const vector<EbpfInst>& insts, const Pc pc) const
+        -> Instruction {
         if (!info.platform->supports_group(bpf_conformance_groups_t::base64)) {
             throw InvalidInstruction{pc, inst.opcode};
         }
         if (pc >= insts.size() - 1) {
             throw InvalidInstruction(pc, "incomplete lddw");
         }
-        const ebpf_inst next = insts[pc + 1];
+        const EbpfInst next = insts[pc + 1];
         if (next.opcode != 0 || next.dst != 0 || next.src != 0 || next.offset != 0) {
             throw InvalidInstruction(pc, "invalid lddw");
         }
@@ -553,18 +550,18 @@ struct Unmarshaller {
     }
 
     /// Given a program counter and an offset, get the label of the target instruction.
-    static label_t getJumpTarget(const int32_t offset, const vector<ebpf_inst>& insts, const pc_t pc) {
-        const pc_t new_pc = pc + 1 + offset;
+    static Label getJumpTarget(const int32_t offset, const vector<EbpfInst>& insts, const Pc pc) {
+        const Pc new_pc = pc + 1 + offset;
         if (new_pc >= insts.size()) {
             throw InvalidInstruction(pc, "jump out of bounds");
         }
         if (insts[new_pc].opcode == 0) {
             throw InvalidInstruction(pc, "jump to middle of lddw");
         }
-        return label_t{gsl::narrow<int>(new_pc)};
+        return Label{gsl::narrow<int>(new_pc)};
     }
 
-    static auto makeCallLocal(const ebpf_inst inst, const vector<ebpf_inst>& insts, const pc_t pc) -> CallLocal {
+    static auto makeCallLocal(const EbpfInst inst, const vector<EbpfInst>& insts, const Pc pc) -> CallLocal {
         if (inst.opcode & INST_SRC_REG) {
             throw InvalidInstruction(pc, inst.opcode);
         }
@@ -574,7 +571,7 @@ struct Unmarshaller {
         return CallLocal{.target = getJumpTarget(inst.imm, insts, pc)};
     }
 
-    static auto makeCallx(const ebpf_inst inst, const pc_t pc) -> Callx {
+    static auto makeCallx(const EbpfInst inst, const Pc pc) -> Callx {
         // callx puts the register number in the 'dst' field rather than the 'src' field.
         if (inst.dst > R10_STACK_POINTER) {
             throw InvalidInstruction(pc, "bad register");
@@ -593,7 +590,7 @@ struct Unmarshaller {
     }
 
     [[nodiscard]]
-    auto makeJmp(const ebpf_inst inst, const vector<ebpf_inst>& insts, const pc_t pc) const -> Instruction {
+    auto makeJmp(const EbpfInst inst, const vector<EbpfInst>& insts, const Pc pc) const -> Instruction {
         switch ((inst.opcode >> 4) & 0xF) {
         case INST_CALL:
             if ((inst.opcode & INST_CLS_MASK) != INST_CLS_JMP) {
@@ -679,7 +676,7 @@ struct Unmarshaller {
             }
 
             const int32_t offset = (inst.opcode == INST_OP_JA32) ? inst.imm : inst.offset;
-            const label_t target = getJumpTarget(offset, insts, pc);
+            const Label target = getJumpTarget(offset, insts, pc);
             if (inst.opcode != INST_OP_JA16 && inst.opcode != INST_OP_JA32) {
                 if (inst.dst > R10_STACK_POINTER) {
                     throw InvalidInstruction(pc, "bad register");
@@ -701,14 +698,14 @@ struct Unmarshaller {
         }
     }
 
-    vector<LabeledInstruction> unmarshal(vector<ebpf_inst> const& insts) {
+    vector<LabeledInstruction> unmarshal(vector<EbpfInst> const& insts) {
         vector<LabeledInstruction> prog;
         int exit_count = 0;
         if (insts.empty()) {
             throw std::invalid_argument("Zero length programs are not allowed");
         }
         for (size_t pc = 0; pc < insts.size();) {
-            const ebpf_inst inst = insts[pc];
+            const EbpfInst inst = insts[pc];
             Instruction new_ins;
             bool skip_instruction = false;
             bool fallthrough = true;
@@ -734,7 +731,7 @@ struct Unmarshaller {
                 if (pc >= insts.size() - 1) {
                     break;
                 }
-                const ebpf_inst next = insts[pc + 1];
+                const EbpfInst next = insts[pc + 1];
                 auto dst = Reg{inst.dst};
 
                 if (new_ins != shift32(dst, Bin::Op::LSH)) {
@@ -782,7 +779,7 @@ struct Unmarshaller {
                 current_line_info = info.line_info.at(pc);
             }
 
-            prog.emplace_back(label_t(gsl::narrow<int>(pc)), new_ins, current_line_info);
+            prog.emplace_back(Label(gsl::narrow<int>(pc)), new_ins, current_line_info);
 
             pc++;
             note_next_pc();
@@ -798,7 +795,7 @@ struct Unmarshaller {
     }
 };
 
-std::variant<InstructionSeq, std::string> unmarshal(const raw_program& raw_prog, vector<vector<string>>& notes) {
+std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog, vector<vector<string>>& notes) {
     thread_local_program_info = raw_prog.info;
     try {
         return Unmarshaller{notes, raw_prog.info}.unmarshal(raw_prog.prog);
@@ -809,13 +806,14 @@ std::variant<InstructionSeq, std::string> unmarshal(const raw_program& raw_prog,
     }
 }
 
-std::variant<InstructionSeq, std::string> unmarshal(const raw_program& raw_prog) {
+std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog) {
     vector<vector<string>> notes;
     return unmarshal(raw_prog, notes);
 }
 
 Call make_call(const int imm, const ebpf_platform_t& platform) {
     vector<vector<string>> notes;
-    const program_info info{.platform = &platform};
+    const ProgramInfo info{.platform = &platform};
     return Unmarshaller{notes, info}.makeCall(imm);
 }
+} // namespace prevail

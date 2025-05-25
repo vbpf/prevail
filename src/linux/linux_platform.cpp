@@ -3,25 +3,21 @@
 #include <stdexcept>
 #if __linux__
 #include <linux/bpf.h>
-#define PTYPE(name, descr, native_type, prefixes) \
-    { name, descr, native_type, prefixes }
-#define PTYPE_PRIVILEGED(name, descr, native_type, prefixes) \
-    { name, descr, native_type, prefixes, true }
+#define PTYPE(name, descr, native_type, prefixes) {name, descr, native_type, prefixes}
+#define PTYPE_PRIVILEGED(name, descr, native_type, prefixes) {name, descr, native_type, prefixes, true}
 #else
-#define PTYPE(name, descr, native_type, prefixes) \
-    { name, descr, 0, prefixes }
-#define PTYPE_PRIVILEGED(name, descr, native_type, prefixes) \
-    { name, descr, 0, prefixes, true }
+#define PTYPE(name, descr, native_type, prefixes) {name, descr, 0, prefixes}
+#define PTYPE_PRIVILEGED(name, descr, native_type, prefixes) {name, descr, 0, prefixes, true}
 #endif
+#include "asm_files.hpp"
 #include "crab_verifier.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
 #include "linux_platform.hpp"
 #include "platform.hpp"
 
-#include <asm_files.hpp>
-
+namespace prevail {
 // Map definitions as they appear in an ELF file, so field width matters.
-struct bpf_load_map_def {
+struct BpfLoadMapDef {
     uint32_t type;
     uint32_t key_size;
     uint32_t value_size;
@@ -137,7 +133,7 @@ static const EbpfMapType linux_map_types[] = {
 
 EbpfMapType get_map_type_linux(uint32_t platform_specific_type) {
     const uint32_t index = platform_specific_type;
-    if ((index == 0) || (index >= sizeof(linux_map_types) / sizeof(linux_map_types[0]))) {
+    if (index == 0 || index >= std::size(linux_map_types)) {
         return linux_map_types[0];
     }
     EbpfMapType type = linux_map_types[index];
@@ -153,9 +149,9 @@ void parse_maps_section_linux(std::vector<EbpfMapDescriptor>& map_descriptors, c
                               const size_t map_def_size, const int map_count, const ebpf_platform_t* platform,
                               const ebpf_verifier_options_t options) {
     // Copy map definitions from the ELF section into a local list.
-    auto mapdefs = std::vector<bpf_load_map_def>();
+    auto mapdefs = std::vector<BpfLoadMapDef>();
     for (int i = 0; i < map_count; i++) {
-        bpf_load_map_def def = {0};
+        BpfLoadMapDef def = {0};
         memcpy(&def, data + i * map_def_size, std::min(map_def_size, sizeof(def)));
         mapdefs.emplace_back(def);
     }
@@ -187,7 +183,7 @@ void resolve_inner_map_references_linux(std::vector<EbpfMapDescriptor>& map_desc
 }
 
 #if __linux__
-static int do_bpf(const bpf_cmd cmd, union bpf_attr& attr) { return syscall(321, cmd, &attr, sizeof(attr)); }
+static int do_bpf(const bpf_cmd cmd, bpf_attr& attr) { return syscall(321, cmd, &attr, sizeof(attr)); }
 #endif
 
 /** Try to allocate a Linux map.
@@ -202,7 +198,7 @@ static int create_map_linux(const uint32_t map_type, const uint32_t key_size, co
     }
 
 #if __linux__
-    union bpf_attr attr {};
+    bpf_attr attr{};
     memset(&attr, '\0', sizeof(attr));
     attr.map_type = map_type;
     attr.key_size = key_size;
@@ -245,10 +241,11 @@ EbpfMapDescriptor& get_map_descriptor_linux(const int map_fd) {
 const ebpf_platform_t g_ebpf_platform_linux = {get_program_type_linux,
                                                get_helper_prototype_linux,
                                                is_helper_usable_linux,
-                                               sizeof(bpf_load_map_def),
+                                               sizeof(BpfLoadMapDef),
                                                parse_maps_section_linux,
                                                get_map_descriptor_linux,
                                                get_map_type_linux,
                                                resolve_inner_map_references_linux,
                                                bpf_conformance_groups_t::default_groups |
                                                    bpf_conformance_groups_t::packet};
+} // namespace prevail

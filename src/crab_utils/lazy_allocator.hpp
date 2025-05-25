@@ -4,7 +4,7 @@
 
 #include <optional>
 
-namespace crab {
+namespace prevail {
 
 /**
  * @brief Lazy allocator for objects of type T. The allocator does not allocate the object until it is first accessed.
@@ -15,7 +15,7 @@ namespace crab {
  * The caller can provide a custom factory to create the object in a specific way.
  */
 template <typename T, T (*factory)() = nullptr>
-class lazy_allocator {
+class LazyAllocator {
     std::optional<T> _value;
 
   public:
@@ -75,4 +75,4 @@ class lazy_allocator {
         return get();
     }
 };
-} // namespace crab
+} // namespace prevail

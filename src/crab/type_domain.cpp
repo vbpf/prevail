@@ -7,44 +7,45 @@
 #include <map>
 #include <optional>
 
+#include "arith/dsl_syntax.hpp"
+#include "arith/variable.hpp"
 #include "crab/array_domain.hpp"
 #include "crab/split_dbm.hpp"
 #include "crab/type_domain.hpp"
 #include "crab/type_encoding.hpp"
-#include "crab/variable.hpp"
+#include "crab/var_registry.hpp"
 #include "crab_utils/debug.hpp"
-#include "dsl_syntax.hpp"
 
-namespace crab {
+namespace prevail {
 
 template <is_enum T>
 static void operator++(T& t) {
     t = static_cast<T>(1 + static_cast<std::underlying_type_t<T>>(t));
 }
 
-std::vector<data_kind_t> iterate_kinds(const data_kind_t lb, const data_kind_t ub) {
+std::vector<DataKind> iterate_kinds(const DataKind lb, const DataKind ub) {
     if (lb > ub) {
         CRAB_ERROR("lower bound ", lb, " is greater than upper bound ", ub);
     }
     if (lb < KIND_MIN || ub > KIND_MAX) {
         CRAB_ERROR("bounds ", lb, " and ", ub, " are out of range");
     }
-    std::vector<data_kind_t> res;
-    for (data_kind_t i = lb; i <= ub; ++i) {
+    std::vector<DataKind> res;
+    for (DataKind i = lb; i <= ub; ++i) {
         res.push_back(i);
     }
     return res;
 }
 
-std::vector<type_encoding_t> iterate_types(const type_encoding_t lb, const type_encoding_t ub) {
+std::vector<TypeEncoding> iterate_types(const TypeEncoding lb, const TypeEncoding ub) {
     if (lb > ub) {
         CRAB_ERROR("lower bound ", lb, " is greater than upper bound ", ub);
     }
     if (lb < T_MIN || ub > T_MAX) {
         CRAB_ERROR("bounds ", lb, " and ", ub, " are out of range");
     }
-    std::vector<type_encoding_t> res;
-    for (type_encoding_t i = lb; i <= ub; ++i) {
+    std::vector<TypeEncoding> res;
+    for (TypeEncoding i = lb; i <= ub; ++i) {
         res.push_back(i);
     }
     return res;
@@ -59,34 +60,34 @@ static constexpr auto S_MAP = "map_fd";
 static constexpr auto S_NUM = "number";
 static constexpr auto S_SHARED = "shared";
 
-std::string name_of(const data_kind_t kind) {
+std::string name_of(const DataKind kind) {
     switch (kind) {
-    case data_kind_t::ctx_offsets: return "ctx_offset";
-    case data_kind_t::map_fds: return "map_fd";
-    case data_kind_t::packet_offsets: return "packet_offset";
-    case data_kind_t::shared_offsets: return "shared_offset";
-    case data_kind_t::shared_region_sizes: return "shared_region_size";
-    case data_kind_t::stack_numeric_sizes: return "stack_numeric_size";
-    case data_kind_t::stack_offsets: return "stack_offset";
-    case data_kind_t::svalues: return "svalue";
-    case data_kind_t::types: return "type";
-    case data_kind_t::uvalues: return "uvalue";
+    case DataKind::ctx_offsets: return "ctx_offset";
+    case DataKind::map_fds: return "map_fd";
+    case DataKind::packet_offsets: return "packet_offset";
+    case DataKind::shared_offsets: return "shared_offset";
+    case DataKind::shared_region_sizes: return "shared_region_size";
+    case DataKind::stack_numeric_sizes: return "stack_numeric_size";
+    case DataKind::stack_offsets: return "stack_offset";
+    case DataKind::svalues: return "svalue";
+    case DataKind::types: return "type";
+    case DataKind::uvalues: return "uvalue";
     }
     return {};
 }
 
-data_kind_t regkind(const std::string& s) {
-    static const std::map<std::string, data_kind_t> string_to_kind{
-        {"type", data_kind_t::types},
-        {"ctx_offset", data_kind_t::ctx_offsets},
-        {"map_fd", data_kind_t::map_fds},
-        {"packet_offset", data_kind_t::packet_offsets},
-        {"shared_offset", data_kind_t::shared_offsets},
-        {"stack_offset", data_kind_t::stack_offsets},
-        {"shared_region_size", data_kind_t::shared_region_sizes},
-        {"stack_numeric_size", data_kind_t::stack_numeric_sizes},
-        {"svalue", data_kind_t::svalues},
-        {"uvalue", data_kind_t::uvalues},
+DataKind regkind(const std::string& s) {
+    static const std::map<std::string, DataKind> string_to_kind{
+        {"type", DataKind::types},
+        {"ctx_offset", DataKind::ctx_offsets},
+        {"map_fd", DataKind::map_fds},
+        {"packet_offset", DataKind::packet_offsets},
+        {"shared_offset", DataKind::shared_offsets},
+        {"stack_offset", DataKind::stack_offsets},
+        {"shared_region_size", DataKind::shared_region_sizes},
+        {"stack_numeric_size", DataKind::stack_numeric_sizes},
+        {"svalue", DataKind::svalues},
+        {"uvalue", DataKind::uvalues},
     };
     if (string_to_kind.contains(s)) {
         return string_to_kind.at(s);
@@ -94,7 +95,7 @@ data_kind_t regkind(const std::string& s) {
     throw std::runtime_error(std::string() + "Bad kind: " + s);
 }
 
-std::ostream& operator<<(std::ostream& os, const type_encoding_t s) {
+std::ostream& operator<<(std::ostream& os, const TypeEncoding s) {
     switch (s) {
     case T_SHARED: return os << S_SHARED;
     case T_STACK: return os << S_STACK;
@@ -108,8 +109,8 @@ std::ostream& operator<<(std::ostream& os, const type_encoding_t s) {
     }
 }
 
-type_encoding_t string_to_type_encoding(const std::string& s) {
-    static std::map<std::string, type_encoding_t> string_to_type{
+TypeEncoding string_to_type_encoding(const std::string& s) {
+    static std::map<std::string, TypeEncoding> string_to_type{
         {S_UNINIT, T_UNINIT}, {S_MAP_PROGRAMS, T_MAP_PROGRAMS},
         {S_MAP, T_MAP},       {S_NUM, T_NUM},
         {S_CTX, T_CTX},       {S_STACK, T_STACK},
@@ -120,27 +121,27 @@ type_encoding_t string_to_type_encoding(const std::string& s) {
     }
     throw std::runtime_error(std::string("Unsupported type name: ") + s);
 }
-reg_pack_t reg_pack(const int i) {
+RegPack reg_pack(const int i) {
     return {
-        variable_t::reg(data_kind_t::svalues, i),
-        variable_t::reg(data_kind_t::uvalues, i),
-        variable_t::reg(data_kind_t::ctx_offsets, i),
-        variable_t::reg(data_kind_t::map_fds, i),
-        variable_t::reg(data_kind_t::packet_offsets, i),
-        variable_t::reg(data_kind_t::shared_offsets, i),
-        variable_t::reg(data_kind_t::stack_offsets, i),
-        variable_t::reg(data_kind_t::types, i),
-        variable_t::reg(data_kind_t::shared_region_sizes, i),
-        variable_t::reg(data_kind_t::stack_numeric_sizes, i),
+        variable_registry->reg(DataKind::svalues, i),
+        variable_registry->reg(DataKind::uvalues, i),
+        variable_registry->reg(DataKind::ctx_offsets, i),
+        variable_registry->reg(DataKind::map_fds, i),
+        variable_registry->reg(DataKind::packet_offsets, i),
+        variable_registry->reg(DataKind::shared_offsets, i),
+        variable_registry->reg(DataKind::stack_offsets, i),
+        variable_registry->reg(DataKind::types, i),
+        variable_registry->reg(DataKind::shared_region_sizes, i),
+        variable_registry->reg(DataKind::stack_numeric_sizes, i),
     };
 }
 
-void TypeDomain::add_extra_invariant(const NumAbsDomain& dst, std::map<variable_t, interval_t>& extra_invariants,
-                                     const variable_t type_variable, const type_encoding_t type, const data_kind_t kind,
+void TypeDomain::add_extra_invariant(const NumAbsDomain& dst, std::map<Variable, Interval>& extra_invariants,
+                                     const Variable type_variable, const TypeEncoding type, const DataKind kind,
                                      const NumAbsDomain& src) const {
     const bool dst_has_type = has_type(dst, type_variable, type);
     const bool src_has_type = has_type(src, type_variable, type);
-    variable_t v = variable_t::kind_var(kind, type_variable);
+    Variable v = variable_registry->kind_var(kind, type_variable);
 
     // If type is contained in exactly one of dst or src,
     // we need to remember the value.
@@ -176,17 +177,17 @@ void TypeDomain::selectively_join_based_on_type(NumAbsDomain& dst, NumAbsDomain&
     // Output:
     //   r1.type={stack,packet}, r1.stack_offset=100, r1.packet_offset=4
 
-    std::map<variable_t, interval_t> extra_invariants;
+    std::map<Variable, Interval> extra_invariants;
     if (!dst.is_bottom()) {
-        for (const variable_t v : variable_t::get_type_variables()) {
-            add_extra_invariant(dst, extra_invariants, v, T_CTX, data_kind_t::ctx_offsets, src);
-            add_extra_invariant(dst, extra_invariants, v, T_MAP, data_kind_t::map_fds, src);
-            add_extra_invariant(dst, extra_invariants, v, T_MAP_PROGRAMS, data_kind_t::map_fds, src);
-            add_extra_invariant(dst, extra_invariants, v, T_PACKET, data_kind_t::packet_offsets, src);
-            add_extra_invariant(dst, extra_invariants, v, T_SHARED, data_kind_t::shared_offsets, src);
-            add_extra_invariant(dst, extra_invariants, v, T_STACK, data_kind_t::stack_offsets, src);
-            add_extra_invariant(dst, extra_invariants, v, T_SHARED, data_kind_t::shared_region_sizes, src);
-            add_extra_invariant(dst, extra_invariants, v, T_STACK, data_kind_t::stack_numeric_sizes, src);
+        for (const Variable v : variable_registry->get_type_variables()) {
+            add_extra_invariant(dst, extra_invariants, v, T_CTX, DataKind::ctx_offsets, src);
+            add_extra_invariant(dst, extra_invariants, v, T_MAP, DataKind::map_fds, src);
+            add_extra_invariant(dst, extra_invariants, v, T_MAP_PROGRAMS, DataKind::map_fds, src);
+            add_extra_invariant(dst, extra_invariants, v, T_PACKET, DataKind::packet_offsets, src);
+            add_extra_invariant(dst, extra_invariants, v, T_SHARED, DataKind::shared_offsets, src);
+            add_extra_invariant(dst, extra_invariants, v, T_STACK, DataKind::stack_offsets, src);
+            add_extra_invariant(dst, extra_invariants, v, T_SHARED, DataKind::shared_region_sizes, src);
+            add_extra_invariant(dst, extra_invariants, v, T_STACK, DataKind::stack_numeric_sizes, src);
         }
     }
 
@@ -203,46 +204,46 @@ void TypeDomain::assign_type(NumAbsDomain& inv, const Reg& lhs, const Reg& rhs) 
     inv.assign(reg_pack(lhs).type, reg_pack(rhs).type);
 }
 
-void TypeDomain::assign_type(NumAbsDomain& inv, const std::optional<variable_t> lhs, const linear_expression_t& t) {
+void TypeDomain::assign_type(NumAbsDomain& inv, const std::optional<Variable> lhs, const LinearExpression& t) {
     inv.assign(lhs, t);
 }
 
-void TypeDomain::assign_type(NumAbsDomain& inv, const Reg& lhs, const std::optional<linear_expression_t>& rhs) {
+void TypeDomain::assign_type(NumAbsDomain& inv, const Reg& lhs, const std::optional<LinearExpression>& rhs) {
     inv.assign(reg_pack(lhs).type, rhs);
 }
 
 void TypeDomain::havoc_type(NumAbsDomain& inv, const Reg& r) { inv.havoc(reg_pack(r).type); }
 
-type_encoding_t TypeDomain::get_type(const NumAbsDomain& inv, const linear_expression_t& v) const {
+TypeEncoding TypeDomain::get_type(const NumAbsDomain& inv, const LinearExpression& v) const {
     const auto res = inv.eval_interval(v).singleton();
     if (!res) {
         return T_UNINIT;
     }
-    return res->narrow<type_encoding_t>();
+    return res->narrow<TypeEncoding>();
 }
 
-type_encoding_t TypeDomain::get_type(const NumAbsDomain& inv, const Reg& r) const {
+TypeEncoding TypeDomain::get_type(const NumAbsDomain& inv, const Reg& r) const {
     const auto res = inv.eval_interval(reg_pack(r).type).singleton();
     if (!res) {
         return T_UNINIT;
     }
-    return res->narrow<type_encoding_t>();
+    return res->narrow<TypeEncoding>();
 }
 
 // Check whether a given type value is within the range of a given type variable's value.
-bool TypeDomain::has_type(const NumAbsDomain& inv, const Reg& r, const type_encoding_t type) const {
-    const interval_t interval = inv.eval_interval(reg_pack(r).type);
+bool TypeDomain::has_type(const NumAbsDomain& inv, const Reg& r, const TypeEncoding type) const {
+    const Interval interval = inv.eval_interval(reg_pack(r).type);
     return interval.contains(type);
 }
 
-bool TypeDomain::has_type(const NumAbsDomain& inv, const linear_expression_t& v, const type_encoding_t type) const {
-    const interval_t interval = inv.eval_interval(v);
+bool TypeDomain::has_type(const NumAbsDomain& inv, const LinearExpression& v, const TypeEncoding type) const {
+    const Interval interval = inv.eval_interval(v);
     return interval.contains(type);
 }
 
 NumAbsDomain TypeDomain::join_over_types(const NumAbsDomain& inv, const Reg& reg,
-                                         const std::function<void(NumAbsDomain&, type_encoding_t)>& transition) const {
-    interval_t types = inv.eval_interval(reg_pack(reg).type);
+                                         const std::function<void(NumAbsDomain&, TypeEncoding)>& transition) const {
+    Interval types = inv.eval_interval(reg_pack(reg).type);
     if (types.is_bottom()) {
         return NumAbsDomain::bottom();
     }
@@ -253,7 +254,7 @@ NumAbsDomain TypeDomain::join_over_types(const NumAbsDomain& inv, const Reg& reg
     }
     NumAbsDomain res = NumAbsDomain::bottom();
     auto [lb, ub] = types.bound(T_MIN, T_MAX);
-    for (type_encoding_t type : iterate_types(lb, ub)) {
+    for (TypeEncoding type : iterate_types(lb, ub)) {
         NumAbsDomain tmp(inv);
         transition(tmp, type);
         selectively_join_based_on_type(res, std::move(tmp)); // res |= tmp;
@@ -261,7 +262,7 @@ NumAbsDomain TypeDomain::join_over_types(const NumAbsDomain& inv, const Reg& reg
     return res;
 }
 
-NumAbsDomain TypeDomain::join_by_if_else(const NumAbsDomain& inv, const linear_constraint_t& condition,
+NumAbsDomain TypeDomain::join_by_if_else(const NumAbsDomain& inv, const LinearConstraint& condition,
                                          const std::function<void(NumAbsDomain&)>& if_true,
                                          const std::function<void(NumAbsDomain&)>& if_false) const {
     NumAbsDomain true_case(inv.when(condition));
@@ -273,8 +274,8 @@ NumAbsDomain TypeDomain::join_by_if_else(const NumAbsDomain& inv, const linear_c
     return true_case | false_case;
 }
 
-static linear_constraint_t eq_types(const Reg& a, const Reg& b) {
-    using namespace crab::dsl_syntax;
+static LinearConstraint eq_types(const Reg& a, const Reg& b) {
+    using namespace dsl_syntax;
     return eq(reg_pack(a).type, reg_pack(b).type);
 }
 
@@ -282,14 +283,13 @@ bool TypeDomain::same_type(const NumAbsDomain& inv, const Reg& a, const Reg& b) 
     return inv.entail(eq_types(a, b));
 }
 
-bool TypeDomain::implies_type(const NumAbsDomain& inv, const linear_constraint_t& a,
-                              const linear_constraint_t& b) const {
+bool TypeDomain::implies_type(const NumAbsDomain& inv, const LinearConstraint& a, const LinearConstraint& b) const {
     return inv.when(a).entail(b);
 }
 
 bool TypeDomain::is_in_group(const NumAbsDomain& inv, const Reg& r, const TypeGroup group) const {
-    using namespace crab::dsl_syntax;
-    const variable_t t = reg_pack(r).type;
+    using namespace dsl_syntax;
+    const Variable t = reg_pack(r).type;
     switch (group) {
     case TypeGroup::number: return inv.entail(t == T_NUM);
     case TypeGroup::map_fd: return inv.entail(t == T_MAP);
@@ -308,7 +308,7 @@ bool TypeDomain::is_in_group(const NumAbsDomain& inv, const Reg& r, const TypeGr
     }
 }
 
-std::string typeset_to_string(const std::vector<type_encoding_t>& items) {
+std::string typeset_to_string(const std::vector<TypeEncoding>& items) {
     std::stringstream ss;
     ss << "{";
     for (auto it = items.begin(); it != items.end(); ++it) {
@@ -335,7 +335,7 @@ bool is_singleton_type(const TypeGroup t) {
 }
 
 std::ostream& operator<<(std::ostream& os, const TypeGroup ts) {
-    using namespace crab;
+    using namespace prevail;
     static const std::map<TypeGroup, std::string> string_to_type{
         {TypeGroup::number, S_NUM},
         {TypeGroup::map_fd, S_MAP},
@@ -357,4 +357,4 @@ std::ostream& operator<<(std::ostream& os, const TypeGroup ts) {
     CRAB_ERROR("Unsupported type group", ts);
 }
 
-} // namespace crab
+} // namespace prevail

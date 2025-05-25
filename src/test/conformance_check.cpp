@@ -15,6 +15,8 @@
 #include "ebpf_verifier.hpp"
 #include "ebpf_yaml.hpp"
 
+using namespace prevail;
+
 /**
  * @brief Read in a string of hex bytes and return a vector of bytes.
  *

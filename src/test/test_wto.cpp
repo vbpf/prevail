@@ -2,24 +2,23 @@
 // SPDX-License-Identifier: MIT
 #include <catch2/catch_all.hpp>
 
-#include "crab/cfg.hpp"
-#include "crab/wto.hpp"
+#include "cfg/cfg.hpp"
+#include "cfg/wto.hpp"
 
-using crab::label_t;
-using crab::wto_t;
+using namespace prevail;
 
 TEST_CASE("wto figure 1", "[wto]") {
     // Construct the example graph in figure 1 of Bourdoncle,
     // "Efficient chaotic iteration strategies with widenings", 1993.
-    const wto_t wto(crab::cfg_from_adjacency_list({{label_t::entry, {label_t{1}}},
-                                                   {label_t{1}, {label_t{2}}},
-                                                   {label_t{2}, {label_t{3}}},
-                                                   {label_t{3}, {label_t{4}}},
-                                                   {label_t{4}, {label_t{5}, label_t{7}}},
-                                                   {label_t{5}, {label_t{6}}},
-                                                   {label_t{6}, {label_t{5}, label_t{7}}},
-                                                   {label_t{7}, {label_t{3}, label_t{8}}},
-                                                   {label_t{8}, {label_t::exit}}}));
+    const Wto wto(cfg_from_adjacency_list({{Label::entry, {Label{1}}},
+                                           {Label{1}, {Label{2}}},
+                                           {Label{2}, {Label{3}}},
+                                           {Label{3}, {Label{4}}},
+                                           {Label{4}, {Label{5}, Label{7}}},
+                                           {Label{5}, {Label{6}}},
+                                           {Label{6}, {Label{5}, Label{7}}},
+                                           {Label{7}, {Label{3}, Label{8}}},
+                                           {Label{8}, {Label::exit}}}));
 
     std::ostringstream os;
     os << wto;
@@ -29,12 +28,12 @@ TEST_CASE("wto figure 1", "[wto]") {
 TEST_CASE("wto figure 2a", "[wto]") {
     // Construct the example graph in figure 2a of Bourdoncle,
     // "Efficient chaotic iteration strategies with widenings", 1993.
-    const wto_t wto(crab::cfg_from_adjacency_list({{label_t::entry, {label_t{1}}},
-                                                   {label_t{1}, {label_t{2}, label_t{4}}},
-                                                   {label_t{2}, {label_t{3}}},
-                                                   {label_t{3}, {label_t::exit}},
-                                                   {label_t{4}, {label_t{3}, label_t{5}}},
-                                                   {label_t{5}, {label_t{4}}}}));
+    const Wto wto(cfg_from_adjacency_list({{Label::entry, {Label{1}}},
+                                           {Label{1}, {Label{2}, Label{4}}},
+                                           {Label{2}, {Label{3}}},
+                                           {Label{3}, {Label::exit}},
+                                           {Label{4}, {Label{3}, Label{5}}},
+                                           {Label{5}, {Label{4}}}}));
 
     std::ostringstream os;
     os << wto;
@@ -44,11 +43,11 @@ TEST_CASE("wto figure 2a", "[wto]") {
 TEST_CASE("wto figure 2b", "[wto]") {
     // Construct the example graph in figure 2b of Bourdoncle,
     // "Efficient chaotic iteration strategies with widenings", 1993.
-    const wto_t wto(crab::cfg_from_adjacency_list({{label_t::entry, {label_t{1}}},
-                                                   {label_t{1}, {label_t{2}, label_t{4}}},
-                                                   {label_t{2}, {label_t{3}}},
-                                                   {label_t{3}, {label_t{1}, label_t::exit}},
-                                                   {label_t{4}, {label_t{3}}}}));
+    const Wto wto(cfg_from_adjacency_list({{Label::entry, {Label{1}}},
+                                           {Label{1}, {Label{2}, Label{4}}},
+                                           {Label{2}, {Label{3}}},
+                                           {Label{3}, {Label{1}, Label::exit}},
+                                           {Label{4}, {Label{3}}}}));
 
     std::ostringstream os;
     os << wto;
