@@ -111,6 +111,7 @@ file(GLOB LIB_SRC
 if (VERIFIER_ENABLE_TESTS)
     file(GLOB ALL_TEST
             "./src/test/test_conformance.cpp"
+            "./src/test/test_dsu.cpp"
             "./src/test/test_marshal.cpp"
             "./src/test/test_print.cpp"
             "./src/test/test_verify.cpp"
