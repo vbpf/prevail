@@ -153,6 +153,20 @@ dot -Tpdf cfg.dot > cfg.pdf
 
 </details>
 
+## Running unit tests
+
+Build with `VERIFIER_ENABLE_TESTS=ON` to produce the `tests` binary. Run the
+suite sequentially using:
+```bash
+./tests -d yes
+```
+
+For faster execution, `scripts/run-tests-parallel.sh` splits the Catch2 suite
+across available CPUs and runs the shards concurrently:
+```bash
+scripts/run-tests-parallel.sh -d yes
+```
+
 ## Testing the Linux verifier
 
 To run the Linux verifier, you must use `sudo`:

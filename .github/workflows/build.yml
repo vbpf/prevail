@@ -52,7 +52,7 @@ jobs:
 
       - name: Run unit tests
         if: ${{matrix.target == 'tests'}}
-        run: ./tests -d yes
+        run: scripts/run-tests-parallel.sh -d yes
 
       - name: Test for memory leaks
         if: ${{matrix.target == 'tests'}}
