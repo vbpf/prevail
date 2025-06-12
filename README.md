@@ -166,6 +166,10 @@ across available CPUs and runs the shards concurrently:
 ```bash
 scripts/run-tests-parallel.sh -d yes
 ```
+The equivalent PowerShell script for Windows is `scripts/run-tests-parallel.ps1`:
+```powershell
+scripts/run-tests-parallel.ps1 -d yes
+```
 
 ## Testing the Linux verifier
 

@@ -88,4 +88,4 @@ jobs:
 
       - name: Run unit tests
         if: ${{matrix.target == 'tests'}}
-        run: ./${{env.BUILD_CONFIGURATION}}/tests -d yes
+        run: ./scripts/run-tests-parallel.ps1 -d yes
