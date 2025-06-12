@@ -14,11 +14,18 @@ if (-not (Test-Path $testBin)) {
     exit 1
 }
 
-$jobs = [int](if ($env:NUM_JOBS) { $env:NUM_JOBS } else { [Environment]::ProcessorCount })
+$jobs = if ($env:NUM_JOBS) {
+    [int]$env:NUM_JOBS
+} else {
+    [Environment]::ProcessorCount
+}
 
 $procs = @()
 for ($i = 0; $i -lt $jobs; $i++) {
-    $arguments = "--shard-count $jobs --shard-index $i" + (if ($args) { ' ' + ($args -join ' ') } else { '' })
+    $arguments = "--shard-count $jobs --shard-index $i"
+    if ($args.Count -gt 0) {
+        $arguments += " " + ($args -join ' ')
+    }
     $procs += Start-Process -FilePath $testBin -ArgumentList $arguments -NoNewWindow -PassThru
 }
 
