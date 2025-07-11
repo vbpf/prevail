@@ -7,7 +7,7 @@
 
 #include "arith/variable.hpp"
 #include "crab/array_domain.hpp"
-#include "crab/type_domain.hpp"
+#include "crab/type_equality_domain.hpp"
 #include "string_constraints.hpp"
 
 namespace prevail {
@@ -51,6 +51,9 @@ class EbpfDomain final {
     bool is_top() const;
     bool operator<=(const EbpfDomain& other) const;
     bool operator==(const EbpfDomain& other) const;
+    void add_extra_invariant(const NumAbsDomain& dst, std::map<Variable, Interval>& extra_invariants,
+                             Variable type_variable, TypeEncoding type, DataKind kind, const NumAbsDomain& src);
+    void selectively_join_based_on_type(NumAbsDomain& dst, NumAbsDomain&& src);
     void operator|=(EbpfDomain&& other);
     void operator|=(const EbpfDomain& other);
     EbpfDomain operator|(EbpfDomain&& other) const;
@@ -104,7 +107,7 @@ class EbpfDomain final {
     /// while dealing with overlapping byte ranges.
     ArrayDomain stack;
 
-    TypeDomain type_inv;
+    EqualityTypeDomain type_inv;
 };
 
 } // namespace prevail

@@ -334,6 +334,25 @@ bool is_singleton_type(const TypeGroup t) {
     }
 }
 
+bool has_type(TypeGroup t, TypeEncoding enc) {
+    switch (t) {
+    case TypeGroup::number: return enc == T_NUM;
+    case TypeGroup::map_fd: return enc == T_MAP;
+    case TypeGroup::map_fd_programs: return enc == T_MAP_PROGRAMS;
+    case TypeGroup::ctx: return enc == T_CTX;
+    case TypeGroup::packet: return enc == T_PACKET;
+    case TypeGroup::stack: return enc == T_STACK;
+    case TypeGroup::shared: return enc == T_SHARED;
+    case TypeGroup::mem: return (enc >= T_PACKET && enc <= T_SHARED);
+    case TypeGroup::pointer: return (enc >= T_CTX && enc <= T_SHARED);
+    case TypeGroup::ptr_or_num: return (enc >= T_NUM && enc <= T_SHARED);
+    case TypeGroup::stack_or_packet: return (enc >= T_PACKET && enc <= T_STACK);
+    case TypeGroup::singleton_ptr: return (enc >= T_CTX && enc <= T_PACKET);
+    case TypeGroup::mem_or_num: return (enc >= T_NUM && enc <= T_SHARED);
+    default: CRAB_ERROR("Unsupported type group", t);
+    }
+}
+
 std::ostream& operator<<(std::ostream& os, const TypeGroup ts) {
     using namespace prevail;
     static const std::map<TypeGroup, std::string> string_to_type{

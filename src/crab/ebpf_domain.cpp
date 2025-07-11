@@ -14,6 +14,7 @@
 #include "config.hpp"
 #include "crab/array_domain.hpp"
 #include "crab/ebpf_domain.hpp"
+#include "crab/type_domain.hpp"
 #include "crab/var_registry.hpp"
 #include "string_constraints.hpp"
 
@@ -32,12 +33,33 @@ std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg, con
     }
 }
 
-std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg, const NumAbsDomain& inv) const {
-    return get_type_offset_variable(reg, type_inv.get_type(inv, reg_pack(reg).type));
+static std::optional<TypeEncoding> as_singleton_type(const TypeGroup typegroup) {
+    switch (typegroup) {
+    case TypeGroup::number: return T_NUM;
+    case TypeGroup::map_fd: return T_MAP;
+    case TypeGroup::map_fd_programs: return T_MAP_PROGRAMS;
+    case TypeGroup::ctx: return T_CTX;
+    case TypeGroup::packet: return T_PACKET;
+    case TypeGroup::stack: return T_STACK;
+    case TypeGroup::shared: return T_SHARED;
+    case TypeGroup::mem:
+    case TypeGroup::mem_or_num:
+    case TypeGroup::pointer:
+    case TypeGroup::ptr_or_num:
+    case TypeGroup::stack_or_packet:
+    case TypeGroup::singleton_ptr:
+    case TypeGroup::empty:
+    case TypeGroup::uninit: return std::nullopt; // Not a singleton type.
+    default: CRAB_ERROR("Unknown TypeGroup in as_singleton_type", typegroup);
+    }
 }
 
 std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg) const {
-    return get_type_offset_variable(reg, m_inv);
+    const TypeGroup typegroup = type_inv.get_var_type(reg_pack(reg).type);
+    if (const auto type = as_singleton_type(typegroup)) {
+        return get_type_offset_variable(reg, *type);
+    }
+    return {};
 }
 
 StringInvariant EbpfDomain::to_set() const { return m_inv.to_set() + stack.to_set(); }
@@ -75,6 +97,70 @@ bool EbpfDomain::operator==(const EbpfDomain& other) const {
     return stack == other.stack && m_inv <= other.m_inv && other.m_inv <= m_inv;
 }
 
+void EbpfDomain::add_extra_invariant(const NumAbsDomain& dst, std::map<Variable, Interval>& extra_invariants,
+                                     const Variable type_variable, const TypeEncoding type, const DataKind kind,
+                                     const NumAbsDomain& src) {
+    const bool dst_has_type = type_inv.has_type(dst, type_variable, type);
+    const bool src_has_type = type_inv.has_type(src, type_variable, type);
+    Variable v = variable_registry->kind_var(kind, type_variable);
+
+    // If type is contained in exactly one of dst or src,
+    // we need to remember the value.
+    if (dst_has_type && !src_has_type) {
+        extra_invariants.emplace(v, dst.eval_interval(v));
+    } else if (!dst_has_type && src_has_type) {
+        extra_invariants.emplace(v, src.eval_interval(v));
+    }
+}
+
+void EbpfDomain::selectively_join_based_on_type(NumAbsDomain& dst, NumAbsDomain&& src) {
+    // Some variables are type-specific.  Type-specific variables
+    // for a register can exist in the domain whenever the associated
+    // type value is present in the register's types interval (and the
+    // value is not Top), and are absent otherwise.  That is, we want
+    // to keep track of the implications of the form
+    // "if register R has type=T then R.T_offset has value ...".
+    //
+    // If a type value is legal in exactly one of the two domains, a
+    // normal join operation would remove any type-specific variables
+    // from the resulting merged domain since absence from the other
+    // would be interpreted to mean Top.
+    //
+    // However, when the type value is not present in one domain,
+    // any type-specific variables for that type are instead to be
+    // interpreted as Bottom, so we want to preserve the values of any
+    // type-specific variables from the other domain where the type
+    // value is legal.
+    //
+    // Example input:
+    //   r1.type=stack, r1.stack_offset=100
+    //   r1.type=packet, r1.packet_offset=4
+    // Output:
+    //   r1.type={stack,packet}, r1.stack_offset=100, r1.packet_offset=4
+
+    std::map<Variable, Interval> extra_invariants;
+    if (!dst.is_bottom()) {
+        for (const Variable v : variable_registry->get_type_variables()) {
+            add_extra_invariant(dst, extra_invariants, v, T_CTX, DataKind::ctx_offsets, src);
+            add_extra_invariant(dst, extra_invariants, v, T_MAP, DataKind::map_fds, src);
+            add_extra_invariant(dst, extra_invariants, v, T_MAP_PROGRAMS, DataKind::map_fds, src);
+            add_extra_invariant(dst, extra_invariants, v, T_PACKET, DataKind::packet_offsets, src);
+            add_extra_invariant(dst, extra_invariants, v, T_SHARED, DataKind::shared_offsets, src);
+            add_extra_invariant(dst, extra_invariants, v, T_STACK, DataKind::stack_offsets, src);
+            add_extra_invariant(dst, extra_invariants, v, T_SHARED, DataKind::shared_region_sizes, src);
+            add_extra_invariant(dst, extra_invariants, v, T_STACK, DataKind::stack_numeric_sizes, src);
+        }
+    }
+
+    // Do a normal join operation on the domain.
+    dst |= std::move(src);
+
+    // Now add in the extra invariants saved above.
+    for (const auto& [variable, interval] : extra_invariants) {
+        dst.set(variable, interval);
+    }
+}
+
 void EbpfDomain::operator|=(EbpfDomain&& other) {
     if (is_bottom()) {
         *this = std::move(other);
@@ -84,7 +170,7 @@ void EbpfDomain::operator|=(EbpfDomain&& other) {
         return;
     }
 
-    type_inv.selectively_join_based_on_type(m_inv, std::move(other.m_inv));
+    selectively_join_based_on_type(m_inv, std::move(other.m_inv));
 
     stack |= std::move(other.stack);
 }
@@ -335,7 +421,7 @@ EbpfDomain EbpfDomain::setup_entry(const bool init_r1) {
     inv.m_inv.assign(r10.stack_offset, EBPF_TOTAL_STACK_SIZE);
     // stack_numeric_size would be 0, but TOP has the same result
     // so no need to assign it.
-    inv.type_inv.assign_type(inv.m_inv, r10_reg, T_STACK);
+    inv.type_inv.assign_concrete_type(r10.type, T_STACK);
 
     if (init_r1) {
         const auto r1 = reg_pack(R1_ARG);
@@ -343,7 +429,7 @@ EbpfDomain EbpfDomain::setup_entry(const bool init_r1) {
         inv.m_inv.add_constraint(1 <= r1.svalue);
         inv.m_inv.add_constraint(r1.svalue <= PTR_MAX);
         inv.m_inv.assign(r1.ctx_offset, 0);
-        inv.type_inv.assign_type(inv.m_inv, r1_reg, T_CTX);
+        inv.type_inv.assign_concrete_type(r1.type, T_CTX);
     }
 
     inv.initialize_packet();

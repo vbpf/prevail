@@ -50,21 +50,31 @@ std::ostream& operator<<(std::ostream& os, TypeEncoding s);
 TypeEncoding string_to_type_encoding(const std::string& s);
 
 enum class TypeGroup {
+    empty,
+    uninit,
+
+    // Concrete/Conceptual Groups
     number,
-    map_fd,
-    ctx,             ///< pointer to the special memory region named 'ctx'
-    packet,          ///< pointer to the packet
-    stack,           ///< pointer to the stack
-    shared,          ///< pointer to shared memory
-    map_fd_programs, ///< reg == T_MAP_PROGRAMS
-    mem,             ///< shared | stack | packet = reg >= T_PACKET
-    mem_or_num,      ///< reg >= T_NUM && reg != T_CTX
-    pointer,         ///< reg >= T_CTX
-    ptr_or_num,      ///< reg >= T_NUM
-    stack_or_packet, ///< reg <= T_STACK && reg >= T_PACKET
-    singleton_ptr,   ///< reg <= T_STACK && reg >= T_CTX
+    map_fd,          // E.g., for BPF_MAP_TYPE_ARRAY, BPF_MAP_TYPE_HASH
+    map_fd_programs, // E.g., for BPF_MAP_TYPE_PROG_ARRAY
+    ctx,
+    packet,
+    stack,
+    shared,
+
+    // Composed Groups - these are distinct elements in our lattice
+    mem,             // stack | packet | shared
+    pointer,         // ctx | mem
+    ptr_or_num,      // pointer | number
+    stack_or_packet, // stack | packet
+    singleton_ptr,   // ctx | stack | packet
+    mem_or_num,      // number | mem
+
+    any, // Top of the lattice
 };
 
 bool is_singleton_type(TypeGroup t);
+bool has_type(TypeGroup t, TypeEncoding enc);
+
 std::ostream& operator<<(std::ostream& os, TypeGroup ts);
 } // namespace prevail
