@@ -177,12 +177,12 @@ void EbpfChecker::check_access_shared(NumAbsDomain& inv, const LinearExpression&
 
 void EbpfChecker::operator()(const Comparable& s) const {
     using namespace dsl_syntax;
-    if (type_inv.same_type(m_inv, s.r1, s.r2)) {
+    if (type_inv.same_type(s.r1, s.r2)) {
         // Same type. If both are numbers, that's okay. Otherwise:
-        const auto inv = m_inv.when(reg_pack(s.r2).type != T_NUM);
+        auto inv = m_inv.when(reg_pack(s.r2).type != T_NUM);
+        TypeDomain tinv(inv);
         // We must check that they belong to a singleton region:
-        if (!type_inv.is_in_group(inv, s.r1, TypeGroup::singleton_ptr) &&
-            !type_inv.is_in_group(inv, s.r1, TypeGroup::map_fd)) {
+        if (!tinv.is_in_group(s.r1, TypeGroup::singleton_ptr) && !tinv.is_in_group(s.r1, TypeGroup::map_fd)) {
             require("Cannot subtract pointers to non-singleton regions");
             return;
         }
@@ -197,7 +197,7 @@ void EbpfChecker::operator()(const Comparable& s) const {
 }
 
 void EbpfChecker::operator()(const Addable& s) const {
-    if (!type_inv.implies_type(m_inv, type_is_pointer(reg_pack(s.ptr)), type_is_number(s.num))) {
+    if (!type_inv.implies_type(type_is_pointer(reg_pack(s.ptr)), type_is_number(s.num))) {
         require("Only numbers can be added to pointers");
     }
 }
@@ -205,7 +205,7 @@ void EbpfChecker::operator()(const Addable& s) const {
 void EbpfChecker::operator()(const ValidDivisor& s) const {
     using namespace dsl_syntax;
     const auto reg = reg_pack(s.reg);
-    if (!type_inv.implies_type(m_inv, type_is_pointer(reg), type_is_number(s.reg))) {
+    if (!type_inv.implies_type(type_is_pointer(reg), type_is_number(s.reg))) {
         require("Only numbers can be used as divisors");
     }
     if (!thread_local_options.allow_division_by_zero) {
@@ -215,13 +215,13 @@ void EbpfChecker::operator()(const ValidDivisor& s) const {
 }
 
 void EbpfChecker::operator()(const ValidStore& s) const {
-    if (!type_inv.implies_type(m_inv, type_is_not_stack(reg_pack(s.mem)), type_is_number(s.val))) {
+    if (!type_inv.implies_type(type_is_not_stack(reg_pack(s.mem)), type_is_number(s.val))) {
         require("Only numbers can be stored to externally-visible regions");
     }
 }
 
 void EbpfChecker::operator()(const TypeConstraint& s) const {
-    if (!type_inv.is_in_group(m_inv, s.reg, s.types)) {
+    if (!type_inv.is_in_group(s.reg, s.types)) {
         require("Invalid type");
     }
 }
@@ -298,7 +298,7 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
         width = value_size->narrow<int>();
     }
 
-    m_inv = type_inv.join_over_types(m_inv, s.access_reg, [&](NumAbsDomain& inv, TypeEncoding access_reg_type) {
+    m_inv = type_inv.join_over_types(s.access_reg, [&](NumAbsDomain& inv, TypeEncoding access_reg_type) {
         if (access_reg_type == T_STACK) {
             Variable lb = access_reg.stack_offset;
             LinearExpression ub = lb + width;
@@ -364,7 +364,7 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
 
     const auto reg = reg_pack(s.reg);
     // join_over_types instead of simple iteration is only needed for assume-assert
-    m_inv = type_inv.join_over_types(m_inv, s.reg, [&](NumAbsDomain& inv, TypeEncoding type) {
+    m_inv = type_inv.join_over_types(s.reg, [&](NumAbsDomain& inv, TypeEncoding type) {
         switch (type) {
         case T_PACKET: {
             auto [lb, ub] = lb_ub_access_pair(s, reg.packet_offset);

@@ -61,7 +61,7 @@ class EbpfTransformer final {
     void havoc_subprogram_stack(const std::string& prefix);
     void forget_packet_pointers();
     void do_load_mapfd(const Reg& dst_reg, int mapfd, bool maybe_null);
-    void do_load_map_address(const Reg& dst_reg, const int mapfd, int32_t offset);
+    void do_load_map_address(const Reg& dst_reg, int mapfd, int32_t offset);
 
     void assign_valid_ptr(const Reg& dst_reg, bool maybe_null);
 
@@ -125,7 +125,7 @@ void EbpfTransformer::scratch_caller_saved_registers() {
     for (int i = R1_ARG; i <= R5_ARG; i++) {
         Reg r{gsl::narrow<uint8_t>(i)};
         havoc_register(m_inv, r);
-        type_inv.havoc_type(m_inv, r);
+        type_inv.havoc_type(r);
     }
 }
 
@@ -172,7 +172,7 @@ void EbpfTransformer::forget_packet_pointers() {
     using namespace dsl_syntax;
 
     for (const Variable type_variable : variable_registry->get_type_variables()) {
-        if (type_inv.has_type(m_inv, type_variable, T_PACKET)) {
+        if (type_inv.has_type(type_variable, T_PACKET)) {
             m_inv.havoc(variable_registry->kind_var(DataKind::types, type_variable));
             m_inv.havoc(variable_registry->kind_var(DataKind::packet_offsets, type_variable));
             m_inv.havoc(variable_registry->kind_var(DataKind::svalues, type_variable));
@@ -234,8 +234,8 @@ void EbpfTransformer::operator()(const Assume& s) {
     if (const auto psrc_reg = std::get_if<Reg>(&cond.right)) {
         const auto src_reg = *psrc_reg;
         const auto src = reg_pack(src_reg);
-        if (type_inv.same_type(m_inv, cond.left, std::get<Reg>(cond.right))) {
-            m_inv = type_inv.join_over_types(m_inv, cond.left, [&](NumAbsDomain& inv, const TypeEncoding type) {
+        if (type_inv.same_type(cond.left, std::get<Reg>(cond.right))) {
+            m_inv = type_inv.join_over_types(cond.left, [&](NumAbsDomain& inv, const TypeEncoding type) {
                 if (type == T_NUM) {
                     for (const LinearConstraint& cst :
                          inv->assume_cst_reg(cond.op, cond.is64, dst.svalue, dst.uvalue, src.svalue, src.uvalue)) {
@@ -388,7 +388,7 @@ void EbpfTransformer::operator()(const Packet& a) {
     }
     const auto reg = reg_pack(R0_RETURN_VALUE);
     constexpr Reg r0_reg{R0_RETURN_VALUE};
-    type_inv.assign_type(m_inv, r0_reg, T_NUM);
+    type_inv.assign_type(r0_reg, T_NUM);
     havoc_offsets(r0_reg);
     m_inv.havoc(reg.svalue);
     m_inv.havoc(reg.uvalue);
@@ -397,10 +397,11 @@ void EbpfTransformer::operator()(const Packet& a) {
 
 void EbpfTransformer::do_load_stack(NumAbsDomain& inv, const Reg& target_reg, const LinearExpression& addr,
                                     const int width, const Reg& src_reg) {
-    type_inv.assign_type(inv, target_reg, stack.load(inv, DataKind::types, addr, width));
+    TypeDomain tinv(inv);
+    tinv.assign_type(target_reg, stack.load(inv, DataKind::types, addr, width));
     using namespace dsl_syntax;
     if (inv.entail(width <= reg_pack(src_reg).stack_numeric_size)) {
-        type_inv.assign_type(inv, target_reg, T_NUM);
+        tinv.assign_type(target_reg, T_NUM);
     }
 
     const RegPack& target = reg_pack(target_reg);
@@ -413,20 +414,20 @@ void EbpfTransformer::do_load_stack(NumAbsDomain& inv, const Reg& target_reg, co
         inv.assign(target.svalue, sresult);
         inv.assign(target.uvalue, uresult);
 
-        if (type_inv.has_type(inv, target.type, T_CTX)) {
+        if (tinv.has_type(target.type, T_CTX)) {
             inv.assign(target.ctx_offset, stack.load(inv, DataKind::ctx_offsets, addr, width));
         }
-        if (type_inv.has_type(inv, target.type, T_MAP) || type_inv.has_type(inv, target.type, T_MAP_PROGRAMS)) {
+        if (tinv.has_type(target.type, T_MAP) || tinv.has_type(target.type, T_MAP_PROGRAMS)) {
             inv.assign(target.map_fd, stack.load(inv, DataKind::map_fds, addr, width));
         }
-        if (type_inv.has_type(inv, target.type, T_PACKET)) {
+        if (tinv.has_type(target.type, T_PACKET)) {
             inv.assign(target.packet_offset, stack.load(inv, DataKind::packet_offsets, addr, width));
         }
-        if (type_inv.has_type(inv, target.type, T_SHARED)) {
+        if (tinv.has_type(target.type, T_SHARED)) {
             inv.assign(target.shared_offset, stack.load(inv, DataKind::shared_offsets, addr, width));
             inv.assign(target.shared_region_size, stack.load(inv, DataKind::shared_region_sizes, addr, width));
         }
-        if (type_inv.has_type(inv, target.type, T_STACK)) {
+        if (tinv.has_type(target.type, T_STACK)) {
             inv.assign(target.stack_offset, stack.load(inv, DataKind::stack_offsets, addr, width));
             inv.assign(target.stack_numeric_size, stack.load(inv, DataKind::stack_numeric_sizes, addr, width));
         }
@@ -441,14 +442,14 @@ void EbpfTransformer::do_load_ctx(NumAbsDomain& inv, const Reg& target_reg, cons
     if (inv.is_bottom()) {
         return;
     }
-
+    TypeDomain tinv(inv);
     const ebpf_context_descriptor_t* desc = thread_local_program_info->type.context_descriptor;
 
     const RegPack& target = reg_pack(target_reg);
 
     if (desc->end < 0) {
         havoc_register(inv, target_reg);
-        type_inv.assign_type(inv, target_reg, T_NUM);
+        tinv.assign_type(target_reg, T_NUM);
         return;
     }
 
@@ -461,9 +462,9 @@ void EbpfTransformer::do_load_ctx(NumAbsDomain& inv, const Reg& target_reg, cons
 
     if (!maybe_addr) {
         if (may_touch_ptr) {
-            type_inv.havoc_type(inv, target_reg);
+            tinv.havoc_type(target_reg);
         } else {
-            type_inv.assign_type(inv, target_reg, T_NUM);
+            tinv.assign_type(target_reg, T_NUM);
         }
         return;
     }
@@ -489,14 +490,14 @@ void EbpfTransformer::do_load_ctx(NumAbsDomain& inv, const Reg& target_reg, cons
         }
     } else {
         if (may_touch_ptr) {
-            type_inv.havoc_type(inv, target_reg);
+            tinv.havoc_type(target_reg);
         } else {
-            type_inv.assign_type(inv, target_reg, T_NUM);
+            tinv.assign_type(target_reg, T_NUM);
         }
         return;
     }
     if (width == offset_width) {
-        type_inv.assign_type(inv, target_reg, T_PACKET);
+        tinv.assign_type(target_reg, T_PACKET);
         inv.add_constraint(4098 <= target.svalue);
         inv.add_constraint(target.svalue <= PTR_MAX);
     }
@@ -509,7 +510,7 @@ void EbpfTransformer::do_load_packet_or_shared(NumAbsDomain& inv, const Reg& tar
     }
     const RegPack& target = reg_pack(target_reg);
 
-    type_inv.assign_type(inv, target_reg, T_NUM);
+    TypeDomain(inv).assign_type(target_reg, T_NUM);
     havoc_register(inv, target_reg);
 
     // A 1 or 2 byte copy results in a limited range of values that may be used as array indices.
@@ -533,7 +534,7 @@ void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
         return;
     }
 
-    m_inv = type_inv.join_over_types(m_inv, b.access.basereg, [&](NumAbsDomain& inv, TypeEncoding type) {
+    m_inv = type_inv.join_over_types(b.access.basereg, [&](NumAbsDomain& inv, TypeEncoding type) {
         switch (type) {
         case T_UNINIT: return;
         case T_MAP: return;
@@ -566,36 +567,36 @@ void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
 void EbpfTransformer::do_store_stack(NumAbsDomain& inv, const LinearExpression& addr, const int width,
                                      const LinearExpression& val_type, const LinearExpression& val_svalue,
                                      const LinearExpression& val_uvalue, const std::optional<RegPack>& opt_val_reg) {
+    TypeDomain tinv(inv);
     {
         const std::optional<Variable> var = stack.store_type(inv, addr, width, val_type);
-        type_inv.assign_type(inv, var, val_type);
+        tinv.assign_type(var, val_type);
     }
     if (width == 8) {
         inv.assign(stack.store(inv, DataKind::svalues, addr, width, val_svalue), val_svalue);
         inv.assign(stack.store(inv, DataKind::uvalues, addr, width, val_uvalue), val_uvalue);
 
-        if (opt_val_reg && type_inv.has_type(m_inv, val_type, T_CTX)) {
+        if (opt_val_reg && tinv.has_type(val_type, T_CTX)) {
             inv.assign(stack.store(inv, DataKind::ctx_offsets, addr, width, opt_val_reg->ctx_offset),
                        opt_val_reg->ctx_offset);
         } else {
             stack.havoc(inv, DataKind::ctx_offsets, addr, width);
         }
 
-        if (opt_val_reg &&
-            (type_inv.has_type(m_inv, val_type, T_MAP) || type_inv.has_type(m_inv, val_type, T_MAP_PROGRAMS))) {
+        if (opt_val_reg && (tinv.has_type(val_type, T_MAP) || tinv.has_type(val_type, T_MAP_PROGRAMS))) {
             inv.assign(stack.store(inv, DataKind::map_fds, addr, width, opt_val_reg->map_fd), opt_val_reg->map_fd);
         } else {
             stack.havoc(inv, DataKind::map_fds, addr, width);
         }
 
-        if (opt_val_reg && type_inv.has_type(m_inv, val_type, T_PACKET)) {
+        if (opt_val_reg && tinv.has_type(val_type, T_PACKET)) {
             inv.assign(stack.store(inv, DataKind::packet_offsets, addr, width, opt_val_reg->packet_offset),
                        opt_val_reg->packet_offset);
         } else {
             stack.havoc(inv, DataKind::packet_offsets, addr, width);
         }
 
-        if (opt_val_reg && type_inv.has_type(m_inv, val_type, T_SHARED)) {
+        if (opt_val_reg && tinv.has_type(val_type, T_SHARED)) {
             inv.assign(stack.store(inv, DataKind::shared_offsets, addr, width, opt_val_reg->shared_offset),
                        opt_val_reg->shared_offset);
             inv.assign(stack.store(inv, DataKind::shared_region_sizes, addr, width, opt_val_reg->shared_region_size),
@@ -605,7 +606,7 @@ void EbpfTransformer::do_store_stack(NumAbsDomain& inv, const LinearExpression& 
             stack.havoc(inv, DataKind::shared_offsets, addr, width);
         }
 
-        if (opt_val_reg && type_inv.has_type(m_inv, val_type, T_STACK)) {
+        if (opt_val_reg && tinv.has_type(val_type, T_STACK)) {
             inv.assign(stack.store(inv, DataKind::stack_offsets, addr, width, opt_val_reg->stack_offset),
                        opt_val_reg->stack_offset);
             inv.assign(stack.store(inv, DataKind::stack_numeric_sizes, addr, width, opt_val_reg->stack_numeric_size),
@@ -615,7 +616,7 @@ void EbpfTransformer::do_store_stack(NumAbsDomain& inv, const LinearExpression& 
             stack.havoc(inv, DataKind::stack_numeric_sizes, addr, width);
         }
     } else {
-        if ((width == 1 || width == 2 || width == 4) && type_inv.get_type(m_inv, val_type) == T_NUM) {
+        if ((width == 1 || width == 2 || width == 4) && tinv.get_type(val_type) == T_NUM) {
             // Keep track of numbers on the stack that might be used as array indices.
             if (const auto stack_svalue = stack.store(inv, DataKind::svalues, addr, width, val_svalue)) {
                 inv.assign(stack_svalue, val_svalue);
@@ -643,7 +644,7 @@ void EbpfTransformer::do_store_stack(NumAbsDomain& inv, const LinearExpression& 
     auto updated_lb = m_inv.eval_interval(addr).lb();
     auto updated_ub = m_inv.eval_interval(addr).ub() + width;
     for (const Variable type_variable : variable_registry->get_type_variables()) {
-        if (!type_inv.has_type(inv, type_variable, T_STACK)) {
+        if (!tinv.has_type(type_variable, T_STACK)) {
             continue;
         }
         const Variable stack_offset_variable = variable_registry->kind_var(DataKind::stack_offsets, type_variable);
@@ -694,7 +695,7 @@ void EbpfTransformer::do_mem_store(const Mem& b, const LinearExpression& val_typ
         }
         return;
     }
-    m_inv = type_inv.join_over_types(m_inv, b.access.basereg, [&](NumAbsDomain& inv, const TypeEncoding type) {
+    m_inv = type_inv.join_over_types(b.access.basereg, [&](NumAbsDomain& inv, const TypeEncoding type) {
         if (type == T_STACK) {
             const auto base_addr = LinearExpression(dom.get_type_offset_variable(b.access.basereg, type).value());
             do_store_stack(inv, dsl_syntax::operator+(base_addr, offset), width, val_type, val_svalue, val_uvalue,
@@ -767,7 +768,7 @@ void EbpfTransformer::operator()(const Atomic& a) {
 
     // Clear the R11 pseudo-register.
     havoc_register(m_inv, r11);
-    type_inv.havoc_type(m_inv, r11);
+    type_inv.havoc_type(r11);
 }
 
 void EbpfTransformer::operator()(const Call& call) {
@@ -805,7 +806,7 @@ void EbpfTransformer::operator()(const Call& call) {
             Variable addr = variable.value();
             Variable width = reg_pack(param.size).svalue;
 
-            m_inv = type_inv.join_over_types(m_inv, param.mem, [&](NumAbsDomain& inv, const TypeEncoding type) {
+            m_inv = type_inv.join_over_types(param.mem, [&](NumAbsDomain& inv, const TypeEncoding type) {
                 if (type == T_STACK) {
                     // Pointer to a memory region that the called function may change,
                     // so we must havoc.
@@ -847,18 +848,18 @@ void EbpfTransformer::operator()(const Call& call) {
                     assign_valid_ptr(r0_reg, true);
                     m_inv.assign(r0_pack.shared_offset, 0);
                     m_inv.set(r0_pack.shared_region_size, dom.get_map_value_size(*maybe_fd_reg));
-                    type_inv.assign_type(m_inv, r0_reg, T_SHARED);
+                    type_inv.assign_type(r0_reg, T_SHARED);
                 }
             }
         }
         assign_valid_ptr(r0_reg, true);
         m_inv.assign(r0_pack.shared_offset, 0);
-        type_inv.assign_type(m_inv, r0_reg, T_SHARED);
+        type_inv.assign_type(r0_reg, T_SHARED);
     } else {
         m_inv.havoc(r0_pack.svalue);
         m_inv.havoc(r0_pack.uvalue);
         havoc_offsets(r0_reg);
-        type_inv.assign_type(m_inv, r0_reg, T_NUM);
+        type_inv.assign_type(r0_reg, T_NUM);
         // m_inv.add_constraint(r0_pack.value < 0); for INTEGER_OR_NO_RETURN_IF_SUCCEED.
     }
 out:
@@ -906,9 +907,9 @@ void EbpfTransformer::do_load_mapfd(const Reg& dst_reg, const int mapfd, const b
     const EbpfMapDescriptor& desc = thread_local_program_info->platform->get_map_descriptor(mapfd);
     const EbpfMapType& type = thread_local_program_info->platform->get_map_type(desc.type);
     if (type.value_type == EbpfMapValueType::PROGRAM) {
-        type_inv.assign_type(m_inv, dst_reg, T_MAP_PROGRAMS);
+        type_inv.assign_type(dst_reg, T_MAP_PROGRAMS);
     } else {
-        type_inv.assign_type(m_inv, dst_reg, T_MAP);
+        type_inv.assign_type(dst_reg, T_MAP);
     }
     const RegPack& dst = reg_pack(dst_reg);
     m_inv.assign(dst.map_fd, mapfd);
@@ -931,7 +932,7 @@ void EbpfTransformer::do_load_map_address(const Reg& dst_reg, const int mapfd, c
     }
 
     // Set the shared region size and offset for the map.
-    type_inv.assign_type(m_inv, dst_reg, T_SHARED);
+    type_inv.assign_type(dst_reg, T_SHARED);
     const RegPack& dst = reg_pack(dst_reg);
     m_inv.assign(dst.shared_offset, offset);
     m_inv.assign(dst.shared_region_size, desc.value_size);
@@ -969,7 +970,7 @@ void EbpfTransformer::recompute_stack_numeric_size(NumAbsDomain& inv, const Vari
         return;
     }
 
-    if (type_inv.has_type(inv, type_variable, T_STACK)) {
+    if (TypeDomain(inv).has_type(type_variable, T_STACK)) {
         const int numeric_size =
             stack.min_all_num_size(inv, variable_registry->kind_var(DataKind::stack_offsets, type_variable));
         if (numeric_size > 0) {
@@ -1042,7 +1043,7 @@ void EbpfTransformer::sign_extend(const Reg& dst_reg, const LinearExpression& ri
                                   const int source_width) {
     havoc_offsets(dst_reg);
 
-    type_inv.assign_type(dom.m_inv, dst_reg, T_NUM);
+    type_inv.assign_type(dst_reg, T_NUM);
 
     const RegPack dst = reg_pack(dst_reg);
     m_inv->sign_extend(dst.svalue, dst.uvalue, right_svalue, target_width, source_width);
@@ -1068,10 +1069,10 @@ void EbpfTransformer::operator()(const Bin& bin) {
 
     // TODO: Unusable states and values should be better handled.
     //       Probably by propagating an error state.
-    if (type_inv.has_type(m_inv, bin.dst, T_UNINIT) &&
+    if (type_inv.has_type(bin.dst, T_UNINIT) &&
         !std::set{Bin::Op::MOV, Bin::Op::MOVSX8, Bin::Op::MOVSX16, Bin::Op::MOVSX32}.contains(bin.op)) {
         havoc_register(m_inv, bin.dst);
-        type_inv.havoc_type(m_inv, bin.dst);
+        type_inv.havoc_type(bin.dst);
         return;
     }
     if (auto pimm = std::get_if<Imm>(&bin.v)) {
@@ -1085,7 +1086,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
             imm = gsl::narrow_cast<int32_t>(pimm->v);
             m_inv->bitwise_and(dst.svalue, dst.uvalue, std::numeric_limits<uint32_t>::max());
             // If this is a 32-bit operation and the destination is not a number, forget everything about the register.
-            if (!type_inv.has_type(m_inv, bin.dst, T_NUM)) {
+            if (!type_inv.has_type(bin.dst, T_NUM)) {
                 havoc_register(m_inv, bin.dst);
                 havoc_offsets(bin.dst);
                 m_inv.havoc(dst.type);
@@ -1096,7 +1097,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
             m_inv.assign(dst.svalue, imm);
             m_inv.assign(dst.uvalue, imm);
             m_inv->overflow_bounds(dst.uvalue, bin.is64 ? 64 : 32, false);
-            type_inv.assign_type(m_inv, bin.dst, T_NUM);
+            type_inv.assign_type(bin.dst, T_NUM);
             havoc_offsets(bin.dst);
             break;
         case Bin::Op::MOVSX8:
@@ -1162,24 +1163,25 @@ void EbpfTransformer::operator()(const Bin& bin) {
         // dst op= src
         auto src_reg = std::get<Reg>(bin.v);
         auto src = reg_pack(src_reg);
-        if (type_inv.has_type(m_inv, src_reg, T_UNINIT)) {
+        if (type_inv.has_type(src_reg, T_UNINIT)) {
             havoc_register(m_inv, bin.dst);
-            type_inv.havoc_type(m_inv, bin.dst);
+            type_inv.havoc_type(bin.dst);
             return;
         }
         switch (bin.op) {
         case Bin::Op::ADD: {
-            if (type_inv.same_type(m_inv, bin.dst, std::get<Reg>(bin.v))) {
+            if (type_inv.same_type(bin.dst, std::get<Reg>(bin.v))) {
                 // both must have been checked to be numbers
                 m_inv->add_overflow(dst.svalue, dst.uvalue, src.svalue, finite_width);
             } else {
                 // Here we're not sure that lhs and rhs are the same type; they might be.
                 // But previous assertions should fail unless we know that exactly one of lhs or rhs is a pointer.
-                m_inv = type_inv.join_over_types(m_inv, bin.dst, [&](NumAbsDomain& inv, const TypeEncoding dst_type) {
-                    inv = type_inv.join_over_types(inv, src_reg, [&](NumAbsDomain& inv, const TypeEncoding src_type) {
+                m_inv = type_inv.join_over_types(bin.dst, [&](NumAbsDomain& inv, const TypeEncoding dst_type) {
+                    inv = TypeDomain(inv).join_over_types(src_reg, [&](NumAbsDomain& inv, const TypeEncoding src_type) {
+                        TypeDomain tinv(inv);
                         if (dst_type == T_NUM && src_type != T_NUM) {
                             // num += ptr
-                            type_inv.assign_type(inv, bin.dst, src_type);
+                            tinv.assign_type(bin.dst, src_type);
                             if (const auto dst_offset = dom.get_type_offset_variable(bin.dst, src_type)) {
                                 inv->apply(ArithBinOp::ADD, dst_offset.value(), dst.svalue,
                                            dom.get_type_offset_variable(src_reg, src_type).value());
@@ -1189,7 +1191,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
                             }
                         } else if (dst_type != T_NUM && src_type == T_NUM) {
                             // ptr += num
-                            type_inv.assign_type(inv, bin.dst, dst_type);
+                            tinv.assign_type(bin.dst, dst_type);
                             if (const auto dst_offset = dom.get_type_offset_variable(bin.dst, dst_type)) {
                                 inv->apply(ArithBinOp::ADD, dst_offset.value(), dst_offset.value(), src.svalue);
                                 if (dst_type == T_STACK) {
@@ -1224,15 +1226,16 @@ void EbpfTransformer::operator()(const Bin& bin) {
             break;
         }
         case Bin::Op::SUB: {
-            if (type_inv.same_type(m_inv, bin.dst, std::get<Reg>(bin.v))) {
+            if (type_inv.same_type(bin.dst, std::get<Reg>(bin.v))) {
                 // src and dest have the same type.
-                m_inv = type_inv.join_over_types(m_inv, bin.dst, [&](NumAbsDomain& inv, const TypeEncoding type) {
+                m_inv = type_inv.join_over_types(bin.dst, [&](NumAbsDomain& inv, const TypeEncoding type) {
+                    TypeDomain tinv(inv);
                     switch (type) {
                     case T_NUM:
                         // This is: sub_overflow(inv, dst.value, src.value, finite_width);
                         inv->apply_signed(ArithBinOp::SUB, dst.svalue, dst.uvalue, dst.svalue, src.svalue,
                                           finite_width);
-                        type_inv.assign_type(inv, bin.dst, T_NUM);
+                        tinv.assign_type(bin.dst, T_NUM);
                         prevail::havoc_offsets(inv, bin.dst);
                         break;
                     default:
@@ -1244,15 +1247,15 @@ void EbpfTransformer::operator()(const Bin& bin) {
                             inv.havoc(dst_offset.value());
                         }
                         prevail::havoc_offsets(inv, bin.dst);
-                        type_inv.assign_type(inv, bin.dst, T_NUM);
+                        tinv.assign_type(bin.dst, T_NUM);
                         break;
                     }
                 });
             } else {
                 // We're not sure that lhs and rhs are the same type.
                 // Either they're different, or at least one is not a singleton.
-                if (type_inv.get_type(m_inv, std::get<Reg>(bin.v)) != T_NUM) {
-                    type_inv.havoc_type(m_inv, bin.dst);
+                if (type_inv.get_type(std::get<Reg>(bin.v)) != T_NUM) {
+                    type_inv.havoc_type(bin.dst);
                     m_inv.havoc(dst.svalue);
                     m_inv.havoc(dst.uvalue);
                     havoc_offsets(bin.dst);
@@ -1260,7 +1263,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
                     m_inv->sub_overflow(dst.svalue, dst.uvalue, src.svalue, finite_width);
                     if (auto dst_offset = dom.get_type_offset_variable(bin.dst)) {
                         m_inv->sub(dst_offset.value(), src.svalue);
-                        if (type_inv.has_type(m_inv, dst.type, T_STACK)) {
+                        if (type_inv.has_type(dst.type, T_STACK)) {
                             // Reduce the numeric size.
                             using namespace dsl_syntax;
                             if (m_inv.intersect(src.svalue > 0)) {
@@ -1381,7 +1384,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
             m_inv.assign(dst.svalue, src.svalue);
             m_inv.assign(dst.uvalue, src.uvalue);
             havoc_offsets(bin.dst);
-            m_inv = type_inv.join_over_types(m_inv, src_reg, [&](NumAbsDomain& inv, const TypeEncoding type) {
+            m_inv = type_inv.join_over_types(src_reg, [&](NumAbsDomain& inv, const TypeEncoding type) {
                 switch (type) {
                 case T_CTX:
                     if (bin.is64) {
@@ -1421,12 +1424,12 @@ void EbpfTransformer::operator()(const Bin& bin) {
             });
             if (bin.is64) {
                 // Add dst.type=src.type invariant.
-                if (bin.dst.v != std::get<Reg>(bin.v).v || type_inv.get_type(m_inv, dst.type) == T_UNINIT) {
+                if (bin.dst.v != std::get<Reg>(bin.v).v || type_inv.get_type(dst.type) == T_UNINIT) {
                     // Only forget the destination type if we're copying from a different register,
                     // or from the same uninitialized register.
                     m_inv.havoc(dst.type);
                 }
-                type_inv.assign_type(m_inv, bin.dst, std::get<Reg>(bin.v));
+                type_inv.assign_type(bin.dst, std::get<Reg>(bin.v));
             }
             break;
         }

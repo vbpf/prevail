@@ -31,40 +31,42 @@ RegPack reg_pack(int i);
 inline RegPack reg_pack(const Reg r) { return reg_pack(r.v); }
 
 struct TypeDomain {
-    void assign_type(NumAbsDomain& inv, const Reg& lhs, const Reg& rhs);
-    void assign_type(NumAbsDomain& inv, const Reg& lhs, const std::optional<LinearExpression>& rhs);
-    void assign_type(NumAbsDomain& inv, std::optional<Variable> lhs, const LinearExpression& t);
+    NumAbsDomain* inv;
+    explicit TypeDomain(NumAbsDomain& inv) : inv(&inv) {}
 
-    void havoc_type(NumAbsDomain& inv, const Reg& r);
+    void assign_type(const Reg& lhs, const Reg& rhs);
+    void assign_type(const Reg& lhs, const std::optional<LinearExpression>& rhs);
+    void assign_type(std::optional<Variable> lhs, const LinearExpression& t);
 
-    [[nodiscard]]
-    TypeEncoding get_type(const NumAbsDomain& inv, const LinearExpression& v) const;
-    [[nodiscard]]
-    TypeEncoding get_type(const NumAbsDomain& inv, const Reg& r) const;
+    void havoc_type(const Reg& r);
 
     [[nodiscard]]
-    bool has_type(const NumAbsDomain& inv, const LinearExpression& v, TypeEncoding type) const;
+    TypeEncoding get_type(const LinearExpression& v) const;
     [[nodiscard]]
-    bool has_type(const NumAbsDomain& inv, const Reg& r, TypeEncoding type) const;
+    TypeEncoding get_type(const Reg& r) const;
 
     [[nodiscard]]
-    bool same_type(const NumAbsDomain& inv, const Reg& a, const Reg& b) const;
+    bool has_type(const LinearExpression& v, TypeEncoding type) const;
     [[nodiscard]]
-    bool implies_type(const NumAbsDomain& inv, const LinearConstraint& a, const LinearConstraint& b) const;
+    bool has_type(const Reg& r, TypeEncoding type) const;
 
     [[nodiscard]]
-    NumAbsDomain join_over_types(const NumAbsDomain& inv, const Reg& reg,
+    bool same_type(const Reg& a, const Reg& b) const;
+    [[nodiscard]]
+    bool implies_type(const LinearConstraint& a, const LinearConstraint& b) const;
+
+    [[nodiscard]]
+    NumAbsDomain join_over_types(const Reg& reg,
                                  const std::function<void(NumAbsDomain&, TypeEncoding)>& transition) const;
     [[nodiscard]]
-    NumAbsDomain join_by_if_else(const NumAbsDomain& inv, const LinearConstraint& condition,
-                                 const std::function<void(NumAbsDomain&)>& if_true,
+    NumAbsDomain join_by_if_else(const LinearConstraint& condition, const std::function<void(NumAbsDomain&)>& if_true,
                                  const std::function<void(NumAbsDomain&)>& if_false) const;
-    void selectively_join_based_on_type(NumAbsDomain& dst, NumAbsDomain&& src) const;
-    void add_extra_invariant(const NumAbsDomain& dst, std::map<Variable, Interval>& extra_invariants,
-                             Variable type_variable, TypeEncoding type, DataKind kind, const NumAbsDomain& src) const;
+    void selectively_join_based_on_type(NumAbsDomain&& src);
+    void add_extra_invariant(std::map<Variable, Interval>& extra_invariants, Variable type_variable, TypeEncoding type,
+                             DataKind kind, const TypeDomain& src);
 
     [[nodiscard]]
-    bool is_in_group(const NumAbsDomain& inv, const Reg& r, TypeGroup group) const;
+    bool is_in_group(const Reg& r, TypeGroup group) const;
 };
 
 } // namespace prevail

@@ -32,12 +32,12 @@ std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg, con
     }
 }
 
-std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg, const NumAbsDomain& inv) const {
-    return get_type_offset_variable(reg, type_inv.get_type(inv, reg_pack(reg).type));
-}
+// std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg, const NumAbsDomain& inv) const {
+//     return get_type_offset_variable(reg, type_inv.get_type(inv, reg_pack(reg).type));
+// }
 
 std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg) const {
-    return get_type_offset_variable(reg, m_inv);
+    return get_type_offset_variable(reg, type_inv.get_type(reg_pack(reg).type));
 }
 
 StringInvariant EbpfDomain::to_set() const { return m_inv.to_set() + stack.to_set(); }
@@ -54,9 +54,12 @@ EbpfDomain EbpfDomain::bottom() {
     return abs;
 }
 
-EbpfDomain::EbpfDomain() : m_inv(NumAbsDomain::top()) {}
+EbpfDomain::EbpfDomain() : m_inv(NumAbsDomain::top()), type_inv(m_inv) {}
 
-EbpfDomain::EbpfDomain(NumAbsDomain inv, ArrayDomain stack) : m_inv(std::move(inv)), stack(std::move(stack)) {}
+EbpfDomain::EbpfDomain(NumAbsDomain inv, ArrayDomain stack)
+    : m_inv(std::move(inv)), stack(std::move(stack)), type_inv(m_inv) {}
+
+EbpfDomain::EbpfDomain(const EbpfDomain& other) : m_inv(other.m_inv), stack(other.stack), type_inv(m_inv) {}
 
 void EbpfDomain::set_to_top() {
     m_inv.set_to_top();
@@ -84,7 +87,7 @@ void EbpfDomain::operator|=(EbpfDomain&& other) {
         return;
     }
 
-    type_inv.selectively_join_based_on_type(m_inv, std::move(other.m_inv));
+    type_inv.selectively_join_based_on_type(std::move(other.m_inv));
 
     stack |= std::move(other.stack);
 }
@@ -335,7 +338,7 @@ EbpfDomain EbpfDomain::setup_entry(const bool init_r1) {
     inv.m_inv.assign(r10.stack_offset, EBPF_TOTAL_STACK_SIZE);
     // stack_numeric_size would be 0, but TOP has the same result
     // so no need to assign it.
-    inv.type_inv.assign_type(inv.m_inv, r10_reg, T_STACK);
+    inv.type_inv.assign_type(r10_reg, T_STACK);
 
     if (init_r1) {
         const auto r1 = reg_pack(R1_ARG);
@@ -343,7 +346,7 @@ EbpfDomain EbpfDomain::setup_entry(const bool init_r1) {
         inv.m_inv.add_constraint(1 <= r1.svalue);
         inv.m_inv.add_constraint(r1.svalue <= PTR_MAX);
         inv.m_inv.assign(r1.ctx_offset, 0);
-        inv.type_inv.assign_type(inv.m_inv, r1_reg, T_CTX);
+        inv.type_inv.assign_type(r1_reg, T_CTX);
     }
 
     inv.initialize_packet();
