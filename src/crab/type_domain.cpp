@@ -149,7 +149,7 @@ static const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
 /// Return the kind variables (for example, offset variables) that are meaningless -- that is, whose type is not present
 /// in the register's types.  These variables are not used in the domain, so they can be ignored when joining domains.
 /// They are effectively Bottom.
-std::vector<Variable> TypeDomain::get_nonexistent_variables() const {
+std::vector<Variable> TypeDomain::get_nonexistent_kind_variables() const {
     std::vector<Variable> res;
     for (const Variable v : variable_registry->get_type_variables()) {
         for (const auto& [type, kinds] : type_to_kinds) {
@@ -166,6 +166,20 @@ std::vector<Variable> TypeDomain::get_nonexistent_variables() const {
     }
     return res;
 }
+
+std::vector<DataKind> TypeDomain::get_valid_kinds(const Reg& r) const {
+    std::vector<DataKind> res{};
+    for (const auto& [type, kinds] : type_to_kinds) {
+        if (has_type(variable_registry->reg(DataKind::types, r.v), type)) {
+            // this type is present in the register's types, so the kind variable is meaningful.
+            for (const auto kind : kinds) {
+                res.push_back(kind);
+            }
+        }
+    }
+    return res;
+}
+
 std::map<Variable, Interval> TypeDomain::recover_type_dependent_constraints(NumAbsDomain& other) const {
     // Some variables are type-specific.  Type-specific variables
     // for a register can exist in the domain whenever the associated
@@ -265,6 +279,7 @@ NumAbsDomain TypeDomain::join_over_types(const Reg& reg,
     for (TypeEncoding type : iterate_types(lb, ub)) {
         NumAbsDomain tmp(*inv);
         transition(tmp, type);
+        // XXX: Adding this breaks many tests for an unclear reason.
         // auto constraints = TypeDomain(res).recover_type_dependent_constraints(tmp);
         res |= std::move(tmp);
         // for (const auto& [variable, interval] : constraints) {
@@ -283,13 +298,12 @@ NumAbsDomain TypeDomain::join_by_if_else(const LinearConstraint& condition,
     NumAbsDomain false_case(inv->when(condition.negate()));
     if_false(false_case);
 
-    // auto constraints = TypeDomain(true_case).recover_type_dependent_constraints(false_case);
-    // true_case |= std::move(false_case);
-    // for (const auto& [variable, interval] : constraints) {
-    //     true_case.set(variable, interval);
-    // }
-    // return true_case;
-    return false_case | true_case;
+    auto constraints = TypeDomain(true_case).recover_type_dependent_constraints(false_case);
+    true_case |= std::move(false_case);
+    for (const auto& [variable, interval] : constraints) {
+        true_case.set(variable, interval);
+    }
+    return true_case;
 }
 
 static LinearConstraint eq_types(const Reg& a, const Reg& b) {

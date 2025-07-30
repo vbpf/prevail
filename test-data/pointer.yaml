@@ -398,9 +398,8 @@ post:
   - r1.svalue=1234567890
   - r1.uvalue=r1.svalue
   - r1.type=ctx
-  - r0.svalue=1234567890
-  - r0.type=number
-  - r0.uvalue=1234567890
+  - r0.svalue=[0, 4294967295]
+  - r0.uvalue=r0.svalue
 
 messages:
   - "0: Invalid type (r1.type == number)"

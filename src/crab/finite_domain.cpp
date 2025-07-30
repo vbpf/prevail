@@ -673,7 +673,7 @@ std::vector<LinearConstraint> FiniteDomain::assume_cst_reg(const Condition::Op o
     throw std::exception();
 }
 
-void FiniteDomain::assign(Variable x, const std::optional<LinearExpression>& e) { dom.assign(x, e); }
+void FiniteDomain::assign(const Variable x, const std::optional<LinearExpression>& e) { dom.assign(x, e); }
 void FiniteDomain::assign(const Variable x, const Variable e) { dom.assign(x, e); }
 void FiniteDomain::assign(const Variable x, const LinearExpression& e) { dom.assign(x, e); }
 void FiniteDomain::assign(const Variable x, const int64_t e) { dom.set(x, Interval(e)); }

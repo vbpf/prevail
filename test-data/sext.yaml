@@ -48,7 +48,8 @@ code:
 post:
   - r1.type=number
   - r1.svalue=[0, 4294967295]
-  - r1.uvalue=r1.svalue
+  - r1.uvalue=[0, 4294967299]
+  - r2.uvalue=r1.uvalue
   - r2.type=number
   - r2.uvalue=[0, 4294967299]
 ---

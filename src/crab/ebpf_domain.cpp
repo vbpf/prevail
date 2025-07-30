@@ -76,7 +76,7 @@ bool EbpfDomain::operator<=(const EbpfDomain& other) const {
     // We do this by replacing the offsets in the other domain with the top
     // value for types that do not exist in the current domain, simulating them to be bottom.
     EbpfDomain tmp{other};
-    for (const Variable& v : type_inv.get_nonexistent_variables()) {
+    for (const Variable& v : type_inv.get_nonexistent_kind_variables()) {
         tmp.m_inv.havoc(v);
     }
     return m_inv <= tmp.m_inv;

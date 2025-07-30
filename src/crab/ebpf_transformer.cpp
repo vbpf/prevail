@@ -1376,62 +1376,46 @@ void EbpfTransformer::operator()(const Bin& bin) {
             break;
         }
         case Bin::Op::MOV:
-            // Keep relational information if operation is a no-op.
-            if (dst.svalue == src.svalue &&
-                m_inv.eval_interval(dst.uvalue) <= Interval::unsigned_int(bin.is64 ? 64 : 32)) {
+            if (!bin.is64) {
+                // careful with self-assignment
+                if (type_inv.get_type(src_reg) == T_NUM) {
+                    bool sfits32 = m_inv.eval_interval(src.svalue) <= Interval::signed_int(32);
+                    bool ufits32 = m_inv.eval_interval(src.uvalue) <= Interval::unsigned_int(32);
+                    if (sfits32 && ufits32) {
+                        if (bin.dst == src_reg) {
+                            return;
+                        }
+                    }
+                    type_inv.assign_type(bin.dst, T_NUM);
+                    havoc_offsets(bin.dst);
+                    m_inv.assign(dst.svalue, src.svalue);
+                    m_inv.assign(dst.uvalue, src.uvalue);
+                } else {
+                    type_inv.havoc_type(bin.dst);
+                    havoc_register(m_inv, bin.dst);
+                }
+                // we already handle 32bit explicitly, no need for bitwise_and
+                break;
+            }
+            if (bin.dst == src_reg) {
                 return;
             }
+            if (type_inv.has_type(src.type, T_UNINIT)) {
+                havoc_register(m_inv, bin.dst);
+                type_inv.havoc_type(bin.dst);
+                break;
+            }
+
+            havoc_offsets(bin.dst);
+
+            type_inv.assign_type(bin.dst, src_reg);
+
             m_inv.assign(dst.svalue, src.svalue);
             m_inv.assign(dst.uvalue, src.uvalue);
-            havoc_offsets(bin.dst);
-            m_inv = type_inv.join_over_types(src_reg, [&](NumAbsDomain& inv, const TypeEncoding type) {
-                switch (type) {
-                case T_CTX:
-                    if (bin.is64) {
-                        inv.assign(dst.type, type);
-                        inv.assign(dst.ctx_offset, src.ctx_offset);
-                    }
-                    break;
-                case T_MAP:
-                case T_MAP_PROGRAMS:
-                    if (bin.is64) {
-                        inv.assign(dst.type, type);
-                        inv.assign(dst.map_fd, src.map_fd);
-                    }
-                    break;
-                case T_PACKET:
-                    if (bin.is64) {
-                        inv.assign(dst.type, type);
-                        inv.assign(dst.packet_offset, src.packet_offset);
-                    }
-                    break;
-                case T_SHARED:
-                    if (bin.is64) {
-                        inv.assign(dst.type, type);
-                        inv.assign(dst.shared_region_size, src.shared_region_size);
-                        inv.assign(dst.shared_offset, src.shared_offset);
-                    }
-                    break;
-                case T_STACK:
-                    if (bin.is64) {
-                        inv.assign(dst.type, type);
-                        inv.assign(dst.stack_offset, src.stack_offset);
-                        inv.assign(dst.stack_numeric_size, src.stack_numeric_size);
-                    }
-                    break;
-                default: inv.assign(dst.type, type); break;
-                }
-            });
-            if (bin.is64) {
-                // Add dst.type=src.type invariant.
-                if (bin.dst.v != std::get<Reg>(bin.v).v || type_inv.get_type(dst.type) == T_UNINIT) {
-                    // Only forget the destination type if we're copying from a different register,
-                    // or from the same uninitialized register.
-                    m_inv.havoc(dst.type);
-                }
-                type_inv.assign_type(bin.dst, std::get<Reg>(bin.v));
+
+            for (const auto kind : type_inv.get_valid_kinds(src_reg)) {
+                m_inv.assign(variable_registry->reg(kind, bin.dst.v), variable_registry->reg(kind, src_reg.v));
             }
-            break;
         }
     }
     if (!bin.is64) {

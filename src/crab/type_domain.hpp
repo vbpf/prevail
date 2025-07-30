@@ -62,8 +62,8 @@ struct TypeDomain {
     NumAbsDomain join_by_if_else(const LinearConstraint& condition, const std::function<void(NumAbsDomain&)>& if_true,
                                  const std::function<void(NumAbsDomain&)>& if_false) const;
     std::map<Variable, Interval> recover_type_dependent_constraints(NumAbsDomain& other) const;
-    std::vector<Variable> get_nonexistent_variables() const;
-
+    std::vector<Variable> get_nonexistent_kind_variables() const;
+    std::vector<DataKind> get_valid_kinds(const Reg& r) const;
     [[nodiscard]]
     bool is_in_group(const Reg& r, TypeGroup group) const;
 };
