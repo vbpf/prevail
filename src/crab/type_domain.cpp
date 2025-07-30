@@ -121,6 +121,7 @@ TypeEncoding string_to_type_encoding(const std::string& s) {
     }
     throw std::runtime_error(std::string("Unsupported type name: ") + s);
 }
+
 RegPack reg_pack(const int i) {
     return {
         variable_registry->reg(DataKind::svalues, i),
@@ -136,22 +137,36 @@ RegPack reg_pack(const int i) {
     };
 }
 
-void TypeDomain::add_extra_invariant(std::map<Variable, Interval>& extra_invariants, const Variable type_variable,
-                                     const TypeEncoding type, const DataKind kind, const TypeDomain& src) {
-    const bool dst_has_type = has_type(type_variable, type);
-    const bool src_has_type = src.has_type(type_variable, type);
-    Variable v = variable_registry->kind_var(kind, type_variable);
+static const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
+    {T_CTX, {DataKind::ctx_offsets}},
+    {T_MAP, {DataKind::map_fds}},
+    {T_MAP_PROGRAMS, {DataKind::map_fds}},
+    {T_PACKET, {DataKind::packet_offsets}},
+    {T_SHARED, {DataKind::shared_offsets, DataKind::shared_region_sizes}},
+    {T_STACK, {DataKind::stack_offsets, DataKind::stack_numeric_sizes}},
+};
 
-    // If type is contained in exactly one of dst or src,
-    // we need to remember the value.
-    if (dst_has_type && !src_has_type) {
-        extra_invariants.emplace(v, inv->eval_interval(v));
-    } else if (!dst_has_type && src_has_type) {
-        extra_invariants.emplace(v, src.inv->eval_interval(v));
+/// Return the kind variables (for example, offset variables) that are meaningless -- that is, whose type is not present
+/// in the register's types.  These variables are not used in the domain, so they can be ignored when joining domains.
+/// They are effectively Bottom.
+std::vector<Variable> TypeDomain::get_nonexistent_variables() const {
+    std::vector<Variable> res;
+    for (const Variable v : variable_registry->get_type_variables()) {
+        for (const auto& [type, kinds] : type_to_kinds) {
+            if (has_type(v, type)) {
+                // this type is present in the register's types, so the kind variable is meaningful.
+                continue;
+            }
+            for (const auto kind : kinds) {
+                // This type is not present in the register's types, so the kind variable is meaningless.
+                Variable type_offset = variable_registry->kind_var(kind, v);
+                res.push_back(type_offset);
+            }
+        }
     }
+    return res;
 }
-
-void TypeDomain::selectively_join_based_on_type(NumAbsDomain&& src) {
+std::map<Variable, Interval> TypeDomain::recover_type_dependent_constraints(NumAbsDomain& other) const {
     // Some variables are type-specific.  Type-specific variables
     // for a register can exist in the domain whenever the associated
     // type value is present in the register's types interval (and the
@@ -166,7 +181,7 @@ void TypeDomain::selectively_join_based_on_type(NumAbsDomain&& src) {
     //
     // However, when the type value is not present in one domain,
     // any type-specific variables for that type are instead to be
-    // interpreted as Bottom, so we want to preserve the values of any
+    // interpreted as Bottom. So we want to preserve the values of any
     // type-specific variables from the other domain where the type
     // value is legal.
     //
@@ -175,28 +190,26 @@ void TypeDomain::selectively_join_based_on_type(NumAbsDomain&& src) {
     //   r1.type=packet, r1.packet_offset=4
     // Output:
     //   r1.type={stack,packet}, r1.stack_offset=100, r1.packet_offset=4
-    TypeDomain src_type_domain(src);
-    std::map<Variable, Interval> extra_invariants;
-    if (!inv->is_bottom()) {
-        for (const Variable v : variable_registry->get_type_variables()) {
-            add_extra_invariant(extra_invariants, v, T_CTX, DataKind::ctx_offsets, src_type_domain);
-            add_extra_invariant(extra_invariants, v, T_MAP, DataKind::map_fds, src_type_domain);
-            add_extra_invariant(extra_invariants, v, T_MAP_PROGRAMS, DataKind::map_fds, src_type_domain);
-            add_extra_invariant(extra_invariants, v, T_PACKET, DataKind::packet_offsets, src_type_domain);
-            add_extra_invariant(extra_invariants, v, T_SHARED, DataKind::shared_offsets, src_type_domain);
-            add_extra_invariant(extra_invariants, v, T_STACK, DataKind::stack_offsets, src_type_domain);
-            add_extra_invariant(extra_invariants, v, T_SHARED, DataKind::shared_region_sizes, src_type_domain);
-            add_extra_invariant(extra_invariants, v, T_STACK, DataKind::stack_numeric_sizes, src_type_domain);
+    std::map<Variable, Interval> result;
+
+    for (const Variable& type_var : variable_registry->get_type_variables()) {
+        for (const auto& [type, kinds] : type_to_kinds) {
+            const bool in_this = has_type(type_var, type);
+            const bool in_other = TypeDomain(other).has_type(type_var, type);
+
+            if (in_this == in_other) {
+                continue; // both have or both lack, nothing to do
+            }
+
+            const NumAbsDomain& source = in_this ? *inv : other;
+            for (const DataKind kind : kinds) {
+                Variable v = variable_registry->kind_var(kind, type_var);
+                result.emplace(v, source.eval_interval(v));
+            }
         }
     }
 
-    // Do a normal join operation on the domain.
-    (*inv) |= std::move(src);
-
-    // Now add in the extra invariants saved above.
-    for (const auto& [variable, interval] : extra_invariants) {
-        inv->set(variable, interval);
-    }
+    return result;
 }
 
 void TypeDomain::assign_type(const Reg& lhs, const Reg& rhs) { inv->assign(reg_pack(lhs).type, reg_pack(rhs).type); }
@@ -252,7 +265,11 @@ NumAbsDomain TypeDomain::join_over_types(const Reg& reg,
     for (TypeEncoding type : iterate_types(lb, ub)) {
         NumAbsDomain tmp(*inv);
         transition(tmp, type);
-        TypeDomain(res).selectively_join_based_on_type(std::move(tmp)); // res |= tmp;
+        // auto constraints = TypeDomain(res).recover_type_dependent_constraints(tmp);
+        res |= std::move(tmp);
+        // for (const auto& [variable, interval] : constraints) {
+        //     res.set(variable, interval);
+        // }
     }
     return res;
 }
@@ -266,7 +283,13 @@ NumAbsDomain TypeDomain::join_by_if_else(const LinearConstraint& condition,
     NumAbsDomain false_case(inv->when(condition.negate()));
     if_false(false_case);
 
-    return true_case | false_case;
+    // auto constraints = TypeDomain(true_case).recover_type_dependent_constraints(false_case);
+    // true_case |= std::move(false_case);
+    // for (const auto& [variable, interval] : constraints) {
+    //     true_case.set(variable, interval);
+    // }
+    // return true_case;
+    return false_case | true_case;
 }
 
 static LinearConstraint eq_types(const Reg& a, const Reg& b) {

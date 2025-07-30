@@ -61,9 +61,8 @@ struct TypeDomain {
     [[nodiscard]]
     NumAbsDomain join_by_if_else(const LinearConstraint& condition, const std::function<void(NumAbsDomain&)>& if_true,
                                  const std::function<void(NumAbsDomain&)>& if_false) const;
-    void selectively_join_based_on_type(NumAbsDomain&& src);
-    void add_extra_invariant(std::map<Variable, Interval>& extra_invariants, Variable type_variable, TypeEncoding type,
-                             DataKind kind, const TypeDomain& src);
+    std::map<Variable, Interval> recover_type_dependent_constraints(NumAbsDomain& other) const;
+    std::vector<Variable> get_nonexistent_variables() const;
 
     [[nodiscard]]
     bool is_in_group(const Reg& r, TypeGroup group) const;

@@ -39,6 +39,7 @@ class EbpfDomain final {
   public:
     EbpfDomain();
     EbpfDomain(NumAbsDomain inv, ArrayDomain stack);
+    EbpfDomain(const EbpfDomain&);
 
     // Generic abstract domain operations
     static EbpfDomain top();
@@ -57,7 +58,7 @@ class EbpfDomain final {
     EbpfDomain operator|(const EbpfDomain& other) const&;
     EbpfDomain operator|(const EbpfDomain& other) &&;
     EbpfDomain operator&(const EbpfDomain& other) const;
-    EbpfDomain widen(const EbpfDomain& other, bool to_constants) const;
+    EbpfDomain widen(EbpfDomain& other, bool to_constants) const;
     EbpfDomain narrow(const EbpfDomain& other) const;
 
     static EbpfDomain calculate_constant_limits();
@@ -66,6 +67,8 @@ class EbpfDomain final {
 
     static EbpfDomain setup_entry(bool init_r1);
     static EbpfDomain from_constraints(const std::set<std::string>& constraints, bool setup_constraints);
+    static EbpfDomain from_constraints(const std::vector<LinearConstraint>& constraints);
+
     void initialize_packet();
 
     StringInvariant to_set() const;
@@ -87,8 +90,6 @@ class EbpfDomain final {
     Interval get_map_max_entries(const Reg& map_fd_reg) const;
 
     static std::optional<Variable> get_type_offset_variable(const Reg& reg, int type);
-    [[nodiscard]]
-    std::optional<Variable> get_type_offset_variable(const Reg& reg, const NumAbsDomain& inv) const;
     [[nodiscard]]
     std::optional<Variable> get_type_offset_variable(const Reg& reg) const;
 

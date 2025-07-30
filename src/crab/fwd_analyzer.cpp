@@ -89,7 +89,7 @@ InvariantTable run_forward_analyzer(const Program& prog, EbpfDomain entry_inv) {
     return std::move(analyzer._inv);
 }
 
-static EbpfDomain extrapolate(const EbpfDomain& before, const EbpfDomain& after, const unsigned int iteration) {
+static EbpfDomain extrapolate(const EbpfDomain& before, EbpfDomain& after, const unsigned int iteration) {
     /// number of iterations until triggering widening
     constexpr auto _widening_delay = 2;
 

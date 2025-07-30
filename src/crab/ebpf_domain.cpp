@@ -32,10 +32,6 @@ std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg, con
     }
 }
 
-// std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg, const NumAbsDomain& inv) const {
-//     return get_type_offset_variable(reg, type_inv.get_type(inv, reg_pack(reg).type));
-// }
-
 std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg) const {
     return get_type_offset_variable(reg, type_inv.get_type(reg_pack(reg).type));
 }
@@ -72,7 +68,19 @@ bool EbpfDomain::is_bottom() const { return m_inv.is_bottom(); }
 
 bool EbpfDomain::is_top() const { return m_inv.is_top() && stack.is_top(); }
 
-bool EbpfDomain::operator<=(const EbpfDomain& other) const { return m_inv <= other.m_inv && stack <= other.stack; }
+bool EbpfDomain::operator<=(const EbpfDomain& other) const {
+    if (!(stack <= other.stack)) {
+        return false;
+    }
+    // We must consider kind variables of nonexistent types to be bottom, but top.
+    // We do this by replacing the offsets in the other domain with the top
+    // value for types that do not exist in the current domain, simulating them to be bottom.
+    EbpfDomain tmp{other};
+    for (const Variable& v : type_inv.get_nonexistent_variables()) {
+        tmp.m_inv.havoc(v);
+    }
+    return m_inv <= tmp.m_inv;
+}
 
 bool EbpfDomain::operator==(const EbpfDomain& other) const {
     return stack == other.stack && m_inv <= other.m_inv && other.m_inv <= m_inv;
@@ -87,7 +95,15 @@ void EbpfDomain::operator|=(EbpfDomain&& other) {
         return;
     }
 
-    type_inv.selectively_join_based_on_type(std::move(other.m_inv));
+    auto extra_invariants = type_inv.recover_type_dependent_constraints(other.m_inv);
+
+    // Do a normal join operation on the domain.
+    this->m_inv |= std::move(other.m_inv);
+
+    // Now add in the extra invariants saved above.
+    for (const auto& [variable, interval] : extra_invariants) {
+        this->m_inv.set(variable, interval);
+    }
 
     stack |= std::move(other.stack);
 }
@@ -98,15 +114,21 @@ void EbpfDomain::operator|=(const EbpfDomain& other) {
 }
 
 EbpfDomain EbpfDomain::operator|(EbpfDomain&& other) const {
-    return EbpfDomain(m_inv | std::move(other.m_inv), stack | other.stack);
+    EbpfDomain res{*this};
+    res |= std::move(other);
+    return res;
 }
 
 EbpfDomain EbpfDomain::operator|(const EbpfDomain& other) const& {
-    return EbpfDomain(m_inv | other.m_inv, stack | other.stack);
+    EbpfDomain res{*this};
+    res |= other;
+    return res;
 }
 
 EbpfDomain EbpfDomain::operator|(const EbpfDomain& other) && {
-    return EbpfDomain(other.m_inv | std::move(m_inv), other.stack | stack);
+    EbpfDomain res{std::move(*this)};
+    res |= other;
+    return res;
 }
 
 EbpfDomain EbpfDomain::operator&(const EbpfDomain& other) const {
@@ -141,8 +163,16 @@ EbpfDomain EbpfDomain::calculate_constant_limits() {
 
 static const EbpfDomain constant_limits = EbpfDomain::calculate_constant_limits();
 
-EbpfDomain EbpfDomain::widen(const EbpfDomain& other, const bool to_constants) const {
-    EbpfDomain res{m_inv.widen(other.m_inv), stack | other.stack};
+EbpfDomain EbpfDomain::widen(EbpfDomain& other, const bool to_constants) const {
+    auto extra_invariants = type_inv.recover_type_dependent_constraints(other.m_inv);
+
+    EbpfDomain res{this->m_inv.widen(std::move(other.m_inv)), stack.widen(other.stack)};
+
+    // Now add in the extra invariants saved above.
+    for (const auto& [variable, interval] : extra_invariants) {
+        res.m_inv.set(variable, interval);
+    }
+
     if (to_constants) {
         return res & constant_limits;
     }
@@ -307,6 +337,14 @@ void EbpfDomain::initialize_packet() {
     } else {
         inv.m_inv.assign(variable_registry->meta_offset(), 0);
     }
+}
+
+EbpfDomain EbpfDomain::from_constraints(const std::vector<LinearConstraint>& constraints) {
+    EbpfDomain inv;
+    for (const LinearConstraint& cst : constraints) {
+        inv.add_constraint(cst);
+    }
+    return inv;
 }
 
 EbpfDomain EbpfDomain::from_constraints(const std::set<std::string>& constraints, const bool setup_constraints) {
