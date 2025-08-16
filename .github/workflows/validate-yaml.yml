@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - name: Checkout GEDCOM.io
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Validate YAML
         run: yamllint . .github .github/workflows test-data
