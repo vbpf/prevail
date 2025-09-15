@@ -27,7 +27,7 @@
 ## Build & test workflow
 1. **Configure** (tests are enabled automatically when working from a git checkout):
    ```bash
-   cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+   cmake -B build -DCMAKE_BUILD_TYPE=Release
    ```
 2. **Build everything** (produces binaries in the repo root via `RUNTIME_OUTPUT_DIRECTORY`):
    ```bash
