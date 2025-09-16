@@ -172,7 +172,7 @@ void EbpfTransformer::forget_packet_pointers() {
     using namespace dsl_syntax;
 
     for (const Variable type_variable : variable_registry->get_type_variables()) {
-        if (type_inv.has_type(m_inv, type_variable, T_PACKET)) {
+        if (type_inv.may_have_type(m_inv, type_variable, T_PACKET)) {
             m_inv.havoc(variable_registry->kind_var(DataKind::types, type_variable));
             m_inv.havoc(variable_registry->kind_var(DataKind::packet_offsets, type_variable));
             m_inv.havoc(variable_registry->kind_var(DataKind::svalues, type_variable));
@@ -413,20 +413,20 @@ void EbpfTransformer::do_load_stack(NumAbsDomain& inv, const Reg& target_reg, co
         inv.assign(target.svalue, sresult);
         inv.assign(target.uvalue, uresult);
 
-        if (type_inv.has_type(inv, target.type, T_CTX)) {
+        if (type_inv.may_have_type(inv, target.type, T_CTX)) {
             inv.assign(target.ctx_offset, stack.load(inv, DataKind::ctx_offsets, addr, width));
         }
-        if (type_inv.has_type(inv, target.type, T_MAP) || type_inv.has_type(inv, target.type, T_MAP_PROGRAMS)) {
+        if (type_inv.may_have_type(inv, target.type, T_MAP) || type_inv.may_have_type(inv, target.type, T_MAP_PROGRAMS)) {
             inv.assign(target.map_fd, stack.load(inv, DataKind::map_fds, addr, width));
         }
-        if (type_inv.has_type(inv, target.type, T_PACKET)) {
+        if (type_inv.may_have_type(inv, target.type, T_PACKET)) {
             inv.assign(target.packet_offset, stack.load(inv, DataKind::packet_offsets, addr, width));
         }
-        if (type_inv.has_type(inv, target.type, T_SHARED)) {
+        if (type_inv.may_have_type(inv, target.type, T_SHARED)) {
             inv.assign(target.shared_offset, stack.load(inv, DataKind::shared_offsets, addr, width));
             inv.assign(target.shared_region_size, stack.load(inv, DataKind::shared_region_sizes, addr, width));
         }
-        if (type_inv.has_type(inv, target.type, T_STACK)) {
+        if (type_inv.may_have_type(inv, target.type, T_STACK)) {
             inv.assign(target.stack_offset, stack.load(inv, DataKind::stack_offsets, addr, width));
             inv.assign(target.stack_numeric_size, stack.load(inv, DataKind::stack_numeric_sizes, addr, width));
         }
@@ -574,7 +574,7 @@ void EbpfTransformer::do_store_stack(NumAbsDomain& inv, const LinearExpression& 
         inv.assign(stack.store(inv, DataKind::svalues, addr, width, val_svalue), val_svalue);
         inv.assign(stack.store(inv, DataKind::uvalues, addr, width, val_uvalue), val_uvalue);
 
-        if (opt_val_reg && type_inv.has_type(m_inv, val_type, T_CTX)) {
+        if (opt_val_reg && type_inv.may_have_type(m_inv, val_type, T_CTX)) {
             inv.assign(stack.store(inv, DataKind::ctx_offsets, addr, width, opt_val_reg->ctx_offset),
                        opt_val_reg->ctx_offset);
         } else {
@@ -582,20 +582,20 @@ void EbpfTransformer::do_store_stack(NumAbsDomain& inv, const LinearExpression& 
         }
 
         if (opt_val_reg &&
-            (type_inv.has_type(m_inv, val_type, T_MAP) || type_inv.has_type(m_inv, val_type, T_MAP_PROGRAMS))) {
+            (type_inv.may_have_type(m_inv, val_type, T_MAP) || type_inv.may_have_type(m_inv, val_type, T_MAP_PROGRAMS))) {
             inv.assign(stack.store(inv, DataKind::map_fds, addr, width, opt_val_reg->map_fd), opt_val_reg->map_fd);
         } else {
             stack.havoc(inv, DataKind::map_fds, addr, width);
         }
 
-        if (opt_val_reg && type_inv.has_type(m_inv, val_type, T_PACKET)) {
+        if (opt_val_reg && type_inv.may_have_type(m_inv, val_type, T_PACKET)) {
             inv.assign(stack.store(inv, DataKind::packet_offsets, addr, width, opt_val_reg->packet_offset),
                        opt_val_reg->packet_offset);
         } else {
             stack.havoc(inv, DataKind::packet_offsets, addr, width);
         }
 
-        if (opt_val_reg && type_inv.has_type(m_inv, val_type, T_SHARED)) {
+        if (opt_val_reg && type_inv.may_have_type(m_inv, val_type, T_SHARED)) {
             inv.assign(stack.store(inv, DataKind::shared_offsets, addr, width, opt_val_reg->shared_offset),
                        opt_val_reg->shared_offset);
             inv.assign(stack.store(inv, DataKind::shared_region_sizes, addr, width, opt_val_reg->shared_region_size),
@@ -605,7 +605,7 @@ void EbpfTransformer::do_store_stack(NumAbsDomain& inv, const LinearExpression& 
             stack.havoc(inv, DataKind::shared_offsets, addr, width);
         }
 
-        if (opt_val_reg && type_inv.has_type(m_inv, val_type, T_STACK)) {
+        if (opt_val_reg && type_inv.may_have_type(m_inv, val_type, T_STACK)) {
             inv.assign(stack.store(inv, DataKind::stack_offsets, addr, width, opt_val_reg->stack_offset),
                        opt_val_reg->stack_offset);
             inv.assign(stack.store(inv, DataKind::stack_numeric_sizes, addr, width, opt_val_reg->stack_numeric_size),
@@ -643,7 +643,7 @@ void EbpfTransformer::do_store_stack(NumAbsDomain& inv, const LinearExpression& 
     auto updated_lb = m_inv.eval_interval(addr).lb();
     auto updated_ub = m_inv.eval_interval(addr).ub() + width;
     for (const Variable type_variable : variable_registry->get_type_variables()) {
-        if (!type_inv.has_type(inv, type_variable, T_STACK)) {
+        if (!type_inv.may_have_type(inv, type_variable, T_STACK)) {
             continue;
         }
         const Variable stack_offset_variable = variable_registry->kind_var(DataKind::stack_offsets, type_variable);
@@ -969,7 +969,7 @@ void EbpfTransformer::recompute_stack_numeric_size(NumAbsDomain& inv, const Vari
         return;
     }
 
-    if (type_inv.has_type(inv, type_variable, T_STACK)) {
+    if (type_inv.may_have_type(inv, type_variable, T_STACK)) {
         const int numeric_size =
             stack.min_all_num_size(inv, variable_registry->kind_var(DataKind::stack_offsets, type_variable));
         if (numeric_size > 0) {
@@ -1068,7 +1068,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
 
     // TODO: Unusable states and values should be better handled.
     //       Probably by propagating an error state.
-    if (type_inv.has_type(m_inv, bin.dst, T_UNINIT) &&
+    if (type_inv.may_have_type(m_inv, bin.dst, T_UNINIT) &&
         !std::set{Bin::Op::MOV, Bin::Op::MOVSX8, Bin::Op::MOVSX16, Bin::Op::MOVSX32}.contains(bin.op)) {
         havoc_register(m_inv, bin.dst);
         type_inv.havoc_type(m_inv, bin.dst);
@@ -1085,7 +1085,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
             imm = gsl::narrow_cast<int32_t>(pimm->v);
             m_inv->bitwise_and(dst.svalue, dst.uvalue, std::numeric_limits<uint32_t>::max());
             // If this is a 32-bit operation and the destination is not a number, forget everything about the register.
-            if (!type_inv.has_type(m_inv, bin.dst, T_NUM)) {
+            if (!type_inv.may_have_type(m_inv, bin.dst, T_NUM)) {
                 havoc_register(m_inv, bin.dst);
                 havoc_offsets(bin.dst);
                 m_inv.havoc(dst.type);
@@ -1162,7 +1162,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
         // dst op= src
         auto src_reg = std::get<Reg>(bin.v);
         auto src = reg_pack(src_reg);
-        if (type_inv.has_type(m_inv, src_reg, T_UNINIT)) {
+        if (type_inv.may_have_type(m_inv, src_reg, T_UNINIT)) {
             havoc_register(m_inv, bin.dst);
             type_inv.havoc_type(m_inv, bin.dst);
             return;
@@ -1260,7 +1260,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
                     m_inv->sub_overflow(dst.svalue, dst.uvalue, src.svalue, finite_width);
                     if (auto dst_offset = dom.get_type_offset_variable(bin.dst)) {
                         m_inv->sub(dst_offset.value(), src.svalue);
-                        if (type_inv.has_type(m_inv, dst.type, T_STACK)) {
+                        if (type_inv.may_have_type(m_inv, dst.type, T_STACK)) {
                             // Reduce the numeric size.
                             using namespace dsl_syntax;
                             if (m_inv.intersect(src.svalue > 0)) {
