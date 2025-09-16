@@ -113,6 +113,7 @@ if (VERIFIER_ENABLE_TESTS)
             "./src/test/test_conformance.cpp"
             "./src/test/test_marshal.cpp"
             "./src/test/test_print.cpp"
+            "./src/test/test_ebpf_domain.cpp"
             "./src/test/test_verify.cpp"
             "./src/test/test_wto.cpp"
             "./src/test/test_yaml.cpp"

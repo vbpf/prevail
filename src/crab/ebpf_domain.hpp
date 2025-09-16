@@ -33,6 +33,7 @@ void ebpf_domain_initialize_loop_counter(EbpfDomain& dom, const Label& label);
 class EbpfDomain final {
     friend class EbpfChecker;
     friend class EbpfTransformer;
+    friend class EbpfDomainTestAccess;
 
     friend std::ostream& operator<<(std::ostream& o, const EbpfDomain& dom);
 
