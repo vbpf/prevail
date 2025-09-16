@@ -30,9 +30,12 @@ std::vector<std::string> ebpf_domain_check(const EbpfDomain& dom, const Assertio
 // TODO: make this an explicit instruction
 void ebpf_domain_initialize_loop_counter(EbpfDomain& dom, const Label& label);
 
+class EbpfDomainInspector;
+
 class EbpfDomain final {
     friend class EbpfChecker;
     friend class EbpfTransformer;
+    friend class EbpfDomainInspector;
 
     friend std::ostream& operator<<(std::ostream& o, const EbpfDomain& dom);
 

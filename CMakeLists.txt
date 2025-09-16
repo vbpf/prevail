@@ -116,6 +116,7 @@ if (VERIFIER_ENABLE_TESTS)
             "./src/test/test_verify.cpp"
             "./src/test/test_wto.cpp"
             "./src/test/test_yaml.cpp"
+            "./src/test/test_ebpf_transformer.cpp"
             "./src/test/test_sign_extension.cpp"
     )
 
