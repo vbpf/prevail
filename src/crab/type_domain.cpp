@@ -139,15 +139,15 @@ RegPack reg_pack(const int i) {
 void TypeDomain::add_extra_invariant(const NumAbsDomain& dst, std::map<Variable, Interval>& extra_invariants,
                                      const Variable type_variable, const TypeEncoding type, const DataKind kind,
                                      const NumAbsDomain& src) const {
-    const bool dst_has_type = has_type(dst, type_variable, type);
-    const bool src_has_type = has_type(src, type_variable, type);
+    const bool dst_may_have_type = may_have_type(dst, type_variable, type);
+    const bool src_may_have_type = may_have_type(src, type_variable, type);
     Variable v = variable_registry->kind_var(kind, type_variable);
 
     // If type is contained in exactly one of dst or src,
     // we need to remember the value.
-    if (dst_has_type && !src_has_type) {
+    if (dst_may_have_type && !src_may_have_type) {
         extra_invariants.emplace(v, dst.eval_interval(v));
-    } else if (!dst_has_type && src_has_type) {
+    } else if (!dst_may_have_type && src_may_have_type) {
         extra_invariants.emplace(v, src.eval_interval(v));
     }
 }
@@ -231,12 +231,12 @@ TypeEncoding TypeDomain::get_type(const NumAbsDomain& inv, const Reg& r) const {
 }
 
 // Check whether a given type value is within the range of a given type variable's value.
-bool TypeDomain::has_type(const NumAbsDomain& inv, const Reg& r, const TypeEncoding type) const {
+bool TypeDomain::may_have_type(const NumAbsDomain& inv, const Reg& r, const TypeEncoding type) const {
     const Interval interval = inv.eval_interval(reg_pack(r).type);
     return interval.contains(type);
 }
 
-bool TypeDomain::has_type(const NumAbsDomain& inv, const LinearExpression& v, const TypeEncoding type) const {
+bool TypeDomain::may_have_type(const NumAbsDomain& inv, const LinearExpression& v, const TypeEncoding type) const {
     const Interval interval = inv.eval_interval(v);
     return interval.contains(type);
 }

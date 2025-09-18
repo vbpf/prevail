@@ -43,9 +43,9 @@ struct TypeDomain {
     TypeEncoding get_type(const NumAbsDomain& inv, const Reg& r) const;
 
     [[nodiscard]]
-    bool has_type(const NumAbsDomain& inv, const LinearExpression& v, TypeEncoding type) const;
+    bool may_have_type(const NumAbsDomain& inv, const LinearExpression& v, TypeEncoding type) const;
     [[nodiscard]]
-    bool has_type(const NumAbsDomain& inv, const Reg& r, TypeEncoding type) const;
+    bool may_have_type(const NumAbsDomain& inv, const Reg& r, TypeEncoding type) const;
 
     [[nodiscard]]
     bool same_type(const NumAbsDomain& inv, const Reg& a, const Reg& b) const;
