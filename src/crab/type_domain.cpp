@@ -121,6 +121,7 @@ TypeEncoding string_to_type_encoding(const std::string& s) {
     }
     throw std::runtime_error(std::string("Unsupported type name: ") + s);
 }
+
 RegPack reg_pack(const int i) {
     return {
         variable_registry->reg(DataKind::svalues, i),
@@ -134,6 +135,110 @@ RegPack reg_pack(const int i) {
         variable_registry->reg(DataKind::shared_region_sizes, i),
         variable_registry->reg(DataKind::stack_numeric_sizes, i),
     };
+}
+
+static const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
+    {T_CTX, {DataKind::ctx_offsets}},
+    {T_MAP, {DataKind::map_fds}},
+    {T_MAP_PROGRAMS, {DataKind::map_fds}},
+    {T_PACKET, {DataKind::packet_offsets}},
+    {T_SHARED, {DataKind::shared_offsets, DataKind::shared_region_sizes}},
+    {T_STACK, {DataKind::stack_offsets, DataKind::stack_numeric_sizes}},
+};
+
+/// Return the kind variables (for example, offset variables) that are meaningless -- that is, whose type is not present
+/// in the register's types.  These variables are not used in the domain, so they can be ignored when joining domains.
+/// They are effectively Bottom.
+std::vector<Variable> TypeDomain::get_nonexistent_kind_variables(const NumAbsDomain& dom) const {
+    std::vector<Variable> res;
+    for (const Variable v : variable_registry->get_type_variables()) {
+        for (const auto& [type, kinds] : type_to_kinds) {
+            if (may_have_type(dom, v, type)) {
+                // this type is present in the register's types, so the kind variable is meaningful.
+                continue;
+            }
+            for (const auto kind : kinds) {
+                // This type is not present in the register's types, so the kind variable is meaningless.
+                Variable type_offset = variable_registry->kind_var(kind, v);
+                res.push_back(type_offset);
+            }
+        }
+    }
+    return res;
+}
+
+std::vector<DataKind> TypeDomain::get_valid_kinds(const NumAbsDomain& dom, const Reg& r) const {
+    std::vector<DataKind> res{};
+    for (const auto& [type, kinds] : type_to_kinds) {
+        if (may_have_type(dom, variable_registry->reg(DataKind::types, r.v), type)) {
+            // this type is present in the register's types, so the kind variable is meaningful.
+            for (const auto kind : kinds) {
+                res.push_back(kind);
+            }
+        }
+    }
+    return res;
+}
+/**
+ * @brief Collects type-specific constraints that are present in only one of two domains during a join.
+ *
+ * @details This function is a crucial helper for implementing a correct join operation
+ * for the EbpfDomain. The domain's structure, where numerical properties depend on a
+ * register's type, requires a specialized join that behaves like a
+ * **Reduced Cardinal Power** of the TypeDomain and the NumAbsDomain.
+ *
+ * ### The Problem
+ *
+ * A register's numerical properties (like `packet_offset` or `stack_offset`) are
+ * only meaningful when the register has the corresponding type (`T_PACKET` or `T_STACK`).
+ * During a join, if one branch has `{r1.type=T_PACKET, r1.packet_offset=4}` and the
+ * other has `{r1.type=T_STACK}`, a naive numerical join would observe that `packet_offset`
+ * is unconstrained (Top) in the second branch and incorrectly discard the precise
+ * information from the first.
+ *
+ * ### The Solution
+ *
+ * This function correctly interprets the absence of a type as making its dependent
+ * variables **irrelevant (Bottom)**, not unconstrained (Top). It inspects the possible
+ * types for each register in the `left` and `right` domains. If a type (e.g., `T_PACKET`)
+ * may exist in one domain but not the other, it extracts the constraints for all variables
+ * specific to that type (e.g., `r1.packet_offset`) from the domain where the type is present.
+ *
+ * The caller (the join operation) uses the returned map to "patch" the naively joined
+ * domain, re-inserting the type-specific constraints that would have otherwise been lost.
+ *
+ * @param[in] left The numerical domain from the first branch of the join.
+ * @param[in] right The numerical domain from the second branch of the join.
+ * @return A map of type-dependent variables to their interval constraints. This map contains
+ * only the constraints that must be preserved because they are tied to a type that
+ * is not present in both input domains.
+ */
+std::vector<std::tuple<Variable, bool, Interval>>
+TypeDomain::collect_type_dependent_constraints(const NumAbsDomain& left, const NumAbsDomain& right) const {
+    std::vector<std::tuple<Variable, bool, Interval>> result;
+
+    for (const Variable& type_var : variable_registry->get_type_variables()) {
+        for (const auto& [type, kinds] : type_to_kinds) {
+            const bool in_left = may_have_type(left, type_var, type);
+            const bool in_right = may_have_type(right, type_var, type);
+
+            // If a type may be present in one domain but not the other, its
+            // dependent constraints must be explicitly preserved.
+            if (in_left != in_right) {
+                // Identify which domain contains the constraints.
+                const NumAbsDomain& source = in_left ? left : right;
+                for (const DataKind kind : kinds) {
+                    Variable var = variable_registry->kind_var(kind, type_var);
+                    Interval value = source.eval_interval(var);
+                    if (!value.is_top()) {
+                        result.emplace_back(var, in_left, value);
+                    }
+                }
+            }
+        }
+    }
+
+    return result;
 }
 
 void TypeDomain::add_extra_invariant(const NumAbsDomain& dst, std::map<Variable, Interval>& extra_invariants,
