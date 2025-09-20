@@ -69,13 +69,22 @@ bool EbpfDomain::is_bottom() const { return m_inv.is_bottom(); }
 
 bool EbpfDomain::is_top() const { return m_inv.is_top() && stack.is_top(); }
 
+/**
+ * @brief Determines if this abstract state is subsumed by another (*this <= other).
+ *
+ * @details This is a type-aware subsumption check that correctly handles type-specific
+ * "kind" variables (e.g., `packet_offset`). A standard numerical comparison is
+ * insufficient due to the special role these variables play: a kind variable associated
+ * with a type that is not active in `this` domain is conceptually Bottom.
+ * To ensure a correct comparison, this function first identifies these "Bottom" variables.
+ * It then `havoc`s them in a temporary copy of the `other` domain, which sets them to
+ * Top. The final numerical check `m_inv <= tmp.m_inv` is then sound, as it
+ * evaluates `Bottom <= Top` for all irrelevant variables on the left-hand side.
+ */
 bool EbpfDomain::operator<=(const EbpfDomain& other) const {
     if (!(stack <= other.stack)) {
         return false;
     }
-    // We must consider kind variables of nonexistent types to be bottom, but top.
-    // We do this by replacing the offsets in the other domain with the top
-    // value for types that do not exist in the current domain, simulating them to be bottom.
     EbpfDomain tmp{other};
     for (const Variable& v : type_inv.get_nonexistent_kind_variables(m_inv)) {
         tmp.m_inv.havoc(v);

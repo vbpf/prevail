@@ -151,14 +151,16 @@ static const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
  * @brief Identifies type-specific ("kind") variables that are meaningless for the given domain.
  *
  * @details This function is a helper for the type-aware subsumption check (`operator<=`).
- *
- * **The Core Principle:** In EbpfDomain, a "kind" variable (e.g., `r1.packet_offset`) is
+ * The Core Principle: In EbpfDomain, a "kind" variable (e.g., `r1.packet_offset`) is
  * only meaningful if the register might have the corresponding type (`T_PACKET`). If the
- * type is absent, the kind variable is conceptually **Bottom**.
+ * type is absent, the kind variable is conceptually Bottom.
  *
- * **Role in Subsumption:** A standard numerical check would incorrectly treat these Bottom
- * variables as Top (unconstrained), failing correct checks like
- *      `{r1.type=T_NUM} <= {r1.type=T_PACKET, r1.packet_offset=5}`
+ * Role in Subsumption: A standard numerical check would incorrectly treat these Bottom
+ * variables as Top, failing correct checks like
+ *      `{r1.type=T_NUM} <= {r1.type in {T_PACKET,T_NUM}, r1.packet_offset=5}`
+ * Effectively meaning:
+ *      `{r1.type=T_NUM, r1.packet_offset=BOT} <= {r1.type in {T_PACKET,T_NUM}, r1.packet_offset=5}`
+ * Which is obviously true, since Bottom <= 5.
  * This function finds these variables so the `operator<=` can handle them correctly,
  * ensuring the subsumption check is sound.
  *
@@ -190,14 +192,14 @@ std::vector<Variable> TypeDomain::get_nonexistent_kind_variables(const NumAbsDom
  *
  * @details This function is a helper for the type-aware join operation (`operator|`).
  *
- * **The Core Principle:** In EbpfDomain, a "kind" variable (e.g., `r1.packet_offset`) is
+ * The Core Principle: In EbpfDomain, a "kind" variable (e.g., `r1.packet_offset`) is
  * only meaningful if the register might have the corresponding type (`T_PACKET`). If the
- * type is absent, the kind variable is conceptually **Bottom**.
+ * type is absent, the kind variable is conceptually Bottom.
  *
- * **Role in Join:** During a join, if one branch has constraints on `packet_offset`
+ * Role in Join: During a join, if one branch has constraints on `packet_offset`
  * (because the type is `T_PACKET`) and the other doesn't, a naive join would lose
  * those constraints. This function identifies such constraints so that the `operator|`
- * can correctly preserve them, creating a sound and precise union of the two states.
+ * can preserve them, creating a more precise union of the two states.
  *
  * @param[in] left The numerical domain from the first branch of the join.
  * @param[in] right The numerical domain from the second branch of the join.
