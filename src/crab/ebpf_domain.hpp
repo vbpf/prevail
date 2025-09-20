@@ -51,6 +51,8 @@ class EbpfDomain final {
     bool is_top() const;
     bool operator<=(const EbpfDomain& other) const;
     bool operator==(const EbpfDomain& other) const;
+
+    static void join_selective(NumAbsDomain& left, NumAbsDomain&& right);
     void operator|=(EbpfDomain&& other);
     void operator|=(const EbpfDomain& other);
     EbpfDomain operator|(EbpfDomain&& other) const;

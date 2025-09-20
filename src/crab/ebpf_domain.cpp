@@ -87,21 +87,28 @@ bool EbpfDomain::operator==(const EbpfDomain& other) const {
     return stack == other.stack && m_inv <= other.m_inv && other.m_inv <= m_inv;
 }
 
+void EbpfDomain::join_selective(NumAbsDomain& left, NumAbsDomain&& right) {
+    if (left.is_bottom()) {
+        left = std::move(right);
+        return;
+    }
+    if (right.is_bottom()) {
+        return;
+    }
+    auto extra_invariants = TypeDomain{}.collect_type_dependent_constraints(left, right);
+    left |= std::move(right);
+    for (const auto& [variable, in_left, interval] : extra_invariants) {
+        left.set(variable, interval);
+    }
+}
+
 void EbpfDomain::operator|=(EbpfDomain&& other) {
     if (is_bottom()) {
-        *this = std::move(other);
-        return;
+        stack = std::move(other.stack);
+    } else if (!other.is_bottom()) {
+        stack |= std::move(other.stack);
     }
-    if (other.is_bottom()) {
-        return;
-    }
-
-    auto extra_invariants = type_inv.collect_type_dependent_constraints(m_inv, other.m_inv);
-    this->m_inv |= std::move(other.m_inv);
-    for (const auto& [variable, in_left, interval] : extra_invariants) {
-        m_inv.set(variable, interval);
-    }
-    stack |= std::move(other.stack);
+    join_selective(m_inv, std::move(other.m_inv));
 }
 
 void EbpfDomain::operator|=(const EbpfDomain& other) {
@@ -160,7 +167,15 @@ EbpfDomain EbpfDomain::calculate_constant_limits() {
 static const EbpfDomain constant_limits = EbpfDomain::calculate_constant_limits();
 
 EbpfDomain EbpfDomain::widen(const EbpfDomain& other, const bool to_constants) const {
-    EbpfDomain res{m_inv.widen(other.m_inv), stack | other.stack};
+    auto extra_invariants = type_inv.collect_type_dependent_constraints(m_inv, other.m_inv);
+
+    EbpfDomain res{this->m_inv.widen(std::move(other.m_inv)), stack.widen(other.stack)};
+
+    // Now add in the extra invariants saved above.
+    for (const auto& [variable, in_left, interval] : extra_invariants) {
+        res.m_inv.set(variable, interval);
+    }
+
     if (to_constants) {
         return res & constant_limits;
     }

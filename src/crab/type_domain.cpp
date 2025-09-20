@@ -10,6 +10,7 @@
 #include "arith/dsl_syntax.hpp"
 #include "arith/variable.hpp"
 #include "crab/array_domain.hpp"
+#include "crab/ebpf_domain.hpp" // for join_selective
 #include "crab/split_dbm.hpp"
 #include "crab/type_domain.hpp"
 #include "crab/type_encoding.hpp"
@@ -146,19 +147,36 @@ static const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
     {T_STACK, {DataKind::stack_offsets, DataKind::stack_numeric_sizes}},
 };
 
-/// Return the kind variables (for example, offset variables) that are meaningless -- that is, whose type is not present
-/// in the register's types.  These variables are not used in the domain, so they can be ignored when joining domains.
-/// They are effectively Bottom.
+/**
+ * @brief Identifies type-specific ("kind") variables that are meaningless for the given domain.
+ *
+ * @details This function is a helper for the type-aware subsumption check (`operator<=`).
+ *
+ * **The Core Principle:** In EbpfDomain, a "kind" variable (e.g., `r1.packet_offset`) is
+ * only meaningful if the register might have the corresponding type (`T_PACKET`). If the
+ * type is absent, the kind variable is conceptually **Bottom**.
+ *
+ * **Role in Subsumption:** A standard numerical check would incorrectly treat these Bottom
+ * variables as Top (unconstrained), failing correct checks like
+ *      `{r1.type=T_NUM} <= {r1.type=T_PACKET, r1.packet_offset=5}`
+ * This function finds these variables so the `operator<=` can handle them correctly,
+ * ensuring the subsumption check is sound.
+ *
+ * @param[in] dom The numerical domain to inspect.
+ * @return A vector of all kind variables that are meaningless (effectively Bottom) in `dom`.
+ */
 std::vector<Variable> TypeDomain::get_nonexistent_kind_variables(const NumAbsDomain& dom) const {
     std::vector<Variable> res;
     for (const Variable v : variable_registry->get_type_variables()) {
         for (const auto& [type, kinds] : type_to_kinds) {
             if (may_have_type(dom, v, type)) {
-                // this type is present in the register's types, so the kind variable is meaningful.
+                // This type might be present in the register's type set, so its kind
+                // variables are meaningful and should not be ignored.
                 continue;
             }
             for (const auto kind : kinds) {
-                // This type is not present in the register's types, so the kind variable is meaningless.
+                // This type is definitely not present, so any associated kind variables
+                // are meaningless for this domain.
                 Variable type_offset = variable_registry->kind_var(kind, v);
                 res.push_back(type_offset);
             }
@@ -167,51 +185,24 @@ std::vector<Variable> TypeDomain::get_nonexistent_kind_variables(const NumAbsDom
     return res;
 }
 
-std::vector<DataKind> TypeDomain::get_valid_kinds(const NumAbsDomain& dom, const Reg& r) const {
-    std::vector<DataKind> res{};
-    for (const auto& [type, kinds] : type_to_kinds) {
-        if (may_have_type(dom, variable_registry->reg(DataKind::types, r.v), type)) {
-            // this type is present in the register's types, so the kind variable is meaningful.
-            for (const auto kind : kinds) {
-                res.push_back(kind);
-            }
-        }
-    }
-    return res;
-}
 /**
- * @brief Collects type-specific constraints that are present in only one of two domains during a join.
+ * @brief Collects type-specific constraints that are present in only one of two domains.
  *
- * @details This function is a crucial helper for implementing a correct join operation
- * for the EbpfDomain. The domain's structure, where numerical properties depend on a
- * register's type, requires a specialized join that behaves like a
- * **Reduced Cardinal Power** of the TypeDomain and the NumAbsDomain.
+ * @details This function is a helper for the type-aware join operation (`operator|`).
  *
- * ### The Problem
+ * **The Core Principle:** In EbpfDomain, a "kind" variable (e.g., `r1.packet_offset`) is
+ * only meaningful if the register might have the corresponding type (`T_PACKET`). If the
+ * type is absent, the kind variable is conceptually **Bottom**.
  *
- * A register's numerical properties (like `packet_offset` or `stack_offset`) are
- * only meaningful when the register has the corresponding type (`T_PACKET` or `T_STACK`).
- * During a join, if one branch has `{r1.type=T_PACKET, r1.packet_offset=4}` and the
- * other has `{r1.type=T_STACK}`, a naive numerical join would observe that `packet_offset`
- * is unconstrained (Top) in the second branch and incorrectly discard the precise
- * information from the first.
- *
- * ### The Solution
- *
- * This function correctly interprets the absence of a type as making its dependent
- * variables **irrelevant (Bottom)**, not unconstrained (Top). It inspects the possible
- * types for each register in the `left` and `right` domains. If a type (e.g., `T_PACKET`)
- * may exist in one domain but not the other, it extracts the constraints for all variables
- * specific to that type (e.g., `r1.packet_offset`) from the domain where the type is present.
- *
- * The caller (the join operation) uses the returned map to "patch" the naively joined
- * domain, re-inserting the type-specific constraints that would have otherwise been lost.
+ * **Role in Join:** During a join, if one branch has constraints on `packet_offset`
+ * (because the type is `T_PACKET`) and the other doesn't, a naive join would lose
+ * those constraints. This function identifies such constraints so that the `operator|`
+ * can correctly preserve them, creating a sound and precise union of the two states.
  *
  * @param[in] left The numerical domain from the first branch of the join.
  * @param[in] right The numerical domain from the second branch of the join.
- * @return A map of type-dependent variables to their interval constraints. This map contains
- * only the constraints that must be preserved because they are tied to a type that
- * is not present in both input domains.
+ * @return A vector containing the variable, which domain it came from (`true` if left),
+ * and its interval value, for each type-specific constraint to be preserved.
  */
 std::vector<std::tuple<Variable, bool, Interval>>
 TypeDomain::collect_type_dependent_constraints(const NumAbsDomain& left, const NumAbsDomain& right) const {
@@ -239,70 +230,6 @@ TypeDomain::collect_type_dependent_constraints(const NumAbsDomain& left, const N
     }
 
     return result;
-}
-
-void TypeDomain::add_extra_invariant(const NumAbsDomain& dst, std::map<Variable, Interval>& extra_invariants,
-                                     const Variable type_variable, const TypeEncoding type, const DataKind kind,
-                                     const NumAbsDomain& src) const {
-    const bool dst_may_have_type = may_have_type(dst, type_variable, type);
-    const bool src_may_have_type = may_have_type(src, type_variable, type);
-    Variable v = variable_registry->kind_var(kind, type_variable);
-
-    // If type is contained in exactly one of dst or src,
-    // we need to remember the value.
-    if (dst_may_have_type && !src_may_have_type) {
-        extra_invariants.emplace(v, dst.eval_interval(v));
-    } else if (!dst_may_have_type && src_may_have_type) {
-        extra_invariants.emplace(v, src.eval_interval(v));
-    }
-}
-
-void TypeDomain::selectively_join_based_on_type(NumAbsDomain& dst, NumAbsDomain&& src) const {
-    // Some variables are type-specific.  Type-specific variables
-    // for a register can exist in the domain whenever the associated
-    // type value is present in the register's types interval (and the
-    // value is not Top), and are absent otherwise.  That is, we want
-    // to keep track of implications of the form
-    // "if register R has type=T then R.T_offset has value ...".
-    //
-    // If a type value is legal in exactly one of the two domains, a
-    // normal join operation would remove any type-specific variables
-    // from the resulting merged domain since absence from the other
-    // would be interpreted to mean Top.
-    //
-    // However, when the type value is not present in one domain,
-    // any type-specific variables for that type are instead to be
-    // interpreted as Bottom, so we want to preserve the values of any
-    // type-specific variables from the other domain where the type
-    // value is legal.
-    //
-    // Example input:
-    //   r1.type=stack, r1.stack_offset=100
-    //   r1.type=packet, r1.packet_offset=4
-    // Output:
-    //   r1.type={stack,packet}, r1.stack_offset=100, r1.packet_offset=4
-
-    std::map<Variable, Interval> extra_invariants;
-    if (!dst.is_bottom()) {
-        for (const Variable v : variable_registry->get_type_variables()) {
-            add_extra_invariant(dst, extra_invariants, v, T_CTX, DataKind::ctx_offsets, src);
-            add_extra_invariant(dst, extra_invariants, v, T_MAP, DataKind::map_fds, src);
-            add_extra_invariant(dst, extra_invariants, v, T_MAP_PROGRAMS, DataKind::map_fds, src);
-            add_extra_invariant(dst, extra_invariants, v, T_PACKET, DataKind::packet_offsets, src);
-            add_extra_invariant(dst, extra_invariants, v, T_SHARED, DataKind::shared_offsets, src);
-            add_extra_invariant(dst, extra_invariants, v, T_STACK, DataKind::stack_offsets, src);
-            add_extra_invariant(dst, extra_invariants, v, T_SHARED, DataKind::shared_region_sizes, src);
-            add_extra_invariant(dst, extra_invariants, v, T_STACK, DataKind::stack_numeric_sizes, src);
-        }
-    }
-
-    // Do a normal join operation on the domain.
-    dst |= std::move(src);
-
-    // Now add in the extra invariants saved above.
-    for (const auto& [variable, interval] : extra_invariants) {
-        dst.set(variable, interval);
-    }
 }
 
 void TypeDomain::assign_type(NumAbsDomain& inv, const Reg& lhs, const Reg& rhs) {
@@ -362,7 +289,7 @@ NumAbsDomain TypeDomain::join_over_types(const NumAbsDomain& inv, const Reg& reg
     for (TypeEncoding type : iterate_types(lb, ub)) {
         NumAbsDomain tmp(inv);
         transition(tmp, type);
-        selectively_join_based_on_type(res, std::move(tmp)); // res |= tmp;
+        EbpfDomain::join_selective(res, std::move(tmp)); // res |= tmp;
     }
     return res;
 }
