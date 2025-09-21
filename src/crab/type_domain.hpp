@@ -9,7 +9,7 @@
 #include <tuple>
 #include <vector>
 
-#include "arith/variable.hpp"
+#include "arith/progvar.hpp"
 #include "asm_syntax.hpp" // for Reg
 #include "crab/array_domain.hpp"
 #include "crab/type_encoding.hpp"
@@ -17,16 +17,16 @@
 namespace prevail {
 
 struct RegPack {
-    Variable svalue; // int64_t value.
-    Variable uvalue; // uint64_t value.
-    Variable ctx_offset;
-    Variable map_fd;
-    Variable packet_offset;
-    Variable shared_offset;
-    Variable stack_offset;
-    Variable type;
-    Variable shared_region_size;
-    Variable stack_numeric_size;
+    ProgVar svalue; // int64_t value.
+    ProgVar uvalue; // uint64_t value.
+    ProgVar ctx_offset;
+    ProgVar map_fd;
+    ProgVar packet_offset;
+    ProgVar shared_offset;
+    ProgVar stack_offset;
+    ProgVar type;
+    ProgVar shared_region_size;
+    ProgVar stack_numeric_size;
 };
 
 RegPack reg_pack(int i);
@@ -35,7 +35,7 @@ inline RegPack reg_pack(const Reg r) { return reg_pack(r.v); }
 struct TypeDomain {
     void assign_type(NumAbsDomain& inv, const Reg& lhs, const Reg& rhs);
     void assign_type(NumAbsDomain& inv, const Reg& lhs, const std::optional<LinearExpression>& rhs);
-    void assign_type(NumAbsDomain& inv, std::optional<Variable> lhs, const LinearExpression& t);
+    void assign_type(NumAbsDomain& inv, const std::optional<ProgVar>& lhs, const LinearExpression& t);
 
     void havoc_type(NumAbsDomain& inv, const Reg& r);
 
@@ -62,8 +62,8 @@ struct TypeDomain {
                                  const std::function<void(NumAbsDomain&)>& if_true,
                                  const std::function<void(NumAbsDomain&)>& if_false) const;
 
-    std::vector<Variable> get_nonexistent_kind_variables(const NumAbsDomain& dom) const;
-    std::vector<std::tuple<Variable, bool, Interval>>
+    std::vector<ProgVar> get_nonexistent_kind_variables(const NumAbsDomain& dom) const;
+    std::vector<std::tuple<ProgVar, bool, Interval>>
     collect_type_dependent_constraints(const NumAbsDomain& left, const NumAbsDomain& right) const;
 
     [[nodiscard]]

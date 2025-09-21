@@ -19,7 +19,7 @@
 
 namespace prevail {
 
-std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg, const int type) {
+std::optional<ProgVar> EbpfDomain::get_type_offset_variable(const Reg& reg, const int type) {
     RegPack r = reg_pack(reg);
     switch (type) {
     case T_CTX: return r.ctx_offset;
@@ -32,11 +32,11 @@ std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg, con
     }
 }
 
-std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg, const NumAbsDomain& inv) const {
+std::optional<ProgVar> EbpfDomain::get_type_offset_variable(const Reg& reg, const NumAbsDomain& inv) const {
     return get_type_offset_variable(reg, type_inv.get_type(inv, reg_pack(reg).type));
 }
 
-std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg) const {
+std::optional<ProgVar> EbpfDomain::get_type_offset_variable(const Reg& reg) const {
     return get_type_offset_variable(reg, m_inv);
 }
 
@@ -86,7 +86,7 @@ bool EbpfDomain::operator<=(const EbpfDomain& other) const {
         return false;
     }
     EbpfDomain tmp{other};
-    for (const Variable& v : type_inv.get_nonexistent_kind_variables(m_inv)) {
+    for (const ProgVar& v : type_inv.get_nonexistent_kind_variables(m_inv)) {
         tmp.m_inv.havoc(v);
     }
     return m_inv <= tmp.m_inv;
@@ -163,7 +163,7 @@ EbpfDomain EbpfDomain::calculate_constant_limits() {
         inv.add_constraint(r.packet_offset <= variable_registry->packet_size());
         inv.add_constraint(r.packet_offset >= 0);
         if (thread_local_options.cfg_opts.check_for_termination) {
-            for (const Variable counter : variable_registry->get_loop_counters()) {
+            for (const ProgVar& counter : variable_registry->get_loop_counters()) {
                 inv.add_constraint(counter <= std::numeric_limits<int32_t>::max());
                 inv.add_constraint(counter >= 0);
                 inv.add_constraint(counter <= r.svalue);
@@ -197,7 +197,7 @@ EbpfDomain EbpfDomain::narrow(const EbpfDomain& other) const {
 
 void EbpfDomain::add_constraint(const LinearConstraint& cst) { m_inv.add_constraint(cst); }
 
-void EbpfDomain::havoc(const Variable var) { m_inv.havoc(var); }
+void EbpfDomain::havoc(const ProgVar& var) { m_inv.havoc(var); }
 
 // Get the start and end of the range of possible map fd values.
 // In the future, it would be cleaner to use a set rather than an interval
@@ -317,7 +317,7 @@ Interval EbpfDomain::get_map_max_entries(const Reg& map_fd_reg) const {
 
 ExtendedNumber EbpfDomain::get_loop_count_upper_bound() const {
     ExtendedNumber ub{0};
-    for (const Variable counter : variable_registry->get_loop_counters()) {
+    for (const ProgVar& counter : variable_registry->get_loop_counters()) {
         ub = std::max(ub, m_inv.eval_interval(counter).ub());
     }
     return ub;

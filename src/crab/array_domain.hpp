@@ -8,7 +8,7 @@
  *
  * - offset is an unsigned number
  * - size is an unsigned number
- * - var is a scalar variable that represents the content of
+ * - var is a scalar ProgVar that represents the content of
  *   a[offset, ..., offset + size - 1]
  *
  * The domain is general enough to represent any possible sequence of
@@ -25,7 +25,7 @@
 
 #include <optional>
 
-#include "arith/variable.hpp"
+#include "arith/progvar.hpp"
 #include "crab/add_bottom.hpp"
 #include "crab/bitset_domain.hpp"
 
@@ -58,27 +58,30 @@ class ArrayDomain final {
 
     ArrayDomain operator|(const ArrayDomain& other) const;
     ArrayDomain operator&(const ArrayDomain& other) const;
+    [[nodiscard]]
     ArrayDomain widen(const ArrayDomain& other) const;
+    [[nodiscard]]
     ArrayDomain narrow(const ArrayDomain& other) const;
 
     friend std::ostream& operator<<(std::ostream& o, const ArrayDomain& dom);
     [[nodiscard]]
     StringInvariant to_set() const;
 
+    [[nodiscard]]
     bool all_num(const NumAbsDomain& inv, const LinearExpression& lb, const LinearExpression& ub) const;
     [[nodiscard]]
-    int min_all_num_size(const NumAbsDomain& inv, Variable offset) const;
+    int min_all_num_size(const NumAbsDomain& inv, const ProgVar& offset) const;
 
     std::optional<LinearExpression> load(const NumAbsDomain& inv, DataKind kind, const LinearExpression& i,
                                          int width) const;
-    std::optional<Variable> store(NumAbsDomain& inv, DataKind kind, const LinearExpression& idx,
-                                  const LinearExpression& elem_size, const LinearExpression& val);
-    std::optional<Variable> store_type(NumAbsDomain& inv, const LinearExpression& idx,
-                                       const LinearExpression& elem_size, const LinearExpression& val);
+    std::optional<ProgVar> store(NumAbsDomain& inv, DataKind kind, const LinearExpression& idx,
+                                 const LinearExpression& elem_size, const LinearExpression& val);
+    std::optional<ProgVar> store_type(NumAbsDomain& inv, const LinearExpression& idx, const LinearExpression& elem_size,
+                                      const LinearExpression& val);
     void havoc(NumAbsDomain& inv, DataKind kind, const LinearExpression& idx, const LinearExpression& elem_size);
 
     // Perform array stores over an array segment
-    void store_numbers(const NumAbsDomain& inv, Variable _idx, Variable _width);
+    void store_numbers(const NumAbsDomain& inv, const ProgVar& _idx, const ProgVar& _width);
 
     void split_number_var(NumAbsDomain& inv, DataKind kind, const LinearExpression& i,
                           const LinearExpression& elem_size) const;

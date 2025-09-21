@@ -138,7 +138,7 @@ class AddBottom final {
         return bottom();
     }
 
-    void havoc(Variable v) {
+    void havoc(const ProgVar& v) {
         if (dom) {
             dom->havoc(v);
         }
@@ -160,7 +160,7 @@ class AddBottom final {
         return Interval::bottom();
     }
 
-    void set(Variable x, const Interval& intv) {
+    void set(const ProgVar& x, const Interval& intv) {
         if (intv.is_bottom()) {
             dom = {};
         } else if (dom) {
@@ -168,14 +168,14 @@ class AddBottom final {
         }
     }
 
-    void assign(const std::optional<Variable> x, const LinearExpression& e) {
+    void assign(const std::optional<ProgVar>& x, const LinearExpression& e) {
         if (x) {
             assign(*x, e);
         }
     }
 
     template <typename V>
-    void assign(Variable x, const V& value) {
+    void assign(ProgVar x, const V& value) {
         if (dom) {
             // XXX: maybe needs to return false when becomes bottom
             // is this possible?
@@ -184,7 +184,7 @@ class AddBottom final {
     }
 
     template <typename Op, typename Left, typename Right>
-    void apply(Op op, Variable x, const Left& left, const Right& right, int finite_width) {
+    void apply(Op op, ProgVar x, const Left& left, const Right& right, int finite_width) {
         if (dom) {
             dom->apply(op, x, left, right, finite_width);
         }

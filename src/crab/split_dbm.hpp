@@ -29,12 +29,12 @@
 #include "arith/linear_constraint.hpp"
 #include "arith/num_big.hpp"
 #include "arith/num_safeint.hpp"
-#include "arith/variable.hpp"
 #include "crab/interval.hpp"
 #include "crab_utils/adapt_sgraph.hpp"
 #include "crab_utils/debug.hpp"
 #include "crab_utils/stats.hpp"
 #include "string_constraints.hpp"
+#include "variable.hpp"
 
 namespace prevail {
 
@@ -121,6 +121,8 @@ class SplitDBM final {
     [[nodiscard]]
     Interval get_interval(Variable x, int finite_width) const;
 
+    [[nodiscard]]
+    Interval get_interval(ProgVar x, int finite_width) const;
     // Restore potential after an edge addition
     bool repair_potential(VertId src, VertId dest);
 
@@ -208,18 +210,18 @@ class SplitDBM final {
     [[nodiscard]]
     SplitDBM narrow(const SplitDBM& o) const;
 
-    void assign(Variable lhs, const LinearExpression& e);
+    void assign(ProgVar lhs, const LinearExpression& e);
 
-    void assign(std::optional<Variable> x, const LinearExpression& e) {
+    void assign(const std::optional<ProgVar>& x, const LinearExpression& e) {
         if (x) {
             assign(*x, e);
         }
     }
-    void assign(Variable x, signed long long int n) { assign(x, LinearExpression(n)); }
+    void assign(const ProgVar& x, signed long long int n) { assign(x, LinearExpression(n)); }
 
-    void assign(Variable x, Variable v) { assign(x, LinearExpression{v}); }
+    void assign(const ProgVar& x, const ProgVar& v) { assign(x, LinearExpression{v}); }
 
-    void assign(Variable x, const std::optional<LinearExpression>& e) {
+    void assign(const ProgVar& x, const std::optional<LinearExpression>& e) {
         if (e) {
             assign(x, *e);
         } else {
@@ -227,22 +229,22 @@ class SplitDBM final {
         }
     }
 
-    void havoc(Variable v);
+    void havoc(ProgVar& v);
 
-    void apply(ArithBinOp op, Variable x, Variable y, Variable z, int finite_width);
+    void apply(ArithBinOp op, const ProgVar& x, const ProgVar& y, const ProgVar& z, int finite_width);
 
-    void apply(ArithBinOp op, Variable x, Variable y, const Number& k, int finite_width);
+    void apply(ArithBinOp op, const ProgVar& x, const ProgVar& y, const Number& k, int finite_width);
 
     // bitwise_operators_api
-    void apply(BitwiseBinOp op, Variable x, Variable y, Variable z, int finite_width);
+    void apply(BitwiseBinOp op, ProgVar x, ProgVar y, ProgVar z, int finite_width);
 
-    void apply(BitwiseBinOp op, Variable x, Variable y, const Number& k, int finite_width);
+    void apply(BitwiseBinOp op, ProgVar x, ProgVar y, const Number& k, int finite_width);
 
-    void apply(BinOp op, Variable x, Variable y, const Number& z, int finite_width) {
+    void apply(BinOp op, ProgVar x, ProgVar y, const Number& z, int finite_width) {
         std::visit([&](auto top) { apply(top, x, y, z, finite_width); }, op);
     }
 
-    void apply(BinOp op, Variable x, Variable y, Variable z, int finite_width) {
+    void apply(BinOp op, ProgVar x, ProgVar y, ProgVar z, int finite_width) {
         std::visit([&](auto top) { apply(top, x, y, z, finite_width); }, op);
     }
 
@@ -251,9 +253,9 @@ class SplitDBM final {
     [[nodiscard]]
     Interval eval_interval(const LinearExpression& e) const;
 
-    Interval operator[](Variable x) const;
+    Interval operator[](const ProgVar& x) const;
 
-    void set(Variable x, const Interval& intv);
+    void set(const ProgVar& x, const Interval& intv);
 
     void forget(const VariableVector& variables);
 

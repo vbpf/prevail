@@ -5,7 +5,7 @@
 // This file is eBPF-specific, not derived from CRAB.
 #include <optional>
 
-#include "arith/variable.hpp"
+#include "arith/progvar.hpp"
 #include "crab/array_domain.hpp"
 #include "crab/type_domain.hpp"
 #include "string_constraints.hpp"
@@ -78,7 +78,7 @@ class EbpfDomain final {
   private:
     // private generic domain functions
     void add_constraint(const LinearConstraint& cst);
-    void havoc(Variable var);
+    void havoc(const ProgVar& var);
 
     [[nodiscard]]
     std::optional<uint32_t> get_map_type(const Reg& map_fd_reg) const;
@@ -91,11 +91,11 @@ class EbpfDomain final {
     [[nodiscard]]
     Interval get_map_max_entries(const Reg& map_fd_reg) const;
 
-    static std::optional<Variable> get_type_offset_variable(const Reg& reg, int type);
+    static std::optional<ProgVar> get_type_offset_variable(const Reg& reg, int type);
     [[nodiscard]]
-    std::optional<Variable> get_type_offset_variable(const Reg& reg, const NumAbsDomain& inv) const;
+    std::optional<ProgVar> get_type_offset_variable(const Reg& reg, const NumAbsDomain& inv) const;
     [[nodiscard]]
-    std::optional<Variable> get_type_offset_variable(const Reg& reg) const;
+    std::optional<ProgVar> get_type_offset_variable(const Reg& reg) const;
 
     bool get_map_fd_range(const Reg& map_fd_reg, int32_t* start_fd, int32_t* end_fd) const;
 
@@ -105,7 +105,7 @@ class EbpfDomain final {
     NumAbsDomain m_inv;
 
     /// Represents the stack as a memory region, i.e., an array of bytes,
-    /// allowing mapping to variable in the m_inv numeric domains
+    /// allowing mapping to ProgVar in the m_inv numeric domains
     /// while dealing with overlapping byte ranges.
     ArrayDomain stack;
 

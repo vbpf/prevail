@@ -10,7 +10,6 @@ namespace prevail {
 // Wrapper for typed variables used by the abstract domains and linear_constraints.
 // Being a class (instead of a type alias) enables overloading in dsl_syntax
 class Variable final {
-    friend class VariableRegistry;
     uint64_t _id;
 
     explicit Variable(const uint64_t id) : _id(id) {}

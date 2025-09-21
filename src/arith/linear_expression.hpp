@@ -4,8 +4,8 @@
 
 #include <map>
 
-#include "num_big.hpp"
-#include "variable.hpp"
+#include "arith/num_big.hpp"
+#include "arith/progvar.hpp"
 
 namespace prevail {
 
@@ -17,7 +17,7 @@ class LinearExpression final {
 
     // Use a map for the variable terms to simplify adding two expressions
     // with the same variable.
-    using VariableTerms = std::map<Variable, Number>;
+    using VariableTerms = std::map<ProgVar, Number>;
 
   private:
     Number _constant_term{};
@@ -25,7 +25,7 @@ class LinearExpression final {
 
     // Get the coefficient for a given variable, which is 0 if it has no term in the expression.
     [[nodiscard]]
-    Number coefficient_of(const Variable& variable) const {
+    Number coefficient_of(const ProgVar& variable) const {
         const auto it = _variable_terms.find(variable);
         if (it == _variable_terms.end()) {
             return 0;
@@ -38,9 +38,9 @@ class LinearExpression final {
 
     LinearExpression(std::integral auto coefficient) : _constant_term(coefficient) {}
     LinearExpression(is_enum auto coefficient) : _constant_term(coefficient) {}
-    LinearExpression(Variable variable) { _variable_terms[variable] = 1; }
+    LinearExpression(const ProgVar& variable) { _variable_terms[variable] = 1; }
 
-    LinearExpression(const Number& coefficient, const Variable& variable) {
+    LinearExpression(const Number& coefficient, const ProgVar& variable) {
         if (coefficient != 0) {
             _variable_terms[variable] = coefficient;
         }
@@ -88,7 +88,7 @@ class LinearExpression final {
 
     // Add a variable (with coefficient of 1) to a linear expression.
     [[nodiscard]]
-    LinearExpression plus(const Variable& variable) const {
+    LinearExpression plus(const ProgVar& variable) const {
         VariableTerms variable_terms = _variable_terms;
         variable_terms[variable] = coefficient_of(variable) + 1;
         return LinearExpression(variable_terms, _constant_term);
@@ -118,7 +118,7 @@ class LinearExpression final {
 
     // Subtract a variable (with coefficient of 1) from a linear expression.
     [[nodiscard]]
-    LinearExpression subtract(const Variable& variable) const {
+    LinearExpression subtract(const ProgVar& variable) const {
         VariableTerms variable_terms = _variable_terms;
         variable_terms[variable] = coefficient_of(variable) - 1;
         return LinearExpression(variable_terms, _constant_term);
@@ -155,7 +155,7 @@ inline std::ostream& operator<<(std::ostream& o, const LinearExpression& express
     expression.output_variable_terms(o);
 
     // Output the constant term.
-    const Number constant = expression.constant_term();
+    const Number& constant = expression.constant_term();
     if (constant < 0) {
         o << constant;
     } else if (constant > 0) {

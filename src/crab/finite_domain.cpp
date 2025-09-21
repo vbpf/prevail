@@ -5,12 +5,12 @@
 
 #include "arith/dsl_syntax.hpp"
 #include "arith/linear_constraint.hpp"
-#include "arith/variable.hpp"
 #include "asm_syntax.hpp" // for Condition::Op
 #include "crab/finite_domain.hpp"
 #include "crab/interval.hpp"
 #include "crab/split_dbm.hpp"
 #include "string_constraints.hpp"
+#include "variable.hpp"
 
 namespace prevail {
 
@@ -45,8 +45,8 @@ std::vector<LinearConstraint> FiniteDomain::assume_bit_cst_interval(Condition::O
     return {result ? LinearConstraint::true_const() : LinearConstraint::false_const()};
 }
 
-std::vector<LinearConstraint> FiniteDomain::assume_signed_64bit_eq(const Variable left_svalue,
-                                                                   const Variable left_uvalue,
+std::vector<LinearConstraint> FiniteDomain::assume_signed_64bit_eq(const ProgVar& left_svalue,
+                                                                   const ProgVar& left_uvalue,
                                                                    const Interval& right_interval,
                                                                    const LinearExpression& right_svalue,
                                                                    const LinearExpression& right_uvalue) const {
@@ -58,8 +58,8 @@ std::vector<LinearConstraint> FiniteDomain::assume_signed_64bit_eq(const Variabl
     }
 }
 
-std::vector<LinearConstraint> FiniteDomain::assume_signed_32bit_eq(const Variable left_svalue,
-                                                                   const Variable left_uvalue,
+std::vector<LinearConstraint> FiniteDomain::assume_signed_32bit_eq(const ProgVar& left_svalue,
+                                                                   const ProgVar& left_uvalue,
                                                                    const Interval& right_interval) const {
     using namespace dsl_syntax;
 
@@ -110,7 +110,7 @@ std::vector<LinearConstraint> FiniteDomain::assume_signed_32bit_eq(const Variabl
 
 // Given left and right values, get the left and right intervals, and also split
 // the left interval into separate negative and positive intervals.
-void FiniteDomain::get_signed_intervals(bool is64, const Variable left_svalue, const Variable left_uvalue,
+void FiniteDomain::get_signed_intervals(bool is64, const ProgVar& left_svalue, const ProgVar& left_uvalue,
                                         const LinearExpression& right_svalue, Interval& left_interval,
                                         Interval& right_interval, Interval& left_interval_positive,
                                         Interval& left_interval_negative) const {
@@ -156,7 +156,7 @@ void FiniteDomain::get_signed_intervals(bool is64, const Variable left_svalue, c
 
 // Given left and right values, get the left and right intervals, and also split
 // the left interval into separate low and high intervals.
-void FiniteDomain::get_unsigned_intervals(bool is64, const Variable left_svalue, const Variable left_uvalue,
+void FiniteDomain::get_unsigned_intervals(bool is64, const ProgVar& left_svalue, const ProgVar& left_uvalue,
                                           const LinearExpression& right_uvalue, Interval& left_interval,
                                           Interval& right_interval, Interval& left_interval_low,
                                           Interval& left_interval_high) const {
@@ -199,7 +199,7 @@ void FiniteDomain::get_unsigned_intervals(bool is64, const Variable left_svalue,
 }
 
 std::vector<LinearConstraint>
-FiniteDomain::assume_signed_64bit_lt(const bool strict, const Variable left_svalue, const Variable left_uvalue,
+FiniteDomain::assume_signed_64bit_lt(const bool strict, const ProgVar& left_svalue, const ProgVar& left_uvalue,
                                      const Interval& left_interval_positive, const Interval& left_interval_negative,
                                      const LinearExpression& right_svalue, const LinearExpression& right_uvalue,
                                      const Interval& right_interval) const {
@@ -222,7 +222,7 @@ FiniteDomain::assume_signed_64bit_lt(const bool strict, const Variable left_sval
 }
 
 std::vector<LinearConstraint>
-FiniteDomain::assume_signed_32bit_lt(const bool strict, const Variable left_svalue, const Variable left_uvalue,
+FiniteDomain::assume_signed_32bit_lt(const bool strict, const ProgVar& left_svalue, const ProgVar& left_uvalue,
                                      const Interval& left_interval_positive, const Interval& left_interval_negative,
                                      const LinearExpression& right_svalue, const LinearExpression& right_uvalue,
                                      const Interval& right_interval) const {
@@ -257,7 +257,7 @@ FiniteDomain::assume_signed_32bit_lt(const bool strict, const Variable left_sval
 }
 
 std::vector<LinearConstraint>
-FiniteDomain::assume_signed_64bit_gt(const bool strict, const Variable left_svalue, const Variable left_uvalue,
+FiniteDomain::assume_signed_64bit_gt(const bool strict, const ProgVar& left_svalue, const ProgVar& left_uvalue,
                                      const Interval& left_interval_positive, const Interval& left_interval_negative,
                                      const LinearExpression& right_svalue, const LinearExpression& right_uvalue,
                                      const Interval& right_interval) const {
@@ -288,7 +288,7 @@ FiniteDomain::assume_signed_64bit_gt(const bool strict, const Variable left_sval
 }
 
 std::vector<LinearConstraint>
-FiniteDomain::assume_signed_32bit_gt(const bool strict, const Variable left_svalue, const Variable left_uvalue,
+FiniteDomain::assume_signed_32bit_gt(const bool strict, const ProgVar& left_svalue, const ProgVar& left_uvalue,
                                      const Interval& left_interval_positive, const Interval& left_interval_negative,
                                      const LinearExpression& right_svalue, const LinearExpression& right_uvalue,
                                      const Interval& right_interval) const {
@@ -322,8 +322,8 @@ FiniteDomain::assume_signed_32bit_gt(const bool strict, const Variable left_sval
     }
 }
 
-std::vector<LinearConstraint> FiniteDomain::assume_signed_cst_interval(Condition::Op op, bool is64,
-                                                                       Variable left_svalue, Variable left_uvalue,
+std::vector<LinearConstraint> FiniteDomain::assume_signed_cst_interval(Condition::Op op, bool is64, ProgVar left_svalue,
+                                                                       ProgVar left_uvalue,
                                                                        const LinearExpression& right_svalue,
                                                                        const LinearExpression& right_uvalue) const {
 
@@ -389,7 +389,7 @@ std::vector<LinearConstraint> FiniteDomain::assume_signed_cst_interval(Condition
 }
 
 std::vector<LinearConstraint>
-FiniteDomain::assume_unsigned_64bit_lt(bool strict, Variable left_svalue, Variable left_uvalue,
+FiniteDomain::assume_unsigned_64bit_lt(bool strict, ProgVar left_svalue, ProgVar left_uvalue,
                                        const Interval& left_interval_low, const Interval& left_interval_high,
                                        const LinearExpression& right_svalue, const LinearExpression& right_uvalue,
                                        const Interval& right_interval) const {
@@ -438,8 +438,8 @@ FiniteDomain::assume_unsigned_64bit_lt(bool strict, Variable left_svalue, Variab
     }
 }
 
-std::vector<LinearConstraint> FiniteDomain::assume_unsigned_32bit_lt(const bool strict, const Variable left_svalue,
-                                                                     const Variable left_uvalue,
+std::vector<LinearConstraint> FiniteDomain::assume_unsigned_32bit_lt(const bool strict, const ProgVar& left_svalue,
+                                                                     const ProgVar& left_uvalue,
                                                                      const LinearExpression& right_svalue,
                                                                      const LinearExpression& right_uvalue) const {
 
@@ -466,7 +466,7 @@ std::vector<LinearConstraint> FiniteDomain::assume_unsigned_32bit_lt(const bool 
 }
 
 std::vector<LinearConstraint>
-FiniteDomain::assume_unsigned_64bit_gt(const bool strict, const Variable left_svalue, const Variable left_uvalue,
+FiniteDomain::assume_unsigned_64bit_gt(const bool strict, const ProgVar& left_svalue, const ProgVar& left_uvalue,
                                        const Interval& left_interval_low, const Interval& left_interval_high,
                                        const LinearExpression& right_svalue, const LinearExpression& right_uvalue,
                                        const Interval& right_interval) const {
@@ -499,7 +499,7 @@ FiniteDomain::assume_unsigned_64bit_gt(const bool strict, const Variable left_sv
 }
 
 std::vector<LinearConstraint>
-FiniteDomain::assume_unsigned_32bit_gt(const bool strict, const Variable left_svalue, const Variable left_uvalue,
+FiniteDomain::assume_unsigned_32bit_gt(const bool strict, const ProgVar& left_svalue, const ProgVar& left_uvalue,
                                        const Interval& left_interval_low, const Interval& left_interval_high,
                                        const LinearExpression& right_svalue, const LinearExpression& right_uvalue,
                                        const Interval& right_interval) const {
@@ -521,7 +521,7 @@ FiniteDomain::assume_unsigned_32bit_gt(const bool strict, const Variable left_sv
 }
 
 std::vector<LinearConstraint> FiniteDomain::assume_unsigned_cst_interval(Condition::Op op, bool is64,
-                                                                         Variable left_svalue, Variable left_uvalue,
+                                                                         ProgVar left_svalue, ProgVar left_uvalue,
                                                                          const LinearExpression& right_svalue,
                                                                          const LinearExpression& right_uvalue) const {
 
@@ -600,7 +600,7 @@ std::vector<LinearConstraint> FiniteDomain::assume_unsigned_cst_interval(Conditi
 /** Linear constraints for a comparison with a constant.
  */
 std::vector<LinearConstraint> FiniteDomain::assume_cst_imm(const Condition::Op op, const bool is64,
-                                                           const Variable dst_svalue, const Variable dst_uvalue,
+                                                           const ProgVar& dst_svalue, const ProgVar& dst_uvalue,
                                                            const int64_t imm) const {
     using namespace dsl_syntax;
     using Op = Condition::Op;
@@ -626,8 +626,8 @@ std::vector<LinearConstraint> FiniteDomain::assume_cst_imm(const Condition::Op o
 /** Linear constraint for a numerical comparison between registers.
  */
 std::vector<LinearConstraint> FiniteDomain::assume_cst_reg(const Condition::Op op, const bool is64,
-                                                           const Variable dst_svalue, const Variable dst_uvalue,
-                                                           const Variable src_svalue, const Variable src_uvalue) const {
+                                                           const ProgVar& dst_svalue, const ProgVar& dst_uvalue,
+                                                           const ProgVar& src_svalue, const ProgVar& src_uvalue) const {
     using namespace dsl_syntax;
     using Op = Condition::Op;
     if (is64) {
@@ -673,40 +673,40 @@ std::vector<LinearConstraint> FiniteDomain::assume_cst_reg(const Condition::Op o
     throw std::exception();
 }
 
-void FiniteDomain::assign(Variable x, const std::optional<LinearExpression>& e) { dom.assign(x, e); }
-void FiniteDomain::assign(const Variable x, const Variable e) { dom.assign(x, e); }
-void FiniteDomain::assign(const Variable x, const LinearExpression& e) { dom.assign(x, e); }
-void FiniteDomain::assign(const Variable x, const int64_t e) { dom.set(x, Interval(e)); }
+void FiniteDomain::assign(const ProgVar& x, const std::optional<LinearExpression>& e) { dom.assign(x, e); }
+void FiniteDomain::assign(const ProgVar& x, const ProgVar& e) { dom.assign(x, e); }
+void FiniteDomain::assign(const ProgVar& x, const LinearExpression& e) { dom.assign(x, e); }
+void FiniteDomain::assign(const ProgVar& x, const int64_t e) { dom.set(x, Interval(e)); }
 
-void FiniteDomain::apply(const ArithBinOp op, const Variable x, const Variable y, const Number& z,
+void FiniteDomain::apply(const ArithBinOp op, const ProgVar& x, const ProgVar& y, const Number& z,
                          const int finite_width) {
     dom.apply(op, x, y, z, finite_width);
 }
 
-void FiniteDomain::apply(const ArithBinOp op, const Variable x, const Variable y, const Variable z,
+void FiniteDomain::apply(const ArithBinOp op, const ProgVar& x, const ProgVar& y, const ProgVar& z,
                          const int finite_width) {
     dom.apply(op, x, y, z, finite_width);
 }
 
-void FiniteDomain::apply(const BitwiseBinOp op, const Variable x, const Variable y, const Variable z,
+void FiniteDomain::apply(const BitwiseBinOp op, const ProgVar& x, const ProgVar& y, const ProgVar& z,
                          const int finite_width) {
     dom.apply(op, x, y, z, finite_width);
 }
 
-void FiniteDomain::apply(const BitwiseBinOp op, const Variable x, const Variable y, const Number& k,
+void FiniteDomain::apply(const BitwiseBinOp op, const ProgVar& x, const ProgVar& y, const Number& k,
                          const int finite_width) {
     dom.apply(op, x, y, k, finite_width);
 }
 
-void FiniteDomain::apply(BinOp op, Variable x, Variable y, const Number& z, int finite_width) {
+void FiniteDomain::apply(BinOp op, ProgVar x, ProgVar y, const Number& z, int finite_width) {
     std::visit([&](auto top) { apply(top, x, y, z, finite_width); }, op);
 }
 
-void FiniteDomain::apply(BinOp op, Variable x, Variable y, Variable z, int finite_width) {
+void FiniteDomain::apply(BinOp op, ProgVar x, ProgVar y, ProgVar z, int finite_width) {
     std::visit([&](auto top) { apply(top, x, y, z, finite_width); }, op);
 }
 
-void FiniteDomain::overflow_bounds(Variable lhs, int finite_width, bool issigned) {
+void FiniteDomain::overflow_bounds(ProgVar lhs, int finite_width, bool issigned) {
     using namespace dsl_syntax;
     auto interval = eval_interval(lhs);
     if (interval.size() >= Interval::unsigned_int(finite_width).size()) {
@@ -743,12 +743,12 @@ void FiniteDomain::overflow_bounds(Variable lhs, int finite_width, bool issigned
     }
 }
 
-void FiniteDomain::overflow_bounds(const Variable svalue, const Variable uvalue, const int finite_width) {
+void FiniteDomain::overflow_bounds(const ProgVar& svalue, const ProgVar& uvalue, const int finite_width) {
     overflow_bounds(svalue, finite_width, true);
     overflow_bounds(uvalue, finite_width, false);
 }
 
-void FiniteDomain::apply_signed(const BinOp& op, const Variable xs, const Variable xu, const Variable y,
+void FiniteDomain::apply_signed(const BinOp& op, const ProgVar& xs, const ProgVar& xu, const ProgVar& y,
                                 const Number& z, const int finite_width) {
     apply(op, xs, y, z, finite_width);
     if (finite_width) {
@@ -757,8 +757,8 @@ void FiniteDomain::apply_signed(const BinOp& op, const Variable xs, const Variab
     }
 }
 
-void FiniteDomain::apply_signed(const BinOp& op, const Variable xs, const Variable xu, const Variable y,
-                                const Variable z, const int finite_width) {
+void FiniteDomain::apply_signed(const BinOp& op, const ProgVar& xs, const ProgVar& xu, const ProgVar& y,
+                                const ProgVar& z, const int finite_width) {
     apply(op, xs, y, z, finite_width);
     if (finite_width) {
         assign(xu, xs);
@@ -766,7 +766,7 @@ void FiniteDomain::apply_signed(const BinOp& op, const Variable xs, const Variab
     }
 }
 
-void FiniteDomain::apply_unsigned(const BinOp& op, const Variable xs, const Variable xu, const Variable y,
+void FiniteDomain::apply_unsigned(const BinOp& op, const ProgVar& xs, const ProgVar& xu, const ProgVar& y,
                                   const Number& z, const int finite_width) {
     apply(op, xu, y, z, finite_width);
     if (finite_width) {
@@ -775,8 +775,8 @@ void FiniteDomain::apply_unsigned(const BinOp& op, const Variable xs, const Vari
     }
 }
 
-void FiniteDomain::apply_unsigned(const BinOp& op, const Variable xs, const Variable xu, const Variable y,
-                                  const Variable z, const int finite_width) {
+void FiniteDomain::apply_unsigned(const BinOp& op, const ProgVar& xs, const ProgVar& xu, const ProgVar& y,
+                                  const ProgVar& z, const int finite_width) {
     apply(op, xu, y, z, finite_width);
     if (finite_width) {
         assign(xs, xu);
@@ -784,87 +784,87 @@ void FiniteDomain::apply_unsigned(const BinOp& op, const Variable xs, const Vari
     }
 }
 
-void FiniteDomain::add(const Variable lhs, const Variable op2) { apply_signed(ArithBinOp::ADD, lhs, lhs, lhs, op2, 0); }
-void FiniteDomain::add(const Variable lhs, const Number& op2) { apply_signed(ArithBinOp::ADD, lhs, lhs, lhs, op2, 0); }
-void FiniteDomain::sub(const Variable lhs, const Variable op2) { apply_signed(ArithBinOp::SUB, lhs, lhs, lhs, op2, 0); }
-void FiniteDomain::sub(const Variable lhs, const Number& op2) { apply_signed(ArithBinOp::SUB, lhs, lhs, lhs, op2, 0); }
+void FiniteDomain::add(const ProgVar& lhs, const ProgVar& op2) { apply_signed(ArithBinOp::ADD, lhs, lhs, lhs, op2, 0); }
+void FiniteDomain::add(const ProgVar& lhs, const Number& op2) { apply_signed(ArithBinOp::ADD, lhs, lhs, lhs, op2, 0); }
+void FiniteDomain::sub(const ProgVar& lhs, const ProgVar& op2) { apply_signed(ArithBinOp::SUB, lhs, lhs, lhs, op2, 0); }
+void FiniteDomain::sub(const ProgVar& lhs, const Number& op2) { apply_signed(ArithBinOp::SUB, lhs, lhs, lhs, op2, 0); }
 
 // Add/subtract with overflow are both signed and unsigned. We can use either one of the two to compute the
 // result before adjusting for overflow, though if one is top we want to use the other to retain precision.
-void FiniteDomain::add_overflow(const Variable lhss, const Variable lhsu, const Variable op2, const int finite_width) {
+void FiniteDomain::add_overflow(const ProgVar& lhss, const ProgVar& lhsu, const ProgVar& op2, const int finite_width) {
     apply_signed(ArithBinOp::ADD, lhss, lhsu, !eval_interval(lhss).is_top() ? lhss : lhsu, op2, finite_width);
 }
-void FiniteDomain::add_overflow(const Variable lhss, const Variable lhsu, const Number& op2, const int finite_width) {
+void FiniteDomain::add_overflow(const ProgVar& lhss, const ProgVar& lhsu, const Number& op2, const int finite_width) {
     apply_signed(ArithBinOp::ADD, lhss, lhsu, !eval_interval(lhss).is_top() ? lhss : lhsu, op2, finite_width);
 }
-void FiniteDomain::sub_overflow(const Variable lhss, const Variable lhsu, const Variable op2, const int finite_width) {
+void FiniteDomain::sub_overflow(const ProgVar& lhss, const ProgVar& lhsu, const ProgVar& op2, const int finite_width) {
     apply_signed(ArithBinOp::SUB, lhss, lhsu, !eval_interval(lhss).is_top() ? lhss : lhsu, op2, finite_width);
 }
-void FiniteDomain::sub_overflow(const Variable lhss, const Variable lhsu, const Number& op2, const int finite_width) {
+void FiniteDomain::sub_overflow(const ProgVar& lhss, const ProgVar& lhsu, const Number& op2, const int finite_width) {
     apply_signed(ArithBinOp::SUB, lhss, lhsu, !eval_interval(lhss).is_top() ? lhss : lhsu, op2, finite_width);
 }
 
-void FiniteDomain::neg(const Variable lhss, const Variable lhsu, const int finite_width) {
+void FiniteDomain::neg(const ProgVar& lhss, const ProgVar& lhsu, const int finite_width) {
     apply_signed(ArithBinOp::MUL, lhss, lhsu, lhss, -1, finite_width);
 }
-void FiniteDomain::mul(const Variable lhss, const Variable lhsu, const Variable op2, const int finite_width) {
+void FiniteDomain::mul(const ProgVar& lhss, const ProgVar& lhsu, const ProgVar& op2, const int finite_width) {
     apply_signed(ArithBinOp::MUL, lhss, lhsu, lhss, op2, finite_width);
 }
-void FiniteDomain::mul(const Variable lhss, const Variable lhsu, const Number& op2, const int finite_width) {
+void FiniteDomain::mul(const ProgVar& lhss, const ProgVar& lhsu, const Number& op2, const int finite_width) {
     apply_signed(ArithBinOp::MUL, lhss, lhsu, lhss, op2, finite_width);
 }
-void FiniteDomain::sdiv(const Variable lhss, const Variable lhsu, const Variable op2, const int finite_width) {
+void FiniteDomain::sdiv(const ProgVar& lhss, const ProgVar& lhsu, const ProgVar& op2, const int finite_width) {
     apply_signed(ArithBinOp::SDIV, lhss, lhsu, lhss, op2, finite_width);
 }
-void FiniteDomain::sdiv(const Variable lhss, const Variable lhsu, const Number& op2, const int finite_width) {
+void FiniteDomain::sdiv(const ProgVar& lhss, const ProgVar& lhsu, const Number& op2, const int finite_width) {
     apply_signed(ArithBinOp::SDIV, lhss, lhsu, lhss, op2, finite_width);
 }
-void FiniteDomain::udiv(const Variable lhss, const Variable lhsu, const Variable op2, const int finite_width) {
+void FiniteDomain::udiv(const ProgVar& lhss, const ProgVar& lhsu, const ProgVar& op2, const int finite_width) {
     apply_unsigned(ArithBinOp::UDIV, lhss, lhsu, lhsu, op2, finite_width);
 }
-void FiniteDomain::udiv(const Variable lhss, const Variable lhsu, const Number& op2, const int finite_width) {
+void FiniteDomain::udiv(const ProgVar& lhss, const ProgVar& lhsu, const Number& op2, const int finite_width) {
     apply_unsigned(ArithBinOp::UDIV, lhss, lhsu, lhsu, op2, finite_width);
 }
-void FiniteDomain::srem(const Variable lhss, const Variable lhsu, const Variable op2, const int finite_width) {
+void FiniteDomain::srem(const ProgVar& lhss, const ProgVar& lhsu, const ProgVar& op2, const int finite_width) {
     apply_signed(ArithBinOp::SREM, lhss, lhsu, lhss, op2, finite_width);
 }
-void FiniteDomain::srem(const Variable lhss, const Variable lhsu, const Number& op2, const int finite_width) {
+void FiniteDomain::srem(const ProgVar& lhss, const ProgVar& lhsu, const Number& op2, const int finite_width) {
     apply_signed(ArithBinOp::SREM, lhss, lhsu, lhss, op2, finite_width);
 }
-void FiniteDomain::urem(const Variable lhss, const Variable lhsu, const Variable op2, const int finite_width) {
+void FiniteDomain::urem(const ProgVar& lhss, const ProgVar& lhsu, const ProgVar& op2, const int finite_width) {
     apply_unsigned(ArithBinOp::UREM, lhss, lhsu, lhsu, op2, finite_width);
 }
-void FiniteDomain::urem(const Variable lhss, const Variable lhsu, const Number& op2, const int finite_width) {
+void FiniteDomain::urem(const ProgVar& lhss, const ProgVar& lhsu, const Number& op2, const int finite_width) {
     apply_unsigned(ArithBinOp::UREM, lhss, lhsu, lhsu, op2, finite_width);
 }
 
-void FiniteDomain::bitwise_and(const Variable lhss, const Variable lhsu, const Variable op2, const int finite_width) {
+void FiniteDomain::bitwise_and(const ProgVar& lhss, const ProgVar& lhsu, const ProgVar& op2, const int finite_width) {
     apply_unsigned(BitwiseBinOp::AND, lhss, lhsu, lhsu, op2, finite_width);
 }
-void FiniteDomain::bitwise_and(const Variable lhss, const Variable lhsu, const Number& op2) {
+void FiniteDomain::bitwise_and(const ProgVar& lhss, const ProgVar& lhsu, const Number& op2) {
     // Use finite width 64 to make the svalue be set as well as the uvalue.
     apply_unsigned(BitwiseBinOp::AND, lhss, lhsu, lhsu, op2, 64);
 }
-void FiniteDomain::bitwise_or(const Variable lhss, const Variable lhsu, const Variable op2, const int finite_width) {
+void FiniteDomain::bitwise_or(const ProgVar& lhss, const ProgVar& lhsu, const ProgVar& op2, const int finite_width) {
     apply_unsigned(BitwiseBinOp::OR, lhss, lhsu, lhsu, op2, finite_width);
 }
-void FiniteDomain::bitwise_or(const Variable lhss, const Variable lhsu, const Number& op2) {
+void FiniteDomain::bitwise_or(const ProgVar& lhss, const ProgVar& lhsu, const Number& op2) {
     apply_unsigned(BitwiseBinOp::OR, lhss, lhsu, lhsu, op2, 64);
 }
-void FiniteDomain::bitwise_xor(const Variable lhss, const Variable lhsu, const Variable op2, const int finite_width) {
+void FiniteDomain::bitwise_xor(const ProgVar& lhss, const ProgVar& lhsu, const ProgVar& op2, const int finite_width) {
     apply_unsigned(BitwiseBinOp::XOR, lhss, lhsu, lhsu, op2, finite_width);
 }
-void FiniteDomain::bitwise_xor(const Variable lhss, const Variable lhsu, const Number& op2) {
+void FiniteDomain::bitwise_xor(const ProgVar& lhss, const ProgVar& lhsu, const Number& op2) {
     apply_unsigned(BitwiseBinOp::XOR, lhss, lhsu, lhsu, op2, 64);
 }
-void FiniteDomain::shl_overflow(const Variable lhss, const Variable lhsu, const Variable op2) {
+void FiniteDomain::shl_overflow(const ProgVar& lhss, const ProgVar& lhsu, const ProgVar& op2) {
     apply_unsigned(BitwiseBinOp::SHL, lhss, lhsu, lhsu, op2, 64);
 }
-void FiniteDomain::shl_overflow(const Variable lhss, const Variable lhsu, const Number& op2) {
+void FiniteDomain::shl_overflow(const ProgVar& lhss, const ProgVar& lhsu, const Number& op2) {
     apply_unsigned(BitwiseBinOp::SHL, lhss, lhsu, lhsu, op2, 64);
 }
 
-void FiniteDomain::shl(const Variable svalue, const Variable uvalue, const int imm, const int finite_width) {
+void FiniteDomain::shl(const ProgVar& svalue, const ProgVar& uvalue, const int imm, const int finite_width) {
     const auto uinterval = eval_interval(uvalue);
     if (!uinterval.finite_size()) {
         shl_overflow(svalue, uvalue, imm);
@@ -890,7 +890,7 @@ void FiniteDomain::shl(const Variable svalue, const Variable uvalue, const int i
     overflow_bounds(svalue, uvalue, finite_width);
 }
 
-void FiniteDomain::lshr(const Variable svalue, const Variable uvalue, int imm, int finite_width) {
+void FiniteDomain::lshr(const ProgVar& svalue, const ProgVar& uvalue, int imm, int finite_width) {
     const auto uinterval = eval_interval(uvalue);
     if (uinterval.finite_size()) {
         auto [lb_n, ub_n] = uinterval.pair_number();
@@ -915,7 +915,7 @@ void FiniteDomain::lshr(const Variable svalue, const Variable uvalue, int imm, i
     overflow_bounds(svalue, uvalue, finite_width);
 }
 
-void FiniteDomain::ashr(const Variable svalue, const Variable uvalue, const LinearExpression& right_svalue,
+void FiniteDomain::ashr(const ProgVar& svalue, const ProgVar& uvalue, const LinearExpression& right_svalue,
                         int finite_width) {
     Interval left_interval = Interval::bottom();
     Interval right_interval = Interval::bottom();
@@ -952,7 +952,7 @@ void FiniteDomain::ashr(const Variable svalue, const Variable uvalue, const Line
     }
 }
 
-void FiniteDomain::sign_extend(const Variable svalue, const Variable uvalue, const LinearExpression& right_svalue,
+void FiniteDomain::sign_extend(const ProgVar& svalue, const ProgVar& uvalue, const LinearExpression& right_svalue,
                                const int target_width, const int source_width) {
     const Interval right_interval = eval_interval(right_svalue);
     const Interval extended = right_interval.sign_extend(source_width);

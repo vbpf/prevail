@@ -8,7 +8,7 @@ namespace prevail::dsl_syntax {
 
 inline LinearExpression operator-(const LinearExpression& e) { return e.negate(); }
 
-inline LinearExpression operator*(Variable x, const Number& n) { return LinearExpression(n, x); }
+inline LinearExpression operator*(const ProgVar& x, const Number& n) { return LinearExpression(n, x); }
 
 inline LinearExpression operator*(const Number& n, const LinearExpression& e) { return e.multiply(n); }
 
@@ -28,12 +28,12 @@ inline LinearConstraint operator>=(const LinearExpression& e1, const LinearExpre
 
 inline LinearConstraint operator>(const LinearExpression& e1, const LinearExpression& e2) { return e2 < e1; }
 
-inline LinearConstraint eq(const Variable a, const Variable b) {
+inline LinearConstraint eq(const ProgVar& a, const ProgVar& b) {
     using namespace dsl_syntax;
     return {a - b, ConstraintKind::EQUALS_ZERO};
 }
 
-inline LinearConstraint neq(const Variable a, const Variable b) {
+inline LinearConstraint neq(const ProgVar& a, const ProgVar& b) {
     using namespace dsl_syntax;
     return {a - b, ConstraintKind::NOT_ZERO};
 }

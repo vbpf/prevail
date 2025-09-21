@@ -74,9 +74,9 @@ class EbpfChecker final {
     void check_access_stack(NumAbsDomain& inv, const LinearExpression& lb, const LinearExpression& ub) const;
     void check_access_context(NumAbsDomain& inv, const LinearExpression& lb, const LinearExpression& ub) const;
     void check_access_packet(NumAbsDomain& inv, const LinearExpression& lb, const LinearExpression& ub,
-                             std::optional<Variable> packet_size) const;
+                             const std::optional<ProgVar>& packet_size) const;
     void check_access_shared(NumAbsDomain& inv, const LinearExpression& lb, const LinearExpression& ub,
-                             Variable shared_region_size) const;
+                             const ProgVar& shared_region_size) const;
 
   private:
     const Assertion assertion;
@@ -136,7 +136,7 @@ static LinearConstraint type_is_not_stack(const RegPack& r) {
 
 void EbpfChecker::check_access_stack(NumAbsDomain& inv, const LinearExpression& lb, const LinearExpression& ub) const {
     using namespace dsl_syntax;
-    const Variable r10_stack_offset = reg_pack(R10_STACK_POINTER).stack_offset;
+    const ProgVar r10_stack_offset = reg_pack(R10_STACK_POINTER).stack_offset;
     const auto interval = inv.eval_interval(r10_stack_offset);
     if (interval.is_singleton()) {
         const int64_t stack_offset = interval.singleton()->cast_to<int64_t>();
@@ -156,7 +156,7 @@ void EbpfChecker::check_access_context(NumAbsDomain& inv, const LinearExpression
 }
 
 void EbpfChecker::check_access_packet(NumAbsDomain& inv, const LinearExpression& lb, const LinearExpression& ub,
-                                      const std::optional<Variable> packet_size) const {
+                                      const std::optional<ProgVar>& packet_size) const {
     using namespace dsl_syntax;
     require(inv, lb >= variable_registry->meta_offset(), "Lower bound must be at least meta_offset");
     if (packet_size) {
@@ -168,7 +168,7 @@ void EbpfChecker::check_access_packet(NumAbsDomain& inv, const LinearExpression&
 }
 
 void EbpfChecker::check_access_shared(NumAbsDomain& inv, const LinearExpression& lb, const LinearExpression& ub,
-                                      const Variable shared_region_size) const {
+                                      const ProgVar& shared_region_size) const {
     using namespace dsl_syntax;
     require(inv, lb >= 0, "Lower bound must be at least 0");
     require(inv, ub <= shared_region_size,
@@ -300,7 +300,7 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
 
     m_inv = type_inv.join_over_types(m_inv, s.access_reg, [&](NumAbsDomain& inv, TypeEncoding access_reg_type) {
         if (access_reg_type == T_STACK) {
-            Variable lb = access_reg.stack_offset;
+            ProgVar lb = access_reg.stack_offset;
             LinearExpression ub = lb + width;
             if (!stack.all_num(inv, lb, ub)) {
                 auto lb_is = inv.eval_interval(lb).lb().number();
@@ -313,13 +313,13 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
                 EbpfMapType map_type = thread_local_program_info->platform->get_map_type(*fd_type);
                 if (map_type.is_array) {
                     // Get offset value.
-                    Variable key_ptr = access_reg.stack_offset;
+                    ProgVar key_ptr = access_reg.stack_offset;
                     std::optional<Number> offset = inv.eval_interval(key_ptr).singleton();
                     if (!offset.has_value()) {
                         require("Pointer must be a singleton");
                     } else if (s.key) {
                         // Look up the value pointed to by the key pointer.
-                        Variable key_value =
+                        ProgVar key_value =
                             variable_registry->cell_var(DataKind::svalues, offset.value(), sizeof(uint32_t));
 
                         if (auto max_entries = dom.get_map_max_entries(s.map_fd_reg).lb().number()) {
@@ -332,12 +332,12 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
                 }
             }
         } else if (access_reg_type == T_PACKET) {
-            Variable lb = access_reg.packet_offset;
+            ProgVar lb = access_reg.packet_offset;
             LinearExpression ub = lb + width;
             check_access_packet(inv, lb, ub, {});
             // Packet memory is both readable and writable.
         } else if (access_reg_type == T_SHARED) {
-            Variable lb = access_reg.shared_offset;
+            ProgVar lb = access_reg.shared_offset;
             LinearExpression ub = lb + width;
             check_access_shared(inv, lb, ub, access_reg.shared_region_size);
             require(inv, access_reg.svalue > 0, "Possible null access");
@@ -349,7 +349,7 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
 }
 
 static std::tuple<LinearExpression, LinearExpression> lb_ub_access_pair(const ValidAccess& s,
-                                                                        const Variable offset_var) {
+                                                                        const ProgVar& offset_var) {
     using namespace dsl_syntax;
     LinearExpression lb = offset_var + s.offset;
     LinearExpression ub = std::holds_alternative<Imm>(s.width) ? lb + std::get<Imm>(s.width).v
@@ -369,7 +369,7 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
         case T_PACKET: {
             auto [lb, ub] = lb_ub_access_pair(s, reg.packet_offset);
             check_access_packet(inv, lb, ub,
-                                is_comparison_check ? std::optional<Variable>{} : variable_registry->packet_size());
+                                is_comparison_check ? std::optional<ProgVar>{} : variable_registry->packet_size());
             // if within bounds, it can never be null
             // Context memory is both readable and writable.
             break;

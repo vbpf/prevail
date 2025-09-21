@@ -8,7 +8,7 @@
 #include <optional>
 
 #include "arith/dsl_syntax.hpp"
-#include "arith/variable.hpp"
+#include "arith/progvar.hpp"
 #include "crab/array_domain.hpp"
 #include "crab/ebpf_domain.hpp" // for join_selective
 #include "crab/split_dbm.hpp"
@@ -151,9 +151,9 @@ static const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
  * @brief Identifies type-specific ("kind") variables that are meaningless for the given domain.
  *
  * @details This function is a helper for the type-aware subsumption check (`operator<=`).
- * The Core Principle: In EbpfDomain, a "kind" variable (e.g., `r1.packet_offset`) is
+ * The Core Principle: In EbpfDomain, a "kind" ProgVar (e.g., `r1.packet_offset`) is
  * only meaningful if the register might have the corresponding type (`T_PACKET`). If the
- * type is absent, the kind variable is conceptually Bottom.
+ * type is absent, the kind ProgVar is conceptually Bottom.
  *
  * Role in Subsumption: A standard numerical check would incorrectly treat these Bottom
  * variables as Top, failing correct checks like
@@ -167,9 +167,9 @@ static const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
  * @param[in] dom The numerical domain to inspect.
  * @return A vector of all kind variables that are meaningless (effectively Bottom) in `dom`.
  */
-std::vector<Variable> TypeDomain::get_nonexistent_kind_variables(const NumAbsDomain& dom) const {
-    std::vector<Variable> res;
-    for (const Variable v : variable_registry->get_type_variables()) {
+std::vector<ProgVar> TypeDomain::get_nonexistent_kind_variables(const NumAbsDomain& dom) const {
+    std::vector<ProgVar> res;
+    for (const ProgVar v : variable_registry->get_type_variables()) {
         for (const auto& [type, kinds] : type_to_kinds) {
             if (may_have_type(dom, v, type)) {
                 // This type might be present in the register's type set, so its kind
@@ -179,7 +179,7 @@ std::vector<Variable> TypeDomain::get_nonexistent_kind_variables(const NumAbsDom
             for (const auto kind : kinds) {
                 // This type is definitely not present, so any associated kind variables
                 // are meaningless for this domain.
-                Variable type_offset = variable_registry->kind_var(kind, v);
+                ProgVar type_offset = variable_registry->kind_var(kind, v);
                 res.push_back(type_offset);
             }
         }
@@ -192,9 +192,9 @@ std::vector<Variable> TypeDomain::get_nonexistent_kind_variables(const NumAbsDom
  *
  * @details This function is a helper for the type-aware join operation (`operator|`).
  *
- * The Core Principle: In EbpfDomain, a "kind" variable (e.g., `r1.packet_offset`) is
+ * The Core Principle: In EbpfDomain, a "kind" ProgVar (e.g., `r1.packet_offset`) is
  * only meaningful if the register might have the corresponding type (`T_PACKET`). If the
- * type is absent, the kind variable is conceptually Bottom.
+ * type is absent, the kind ProgVar is conceptually Bottom.
  *
  * Role in Join: During a join, if one branch has constraints on `packet_offset`
  * (because the type is `T_PACKET`) and the other doesn't, a naive join would lose
@@ -203,14 +203,14 @@ std::vector<Variable> TypeDomain::get_nonexistent_kind_variables(const NumAbsDom
  *
  * @param[in] left The numerical domain from the first branch of the join.
  * @param[in] right The numerical domain from the second branch of the join.
- * @return A vector containing the variable, which domain it came from (`true` if left),
+ * @return A vector containing the ProgVar, which domain it came from (`true` if left),
  * and its interval value, for each type-specific constraint to be preserved.
  */
-std::vector<std::tuple<Variable, bool, Interval>>
+std::vector<std::tuple<ProgVar, bool, Interval>>
 TypeDomain::collect_type_dependent_constraints(const NumAbsDomain& left, const NumAbsDomain& right) const {
-    std::vector<std::tuple<Variable, bool, Interval>> result;
+    std::vector<std::tuple<ProgVar, bool, Interval>> result;
 
-    for (const Variable& type_var : variable_registry->get_type_variables()) {
+    for (const ProgVar& type_var : variable_registry->get_type_variables()) {
         for (const auto& [type, kinds] : type_to_kinds) {
             const bool in_left = may_have_type(left, type_var, type);
             const bool in_right = may_have_type(right, type_var, type);
@@ -221,7 +221,7 @@ TypeDomain::collect_type_dependent_constraints(const NumAbsDomain& left, const N
                 // Identify which domain contains the constraints.
                 const NumAbsDomain& source = in_left ? left : right;
                 for (const DataKind kind : kinds) {
-                    Variable var = variable_registry->kind_var(kind, type_var);
+                    ProgVar var = variable_registry->kind_var(kind, type_var);
                     Interval value = source.eval_interval(var);
                     if (!value.is_top()) {
                         result.emplace_back(var, in_left, value);
@@ -238,7 +238,7 @@ void TypeDomain::assign_type(NumAbsDomain& inv, const Reg& lhs, const Reg& rhs) 
     inv.assign(reg_pack(lhs).type, reg_pack(rhs).type);
 }
 
-void TypeDomain::assign_type(NumAbsDomain& inv, const std::optional<Variable> lhs, const LinearExpression& t) {
+void TypeDomain::assign_type(NumAbsDomain& inv, const std::optional<ProgVar>& lhs, const LinearExpression& t) {
     inv.assign(lhs, t);
 }
 
@@ -264,7 +264,7 @@ TypeEncoding TypeDomain::get_type(const NumAbsDomain& inv, const Reg& r) const {
     return res->narrow<TypeEncoding>();
 }
 
-// Check whether a given type value is within the range of a given type variable's value.
+// Check whether a given type value is within the range of a given type ProgVar's value.
 bool TypeDomain::may_have_type(const NumAbsDomain& inv, const Reg& r, const TypeEncoding type) const {
     const Interval interval = inv.eval_interval(reg_pack(r).type);
     return interval.contains(type);
@@ -323,7 +323,7 @@ bool TypeDomain::implies_type(const NumAbsDomain& inv, const LinearConstraint& a
 
 bool TypeDomain::is_in_group(const NumAbsDomain& inv, const Reg& r, const TypeGroup group) const {
     using namespace dsl_syntax;
-    const Variable t = reg_pack(r).type;
+    const ProgVar t = reg_pack(r).type;
     switch (group) {
     case TypeGroup::number: return inv.entail(t == T_NUM);
     case TypeGroup::map_fd: return inv.entail(t == T_MAP);

@@ -7,13 +7,13 @@
 #include <vector>
 
 #include "arith/num_big.hpp"
-#include "arith/variable.hpp"
 #include "asm_syntax.hpp"
 #include "cfg/cfg.hpp"
 #include "crab/fwd_analyzer.hpp"
 #include "crab/interval.hpp"
 #include "crab/type_encoding.hpp"
 #include "crab/var_registry.hpp"
+#include "crab/variable.hpp"
 #include "crab_verifier.hpp"
 #include "helpers.hpp"
 #include "platform.hpp"

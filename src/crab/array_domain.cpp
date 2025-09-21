@@ -17,11 +17,12 @@
 #include "crab/array_domain.hpp"
 #include "crab/var_registry.hpp"
 #include "crab_utils/num_safety.hpp"
-#include "spec_type_descriptors.hpp"
 
 namespace prevail {
 
-using Index = uint64_t;
+ProgVar get_scalar(const Cell& c, const DataKind kind) {
+    return variable_registry->cell_var(kind, (Index)c.offset, c.size);
+}
 
 static bool maybe_between(const NumAbsDomain& dom, const ExtendedNumber& x, const LinearExpression& symb_lb,
                           const LinearExpression& symb_ub) {
@@ -33,25 +34,6 @@ static bool maybe_between(const NumAbsDomain& dom, const ExtendedNumber& x, cons
     tmp.add_constraint(num <= symb_ub);
     return !tmp.is_bottom();
 }
-
-class offset_t final {
-    Index _index{};
-    int _prefix_length;
-
-  public:
-    static constexpr int bitsize = 8 * sizeof(Index);
-    offset_t() : _prefix_length(bitsize) {}
-    explicit offset_t(const Index index) : _index(index), _prefix_length(bitsize) {}
-    offset_t(const Index index, const int prefix_length) : _index(index), _prefix_length(prefix_length) {}
-    explicit operator int() const { return gsl::narrow<int>(_index); }
-    operator Index() const { return _index; }
-    [[nodiscard]]
-    int prefix_length() const {
-        return _prefix_length;
-    }
-
-    Index operator[](const int n) const { return (_index >> (bitsize - 1 - n)) & 1; }
-};
 
 // NOTE: required by radix_tree
 // Get the length of a key, which is the size usable with the [] operator.
@@ -88,91 +70,15 @@ offset_t radix_join(const offset_t& entry1, const offset_t& entry2) {
     return offset_t{value, prefix_length};
 }
 
-/***
-   Conceptually, a cell is tuple of an array, offset, size, and
-   scalar variable such that:
-
-_scalar = array[_offset, _offset + 1, ..., _offset + _size - 1]
-
-    For simplicity, we don't carry the array inside the cell class.
-    Only, offset_map objects can create cells. They will consider the
-            array when generating the scalar variable.
-*/
-class Cell final {
-  private:
-    friend class offset_map_t;
-
-    offset_t _offset{};
-    unsigned _size{};
-
-    // Only offset_map_t can create cells
-    Cell() = default;
-
-    Cell(const offset_t offset, const unsigned size) : _offset(offset), _size(size) {}
-
-    static Interval to_interval(const offset_t o, const unsigned size) {
-        const Number lb{gsl::narrow<int>(o)};
-        return {lb, lb + size - 1};
-    }
-
-  public:
-    [[nodiscard]]
-    Interval to_interval() const {
-        return to_interval(_offset, _size);
-    }
-
-    [[nodiscard]]
-    bool is_null() const {
-        return _offset == 0 && _size == 0;
-    }
-
-    [[nodiscard]]
-    offset_t get_offset() const {
-        return _offset;
-    }
-
-    [[nodiscard]]
-    Variable get_scalar(const DataKind kind) const {
-        return variable_registry->cell_var(kind, gsl::narrow<Index>(_offset), _size);
-    }
-
-    // ignore the scalar variable
-    bool operator==(const Cell& o) const { return to_interval() == o.to_interval(); }
-
-    // ignore the scalar variable
-    bool operator<(const Cell& o) const {
-        if (_offset == o._offset) {
-            return _size < o._size;
-        }
-        return _offset < o._offset;
-    }
-
-    // Return true if [o, o + size) definitely overlaps with the cell,
-    // where o is a constant expression.
-    [[nodiscard]]
-    bool overlap(const offset_t& o, const unsigned size) const {
-        const Interval x = to_interval();
-        const Interval y = to_interval(o, size);
-        const bool res = (!(x & y).is_bottom());
-        CRAB_LOG("array-expansion-overlap",
-                 std::cout << "**Checking if " << x << " overlaps with " << y << "=" << res << "\n";);
-        return res;
-    }
-
-    // Return true if [symb_lb, symb_ub] may overlap with the cell,
-    // where symb_lb and symb_ub are not constant expressions.
-    [[nodiscard]]
-    bool symbolic_overlap(const LinearExpression& symb_lb, const LinearExpression& symb_ub,
-                          const NumAbsDomain& dom) const;
-
-    friend std::ostream& operator<<(std::ostream& o, const Cell& c) { return o << "cell(" << c.to_interval() << ")"; }
-};
+static Interval cell_to_interval(const Cell& c) {
+    return Interval(static_cast<Index>(c.offset), c.offset + c.size - 1);
+}
 
 // Return true if [symb_lb, symb_ub] may overlap with the cell,
 // where symb_lb and symb_ub are not constant expressions.
-bool Cell::symbolic_overlap(const LinearExpression& symb_lb, const LinearExpression& symb_ub,
-                            const NumAbsDomain& dom) const {
-    const Interval x = to_interval();
+static bool symbolic_overlap(const Cell& cell, const LinearExpression& symb_lb, const LinearExpression& symb_ub,
+                             const NumAbsDomain& dom) {
+    const Interval x = cell_to_interval(cell);
     return maybe_between(dom, x.lb(), symb_lb, symb_ub) || maybe_between(dom, x.ub(), symb_lb, symb_ub);
 }
 
@@ -262,7 +168,7 @@ class offset_map_t final {
 };
 
 void offset_map_t::remove_cell(const Cell& c) {
-    const offset_t key = c.get_offset();
+    const offset_t key = c.offset;
     _map[key].erase(c);
 }
 
@@ -283,14 +189,14 @@ std::vector<Cell> offset_map_t::get_overlap_cells_symbolic_offset(const NumAbsDo
             if (largest_cell.is_null()) {
                 largest_cell = c;
             } else {
-                assert(c.get_offset() == largest_cell.get_offset());
+                assert(c.offset == largest_cell.offset);
                 if (largest_cell < c) {
                     largest_cell = c;
                 }
             }
         }
         if (!largest_cell.is_null()) {
-            if (largest_cell.symbolic_overlap(symb_lb, symb_ub, dom)) {
+            if (symbolic_overlap(largest_cell, symb_lb, symb_ub, dom)) {
                 for (const auto& c : o_cells) {
                     out.push_back(c);
                 }
@@ -300,7 +206,7 @@ std::vector<Cell> offset_map_t::get_overlap_cells_symbolic_offset(const NumAbsDo
     return out;
 }
 
-void offset_map_t::insert_cell(const Cell& c) { _map[c.get_offset()].insert(c); }
+void offset_map_t::insert_cell(const Cell& c) { _map[c.offset].insert(c); }
 
 std::optional<Cell> offset_map_t::get_cell(const offset_t o, const unsigned size) {
     cell_set_t& cells = _map[o];
@@ -317,7 +223,7 @@ Cell offset_map_t::mk_cell(const offset_t o, const unsigned size) {
     if (const auto maybe_c = get_cell(o, size)) {
         return *maybe_c;
     }
-    // create a new scalar variable for representing the contents
+    // create a new scalar ProgVar for representing the contents
     // of bytes array[o,o+1,..., o+size-1]
     const Cell c(o, size);
     insert_cell(c);
@@ -360,7 +266,7 @@ std::vector<Cell> offset_map_t::get_overlap_cells(const offset_t o, const unsign
             ////////
             bool continue_outer_loop = false;
             for (const Cell& x : upto_lb[i]) {
-                if (x.overlap(o, size)) {
+                if (x.overlap(Cell{o, size})) {
                     if (x != *maybe_c) {
                         // FIXME: we might have some duplicates. this is a very drastic solution.
                         if (std::ranges::find(out, x) == out.end()) {
@@ -381,7 +287,7 @@ std::vector<Cell> offset_map_t::get_overlap_cells(const offset_t o, const unsign
     for (; ub_it != _map.end(); ++ub_it) {
         bool continue_outer_loop = false;
         for (const Cell& x : ub_it->second) {
-            if (x.overlap(o, size)) {
+            if (x.overlap(Cell(o, size))) {
                 // FIXME: we might have some duplicates. this is a very drastic solution.
                 if (std::ranges::find(out, x) == out.end()) {
                     out.push_back(x);
@@ -401,7 +307,7 @@ std::vector<Cell> offset_map_t::get_overlap_cells(const offset_t o, const unsign
             if (x == *maybe_c) { // we don't put it in out
                 continue;
             }
-            if (x.overlap(o, size)) {
+            if (x.overlap(Cell(o, size))) {
                 if (std::ranges::find(out, x) == out.end()) {
                     out.push_back(x);
                 }
@@ -464,8 +370,8 @@ void ArrayDomain::split_cell(NumAbsDomain& inv, const DataKind kind, const int c
     // Create a new cell for that range.
     offset_map_t& offset_map = lookup_array_map(kind);
     const Cell new_cell = offset_map.mk_cell(offset_t{gsl::narrow_cast<Index>(cell_start_index)}, len);
-    inv.assign(new_cell.get_scalar(DataKind::svalues), svalue);
-    inv.assign(new_cell.get_scalar(DataKind::uvalues), uvalue);
+    inv.assign(get_scalar(new_cell, DataKind::svalues), svalue);
+    inv.assign(get_scalar(new_cell, DataKind::uvalues), uvalue);
 }
 
 // Prepare to havoc bytes in the middle of a cell by potentially splitting the cell if it is numeric,
@@ -491,7 +397,7 @@ void ArrayDomain::split_number_var(NumAbsDomain& inv, DataKind kind, const Linea
 
     std::vector<Cell> cells = offset_map.get_overlap_cells(o, size);
     for (Cell const& c : cells) {
-        Interval intv = c.to_interval();
+        Interval intv = cell_to_interval(c);
         int cell_start_index = intv.lb().narrow<int>();
         int cell_end_index = intv.ub().narrow<int>();
 
@@ -501,7 +407,7 @@ void ArrayDomain::split_number_var(NumAbsDomain& inv, DataKind kind, const Linea
             continue;
         }
 
-        if (!inv.eval_interval(c.get_scalar(kind)).is_singleton()) {
+        if (!inv.eval_interval(get_scalar(c, kind)).is_singleton()) {
             // We can only split cells with a singleton value.
             continue;
         }
@@ -542,13 +448,13 @@ kill_and_find_var(NumAbsDomain& inv, DataKind kind, const LinearExpression& i, c
     if (!cells.empty()) {
         // Forget the scalars from the numerical domain
         for (const auto& c : cells) {
-            inv.havoc(c.get_scalar(kind));
+            inv.havoc(get_scalar(c, DataKind::types)); // ???
 
             // Forget signed and unsigned values together.
             if (kind == DataKind::svalues) {
-                inv.havoc(c.get_scalar(DataKind::uvalues));
+                inv.havoc(get_scalar(c, DataKind::uvalues));
             } else if (kind == DataKind::uvalues) {
-                inv.havoc(c.get_scalar(DataKind::svalues));
+                inv.havoc(get_scalar(c, DataKind::svalues));
             }
         }
         // Remove the cells. If needed again they will be re-created.
@@ -575,7 +481,7 @@ bool ArrayDomain::all_num(const NumAbsDomain& inv, const LinearExpression& lb, c
 }
 
 // Get the number of bytes, starting at offset, that are known to be numbers.
-int ArrayDomain::min_all_num_size(const NumAbsDomain& inv, const Variable offset) const {
+int ArrayDomain::min_all_num_size(const NumAbsDomain& inv, const ProgVar& offset) const {
     const auto min_lb = inv.eval_interval(offset).lb().number();
     const auto max_ub = inv.eval_interval(offset).ub().number();
     if (!min_lb || !max_ub || !min_lb->fits<int32_t>() || !max_ub->fits<int32_t>()) {
@@ -588,7 +494,7 @@ int ArrayDomain::min_all_num_size(const NumAbsDomain& inv, const Variable offset
 
 // Get one byte of a value.
 std::optional<uint8_t> get_value_byte(const NumAbsDomain& inv, const offset_t o, const int width) {
-    const Variable v = variable_registry->cell_var(DataKind::svalues, (o / width) * width, width);
+    const ProgVar v = variable_registry->cell_var(DataKind::svalues, (o / width) * width, width);
     const std::optional<Number> t = inv.eval_interval(v).singleton();
     if (!t) {
         return {};
@@ -643,7 +549,7 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, DataK
         offset_t o(k);
         unsigned size = to_unsigned(width);
         if (auto cell = lookup_array_map(kind).get_cell(o, size)) {
-            return cell->get_scalar(kind);
+            return get_scalar(*cell, kind);
         }
         if (kind == DataKind::svalues || kind == DataKind::uvalues) {
             // Copy bytes into result_buffer, taking into account that the
@@ -708,9 +614,9 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, DataK
         std::vector<Cell> cells = offset_map.get_overlap_cells(o, size);
         if (cells.empty()) {
             Cell c = offset_map.mk_cell(o, size);
-            // Here it's ok to do assignment (instead of expand) because c is not a summarized variable.
+            // Here it's ok to do assignment (instead of expand) because c is not a summarized ProgVar.
             // Otherwise, it would be unsound.
-            return c.get_scalar(kind);
+            return get_scalar(c, kind);
         }
         CRAB_WARN("Ignored read from cell ", kind, "[", o, "...", o + size - 1, "]", " because it overlaps with ",
                   cells.size(), " cells");
@@ -753,8 +659,8 @@ static std::optional<std::pair<offset_t, unsigned>> split_and_find_var(const Arr
     return kill_and_find_var(inv, kind, idx, elem_size);
 }
 
-std::optional<Variable> ArrayDomain::store(NumAbsDomain& inv, const DataKind kind, const LinearExpression& idx,
-                                           const LinearExpression& elem_size, const LinearExpression& val) {
+std::optional<ProgVar> ArrayDomain::store(NumAbsDomain& inv, const DataKind kind, const LinearExpression& idx,
+                                          const LinearExpression& elem_size, const LinearExpression& val) {
     if (auto maybe_cell = split_and_find_var(*this, inv, kind, idx, elem_size)) {
         // perform strong update
         auto [offset, size] = *maybe_cell;
@@ -766,14 +672,14 @@ std::optional<Variable> ArrayDomain::store(NumAbsDomain& inv, const DataKind kin
                 num_bytes.havoc(offset, size);
             }
         }
-        Variable v = lookup_array_map(kind).mk_cell(offset, size).get_scalar(kind);
+        ProgVar v = get_scalar(lookup_array_map(kind).mk_cell(offset, size), kind);
         return v;
     }
     return {};
 }
 
-std::optional<Variable> ArrayDomain::store_type(NumAbsDomain& inv, const LinearExpression& idx,
-                                                const LinearExpression& elem_size, const LinearExpression& val) {
+std::optional<ProgVar> ArrayDomain::store_type(NumAbsDomain& inv, const LinearExpression& idx,
+                                               const LinearExpression& elem_size, const LinearExpression& val) {
     constexpr auto kind = DataKind::types;
     if (auto maybe_cell = split_and_find_var(*this, inv, kind, idx, elem_size)) {
         // perform strong update
@@ -784,7 +690,7 @@ std::optional<Variable> ArrayDomain::store_type(NumAbsDomain& inv, const LinearE
         } else {
             num_bytes.havoc(offset, size);
         }
-        Variable v = lookup_array_map(kind).mk_cell(offset, size).get_scalar(kind);
+        ProgVar v = get_scalar(lookup_array_map(kind).mk_cell(offset, size), kind);
         return v;
     }
     return {};
@@ -799,7 +705,7 @@ void ArrayDomain::havoc(NumAbsDomain& inv, const DataKind kind, const LinearExpr
     }
 }
 
-void ArrayDomain::store_numbers(const NumAbsDomain& inv, const Variable _idx, const Variable _width) {
+void ArrayDomain::store_numbers(const NumAbsDomain& inv, const ProgVar& _idx, const ProgVar& _width) {
 
     // TODO: this should be an user parameter.
     const Number max_num_elems = EBPF_TOTAL_STACK_SIZE;

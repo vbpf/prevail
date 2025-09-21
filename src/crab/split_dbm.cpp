@@ -157,7 +157,8 @@ void SplitDBM::diffcsts_of_lin_leq(const LinearExpression& exp,
     std::optional<Variable> unbounded_ubvar;
 
     std::vector<std::pair<std::pair<Weight, Variable>, Weight>> pos_terms, neg_terms;
-    for (const auto& [y, n] : exp.variable_terms()) {
+    for (const auto& [_y, n] : exp.variable_terms()) {
+        Variable y = _y;
         Weight coeff;
         if (convert_NtoW_overflow(n, coeff)) {
             continue;
@@ -747,7 +748,8 @@ std::optional<SplitDBM> SplitDBM::meet(const SplitDBM& o) const {
     return res;
 }
 
-void SplitDBM::havoc(const Variable v) {
+void SplitDBM::havoc(const ProgVar& _v) {
+    Variable v = _v;
     if (const auto y = try_at(vert_map, v)) {
         g.forget(*y);
         rev_map[*y] = std::nullopt;
@@ -958,7 +960,7 @@ void SplitDBM::normalize() {
     unstable.clear();
 }
 
-void SplitDBM::set(const Variable x, const Interval& intv) {
+void SplitDBM::set(const ProgVar& x, const Interval& intv) {
     CrabStats::count("SplitDBM.count.assign");
     ScopedCrabStats __st__("SplitDBM.assign");
     assert(!intv.is_bottom());
@@ -991,7 +993,7 @@ void SplitDBM::set(const Variable x, const Interval& intv) {
     normalize();
 }
 
-void SplitDBM::apply(const ArithBinOp op, const Variable x, const Variable y, const Variable z,
+void SplitDBM::apply(const ArithBinOp op, const ProgVar& x, const ProgVar& y, const ProgVar& z,
                      const int finite_width) {
     CrabStats::count("SplitDBM.count.apply");
     ScopedCrabStats __st__("SplitDBM.apply");
@@ -1034,7 +1036,7 @@ static Number read_imm_for_sdiv_or_smod(const Number& imm, const int width) {
     return Number{imm.cast_to<int64_t>()};
 }
 
-void SplitDBM::apply(const ArithBinOp op, const Variable x, const Variable y, const Number& k, const int finite_width) {
+void SplitDBM::apply(const ArithBinOp op, const ProgVar& x, const ProgVar& y, const Number& k, const int finite_width) {
     CrabStats::count("SplitDBM.count.apply");
     ScopedCrabStats __st__("SplitDBM.apply");
 
@@ -1062,7 +1064,7 @@ void SplitDBM::apply(const ArithBinOp op, const Variable x, const Variable y, co
     normalize();
 }
 
-void SplitDBM::apply(BitwiseBinOp op, Variable x, Variable y, Variable z, int finite_width) {
+void SplitDBM::apply(BitwiseBinOp op, ProgVar x, ProgVar y, ProgVar z, int finite_width) {
     CrabStats::count("SplitDBM.count.apply");
     ScopedCrabStats __st__("SplitDBM.apply");
 
@@ -1084,7 +1086,7 @@ void SplitDBM::apply(BitwiseBinOp op, Variable x, Variable y, Variable z, int fi
 }
 
 // Apply a bitwise operator to a uvalue.
-void SplitDBM::apply(BitwiseBinOp op, Variable x, Variable y, const Number& k, int finite_width) {
+void SplitDBM::apply(BitwiseBinOp op, ProgVar x, ProgVar y, const Number& k, int finite_width) {
     CrabStats::count("SplitDBM.count.apply");
     ScopedCrabStats __st__("SplitDBM.apply");
 
@@ -1120,7 +1122,7 @@ void SplitDBM::forget(const VariableVector& variables) {
     normalize();
 }
 
-static std::string to_string(const Variable vd, const Variable vs, const SplitDBM::Weight& w, const bool eq) {
+static std::string to_string(const ProgVar& vd, const ProgVar& vs, const SplitDBM::Weight& w, const bool eq) {
     std::stringstream elem;
     if (eq) {
         if (w.operator>(0)) {
@@ -1236,7 +1238,8 @@ bool SplitDBM::eval_expression_overflow(const LinearExpression& e, Weight& out) 
     [[maybe_unused]]
     const bool overflow = convert_NtoW_overflow(e.constant_term(), out);
     assert(!overflow);
-    for (const auto& [variable, coefficient] : e.variable_terms()) {
+    for (const auto& [_variable, coefficient] : e.variable_terms()) {
+        const Variable variable = _variable;
         Weight coef;
         if (convert_NtoW_overflow(coefficient, coef)) {
             out = Weight(0);
@@ -1249,7 +1252,8 @@ bool SplitDBM::eval_expression_overflow(const LinearExpression& e, Weight& out) 
 
 Interval SplitDBM::compute_residual(const LinearExpression& e, const Variable pivot) const {
     Interval residual(-e.constant_term());
-    for (const auto& [variable, coefficient] : e.variable_terms()) {
+    for (const auto& [_variable, coefficient] : e.variable_terms()) {
+        const Variable variable = _variable;
         if (variable != pivot) {
             residual = residual - (Interval(coefficient) * this->operator[](variable));
         }
@@ -1360,10 +1364,10 @@ static Interval get_interval(const SplitDBM::VertMap& m, const SplitDBM::Graph& 
     return {lb, ub};
 }
 
-Interval SplitDBM::get_interval(const Variable x, const int finite_width) const {
+Interval SplitDBM::get_interval(const ProgVar& x, const int finite_width) const {
     return prevail::get_interval(vert_map, g, x, finite_width);
 }
 
-Interval SplitDBM::operator[](const Variable x) const { return prevail::get_interval(vert_map, g, x, 0); }
+Interval SplitDBM::operator[](const ProgVar& x) const { return prevail::get_interval(vert_map, g, x, 0); }
 
 } // namespace prevail

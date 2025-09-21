@@ -6,7 +6,7 @@
 #include <utility>
 
 #include "arith/linear_constraint.hpp"
-#include "arith/variable.hpp"
+#include "arith/progvar.hpp"
 #include "asm_syntax.hpp" // for Condition::Op
 #include "crab/interval.hpp"
 #include "crab/split_dbm.hpp"
@@ -69,70 +69,74 @@ class FiniteDomain {
         return FiniteDomain{dom.narrow(o.dom)};
     }
 
-    Interval eval_interval(const Variable& v) const { return dom.eval_interval(v); }
+    Interval eval_interval(const ProgVar& v) const { return dom.eval_interval(v); }
     Interval eval_interval(const LinearExpression& exp) const { return dom.eval_interval(exp); }
 
-    void assign(Variable x, const std::optional<LinearExpression>& e);
-    void assign(Variable x, Variable e);
-    void assign(Variable x, const LinearExpression& e);
-    void assign(Variable x, int64_t e);
+    void assign(const ProgVar& x, const std::optional<LinearExpression>& e);
+    void assign(const ProgVar& x, const ProgVar& e);
+    void assign(const ProgVar& x, const LinearExpression& e);
+    void assign(const ProgVar& x, int64_t e);
 
-    void apply(ArithBinOp op, Variable x, Variable y, const Number& z, int finite_width);
-    void apply(ArithBinOp op, Variable x, Variable y, Variable z, int finite_width);
-    void apply(BitwiseBinOp op, Variable x, Variable y, Variable z, int finite_width);
-    void apply(BitwiseBinOp op, Variable x, Variable y, const Number& k, int finite_width);
-    void apply(BinOp op, Variable x, Variable y, const Number& z, int finite_width);
-    void apply(BinOp op, Variable x, Variable y, Variable z, int finite_width);
-    void apply(const BinOp& op, const Variable x, const Variable y, const Variable z) { apply(op, x, y, z, 0); }
+    void apply(ArithBinOp op, const ProgVar& x, const ProgVar& y, const Number& z, int finite_width);
+    void apply(ArithBinOp op, const ProgVar& x, const ProgVar& y, const ProgVar& z, int finite_width);
+    void apply(BitwiseBinOp op, const ProgVar& x, const ProgVar& y, const ProgVar& z, int finite_width);
+    void apply(BitwiseBinOp op, const ProgVar& x, const ProgVar& y, const Number& k, int finite_width);
+    void apply(BinOp op, ProgVar x, ProgVar y, const Number& z, int finite_width);
+    void apply(BinOp op, ProgVar x, ProgVar y, ProgVar z, int finite_width);
+    void apply(const BinOp& op, const ProgVar& x, const ProgVar& y, const ProgVar& z) { apply(op, x, y, z, 0); }
 
-    void overflow_bounds(Variable lhs, int finite_width, bool issigned);
-    void overflow_bounds(Variable svalue, Variable uvalue, int finite_width);
+    void overflow_bounds(ProgVar lhs, int finite_width, bool issigned);
+    void overflow_bounds(const ProgVar& svalue, const ProgVar& uvalue, int finite_width);
 
-    void apply_signed(const BinOp& op, Variable xs, Variable xu, Variable y, const Number& z, int finite_width);
-    void apply_signed(const BinOp& op, Variable xs, Variable xu, Variable y, Variable z, int finite_width);
-    void apply_unsigned(const BinOp& op, Variable xs, Variable xu, Variable y, const Number& z, int finite_width);
-    void apply_unsigned(const BinOp& op, Variable xs, Variable xu, Variable y, Variable z, int finite_width);
+    void apply_signed(const BinOp& op, const ProgVar& xs, const ProgVar& xu, const ProgVar& y, const Number& z,
+                      int finite_width);
+    void apply_signed(const BinOp& op, const ProgVar& xs, const ProgVar& xu, const ProgVar& y, const ProgVar& z,
+                      int finite_width);
+    void apply_unsigned(const BinOp& op, const ProgVar& xs, const ProgVar& xu, const ProgVar& y, const Number& z,
+                        int finite_width);
+    void apply_unsigned(const BinOp& op, const ProgVar& xs, const ProgVar& xu, const ProgVar& y, const ProgVar& z,
+                        int finite_width);
 
-    void add(Variable lhs, Variable op2);
-    void add(Variable lhs, const Number& op2);
-    void sub(Variable lhs, Variable op2);
-    void sub(Variable lhs, const Number& op2);
-    void add_overflow(Variable lhss, Variable lhsu, Variable op2, int finite_width);
-    void add_overflow(Variable lhss, Variable lhsu, const Number& op2, int finite_width);
-    void sub_overflow(Variable lhss, Variable lhsu, Variable op2, int finite_width);
-    void sub_overflow(Variable lhss, Variable lhsu, const Number& op2, int finite_width);
-    void neg(Variable lhss, Variable lhsu, int finite_width);
-    void mul(Variable lhss, Variable lhsu, Variable op2, int finite_width);
-    void mul(Variable lhss, Variable lhsu, const Number& op2, int finite_width);
-    void sdiv(Variable lhss, Variable lhsu, Variable op2, int finite_width);
-    void sdiv(Variable lhss, Variable lhsu, const Number& op2, int finite_width);
-    void udiv(Variable lhss, Variable lhsu, Variable op2, int finite_width);
-    void udiv(Variable lhss, Variable lhsu, const Number& op2, int finite_width);
-    void srem(Variable lhss, Variable lhsu, Variable op2, int finite_width);
-    void srem(Variable lhss, Variable lhsu, const Number& op2, int finite_width);
-    void urem(Variable lhss, Variable lhsu, Variable op2, int finite_width);
-    void urem(Variable lhss, Variable lhsu, const Number& op2, int finite_width);
+    void add(const ProgVar& lhs, const ProgVar& op2);
+    void add(const ProgVar& lhs, const Number& op2);
+    void sub(const ProgVar& lhs, const ProgVar& op2);
+    void sub(const ProgVar& lhs, const Number& op2);
+    void add_overflow(const ProgVar& lhss, const ProgVar& lhsu, const ProgVar& op2, int finite_width);
+    void add_overflow(const ProgVar& lhss, const ProgVar& lhsu, const Number& op2, int finite_width);
+    void sub_overflow(const ProgVar& lhss, const ProgVar& lhsu, const ProgVar& op2, int finite_width);
+    void sub_overflow(const ProgVar& lhss, const ProgVar& lhsu, const Number& op2, int finite_width);
+    void neg(const ProgVar& lhss, const ProgVar& lhsu, int finite_width);
+    void mul(const ProgVar& lhss, const ProgVar& lhsu, const ProgVar& op2, int finite_width);
+    void mul(const ProgVar& lhss, const ProgVar& lhsu, const Number& op2, int finite_width);
+    void sdiv(const ProgVar& lhss, const ProgVar& lhsu, const ProgVar& op2, int finite_width);
+    void sdiv(const ProgVar& lhss, const ProgVar& lhsu, const Number& op2, int finite_width);
+    void udiv(const ProgVar& lhss, const ProgVar& lhsu, const ProgVar& op2, int finite_width);
+    void udiv(const ProgVar& lhss, const ProgVar& lhsu, const Number& op2, int finite_width);
+    void srem(const ProgVar& lhss, const ProgVar& lhsu, const ProgVar& op2, int finite_width);
+    void srem(const ProgVar& lhss, const ProgVar& lhsu, const Number& op2, int finite_width);
+    void urem(const ProgVar& lhss, const ProgVar& lhsu, const ProgVar& op2, int finite_width);
+    void urem(const ProgVar& lhss, const ProgVar& lhsu, const Number& op2, int finite_width);
 
-    void bitwise_and(Variable lhss, Variable lhsu, Variable op2, int finite_width);
-    void bitwise_and(Variable lhss, Variable lhsu, const Number& op2);
-    void bitwise_or(Variable lhss, Variable lhsu, Variable op2, int finite_width);
-    void bitwise_or(Variable lhss, Variable lhsu, const Number& op2);
-    void bitwise_xor(Variable lhss, Variable lhsu, Variable op2, int finite_width);
-    void bitwise_xor(Variable lhss, Variable lhsu, const Number& op2);
-    void shl_overflow(Variable lhss, Variable lhsu, Variable op2);
-    void shl_overflow(Variable lhss, Variable lhsu, const Number& op2);
-    void shl(Variable svalue, Variable uvalue, int imm, int finite_width);
-    void lshr(Variable svalue, Variable uvalue, int imm, int finite_width);
-    void ashr(Variable svalue, Variable uvalue, const LinearExpression& right_svalue, int finite_width);
-    void sign_extend(Variable svalue, Variable uvalue, const LinearExpression& right_svalue, int target_width,
-                     int source_width);
+    void bitwise_and(const ProgVar& lhss, const ProgVar& lhsu, const ProgVar& op2, int finite_width);
+    void bitwise_and(const ProgVar& lhss, const ProgVar& lhsu, const Number& op2);
+    void bitwise_or(const ProgVar& lhss, const ProgVar& lhsu, const ProgVar& op2, int finite_width);
+    void bitwise_or(const ProgVar& lhss, const ProgVar& lhsu, const Number& op2);
+    void bitwise_xor(const ProgVar& lhss, const ProgVar& lhsu, const ProgVar& op2, int finite_width);
+    void bitwise_xor(const ProgVar& lhss, const ProgVar& lhsu, const Number& op2);
+    void shl_overflow(const ProgVar& lhss, const ProgVar& lhsu, const ProgVar& op2);
+    void shl_overflow(const ProgVar& lhss, const ProgVar& lhsu, const Number& op2);
+    void shl(const ProgVar& svalue, const ProgVar& uvalue, int imm, int finite_width);
+    void lshr(const ProgVar& svalue, const ProgVar& uvalue, int imm, int finite_width);
+    void ashr(const ProgVar& svalue, const ProgVar& uvalue, const LinearExpression& right_svalue, int finite_width);
+    void sign_extend(const ProgVar& svalue, const ProgVar& uvalue, const LinearExpression& right_svalue,
+                     int target_width, int source_width);
 
     bool add_constraint(const LinearConstraint& cst) { return dom.add_constraint(cst); }
 
-    void set(const Variable x, const Interval& intv) { dom.set(x, intv); }
+    void set(const ProgVar& x, const Interval& intv) { dom.set(x, intv); }
 
     /// Forget everything we know about the value of a variable.
-    void havoc(Variable v) { dom.havoc(v); }
+    void havoc(const ProgVar& v) { dom.havoc(v); }
 
     [[nodiscard]]
     std::pair<std::size_t, std::size_t> size() const {
@@ -161,74 +165,74 @@ class FiniteDomain {
     static void clear_thread_local_state() { SplitDBM::clear_thread_local_state(); }
 
   private:
-    std::vector<LinearConstraint> assume_signed_64bit_eq(Variable left_svalue, Variable left_uvalue,
+    std::vector<LinearConstraint> assume_signed_64bit_eq(const ProgVar& left_svalue, const ProgVar& left_uvalue,
                                                          const Interval& right_interval,
                                                          const LinearExpression& right_svalue,
                                                          const LinearExpression& right_uvalue) const;
-    std::vector<LinearConstraint> assume_signed_32bit_eq(Variable left_svalue, Variable left_uvalue,
+    std::vector<LinearConstraint> assume_signed_32bit_eq(const ProgVar& left_svalue, const ProgVar& left_uvalue,
                                                          const Interval& right_interval) const;
 
     std::vector<LinearConstraint> assume_bit_cst_interval(Condition::Op op, bool is64, Interval dst_interval,
                                                           Interval src_interval) const;
 
-    void get_unsigned_intervals(bool is64, Variable left_svalue, Variable left_uvalue,
+    void get_unsigned_intervals(bool is64, const ProgVar& left_svalue, const ProgVar& left_uvalue,
                                 const LinearExpression& right_uvalue, Interval& left_interval, Interval& right_interval,
                                 Interval& left_interval_low, Interval& left_interval_high) const;
-    std::vector<LinearConstraint> assume_signed_64bit_lt(bool strict, Variable left_svalue, Variable left_uvalue,
-                                                         const Interval& left_interval_positive,
-                                                         const Interval& left_interval_negative,
-                                                         const LinearExpression& right_svalue,
-                                                         const LinearExpression& right_uvalue,
-                                                         const Interval& right_interval) const;
-    std::vector<LinearConstraint> assume_signed_32bit_lt(bool strict, Variable left_svalue, Variable left_uvalue,
-                                                         const Interval& left_interval_positive,
-                                                         const Interval& left_interval_negative,
-                                                         const LinearExpression& right_svalue,
-                                                         const LinearExpression& right_uvalue,
-                                                         const Interval& right_interval) const;
-    std::vector<LinearConstraint> assume_signed_64bit_gt(bool strict, Variable left_svalue, Variable left_uvalue,
-                                                         const Interval& left_interval_positive,
-                                                         const Interval& left_interval_negative,
-                                                         const LinearExpression& right_svalue,
-                                                         const LinearExpression& right_uvalue,
-                                                         const Interval& right_interval) const;
-    std::vector<LinearConstraint> assume_signed_32bit_gt(bool strict, Variable left_svalue, Variable left_uvalue,
-                                                         const Interval& left_interval_positive,
-                                                         const Interval& left_interval_negative,
-                                                         const LinearExpression& right_svalue,
-                                                         const LinearExpression& right_uvalue,
-                                                         const Interval& right_interval) const;
-    std::vector<LinearConstraint> assume_signed_cst_interval(Condition::Op op, bool is64, Variable left_svalue,
-                                                             Variable left_uvalue, const LinearExpression& right_svalue,
+    std::vector<LinearConstraint>
+    assume_signed_64bit_lt(bool strict, const ProgVar& left_svalue, const ProgVar& left_uvalue,
+                           const Interval& left_interval_positive, const Interval& left_interval_negative,
+                           const LinearExpression& right_svalue, const LinearExpression& right_uvalue,
+                           const Interval& right_interval) const;
+    std::vector<LinearConstraint>
+    assume_signed_32bit_lt(bool strict, const ProgVar& left_svalue, const ProgVar& left_uvalue,
+                           const Interval& left_interval_positive, const Interval& left_interval_negative,
+                           const LinearExpression& right_svalue, const LinearExpression& right_uvalue,
+                           const Interval& right_interval) const;
+    std::vector<LinearConstraint>
+    assume_signed_64bit_gt(bool strict, const ProgVar& left_svalue, const ProgVar& left_uvalue,
+                           const Interval& left_interval_positive, const Interval& left_interval_negative,
+                           const LinearExpression& right_svalue, const LinearExpression& right_uvalue,
+                           const Interval& right_interval) const;
+    std::vector<LinearConstraint>
+    assume_signed_32bit_gt(bool strict, const ProgVar& left_svalue, const ProgVar& left_uvalue,
+                           const Interval& left_interval_positive, const Interval& left_interval_negative,
+                           const LinearExpression& right_svalue, const LinearExpression& right_uvalue,
+                           const Interval& right_interval) const;
+    std::vector<LinearConstraint> assume_signed_cst_interval(Condition::Op op, bool is64, ProgVar left_svalue,
+                                                             ProgVar left_uvalue, const LinearExpression& right_svalue,
                                                              const LinearExpression& right_uvalue) const;
     std::vector<LinearConstraint>
-    assume_unsigned_64bit_lt(bool strict, Variable left_svalue, Variable left_uvalue, const Interval& left_interval_low,
+    assume_unsigned_64bit_lt(bool strict, ProgVar left_svalue, ProgVar left_uvalue, const Interval& left_interval_low,
                              const Interval& left_interval_high, const LinearExpression& right_svalue,
                              const LinearExpression& right_uvalue, const Interval& right_interval) const;
-    std::vector<LinearConstraint> assume_unsigned_32bit_lt(bool strict, Variable left_svalue, Variable left_uvalue,
+    std::vector<LinearConstraint> assume_unsigned_32bit_lt(bool strict, const ProgVar& left_svalue,
+                                                           const ProgVar& left_uvalue,
                                                            const LinearExpression& right_svalue,
                                                            const LinearExpression& right_uvalue) const;
     std::vector<LinearConstraint>
-    assume_unsigned_64bit_gt(bool strict, Variable left_svalue, Variable left_uvalue, const Interval& left_interval_low,
-                             const Interval& left_interval_high, const LinearExpression& right_svalue,
-                             const LinearExpression& right_uvalue, const Interval& right_interval) const;
+    assume_unsigned_64bit_gt(bool strict, const ProgVar& left_svalue, const ProgVar& left_uvalue,
+                             const Interval& left_interval_low, const Interval& left_interval_high,
+                             const LinearExpression& right_svalue, const LinearExpression& right_uvalue,
+                             const Interval& right_interval) const;
     std::vector<LinearConstraint>
-    assume_unsigned_32bit_gt(bool strict, Variable left_svalue, Variable left_uvalue, const Interval& left_interval_low,
-                             const Interval& left_interval_high, const LinearExpression& right_svalue,
-                             const LinearExpression& right_uvalue, const Interval& right_interval) const;
-    std::vector<LinearConstraint> assume_unsigned_cst_interval(Condition::Op op, bool is64, Variable left_svalue,
-                                                               Variable left_uvalue,
+    assume_unsigned_32bit_gt(bool strict, const ProgVar& left_svalue, const ProgVar& left_uvalue,
+                             const Interval& left_interval_low, const Interval& left_interval_high,
+                             const LinearExpression& right_svalue, const LinearExpression& right_uvalue,
+                             const Interval& right_interval) const;
+    std::vector<LinearConstraint> assume_unsigned_cst_interval(Condition::Op op, bool is64, ProgVar left_svalue,
+                                                               ProgVar left_uvalue,
                                                                const LinearExpression& right_svalue,
                                                                const LinearExpression& right_uvalue) const;
 
-    void get_signed_intervals(bool is64, Variable left_svalue, Variable left_uvalue,
+    void get_signed_intervals(bool is64, const ProgVar& left_svalue, const ProgVar& left_uvalue,
                               const LinearExpression& right_svalue, Interval& left_interval, Interval& right_interval,
                               Interval& left_interval_positive, Interval& left_interval_negative) const;
 
   public:
-    std::vector<LinearConstraint> assume_cst_imm(Condition::Op op, bool is64, Variable dst_svalue, Variable dst_uvalue,
-                                                 int64_t imm) const;
-    std::vector<LinearConstraint> assume_cst_reg(Condition::Op op, bool is64, Variable dst_svalue, Variable dst_uvalue,
-                                                 Variable src_svalue, Variable src_uvalue) const;
+    std::vector<LinearConstraint> assume_cst_imm(Condition::Op op, bool is64, const ProgVar& dst_svalue,
+                                                 const ProgVar& dst_uvalue, int64_t imm) const;
+    std::vector<LinearConstraint> assume_cst_reg(Condition::Op op, bool is64, const ProgVar& dst_svalue,
+                                                 const ProgVar& dst_uvalue, const ProgVar& src_svalue,
+                                                 const ProgVar& src_uvalue) const;
 };
 } // namespace prevail
