@@ -6,7 +6,6 @@
 #include "crab/ebpf_domain.hpp"
 
 using namespace prevail;
-using namespace dsl_syntax;
 
 // Assert that the domain defined by `specific_csts` is subsumed by the one from `general_csts`.
 // (i.e., specific <= general)
@@ -29,6 +28,7 @@ static const RegPack r0 = reg_pack(0);
 static const RegPack r1 = reg_pack(1);
 
 TEST_CASE("Basic subsumption properties", "[subsumption][lattice]") {
+    using namespace dsl_syntax;
     // Identical domains subsume each other.
     require_subsumes({r0.type == T_NUM}, {r0.type == T_NUM});
 
@@ -40,6 +40,7 @@ TEST_CASE("Basic subsumption properties", "[subsumption][lattice]") {
 }
 
 TEST_CASE("Straightforward value and type subsumption", "[subsumption][lattice]") {
+    using namespace dsl_syntax;
     // A specific value is subsumed by a range containing it.
     require_subsumes({r0.type == T_NUM, r0.svalue == 5}, {r0.type == T_NUM, r0.svalue >= 0, r0.svalue <= 10});
     require_not_subsumes({r0.type == T_NUM, r0.svalue >= 0, r0.svalue <= 10}, {r0.type == T_NUM, r0.svalue == 5});
@@ -60,6 +61,7 @@ TEST_CASE("Straightforward value and type subsumption", "[subsumption][lattice]"
 }
 
 TEST_CASE("Subsumption of unrelated or disjoint domains", "[subsumption][lattice]") {
+    using namespace dsl_syntax;
     require_not_subsumes({r0.type == T_NUM, r0.svalue == 1}, {r0.type == T_NUM, r0.svalue == 2});
     require_not_subsumes({r0.type == T_PACKET}, {r0.type == T_STACK});
     require_not_subsumes({r0.type == T_NUM, r0.svalue >= 0, r0.svalue <= 5},
@@ -67,6 +69,7 @@ TEST_CASE("Subsumption of unrelated or disjoint domains", "[subsumption][lattice
 }
 
 TEST_CASE("Subsumption with absent type-specific variables", "[subsumption][lattice]") {
+    using namespace dsl_syntax;
     // This is the core of the bug fix.
     // The specific domain has type T_NUM. For this type, `packet_offset` is an irrelevant (bottom) variable.
     // The general domain includes T_PACKET and has a constraint on `packet_offset`.
@@ -85,6 +88,7 @@ TEST_CASE("Subsumption with absent type-specific variables", "[subsumption][latt
 }
 
 TEST_CASE("Subsumption with present type-specific variables", "[subsumption][lattice]") {
+    using namespace dsl_syntax;
     // Standard subsumption check when the relevant type-specific variables are active in both domains.
     require_subsumes({r0.type == T_PACKET, r0.packet_offset == 8},
                      {r0.type == T_PACKET, r0.packet_offset >= 0, r0.packet_offset <= 16});
@@ -100,6 +104,7 @@ TEST_CASE("Subsumption with present type-specific variables", "[subsumption][lat
 }
 
 TEST_CASE("Edge case subsumption with bottom and mixed types", "[subsumption][lattice]") {
+    using namespace dsl_syntax;
     // Bottom is subsumed by anything.
     require_subsumes({r0.svalue > 0, r0.svalue < 0}, {r0.type == T_NUM});
     require_subsumes({r0.svalue > 0, r0.svalue < 0}, {});
