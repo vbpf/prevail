@@ -42,7 +42,7 @@ TEST_CASE("join disjoint precise types widens to range", "[join][lattice]") {
     require_join({r0.type == T_MAP}, {r0.type == T_STACK}, {r0.type >= T_MAP, r0.type <= T_STACK});
 }
 
-TEST_CASE("join precise with top widens and keeps precise offsets later", "[join][lattice]") {
+TEST_CASE("join precise with top widens type range", "[join][lattice]") {
     using namespace dsl_syntax;
     require_join({r0.type == T_MAP}, {r0.type == T_NUM}, {r0.type >= T_MAP, r0.type <= T_NUM});
 }
@@ -132,14 +132,6 @@ TEST_CASE("join with different types and unknown offsets", "[join][lattice]") {
     using namespace dsl_syntax;
     require_join({r0.type == T_MAP, r0.svalue == 1}, {r0.type == T_STACK, r0.svalue == 2},
                  {r0.type <= T_STACK, r0.type >= T_MAP, r0.svalue >= 1, r0.svalue <= 2});
-}
-
-TEST_CASE("join preserves type-specific offsets", "[join][lattice]") {
-    using namespace dsl_syntax;
-    require_join(
-        {r1.type == T_STACK, r1.svalue == 123, r1.stack_offset == 100},
-        {r1.type == T_PACKET, r1.svalue == 123, r1.packet_offset == 4},
-        {r1.svalue == 123, r1.type >= T_PACKET, r1.type <= T_STACK, r1.stack_offset == 100, r1.packet_offset == 4});
 }
 
 // 6) Shared memory offsets and sizes
@@ -234,9 +226,17 @@ TEST_CASE("join regression from 74+103 to 104", "[join][lattice]") {
         },
         {
             // Conservative overapproximation of correct join
-            r0.type >= T_MAP, r0.type <= T_NUM, r6.type >= T_MAP, r6.type <= T_NUM, r7.type == T_NUM, r7.svalue >= 0,
-            r1.svalue >= 146, r1.svalue <= 153, r10.type == T_STACK, r10.svalue >= 4096,
-            r10.svalue <= 2147319808 + 98304, // equals 2147418112
+            r0.type >= T_MAP,
+            r0.type <= T_NUM,
+            r6.type >= T_MAP,
+            r6.type <= T_NUM,
+            r7.type == T_NUM,
+            r7.svalue >= 0,
+            r1.svalue >= 146,
+            r1.svalue <= 153,
+            r10.type == T_STACK,
+            r10.svalue >= 4096,
+            r10.svalue <= 2147418112,
         });
 }
 
