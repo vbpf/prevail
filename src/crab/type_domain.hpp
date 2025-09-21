@@ -6,6 +6,8 @@
 
 #include <functional>
 #include <optional>
+#include <tuple>
+#include <vector>
 
 #include "arith/variable.hpp"
 #include "asm_syntax.hpp" // for Reg
@@ -59,9 +61,10 @@ struct TypeDomain {
     NumAbsDomain join_by_if_else(const NumAbsDomain& inv, const LinearConstraint& condition,
                                  const std::function<void(NumAbsDomain&)>& if_true,
                                  const std::function<void(NumAbsDomain&)>& if_false) const;
-    void selectively_join_based_on_type(NumAbsDomain& dst, NumAbsDomain&& src) const;
-    void add_extra_invariant(const NumAbsDomain& dst, std::map<Variable, Interval>& extra_invariants,
-                             Variable type_variable, TypeEncoding type, DataKind kind, const NumAbsDomain& src) const;
+
+    std::vector<Variable> get_nonexistent_kind_variables(const NumAbsDomain& dom) const;
+    std::vector<std::tuple<Variable, bool, Interval>>
+    collect_type_dependent_constraints(const NumAbsDomain& left, const NumAbsDomain& right) const;
 
     [[nodiscard]]
     bool is_in_group(const NumAbsDomain& inv, const Reg& r, TypeGroup group) const;

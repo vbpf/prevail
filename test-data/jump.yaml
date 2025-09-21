@@ -442,6 +442,19 @@ post:
   - r8.type=ctx
   - r8.svalue=1024
   - r8.uvalue=1024
+  - r1.svalue-r0.uvalue<=2048
+  - r1.svalue-r2.type<=2052
+  - r1.type-r0.uvalue<=1021
+  - r1.type-r2.type<=1025
+  - r2.ctx_offset-r0.uvalue<=1024
+  - r2.ctx_offset-r2.type<=1028
+  - r2.svalue-r1.svalue<=1024
+  - r2.svalue-r1.type<=2051
+  - r2.svalue-r2.ctx_offset<=2048
+  - r2.type-r1.svalue<=-3
+  - r2.type-r1.type<=1024
+  - r2.type-r2.ctx_offset<=1021
+  - r3.svalue-r2.ctx_offset<=4096
 
 messages:
   - "8: Only numbers can be added to pointers (r2.type in {ctx, stack, packet, shared} -> r3.type == number)"

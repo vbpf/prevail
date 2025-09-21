@@ -69,24 +69,55 @@ bool EbpfDomain::is_bottom() const { return m_inv.is_bottom(); }
 
 bool EbpfDomain::is_top() const { return m_inv.is_top() && stack.is_top(); }
 
-bool EbpfDomain::operator<=(const EbpfDomain& other) const { return m_inv <= other.m_inv && stack <= other.stack; }
+/**
+ * @brief Determines if this abstract state is subsumed by another (*this <= other).
+ *
+ * @details This is a type-aware subsumption check that correctly handles type-specific
+ * "kind" variables (e.g., `packet_offset`). A standard numerical comparison is
+ * insufficient due to the special role these variables play: a kind variable associated
+ * with a type that is not active in `this` domain is conceptually Bottom.
+ * To ensure a correct comparison, this function first identifies these "Bottom" variables.
+ * It then `havoc`s them in a temporary copy of the `other` domain, which sets them to
+ * Top. The final numerical check `m_inv <= tmp.m_inv` is then sound, as it
+ * evaluates `Bottom <= Top` for all irrelevant variables on the left-hand side.
+ */
+bool EbpfDomain::operator<=(const EbpfDomain& other) const {
+    if (!(stack <= other.stack)) {
+        return false;
+    }
+    EbpfDomain tmp{other};
+    for (const Variable& v : type_inv.get_nonexistent_kind_variables(m_inv)) {
+        tmp.m_inv.havoc(v);
+    }
+    return m_inv <= tmp.m_inv;
+}
 
 bool EbpfDomain::operator==(const EbpfDomain& other) const {
     return stack == other.stack && m_inv <= other.m_inv && other.m_inv <= m_inv;
 }
 
+void EbpfDomain::join_selective(NumAbsDomain& left, NumAbsDomain&& right) {
+    if (left.is_bottom()) {
+        left = std::move(right);
+        return;
+    }
+    if (right.is_bottom()) {
+        return;
+    }
+    auto extra_invariants = TypeDomain{}.collect_type_dependent_constraints(left, right);
+    left |= std::move(right);
+    for (const auto& [variable, in_left, interval] : extra_invariants) {
+        left.set(variable, interval);
+    }
+}
+
 void EbpfDomain::operator|=(EbpfDomain&& other) {
     if (is_bottom()) {
-        *this = std::move(other);
-        return;
+        stack = std::move(other.stack);
+    } else if (!other.is_bottom()) {
+        stack |= std::move(other.stack);
     }
-    if (other.is_bottom()) {
-        return;
-    }
-
-    type_inv.selectively_join_based_on_type(m_inv, std::move(other.m_inv));
-
-    stack |= std::move(other.stack);
+    join_selective(m_inv, std::move(other.m_inv));
 }
 
 void EbpfDomain::operator|=(const EbpfDomain& other) {
@@ -95,15 +126,21 @@ void EbpfDomain::operator|=(const EbpfDomain& other) {
 }
 
 EbpfDomain EbpfDomain::operator|(EbpfDomain&& other) const {
-    return EbpfDomain(m_inv | std::move(other.m_inv), stack | other.stack);
+    EbpfDomain res{std::move(other)};
+    res |= *this;
+    return res;
 }
 
 EbpfDomain EbpfDomain::operator|(const EbpfDomain& other) const& {
-    return EbpfDomain(m_inv | other.m_inv, stack | other.stack);
+    EbpfDomain res{other};
+    res |= *this;
+    return res;
 }
 
 EbpfDomain EbpfDomain::operator|(const EbpfDomain& other) && {
-    return EbpfDomain(other.m_inv | std::move(m_inv), other.stack | stack);
+    EbpfDomain res{std::move(*this)};
+    res |= other;
+    return res;
 }
 
 EbpfDomain EbpfDomain::operator&(const EbpfDomain& other) const {
@@ -139,7 +176,15 @@ EbpfDomain EbpfDomain::calculate_constant_limits() {
 static const EbpfDomain constant_limits = EbpfDomain::calculate_constant_limits();
 
 EbpfDomain EbpfDomain::widen(const EbpfDomain& other, const bool to_constants) const {
-    EbpfDomain res{m_inv.widen(other.m_inv), stack | other.stack};
+    auto extra_invariants = type_inv.collect_type_dependent_constraints(m_inv, other.m_inv);
+
+    EbpfDomain res{this->m_inv.widen(std::move(other.m_inv)), stack.widen(other.stack)};
+
+    // Now add in the extra invariants saved above.
+    for (const auto& [variable, in_left, interval] : extra_invariants) {
+        res.m_inv.set(variable, interval);
+    }
+
     if (to_constants) {
         return res & constant_limits;
     }
@@ -304,6 +349,14 @@ void EbpfDomain::initialize_packet() {
     } else {
         inv.m_inv.assign(variable_registry->meta_offset(), 0);
     }
+}
+
+EbpfDomain EbpfDomain::from_constraints(const std::vector<LinearConstraint>& constraints) {
+    EbpfDomain inv;
+    for (const auto& cst : constraints) {
+        inv.add_constraint(cst);
+    }
+    return inv;
 }
 
 EbpfDomain EbpfDomain::from_constraints(const std::set<std::string>& constraints, const bool setup_constraints) {

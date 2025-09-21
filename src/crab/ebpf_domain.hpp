@@ -51,6 +51,8 @@ class EbpfDomain final {
     bool is_top() const;
     bool operator<=(const EbpfDomain& other) const;
     bool operator==(const EbpfDomain& other) const;
+
+    static void join_selective(NumAbsDomain& left, NumAbsDomain&& right);
     void operator|=(EbpfDomain&& other);
     void operator|=(const EbpfDomain& other);
     EbpfDomain operator|(EbpfDomain&& other) const;
@@ -66,6 +68,9 @@ class EbpfDomain final {
 
     static EbpfDomain setup_entry(bool init_r1);
     static EbpfDomain from_constraints(const std::set<std::string>& constraints, bool setup_constraints);
+    static EbpfDomain from_constraints(const std::vector<LinearConstraint>& constraints);
+    friend void require_join(const std::vector<LinearConstraint>& a_csts, const std::vector<LinearConstraint>& b_csts,
+                             const std::vector<LinearConstraint>& over_csts);
     void initialize_packet();
 
     StringInvariant to_set() const;
