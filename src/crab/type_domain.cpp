@@ -167,11 +167,11 @@ static const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
  * @param[in] dom The numerical domain to inspect.
  * @return A vector of all kind variables that are meaningless (effectively Bottom) in `dom`.
  */
-std::vector<Variable> TypeDomain::get_nonexistent_kind_variables(const NumAbsDomain& dom) const {
+std::vector<Variable> TypeDomain::get_nonexistent_kind_variables() const {
     std::vector<Variable> res;
     for (const Variable v : variable_registry->get_type_variables()) {
         for (const auto& [type, kinds] : type_to_kinds) {
-            if (may_have_type(dom, v, type)) {
+            if (may_have_type(v, type)) {
                 // This type might be present in the register's type set, so its kind
                 // variables are meaningful and should not be ignored.
                 continue;
@@ -207,19 +207,20 @@ std::vector<Variable> TypeDomain::get_nonexistent_kind_variables(const NumAbsDom
  * and its interval value, for each type-specific constraint to be preserved.
  */
 std::vector<std::tuple<Variable, bool, Interval>>
-TypeDomain::collect_type_dependent_constraints(const NumAbsDomain& left, const NumAbsDomain& right) const {
+TypeDomain::collect_type_dependent_constraints(const TypeDomain& left_type, const NumAbsDomain& left_num,
+                                               const TypeDomain& right_type, const NumAbsDomain& right_num) {
     std::vector<std::tuple<Variable, bool, Interval>> result;
 
     for (const Variable& type_var : variable_registry->get_type_variables()) {
         for (const auto& [type, kinds] : type_to_kinds) {
-            const bool in_left = may_have_type(left, type_var, type);
-            const bool in_right = may_have_type(right, type_var, type);
+            const bool in_left = left_type.may_have_type(type_var, type);
+            const bool in_right = right_type.may_have_type(type_var, type);
 
             // If a type may be present in one domain but not the other, its
             // dependent constraints must be explicitly preserved.
             if (in_left != in_right) {
                 // Identify which domain contains the constraints.
-                const NumAbsDomain& source = in_left ? left : right;
+                const NumAbsDomain& source = in_left ? left_num : right_num;
                 for (const DataKind kind : kinds) {
                     Variable var = variable_registry->kind_var(kind, type_var);
                     Interval value = source.eval_interval(var);
@@ -234,21 +235,17 @@ TypeDomain::collect_type_dependent_constraints(const NumAbsDomain& left, const N
     return result;
 }
 
-void TypeDomain::assign_type(NumAbsDomain& inv, const Reg& lhs, const Reg& rhs) {
-    inv.assign(reg_pack(lhs).type, reg_pack(rhs).type);
-}
+void TypeDomain::assign_type(const Reg& lhs, const Reg& rhs) { inv.assign(reg_pack(lhs).type, reg_pack(rhs).type); }
 
-void TypeDomain::assign_type(NumAbsDomain& inv, const std::optional<Variable> lhs, const LinearExpression& t) {
-    inv.assign(lhs, t);
-}
+void TypeDomain::assign_type(const std::optional<Variable> lhs, const LinearExpression& t) { inv.assign(lhs, t); }
 
-void TypeDomain::assign_type(NumAbsDomain& inv, const Reg& lhs, const std::optional<LinearExpression>& rhs) {
+void TypeDomain::assign_type(const Reg& lhs, const std::optional<LinearExpression>& rhs) {
     inv.assign(reg_pack(lhs).type, rhs);
 }
 
-void TypeDomain::havoc_type(NumAbsDomain& inv, const Reg& r) { inv.havoc(reg_pack(r).type); }
+void TypeDomain::havoc_type(const Reg& r) { inv.havoc(reg_pack(r).type); }
 
-TypeEncoding TypeDomain::get_type(const NumAbsDomain& inv, const LinearExpression& v) const {
+TypeEncoding TypeDomain::get_type(const LinearExpression& v) const {
     const auto res = inv.eval_interval(v).singleton();
     if (!res) {
         return T_UNINIT;
@@ -256,7 +253,7 @@ TypeEncoding TypeDomain::get_type(const NumAbsDomain& inv, const LinearExpressio
     return res->narrow<TypeEncoding>();
 }
 
-TypeEncoding TypeDomain::get_type(const NumAbsDomain& inv, const Reg& r) const {
+TypeEncoding TypeDomain::get_type(const Reg& r) const {
     const auto res = inv.eval_interval(reg_pack(r).type).singleton();
     if (!res) {
         return T_UNINIT;
@@ -265,44 +262,44 @@ TypeEncoding TypeDomain::get_type(const NumAbsDomain& inv, const Reg& r) const {
 }
 
 // Check whether a given type value is within the range of a given type variable's value.
-bool TypeDomain::may_have_type(const NumAbsDomain& inv, const Reg& r, const TypeEncoding type) const {
+bool TypeDomain::may_have_type(const Reg& r, const TypeEncoding type) const {
     const Interval interval = inv.eval_interval(reg_pack(r).type);
     return interval.contains(type);
 }
 
-bool TypeDomain::may_have_type(const NumAbsDomain& inv, const LinearExpression& v, const TypeEncoding type) const {
+bool TypeDomain::may_have_type(const LinearExpression& v, const TypeEncoding type) const {
     const Interval interval = inv.eval_interval(v);
     return interval.contains(type);
 }
 
-NumAbsDomain TypeDomain::join_over_types(const NumAbsDomain& inv, const Reg& reg,
+NumAbsDomain TypeDomain::join_over_types(const NumAbsDomain& num_dom, const Reg& reg,
                                          const std::function<void(NumAbsDomain&, TypeEncoding)>& transition) const {
     Interval types = inv.eval_interval(reg_pack(reg).type);
     if (types.is_bottom()) {
         return NumAbsDomain::bottom();
     }
     if (types.contains(T_UNINIT)) {
-        NumAbsDomain res(inv);
+        NumAbsDomain res(num_dom);
         transition(res, T_UNINIT);
         return res;
     }
     NumAbsDomain res = NumAbsDomain::bottom();
     auto [lb, ub] = types.bound(T_MIN, T_MAX);
     for (TypeEncoding type : iterate_types(lb, ub)) {
-        NumAbsDomain tmp(inv);
+        NumAbsDomain tmp(num_dom);
         transition(tmp, type);
         EbpfDomain::join_selective(res, std::move(tmp)); // res |= tmp;
     }
     return res;
 }
 
-NumAbsDomain TypeDomain::join_by_if_else(const NumAbsDomain& inv, const LinearConstraint& condition,
+NumAbsDomain TypeDomain::join_by_if_else(const NumAbsDomain& num_dom, const LinearConstraint& condition,
                                          const std::function<void(NumAbsDomain&)>& if_true,
                                          const std::function<void(NumAbsDomain&)>& if_false) const {
-    NumAbsDomain true_case(inv.when(condition));
+    NumAbsDomain true_case(num_dom.when(condition));
     if_true(true_case);
 
-    NumAbsDomain false_case(inv.when(condition.negate()));
+    NumAbsDomain false_case(num_dom.when(condition.negate()));
     if_false(false_case);
 
     return true_case | false_case;
@@ -313,15 +310,9 @@ static LinearConstraint eq_types(const Reg& a, const Reg& b) {
     return eq(reg_pack(a).type, reg_pack(b).type);
 }
 
-bool TypeDomain::same_type(const NumAbsDomain& inv, const Reg& a, const Reg& b) const {
-    return inv.entail(eq_types(a, b));
-}
+bool TypeDomain::same_type(const Reg& a, const Reg& b) const { return inv.entail(eq_types(a, b)); }
 
-bool TypeDomain::implies_type(const NumAbsDomain& inv, const LinearConstraint& a, const LinearConstraint& b) const {
-    return inv.when(a).entail(b);
-}
-
-bool TypeDomain::is_in_group(const NumAbsDomain& inv, const Reg& r, const TypeGroup group) const {
+bool TypeDomain::is_in_group(const Reg& r, const TypeGroup group) const {
     using namespace dsl_syntax;
     const Variable t = reg_pack(r).type;
     switch (group) {

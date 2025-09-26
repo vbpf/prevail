@@ -38,7 +38,7 @@ class EbpfDomain final {
 
   public:
     EbpfDomain();
-    EbpfDomain(NumAbsDomain inv, ArrayDomain stack);
+    EbpfDomain(TypeDomain type_inv, NumAbsDomain inv, ArrayDomain stack);
 
     // Generic abstract domain operations
     static EbpfDomain top();
@@ -52,7 +52,8 @@ class EbpfDomain final {
     bool operator<=(const EbpfDomain& other) const;
     bool operator==(const EbpfDomain& other) const;
 
-    static void join_selective(NumAbsDomain& left, NumAbsDomain&& right);
+    static void join_selective(TypeDomain& left_type, NumAbsDomain& left_num, TypeDomain& right_type,
+                               NumAbsDomain&& right_num);
     void operator|=(EbpfDomain&& other);
     void operator|=(const EbpfDomain& other);
     EbpfDomain operator|(EbpfDomain&& other) const;
@@ -99,6 +100,8 @@ class EbpfDomain final {
 
     bool get_map_fd_range(const Reg& map_fd_reg, int32_t* start_fd, int32_t* end_fd) const;
 
+    TypeDomain m_type_inv;
+
     /// Mapping from variables (including registers, types, offsets,
     /// memory locations, etc.) to numeric intervals or relationships
     /// to other variables.
@@ -108,8 +111,6 @@ class EbpfDomain final {
     /// allowing mapping to variable in the m_inv numeric domains
     /// while dealing with overlapping byte ranges.
     ArrayDomain stack;
-
-    TypeDomain type_inv;
 };
 
 } // namespace prevail
