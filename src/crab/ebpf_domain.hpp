@@ -3,12 +3,12 @@
 #pragma once
 
 // This file is eBPF-specific, not derived from CRAB.
-#include "rcp.hpp"
 
 #include <optional>
 
 #include "arith/variable.hpp"
 #include "crab/array_domain.hpp"
+#include "crab/rcp.hpp"
 #include "crab/type_domain.hpp"
 #include "string_constraints.hpp"
 

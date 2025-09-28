@@ -48,14 +48,11 @@ inline const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
     {T_STACK, {DataKind::stack_offsets, DataKind::stack_numeric_sizes}},
 };
 
-//**
- * TypeToNumDomain implements a Reduced Cardinal Power Domain between TypeDomain and NumAbsDomain.
- * This struct is used to represent the eBPF abstract domain where type information
- * (TypeDomain) is used to guide the precision of the numeric domain (NumAbsDomain).
- * For example, if a register is known to be of type stack, then the numeric
- * domain can track its stack offset; if a register is known to be a number,
- * then the numeric domain can track its signed integer value, etc.
- */
+/** TypeToNumDomain implements a Reduced Cardinal Power Domain between TypeDomain and NumAbsDomain.
+ * This struct is used to represent the eBPF abstract domain where type information (TypeDomain) is used to guide the
+ * precision of the numeric domain(NumAbsDomain). For example, if a register is known to be of type stack, then the
+ * numeric domain can track its stack offset; if a register is known to be a number, the numeric domain can track its
+ * signed integer value, etc. */
 struct TypeToNumDomain {
     TypeDomain types{TypeDomain::top()};
     NumAbsDomain values{NumAbsDomain::top()};
@@ -274,5 +271,4 @@ struct TypeToNumDomain {
         return types.to_set() + values.to_set();
     }
 };
-
 } // namespace prevail
