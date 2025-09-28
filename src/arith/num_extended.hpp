@@ -6,8 +6,8 @@
 #include <optional>
 #include <utility>
 
+#include "arith/num_big.hpp"
 #include "crab_utils/stats.hpp"
-#include "num_big.hpp"
 
 namespace prevail {
 

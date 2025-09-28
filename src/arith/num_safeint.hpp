@@ -12,7 +12,7 @@
 #include <boost/multiprecision/cpp_int.hpp>
 #endif
 
-#include "num_big.hpp"
+#include "arith/num_big.hpp"
 
 namespace prevail {
 

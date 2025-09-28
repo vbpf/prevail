@@ -43,8 +43,8 @@ using OnRequire = std::function<void(NumAbsDomain&, const LinearConstraint&, con
 class EbpfChecker final {
   public:
     explicit EbpfChecker(EbpfDomain& dom, const Assertion& assertion, const OnRequire& on_require)
-        : assertion{assertion}, on_require{on_require}, dom(dom), m_inv(dom.m_inv), stack(dom.stack),
-          type_inv(dom.type_inv) {}
+        : assertion{assertion}, on_require{on_require}, dom(dom), values(dom.rcp.values), stack(dom.stack),
+          types(dom.rcp.types) {}
 
     void visit(const Assertion& assertion) { std::visit(*this, assertion); }
 
@@ -68,7 +68,7 @@ class EbpfChecker final {
         on_require(inv, cst, create_warning(msg));
     }
 
-    void require(const std::string& msg) const { require(m_inv, LinearConstraint::false_const(), msg); }
+    void require(const std::string& msg) const { require(values, LinearConstraint::false_const(), msg); }
 
     // memory check / load / store
     void check_access_stack(NumAbsDomain& inv, const LinearExpression& lb, const LinearExpression& ub) const;
@@ -84,9 +84,9 @@ class EbpfChecker final {
 
     EbpfDomain& dom;
     // shorthands:
-    NumAbsDomain& m_inv;
+    NumAbsDomain& values;
     ArrayDomain& stack;
-    TypeDomain& type_inv;
+    TypeDomain& types;
 };
 
 void ebpf_domain_assume(EbpfDomain& dom, const Assertion& assertion) {
@@ -177,12 +177,11 @@ void EbpfChecker::check_access_shared(NumAbsDomain& inv, const LinearExpression&
 
 void EbpfChecker::operator()(const Comparable& s) const {
     using namespace dsl_syntax;
-    if (type_inv.same_type(m_inv, s.r1, s.r2)) {
+    if (types.same_type(s.r1, s.r2)) {
         // Same type. If both are numbers, that's okay. Otherwise:
-        const auto inv = m_inv.when(reg_pack(s.r2).type != T_NUM);
+        const auto inv = values.when(reg_pack(s.r2).type != T_NUM);
         // We must check that they belong to a singleton region:
-        if (!type_inv.is_in_group(inv, s.r1, TypeGroup::singleton_ptr) &&
-            !type_inv.is_in_group(inv, s.r1, TypeGroup::map_fd)) {
+        if (!types.is_in_group(s.r1, TypeGroup::singleton_ptr) && !types.is_in_group(s.r1, TypeGroup::map_fd)) {
             require("Cannot subtract pointers to non-singleton regions");
             return;
         }
@@ -192,12 +191,12 @@ void EbpfChecker::operator()(const Comparable& s) const {
     } else {
         // _Maybe_ different types, so r2 must be a number.
         // We checked in a previous assertion that r1 is a pointer or a number.
-        require(m_inv, reg_pack(s.r2).type == T_NUM, "Cannot subtract pointers to different regions");
+        require(values, reg_pack(s.r2).type == T_NUM, "Cannot subtract pointers to different regions");
     }
 }
 
 void EbpfChecker::operator()(const Addable& s) const {
-    if (!type_inv.implies_type(m_inv, type_is_pointer(reg_pack(s.ptr)), type_is_number(s.num))) {
+    if (!types.implies(type_is_pointer(reg_pack(s.ptr)), type_is_number(s.num))) {
         require("Only numbers can be added to pointers");
     }
 }
@@ -205,23 +204,23 @@ void EbpfChecker::operator()(const Addable& s) const {
 void EbpfChecker::operator()(const ValidDivisor& s) const {
     using namespace dsl_syntax;
     const auto reg = reg_pack(s.reg);
-    if (!type_inv.implies_type(m_inv, type_is_pointer(reg), type_is_number(s.reg))) {
+    if (!types.implies(type_is_pointer(reg), type_is_number(s.reg))) {
         require("Only numbers can be used as divisors");
     }
     if (!thread_local_options.allow_division_by_zero) {
         const auto v = s.is_signed ? reg.svalue : reg.uvalue;
-        require(m_inv, v != 0, "Possible division by zero");
+        require(values, v != 0, "Possible division by zero");
     }
 }
 
 void EbpfChecker::operator()(const ValidStore& s) const {
-    if (!type_inv.implies_type(m_inv, type_is_not_stack(reg_pack(s.mem)), type_is_number(s.val))) {
+    if (!types.implies(type_is_not_stack(reg_pack(s.mem)), type_is_number(s.val))) {
         require("Only numbers can be stored to externally-visible regions");
     }
 }
 
 void EbpfChecker::operator()(const TypeConstraint& s) const {
-    if (!type_inv.is_in_group(m_inv, s.reg, s.types)) {
+    if (!types.is_in_group(s.reg, s.types)) {
         require("Invalid type");
     }
 }
@@ -231,16 +230,16 @@ void EbpfChecker::operator()(const BoundedLoopCount& s) const {
     // does not exceed the specified limit
     using namespace dsl_syntax;
     const auto counter = variable_registry->loop_counter(to_string(s.name));
-    require(m_inv, counter <= s.limit, "Loop counter is too large");
+    require(values, counter <= s.limit, "Loop counter is too large");
 }
 
 void EbpfChecker::operator()(const FuncConstraint& s) const {
     // Look up the helper function id.
-    if (!m_inv) {
+    if (!values) {
         return;
     }
     const RegPack& reg = reg_pack(s.reg);
-    const auto src_interval = m_inv.eval_interval(reg.svalue);
+    const auto src_interval = values.eval_interval(reg.svalue);
     if (const auto sn = src_interval.singleton()) {
         if (sn->fits<int32_t>()) {
             // We can now process it as if the id was immediate.
@@ -263,7 +262,7 @@ void EbpfChecker::operator()(const FuncConstraint& s) const {
 void EbpfChecker::operator()(const ValidSize& s) const {
     using namespace dsl_syntax;
     const auto r = reg_pack(s.reg);
-    require(m_inv, s.can_be_zero ? r.svalue >= 0 : r.svalue > 0, "Invalid size");
+    require(values, s.can_be_zero ? r.svalue >= 0 : r.svalue > 0, "Invalid size");
 }
 
 void EbpfChecker::operator()(const ValidCall& s) const {
@@ -298,23 +297,23 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
         width = value_size->narrow<int>();
     }
 
-    m_inv = type_inv.join_over_types(m_inv, s.access_reg, [&](NumAbsDomain& inv, TypeEncoding access_reg_type) {
+    dom.rcp = dom.rcp.join_over_types(s.access_reg, [&](TypeToNumDomain& rcp, TypeEncoding access_reg_type) {
         if (access_reg_type == T_STACK) {
             Variable lb = access_reg.stack_offset;
             LinearExpression ub = lb + width;
-            if (!stack.all_num(inv, lb, ub)) {
-                auto lb_is = inv.eval_interval(lb).lb().number();
+            if (!stack.all_num(rcp.values, lb, ub)) {
+                auto lb_is = rcp.values.eval_interval(lb).lb().number();
                 std::string lb_s = lb_is && lb_is->fits<int32_t>() ? std::to_string(lb_is->narrow<int32_t>()) : "-oo";
-                auto ub_is = inv.eval_interval(ub).ub().number();
+                auto ub_is = rcp.values.eval_interval(ub).ub().number();
                 std::string ub_s = ub_is && ub_is->fits<int32_t>() ? std::to_string(ub_is->narrow<int32_t>()) : "oo";
-                require(inv, LinearConstraint::false_const(),
+                require(rcp.values, LinearConstraint::false_const(),
                         "Illegal map update with a non-numerical value [" + lb_s + "-" + ub_s + ")");
             } else if (thread_local_options.strict && fd_type.has_value()) {
                 EbpfMapType map_type = thread_local_program_info->platform->get_map_type(*fd_type);
                 if (map_type.is_array) {
                     // Get offset value.
                     Variable key_ptr = access_reg.stack_offset;
-                    std::optional<Number> offset = inv.eval_interval(key_ptr).singleton();
+                    std::optional<Number> offset = rcp.values.eval_interval(key_ptr).singleton();
                     if (!offset.has_value()) {
                         require("Pointer must be a singleton");
                     } else if (s.key) {
@@ -323,24 +322,24 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
                             variable_registry->cell_var(DataKind::svalues, offset.value(), sizeof(uint32_t));
 
                         if (auto max_entries = dom.get_map_max_entries(s.map_fd_reg).lb().number()) {
-                            require(inv, key_value < *max_entries, "Array index overflow");
+                            require(rcp.values, key_value < *max_entries, "Array index overflow");
                         } else {
                             require("Max entries is not finite");
                         }
-                        require(inv, key_value >= 0, "Array index underflow");
+                        require(rcp.values, key_value >= 0, "Array index underflow");
                     }
                 }
             }
         } else if (access_reg_type == T_PACKET) {
             Variable lb = access_reg.packet_offset;
             LinearExpression ub = lb + width;
-            check_access_packet(inv, lb, ub, {});
+            check_access_packet(rcp.values, lb, ub, {});
             // Packet memory is both readable and writable.
         } else if (access_reg_type == T_SHARED) {
             Variable lb = access_reg.shared_offset;
             LinearExpression ub = lb + width;
-            check_access_shared(inv, lb, ub, access_reg.shared_region_size);
-            require(inv, access_reg.svalue > 0, "Possible null access");
+            check_access_shared(rcp.values, lb, ub, access_reg.shared_region_size);
+            require(rcp.values, access_reg.svalue > 0, "Possible null access");
             // Shared memory is zero-initialized when created so is safe to read and write.
         } else {
             require("Only stack or packet can be used as a parameter");
@@ -364,11 +363,11 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
 
     const auto reg = reg_pack(s.reg);
     // join_over_types instead of simple iteration is only needed for assume-assert
-    m_inv = type_inv.join_over_types(m_inv, s.reg, [&](NumAbsDomain& inv, TypeEncoding type) {
+    dom.rcp = dom.rcp.join_over_types(s.reg, [&](TypeToNumDomain& rcp, TypeEncoding type) {
         switch (type) {
         case T_PACKET: {
             auto [lb, ub] = lb_ub_access_pair(s, reg.packet_offset);
-            check_access_packet(inv, lb, ub,
+            check_access_packet(rcp.values, lb, ub,
                                 is_comparison_check ? std::optional<Variable>{} : variable_registry->packet_size());
             // if within bounds, it can never be null
             // Context memory is both readable and writable.
@@ -376,19 +375,20 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
         }
         case T_STACK: {
             auto [lb, ub] = lb_ub_access_pair(s, reg.stack_offset);
-            check_access_stack(inv, lb, ub);
+            check_access_stack(rcp.values, lb, ub);
             // if within bounds, it can never be null
             if (s.access_type == AccessType::read) {
                 // Require that the stack range contains numbers.
-                if (!stack.all_num(inv, lb, ub)) {
+                if (!stack.all_num(rcp.values, lb, ub)) {
                     if (s.offset < 0) {
                         require("Stack content is not numeric");
                     } else if (const auto pimm = std::get_if<Imm>(&s.width)) {
-                        if (!inv.entail(gsl::narrow<int>(pimm->v) <= reg.stack_numeric_size - s.offset)) {
+                        if (!rcp.values.entail(gsl::narrow<int>(pimm->v) <= reg.stack_numeric_size - s.offset)) {
                             require("Stack content is not numeric");
                         }
                     } else {
-                        if (!inv.entail(reg_pack(std::get<Reg>(s.width)).svalue <= reg.stack_numeric_size - s.offset)) {
+                        if (!rcp.values.entail(reg_pack(std::get<Reg>(s.width)).svalue <=
+                                               reg.stack_numeric_size - s.offset)) {
                             require("Stack content is not numeric");
                         }
                     }
@@ -398,16 +398,16 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
         }
         case T_CTX: {
             auto [lb, ub] = lb_ub_access_pair(s, reg.ctx_offset);
-            check_access_context(inv, lb, ub);
+            check_access_context(rcp.values, lb, ub);
             // if within bounds, it can never be null
             // The context is both readable and writable.
             break;
         }
         case T_SHARED: {
             auto [lb, ub] = lb_ub_access_pair(s, reg.shared_offset);
-            check_access_shared(inv, lb, ub, reg.shared_region_size);
+            check_access_shared(rcp.values, lb, ub, reg.shared_region_size);
             if (!is_comparison_check && !s.or_null) {
-                require(inv, reg.svalue > 0, "Possible null access");
+                require(rcp.values, reg.svalue > 0, "Possible null access");
             }
             // Shared memory is zero-initialized when created so is safe to read and write.
             break;
@@ -415,7 +415,7 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
         case T_NUM:
             if (!is_comparison_check) {
                 if (s.or_null) {
-                    require(inv, reg.svalue == 0, "Non-null number");
+                    require(rcp.values, reg.svalue == 0, "Non-null number");
                 } else {
                     require("Only pointers can be dereferenced");
                 }
@@ -435,7 +435,7 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
 void EbpfChecker::operator()(const ZeroCtxOffset& s) const {
     using namespace dsl_syntax;
     const auto reg = reg_pack(s.reg);
-    require(m_inv, reg.ctx_offset == 0, "Nonzero context offset");
+    require(values, reg.ctx_offset == 0, "Nonzero context offset");
 }
 
 } // namespace prevail

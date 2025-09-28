@@ -31,9 +31,6 @@
 
 namespace prevail {
 
-// Numerical abstract domain.
-using NumAbsDomain = AddBottom;
-
 void clear_thread_local_state();
 
 class ArrayDomain final {
