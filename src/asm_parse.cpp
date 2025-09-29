@@ -322,8 +322,8 @@ parse_linear_constraints(const std::set<std::string>& constraints, std::vector<I
         } else if (regex_match(cst_text, m,
                                regex(REG DOT "type"
                                              "=" REG DOT "type"))) {
-            LinearExpression d = variable_registry->reg(regkind(m[2]), regnum(m[1]));
-            LinearExpression s = variable_registry->reg(regkind(m[4]), regnum(m[3]));
+            LinearExpression d = variable_registry->reg(DataKind::types, regnum(m[1]));
+            LinearExpression s = variable_registry->reg(DataKind::types, regnum(m[2]));
             type_csts.push_back(d == s);
         } else if (regex_match(cst_text, m,
                                regex(REG DOT "type"

@@ -73,6 +73,26 @@ struct TypeDomain {
     void add_constraint(const LinearConstraint& cst) { inv.add_constraint(cst); }
     void havoc_type(const Reg& r);
 
+    bool type_is_pointer(const Reg& r) const {
+        using namespace dsl_syntax;
+        return inv.entail(reg_type(r) >= T_CTX);
+    }
+
+    bool type_is_number(const Reg& r) const {
+        using namespace dsl_syntax;
+        return inv.entail(reg_type(r) == T_NUM);
+    }
+
+    bool type_is_not_stack(const Reg& r) const {
+        using namespace dsl_syntax;
+        return inv.entail(reg_type(r) != T_STACK);
+    }
+
+    bool type_is_not_number(const Reg& r) const {
+        using namespace dsl_syntax;
+        return inv.entail(reg_type(r) != T_NUM);
+    }
+
     std::vector<TypeEncoding> iterate_types(const Reg& reg) const;
 
     [[nodiscard]]

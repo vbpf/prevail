@@ -289,7 +289,7 @@ void EbpfTransformer::operator()(const Un& stmt) {
     }
     const auto dst = reg_pack(stmt.dst);
     auto swap_endianness = [&](const Variable v, auto be_or_le) {
-        if (m_inv.entail(type_is_number(stmt.dst))) {
+        if (dom.rcp.types.type_is_number(stmt.dst)) {
             if (const auto n = m_inv.eval_interval(v).singleton()) {
                 if (n->fits_cast_to<int64_t>()) {
                     m_inv.set(v, Interval{be_or_le(n->cast_to<int64_t>())});
@@ -737,11 +737,11 @@ void EbpfTransformer::operator()(const Atomic& a) {
     if (m_inv.is_bottom()) {
         return;
     }
-    if (!m_inv.entail(type_is_pointer(a.access.basereg)) ||
-        !m_inv.entail(type_is_number(a.valreg))) {
+    if (!dom.rcp.types.type_is_pointer(a.access.basereg) ||
+        !dom.rcp.types.type_is_number(a.valreg)) {
         return;
     }
-    if (m_inv.entail(type_is_not_stack(a.access.basereg))) {
+    if (dom.rcp.types.type_is_not_stack(a.access.basereg)) {
         // Shared memory regions are volatile so we can just havoc
         // any register that will be updated.
         if (a.op == Atomic::Op::CMPXCHG) {
@@ -1018,7 +1018,7 @@ void EbpfTransformer::shl(const Reg& dst_reg, int imm, const int finite_width) {
     // The BPF ISA requires masking the imm.
     imm &= finite_width - 1;
     const RegPack dst = reg_pack(dst_reg);
-    if (m_inv.entail(type_is_number(dst_reg))) {
+    if (dom.rcp.types.type_is_number(dst_reg)) {
         m_inv->shl(dst.svalue, dst.uvalue, imm, finite_width);
     } else {
         m_inv.havoc(dst.svalue);
@@ -1032,7 +1032,7 @@ void EbpfTransformer::lshr(const Reg& dst_reg, int imm, int finite_width) {
     // The BPF ISA requires masking the imm.
     imm &= finite_width - 1;
     const RegPack dst = reg_pack(dst_reg);
-    if (m_inv.entail(type_is_number(dst_reg))) {
+    if (dom.rcp.types.type_is_number(dst_reg)) {
         m_inv->lshr(dst.svalue, dst.uvalue, imm, finite_width);
     } else {
         m_inv.havoc(dst.svalue);
@@ -1044,7 +1044,7 @@ void EbpfTransformer::ashr(const Reg& dst_reg, const LinearExpression& right_sva
     havoc_offsets(dst_reg);
 
     const RegPack dst = reg_pack(dst_reg);
-    if (m_inv.entail(type_is_number(dst_reg))) {
+    if (dom.rcp.types.type_is_number(dst_reg)) {
         m_inv->ashr(dst.svalue, dst.uvalue, right_svalue, finite_width);
     } else {
         m_inv.havoc(dst.svalue);
@@ -1098,7 +1098,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
             // Use only the low 32 bits of the value.
             imm = gsl::narrow_cast<int32_t>(pimm->v);
             // If this is a 32-bit operation and the destination is not proven a number, forget the register.
-            if (m_inv.entail(type_is_number(bin.dst))) {
+            if (dom.rcp.types.type_is_number(bin.dst)) {
                 // Safe to zero-extend the low 32 bits; even if it's also bin.src, only the 32-bit value is used.
                 m_inv->bitwise_and(dst.svalue, dst.uvalue, std::numeric_limits<uint32_t>::max());
             } else {
@@ -1268,12 +1268,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
             } else {
                 // We're not sure that lhs and rhs are the same type.
                 // Either they're different, or at least one is not a singleton.
-                if (dom.rcp.types.get_type(std::get<Reg>(bin.v)) != T_NUM) {
-                    dom.rcp.types.havoc_type(bin.dst);
-                    m_inv.havoc(dst.svalue);
-                    m_inv.havoc(dst.uvalue);
-                    havoc_offsets(bin.dst);
-                } else {
+                if (dom.rcp.types.type_is_number(std::get<Reg>(bin.v))) {
                     m_inv->sub_overflow(dst.svalue, dst.uvalue, src.svalue, finite_width);
                     if (auto dst_offset = dom.get_type_offset_variable(bin.dst)) {
                         m_inv->sub(dst_offset.value(), src.svalue);
@@ -1289,6 +1284,11 @@ void EbpfTransformer::operator()(const Bin& bin) {
                             }
                         }
                     }
+                } else {
+                    dom.rcp.types.havoc_type(bin.dst);
+                    m_inv.havoc(dst.svalue);
+                    m_inv.havoc(dst.uvalue);
+                    havoc_offsets(bin.dst);
                 }
             }
             break;
@@ -1322,7 +1322,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
             havoc_offsets(bin.dst);
             break;
         case Bin::Op::LSH:
-            if (m_inv.entail(type_is_number(src_reg))) {
+            if (dom.rcp.types.type_is_number(src_reg))  {
                 auto src_interval = m_inv.eval_interval(src.uvalue);
                 if (std::optional<Number> sn = src_interval.singleton()) {
                     // truncate to uint64?
@@ -1341,7 +1341,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
             havoc_offsets(bin.dst);
             break;
         case Bin::Op::RSH:
-            if (m_inv.entail(type_is_number(src_reg))) {
+            if (dom.rcp.types.type_is_number(src_reg)) {
                 auto src_interval = m_inv.eval_interval(src.uvalue);
                 if (std::optional<Number> sn = src_interval.singleton()) {
                     uint64_t imm = sn->cast_to<uint64_t>() & (bin.is64 ? 63 : 31);
@@ -1360,7 +1360,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
             havoc_offsets(bin.dst);
             break;
         case Bin::Op::ARSH:
-            if (m_inv.entail(type_is_number(src_reg))) {
+            if (dom.rcp.types.type_is_number(src_reg)) {
                 ashr(bin.dst, src.svalue, finite_width);
                 break;
             }
@@ -1380,7 +1380,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
             if (dst.svalue == src.svalue && m_inv.eval_interval(dst.svalue) <= Interval::signed_int(source_width)) {
                 return;
             }
-            if (m_inv.entail(type_is_number(src_reg))) {
+            if (dom.rcp.types.type_is_number(src_reg)) {
                 sign_extend(bin.dst, src.svalue, finite_width, source_width);
                 break;
             }
@@ -1396,7 +1396,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
                     return;
                 }
             }
-            if (bin.is64 || m_inv.entail(type_is_number(src_reg))) {
+            if (bin.is64 || dom.rcp.types.type_is_number(src_reg)) {
                 // the 32bit case is handled below
                 dom.rcp.assign(bin.dst, src_reg);
             } else {

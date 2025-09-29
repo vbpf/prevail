@@ -337,7 +337,6 @@ post:
   - r1.type in {number, ctx}
   - r2.ctx_offset=0
   - r2.type in {number, ctx}
-  - r2.type-r0.uvalue<=-4
   - r8.ctx_offset=4
   - r8.type=ctx
   - r9.ctx_offset=0

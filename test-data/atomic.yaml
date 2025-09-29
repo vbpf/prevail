@@ -22,7 +22,7 @@ code:
   <start>: |
     lock *(u32 *)(r2 + 4) += r1 fetch
 
-post: ["r1.type=number", "r1.svalue=2", "r1.uvalue=2",
+post: ["r1.type=number",
        "r2.type=shared", "r2.shared_region_size=12", "r2.shared_offset=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=r2.svalue"]
 ---
 test-case: atomic 64-bit ADD shared
@@ -46,7 +46,7 @@ code:
   <start>: |
     lock *(u64 *)(r2 + 4) += r1 fetch
 
-post: ["r1.type=number", "r1.svalue=2", "r1.uvalue=2",
+post: ["r1.type=number",
        "r2.type=shared", "r2.shared_region_size=16", "r2.shared_offset=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=r2.svalue"]
 ---
 test-case: atomic 32-bit AND shared
@@ -70,7 +70,7 @@ code:
   <start>: |
     lock *(u32 *)(r2 + 4) &= r1 fetch
 
-post: ["r1.type=number", "r1.svalue=2", "r1.uvalue=2",
+post: ["r1.type=number",
        "r2.type=shared", "r2.shared_region_size=12", "r2.shared_offset=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=r2.svalue"]
 ---
 test-case: atomic 64-bit AND shared
@@ -94,7 +94,7 @@ code:
   <start>: |
     lock *(u64 *)(r2 + 4) &= r1 fetch
 
-post: ["r1.type=number", "r1.svalue=2", "r1.uvalue=2",
+post: ["r1.type=number",
        "r2.type=shared", "r2.shared_region_size=16", "r2.shared_offset=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=r2.svalue"]
 ---
 test-case: atomic 32-bit OR shared
@@ -118,7 +118,7 @@ code:
   <start>: |
     lock *(u32 *)(r2 + 4) |= r1 fetch
 
-post: ["r1.type=number", "r1.svalue=2", "r1.uvalue=2",
+post: ["r1.type=number",
        "r2.type=shared", "r2.shared_region_size=12", "r2.shared_offset=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=r2.svalue"]
 ---
 test-case: atomic 64-bit OR shared
@@ -142,7 +142,7 @@ code:
   <start>: |
     lock *(u64 *)(r2 + 4) |= r1 fetch
 
-post: ["r1.type=number", "r1.svalue=2", "r1.uvalue=2",
+post: ["r1.type=number",
        "r2.type=shared", "r2.shared_region_size=16", "r2.shared_offset=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=r2.svalue"]
 ---
 test-case: atomic 32-bit XOR shared
@@ -166,7 +166,7 @@ code:
   <start>: |
     lock *(u32 *)(r2 + 4) ^= r1 fetch
 
-post: ["r1.type=number", "r1.svalue=2", "r1.uvalue=2",
+post: ["r1.type=number",
        "r2.type=shared", "r2.shared_region_size=12", "r2.shared_offset=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=r2.svalue"]
 ---
 test-case: atomic 64-bit XOR shared
@@ -190,7 +190,7 @@ code:
   <start>: |
     lock *(u64 *)(r2 + 4) ^= r1 fetch
 
-post: ["r1.type=number", "r1.svalue=2", "r1.uvalue=2",
+post: ["r1.type=number",
        "r2.type=shared", "r2.shared_region_size=16", "r2.shared_offset=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=r2.svalue"]
 ---
 test-case: atomic 32-bit XCHG shared
@@ -202,7 +202,7 @@ code:
   <start>: |
     lock *(u32 *)(r2 + 4) x= r1
 
-post: ["r1.type=number", "r1.svalue=2", "r1.uvalue=2",
+post: ["r1.type=number",
        "r2.type=shared", "r2.shared_region_size=12", "r2.shared_offset=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=r2.svalue"]
 ---
 test-case: atomic 64-bit XCHG shared
@@ -214,7 +214,7 @@ code:
   <start>: |
     lock *(u64 *)(r2 + 4) x= r1
 
-post: ["r1.type=number", "r1.svalue=2", "r1.uvalue=2",
+post: ["r1.type=number",
        "r2.type=shared", "r2.shared_region_size=16", "r2.shared_offset=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=r2.svalue"]
 ---
 test-case: atomic 32-bit CMPXCHG shared
@@ -227,13 +227,13 @@ code:
   <start>: |
     lock *(u32 *)(r2 + 4) cx= r1
 
-post: ["r0.type=number", "r0.svalue=1", "r0.uvalue=1",
+post: ["r0.type=number",
        "r1.type=number", "r1.svalue=2", "r1.uvalue=2",
        "r2.type=shared", "r2.shared_region_size=12", "r2.shared_offset=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=r2.svalue"]
 ---
 test-case: atomic 64-bit CMPXCHG shared
 
-pre: ["r0.type=number", "r0.svalue=1", "r0.uvalue=1",
+pre: ["r0.type=number", "r0.svalue=2", "r0.uvalue=2",
       "r1.type=number", "r1.svalue=2", "r1.uvalue=2",
       "r2.type=shared", "r2.shared_region_size=16", "r2.shared_offset=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=r2.svalue"]
 
@@ -241,7 +241,7 @@ code:
   <start>: |
     lock *(u64 *)(r2 + 4) cx= r1
 
-post: ["r0.type=number", "r0.svalue=1", "r0.uvalue=1",
+post: ["r0.type=number",
        "r1.type=number", "r1.svalue=2", "r1.uvalue=2",
        "r2.type=shared", "r2.shared_region_size=16", "r2.shared_offset=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=r2.svalue"]
 ---
