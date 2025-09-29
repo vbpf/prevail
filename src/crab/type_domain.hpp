@@ -45,7 +45,7 @@ struct TypeDomain {
     void assign_type(const Reg& lhs, const Reg& rhs);
     void assign_type(const Reg& lhs, const std::optional<LinearExpression>& rhs);
     void assign_type(std::optional<Variable> lhs, const LinearExpression& t);
-
+    void add_constraint(const LinearConstraint& cst) { inv.add_constraint(cst); }
     void havoc_type(const Reg& r);
 
     std::vector<TypeEncoding> iterate_types(const Reg& reg) const;

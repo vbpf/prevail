@@ -45,7 +45,7 @@ namespace prevail {
 
 #define SPECIAL_VAR R"_(\s*(packet_size|meta_offset)\s*)_"
 #define KIND \
-    R"_(\s*(type|svalue|uvalue|ctx_offset|map_fd|packet_offset|shared_offset|stack_offset|shared_region_size|stack_numeric_size)\s*)_"
+    R"_(\s*(svalue|uvalue|ctx_offset|map_fd|packet_offset|shared_offset|stack_offset|shared_region_size|stack_numeric_size)\s*)_"
 #define INTERVAL R"_(\s*\[([-+]?\d+),\s*([-+]?\d+)\]?\s*)_"
 #define ARRAY_RANGE R"_(\s*\[([-+]?\d+)\.\.\.\s*([-+]?\d+)\]?\s*)_"
 
@@ -287,38 +287,45 @@ static Variable special_var(const std::string& s) {
     throw std::runtime_error(std::string() + "Bad special variable: " + s);
 }
 
-std::vector<LinearConstraint> parse_linear_constraints(const std::set<std::string>& constraints,
-                                                       std::vector<Interval>& numeric_ranges) {
+std::tuple<std::vector<LinearConstraint>, std::vector<LinearConstraint>>
+parse_linear_constraints(const std::set<std::string>& constraints, std::vector<Interval>& numeric_ranges) {
     using namespace dsl_syntax;
 
-    std::vector<LinearConstraint> res;
+    std::vector<LinearConstraint> value_csts;
+    std::vector<LinearConstraint> type_csts;
     for (const std::string& cst_text : constraints) {
         std::smatch m;
         if (regex_match(cst_text, m, regex(SPECIAL_VAR "=" IMM))) {
-            res.push_back(special_var(m[1]) == signed_number(m[2]));
+            value_csts.push_back(special_var(m[1]) == signed_number(m[2]));
         } else if (regex_match(cst_text, m, regex(SPECIAL_VAR "=" INTERVAL))) {
             Variable d = special_var(m[1]);
             Number lb{signed_number(m[2])};
             Number ub{signed_number(m[3])};
-            res.push_back(lb <= d);
-            res.push_back(d <= ub);
+            value_csts.push_back(lb <= d);
+            value_csts.push_back(d <= ub);
         } else if (regex_match(cst_text, m, regex(SPECIAL_VAR "=" REG DOT KIND))) {
             LinearExpression d = special_var(m[1]);
             LinearExpression s = variable_registry->reg(regkind(m[3]), regnum(m[2]));
-            res.push_back(d == s);
+            value_csts.push_back(d == s);
         } else if (regex_match(cst_text, m, regex(REG DOT KIND "=" SPECIAL_VAR))) {
             LinearExpression d = variable_registry->reg(regkind(m[2]), regnum(m[1]));
             LinearExpression s = special_var(m[3]);
-            res.push_back(d == s);
+            value_csts.push_back(d == s);
         } else if (regex_match(cst_text, m, regex(REG DOT KIND "=" REG DOT KIND))) {
             LinearExpression d = variable_registry->reg(regkind(m[2]), regnum(m[1]));
             LinearExpression s = variable_registry->reg(regkind(m[4]), regnum(m[3]));
-            res.push_back(d == s);
+            value_csts.push_back(d == s);
+        } else if (regex_match(cst_text, m,
+                               regex(REG DOT "type"
+                                             "=" REG DOT "type"))) {
+            LinearExpression d = variable_registry->reg(regkind(m[2]), regnum(m[1]));
+            LinearExpression s = variable_registry->reg(regkind(m[4]), regnum(m[3]));
+            type_csts.push_back(d == s);
         } else if (regex_match(cst_text, m,
                                regex(REG DOT "type"
                                              "=" TYPE))) {
             Variable d = variable_registry->reg(DataKind::types, regnum(m[1]));
-            res.push_back(d == string_to_type_encoding(m[2]));
+            type_csts.push_back(d == string_to_type_encoding(m[2]));
         } else if (regex_match(cst_text, m, regex(REG DOT KIND "=" IMM))) {
             Variable d = variable_registry->reg(regkind(m[2]), regnum(m[1]));
             Number value;
@@ -327,7 +334,7 @@ std::vector<LinearConstraint> parse_linear_constraints(const std::set<std::strin
             } else {
                 value = signed_number(m[3]);
             }
-            res.push_back(d == value);
+            value_csts.push_back(d == value);
         } else if (regex_match(cst_text, m, regex(REG DOT KIND "=" INTERVAL))) {
             Variable d = variable_registry->reg(regkind(m[2]), regnum(m[1]));
             Number lb, ub;
@@ -338,13 +345,13 @@ std::vector<LinearConstraint> parse_linear_constraints(const std::set<std::strin
                 lb = signed_number(m[3]);
                 ub = signed_number(m[4]);
             }
-            res.push_back(lb <= d);
-            res.push_back(d <= ub);
+            value_csts.push_back(lb <= d);
+            value_csts.push_back(d <= ub);
         } else if (regex_match(cst_text, m, regex(REG DOT KIND "-" REG DOT KIND "<=" IMM))) {
             Variable d = variable_registry->reg(regkind(m[2]), regnum(m[1]));
             Variable s = variable_registry->reg(regkind(m[4]), regnum(m[3]));
             Number diff = signed_number(m[5]);
-            res.push_back(d - s <= diff);
+            value_csts.push_back(d - s <= diff);
         } else if (regex_match(cst_text, m,
                                regex("s" ARRAY_RANGE DOT "type"
                                      "=" TYPE))) {
@@ -355,7 +362,7 @@ std::vector<LinearConstraint> parse_linear_constraints(const std::set<std::strin
                 Number lb = signed_number(m[1]);
                 Number ub = signed_number(m[2]);
                 Variable d = variable_registry->cell_var(DataKind::types, lb, ub - lb + 1);
-                res.push_back(d == type);
+                type_csts.push_back(d == type);
             }
         } else if (regex_match(cst_text, m,
                                regex("s" ARRAY_RANGE DOT "svalue"
@@ -363,19 +370,19 @@ std::vector<LinearConstraint> parse_linear_constraints(const std::set<std::strin
             Number lb = signed_number(m[1]);
             Number ub = signed_number(m[2]);
             Variable d = variable_registry->cell_var(DataKind::svalues, lb, ub - lb + 1);
-            res.push_back(d == signed_number(m[3]));
+            value_csts.push_back(d == signed_number(m[3]));
         } else if (regex_match(cst_text, m,
                                regex("s" ARRAY_RANGE DOT "uvalue"
                                      "=" IMM))) {
             Number lb = signed_number(m[1]);
             Number ub = signed_number(m[2]);
             Variable d = variable_registry->cell_var(DataKind::uvalues, lb, ub - lb + 1);
-            res.push_back(d == unsigned_number(m[3]));
+            value_csts.push_back(d == unsigned_number(m[3]));
         } else {
             throw std::runtime_error(std::string("Unknown constraint: ") + cst_text);
         }
     }
-    return res;
+    return {value_csts, type_csts};
 }
 
 // return a-b, taking account potential optional-none

@@ -55,6 +55,6 @@ struct StringInvariant {
     friend std::ostream& operator<<(std::ostream&, const StringInvariant& inv);
 };
 
-std::vector<LinearConstraint> parse_linear_constraints(const std::set<std::string>& constraints,
-                                                       std::vector<Interval>& numeric_ranges);
+std::tuple<std::vector<LinearConstraint>, std::vector<LinearConstraint>>
+parse_linear_constraints(const std::set<std::string>& constraints, std::vector<Interval>& numeric_ranges);
 } // namespace prevail

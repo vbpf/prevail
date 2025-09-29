@@ -124,21 +124,21 @@ EbpfDomain EbpfDomain::calculate_constant_limits() {
     using namespace dsl_syntax;
     for (const int i : {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}) {
         const auto r = reg_pack(i);
-        inv.add_constraint(r.svalue <= std::numeric_limits<int32_t>::max());
-        inv.add_constraint(r.svalue >= std::numeric_limits<int32_t>::min());
-        inv.add_constraint(r.uvalue <= std::numeric_limits<uint32_t>::max());
-        inv.add_constraint(r.uvalue >= 0);
-        inv.add_constraint(r.stack_offset <= EBPF_TOTAL_STACK_SIZE);
-        inv.add_constraint(r.stack_offset >= 0);
-        inv.add_constraint(r.shared_offset <= r.shared_region_size);
-        inv.add_constraint(r.shared_offset >= 0);
-        inv.add_constraint(r.packet_offset <= variable_registry->packet_size());
-        inv.add_constraint(r.packet_offset >= 0);
+        inv.add_value_constraint(r.svalue <= std::numeric_limits<int32_t>::max());
+        inv.add_value_constraint(r.svalue >= std::numeric_limits<int32_t>::min());
+        inv.add_value_constraint(r.uvalue <= std::numeric_limits<uint32_t>::max());
+        inv.add_value_constraint(r.uvalue >= 0);
+        inv.add_value_constraint(r.stack_offset <= EBPF_TOTAL_STACK_SIZE);
+        inv.add_value_constraint(r.stack_offset >= 0);
+        inv.add_value_constraint(r.shared_offset <= r.shared_region_size);
+        inv.add_value_constraint(r.shared_offset >= 0);
+        inv.add_value_constraint(r.packet_offset <= variable_registry->packet_size());
+        inv.add_value_constraint(r.packet_offset >= 0);
         if (thread_local_options.cfg_opts.check_for_termination) {
             for (const Variable counter : variable_registry->get_loop_counters()) {
-                inv.add_constraint(counter <= std::numeric_limits<int32_t>::max());
-                inv.add_constraint(counter >= 0);
-                inv.add_constraint(counter <= r.svalue);
+                inv.add_value_constraint(counter <= std::numeric_limits<int32_t>::max());
+                inv.add_value_constraint(counter >= 0);
+                inv.add_value_constraint(counter <= r.svalue);
             }
         }
     }
@@ -167,7 +167,9 @@ EbpfDomain EbpfDomain::narrow(const EbpfDomain& other) const {
     return EbpfDomain(rcp.narrow(other.rcp), stack & other.stack);
 }
 
-void EbpfDomain::add_constraint(const LinearConstraint& cst) { rcp.values.add_constraint(cst); }
+void EbpfDomain::add_value_constraint(const LinearConstraint& cst) { rcp.values.add_constraint(cst); }
+
+void EbpfDomain::add_type_constraint(const LinearConstraint& cst) { rcp.types.add_constraint(cst); }
 
 void EbpfDomain::havoc(const Variable var) {
     // TODO: type inv?
@@ -315,21 +317,25 @@ void EbpfDomain::initialize_packet() {
     inv.havoc(variable_registry->packet_size());
     inv.havoc(variable_registry->meta_offset());
 
-    inv.add_constraint(0 <= variable_registry->packet_size());
-    inv.add_constraint(variable_registry->packet_size() < MAX_PACKET_SIZE);
+    inv.add_value_constraint(0 <= variable_registry->packet_size());
+    inv.add_value_constraint(variable_registry->packet_size() < MAX_PACKET_SIZE);
     const auto info = *thread_local_program_info;
     if (info.type.context_descriptor->meta >= 0) {
-        inv.add_constraint(variable_registry->meta_offset() <= 0);
-        inv.add_constraint(variable_registry->meta_offset() >= -4098);
+        inv.add_value_constraint(variable_registry->meta_offset() <= 0);
+        inv.add_value_constraint(variable_registry->meta_offset() >= -4098);
     } else {
         inv.rcp.values.assign(variable_registry->meta_offset(), 0);
     }
 }
 
-EbpfDomain EbpfDomain::from_constraints(const std::vector<LinearConstraint>& constraints) {
+EbpfDomain EbpfDomain::from_constraints(const std::vector<LinearConstraint>& type_constraints,
+                                        const std::vector<LinearConstraint>& value_constraints) {
     EbpfDomain inv;
-    for (const auto& cst : constraints) {
-        inv.add_constraint(cst);
+    for (const auto& cst : type_constraints) {
+        inv.add_type_constraint(cst);
+    }
+    for (const auto& cst : value_constraints) {
+        inv.add_value_constraint(cst);
     }
     return inv;
 }
@@ -340,8 +346,12 @@ EbpfDomain EbpfDomain::from_constraints(const std::set<std::string>& constraints
         inv = setup_entry(false);
     }
     auto numeric_ranges = std::vector<Interval>();
-    for (const auto& cst : parse_linear_constraints(constraints, numeric_ranges)) {
-        inv.add_constraint(cst);
+    auto [type_constraints, value_constraints] = parse_linear_constraints(constraints, numeric_ranges);
+    for (const auto& cst : type_constraints) {
+        inv.add_type_constraint(cst);
+    }
+    for (const auto& cst : value_constraints) {
+        inv.add_value_constraint(cst);
     }
     for (const Interval& range : numeric_ranges) {
         const int start = range.lb().narrow<int>();

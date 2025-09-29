@@ -68,7 +68,8 @@ class EbpfDomain final {
 
     static EbpfDomain setup_entry(bool init_r1);
     static EbpfDomain from_constraints(const std::set<std::string>& constraints, bool setup_constraints);
-    static EbpfDomain from_constraints(const std::vector<LinearConstraint>& constraints);
+    static EbpfDomain from_constraints(const std::vector<LinearConstraint>& type_constraints,
+                                       const std::vector<LinearConstraint>& value_constraints);
     friend void require_join(const std::vector<LinearConstraint>& a_csts, const std::vector<LinearConstraint>& b_csts,
                              const std::vector<LinearConstraint>& over_csts);
     void initialize_packet();
@@ -77,7 +78,8 @@ class EbpfDomain final {
 
   private:
     // private generic domain functions
-    void add_constraint(const LinearConstraint& cst);
+    void add_value_constraint(const LinearConstraint& cst);
+    void add_type_constraint(const LinearConstraint& cst);
     void havoc(Variable var);
 
     [[nodiscard]]
