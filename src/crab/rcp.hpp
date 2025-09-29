@@ -11,7 +11,6 @@
 namespace prevail {
 
 struct RegPack {
-    Variable type;
     Variable svalue; // int64_t value.
     Variable uvalue; // uint64_t value.
     Variable ctx_offset;
@@ -25,7 +24,6 @@ struct RegPack {
 
 inline RegPack reg_pack(const int i) {
     return {
-        .type = variable_registry->type_reg(i),
         .svalue = variable_registry->reg(DataKind::svalues, i),
         .uvalue = variable_registry->reg(DataKind::uvalues, i),
         .ctx_offset = variable_registry->reg(DataKind::ctx_offsets, i),

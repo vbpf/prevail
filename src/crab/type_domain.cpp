@@ -19,8 +19,6 @@
 
 namespace prevail {
 
-static Variable reg_type(const Reg& lhs) { return variable_registry->type_reg(lhs.v); }
-
 template <is_enum T>
 static void operator++(T& t) {
     t = static_cast<T>(1 + static_cast<std::underlying_type_t<T>>(t));
@@ -136,6 +134,8 @@ TypeEncoding string_to_type_encoding(const std::string& s) {
     }
     throw std::runtime_error(std::string("Unsupported type name: ") + s);
 }
+
+Variable reg_type(const Reg& lhs) { return variable_registry->type_reg(lhs.v); }
 
 void TypeDomain::assign_type(const Reg& lhs, const Reg& rhs) { inv.assign(reg_type(lhs), reg_type(rhs)); }
 

@@ -212,23 +212,6 @@ void EbpfTransformer::forget_packet_pointers() {
 
 void EbpfTransformer::havoc_offsets(const Reg& reg) { prevail::havoc_offsets(m_inv, reg); }
 
-static LinearConstraint type_is_pointer(const RegPack& r) {
-    using namespace dsl_syntax;
-    return r.type >= T_CTX;
-}
-
-static LinearConstraint type_is_number(const RegPack& r) {
-    using namespace dsl_syntax;
-    return r.type == T_NUM;
-}
-
-static LinearConstraint type_is_number(const Reg& r) { return type_is_number(reg_pack(r)); }
-
-static LinearConstraint type_is_not_stack(const RegPack& r) {
-    using namespace dsl_syntax;
-    return r.type != T_STACK;
-}
-
 /** Linear constraint for a pointer comparison.
  */
 static LinearConstraint assume_cst_offsets_reg(const Condition::Op op, const Variable dst_offset,
@@ -440,21 +423,21 @@ void EbpfTransformer::do_load_stack(TypeToNumDomain& rcp, const Reg& target_reg,
         rcp.values.assign(target.svalue, sresult);
         rcp.values.assign(target.uvalue, uresult);
 
-        if (rcp.types.may_have_type(target.type, T_CTX)) {
+        if (rcp.types.may_have_type(target_reg, T_CTX)) {
             rcp.values.assign(target.ctx_offset, stack.load(rcp.values, DataKind::ctx_offsets, addr, width));
         }
-        if (rcp.types.may_have_type(target.type, T_MAP) || rcp.types.may_have_type(target.type, T_MAP_PROGRAMS)) {
+        if (rcp.types.may_have_type(target_reg, T_MAP) || rcp.types.may_have_type(target_reg, T_MAP_PROGRAMS)) {
             rcp.values.assign(target.map_fd, stack.load(rcp.values, DataKind::map_fds, addr, width));
         }
-        if (rcp.types.may_have_type(target.type, T_PACKET)) {
+        if (rcp.types.may_have_type(target_reg, T_PACKET)) {
             rcp.values.assign(target.packet_offset, stack.load(rcp.values, DataKind::packet_offsets, addr, width));
         }
-        if (rcp.types.may_have_type(target.type, T_SHARED)) {
+        if (rcp.types.may_have_type(target_reg, T_SHARED)) {
             rcp.values.assign(target.shared_offset, stack.load(rcp.values, DataKind::shared_offsets, addr, width));
             rcp.values.assign(target.shared_region_size,
                               stack.load(rcp.values, DataKind::shared_region_sizes, addr, width));
         }
-        if (rcp.types.may_have_type(target.type, T_STACK)) {
+        if (rcp.types.may_have_type(target_reg, T_STACK)) {
             rcp.values.assign(target.stack_offset, stack.load(rcp.values, DataKind::stack_offsets, addr, width));
             rcp.values.assign(target.stack_numeric_size,
                               stack.load(rcp.values, DataKind::stack_numeric_sizes, addr, width));
@@ -702,7 +685,7 @@ void EbpfTransformer::operator()(const Mem& b) {
             do_load(b, *preg);
         } else {
             const auto data_reg = reg_pack(*preg);
-            do_mem_store(b, data_reg.type, data_reg.svalue, data_reg.uvalue, data_reg);
+            do_mem_store(b, reg_type(*preg), data_reg.svalue, data_reg.uvalue, data_reg);
         }
     } else {
         const uint64_t imm = std::get<Imm>(b.value).v;
@@ -756,11 +739,11 @@ void EbpfTransformer::operator()(const Atomic& a) {
     if (m_inv.is_bottom()) {
         return;
     }
-    if (!m_inv.entail(type_is_pointer(reg_pack(a.access.basereg))) ||
-        !m_inv.entail(type_is_number(reg_pack(a.valreg)))) {
+    if (!m_inv.entail(type_is_pointer(a.access.basereg)) ||
+        !m_inv.entail(type_is_number(a.valreg))) {
         return;
     }
-    if (m_inv.entail(type_is_not_stack(reg_pack(a.access.basereg)))) {
+    if (m_inv.entail(type_is_not_stack(a.access.basereg))) {
         // Shared memory regions are volatile so we can just havoc
         // any register that will be updated.
         if (a.op == Atomic::Op::CMPXCHG) {
@@ -1012,7 +995,7 @@ void EbpfTransformer::recompute_stack_numeric_size(TypeToNumDomain& rcp, const V
 }
 
 void EbpfTransformer::recompute_stack_numeric_size(TypeToNumDomain& rcp, const Reg& reg) const {
-    recompute_stack_numeric_size(rcp, reg_pack(reg).type);
+    recompute_stack_numeric_size(rcp, reg_type(reg));
 }
 
 void EbpfTransformer::add(const Reg& dst_reg, const int imm, const int finite_width) {
@@ -1037,7 +1020,7 @@ void EbpfTransformer::shl(const Reg& dst_reg, int imm, const int finite_width) {
     // The BPF ISA requires masking the imm.
     imm &= finite_width - 1;
     const RegPack dst = reg_pack(dst_reg);
-    if (m_inv.entail(type_is_number(dst))) {
+    if (m_inv.entail(type_is_number(dst_reg))) {
         m_inv->shl(dst.svalue, dst.uvalue, imm, finite_width);
     } else {
         m_inv.havoc(dst.svalue);
@@ -1051,7 +1034,7 @@ void EbpfTransformer::lshr(const Reg& dst_reg, int imm, int finite_width) {
     // The BPF ISA requires masking the imm.
     imm &= finite_width - 1;
     const RegPack dst = reg_pack(dst_reg);
-    if (m_inv.entail(type_is_number(dst))) {
+    if (m_inv.entail(type_is_number(dst_reg))) {
         m_inv->lshr(dst.svalue, dst.uvalue, imm, finite_width);
     } else {
         m_inv.havoc(dst.svalue);
@@ -1063,7 +1046,7 @@ void EbpfTransformer::ashr(const Reg& dst_reg, const LinearExpression& right_sva
     havoc_offsets(dst_reg);
 
     const RegPack dst = reg_pack(dst_reg);
-    if (m_inv.entail(type_is_number(dst))) {
+    if (m_inv.entail(type_is_number(dst_reg))) {
         m_inv->ashr(dst.svalue, dst.uvalue, right_svalue, finite_width);
     } else {
         m_inv.havoc(dst.svalue);
@@ -1123,7 +1106,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
             } else {
                 havoc_register(m_inv, bin.dst);
                 havoc_offsets(bin.dst);
-                m_inv.havoc(dst.type);
+                dom.rcp.types.havoc_type(bin.dst);
             }
         }
         switch (bin.op) {
@@ -1232,7 +1215,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
                                     using namespace dsl_syntax;
                                     if (rcp.values.intersect(src.svalue < 0)) {
                                         rcp.values.havoc(dst.stack_numeric_size);
-                                        recompute_stack_numeric_size(rcp, dst.type);
+                                        recompute_stack_numeric_size(rcp, bin.dst);
                                     } else {
                                         rcp.values->apply_signed(ArithBinOp::SUB, dst.stack_numeric_size,
                                                                  dst.stack_numeric_size, dst.stack_numeric_size,
@@ -1296,12 +1279,12 @@ void EbpfTransformer::operator()(const Bin& bin) {
                     m_inv->sub_overflow(dst.svalue, dst.uvalue, src.svalue, finite_width);
                     if (auto dst_offset = dom.get_type_offset_variable(bin.dst)) {
                         m_inv->sub(dst_offset.value(), src.svalue);
-                        if (dom.rcp.types.may_have_type(dst.type, T_STACK)) {
+                        if (dom.rcp.types.may_have_type(bin.dst, T_STACK)) {
                             // Reduce the numeric size.
                             using namespace dsl_syntax;
                             if (m_inv.intersect(src.svalue > 0)) {
                                 m_inv.havoc(dst.stack_numeric_size);
-                                recompute_stack_numeric_size(dom.rcp, dst.type);
+                                recompute_stack_numeric_size(dom.rcp, bin.dst);
                             } else {
                                 m_inv->apply(ArithBinOp::ADD, dst.stack_numeric_size, dst.stack_numeric_size,
                                              src.svalue);
@@ -1421,43 +1404,43 @@ void EbpfTransformer::operator()(const Bin& bin) {
                 switch (type) {
                 case T_CTX:
                     if (bin.is64) {
-                        rcp.types.assign_type(dst.type, type);
+                        rcp.types.assign_type(bin.dst, type);
                         rcp.values.assign(dst.ctx_offset, src.ctx_offset);
                     }
                     break;
                 case T_MAP:
                 case T_MAP_PROGRAMS:
                     if (bin.is64) {
-                        rcp.types.assign_type(dst.type, type);
+                        rcp.types.assign_type(bin.dst, type);
                         rcp.values.assign(dst.map_fd, src.map_fd);
                     }
                     break;
                 case T_PACKET:
                     if (bin.is64) {
-                        rcp.types.assign_type(dst.type, type);
+                        rcp.types.assign_type(bin.dst, type);
                         rcp.values.assign(dst.packet_offset, src.packet_offset);
                     }
                     break;
                 case T_SHARED:
                     if (bin.is64) {
-                        rcp.types.assign_type(dst.type, type);
+                        rcp.types.assign_type(bin.dst, type);
                         rcp.values.assign(dst.shared_region_size, src.shared_region_size);
                         rcp.values.assign(dst.shared_offset, src.shared_offset);
                     }
                     break;
                 case T_STACK:
                     if (bin.is64) {
-                        rcp.types.assign_type(dst.type, type);
+                        rcp.types.assign_type(bin.dst, type);
                         rcp.values.assign(dst.stack_offset, src.stack_offset);
                         rcp.values.assign(dst.stack_numeric_size, src.stack_numeric_size);
                     }
                     break;
-                default: rcp.types.assign_type(dst.type, type); break;
+                default: rcp.types.assign_type(bin.dst, type); break;
                 }
             });
             if (bin.is64) {
                 // Add dst.type=src.type invariant.
-                if (bin.dst.v != std::get<Reg>(bin.v).v || dom.rcp.types.get_type(dst.type) == T_UNINIT) {
+                if (bin.dst.v != std::get<Reg>(bin.v).v || dom.rcp.types.get_type(bin.dst) == T_UNINIT) {
                     // Only forget the destination type if we're copying from a different register,
                     // or from the same uninitialized register.
                     dom.rcp.types.havoc_type(bin.dst);

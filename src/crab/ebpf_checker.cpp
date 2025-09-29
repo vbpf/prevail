@@ -117,23 +117,6 @@ std::vector<std::string> ebpf_domain_check(const EbpfDomain& dom, const Assertio
     return warnings;
 }
 
-static LinearConstraint type_is_pointer(const RegPack& r) {
-    using namespace dsl_syntax;
-    return r.type >= T_CTX;
-}
-
-static LinearConstraint type_is_number(const RegPack& r) {
-    using namespace dsl_syntax;
-    return r.type == T_NUM;
-}
-
-static LinearConstraint type_is_number(const Reg& r) { return type_is_number(reg_pack(r)); }
-
-static LinearConstraint type_is_not_stack(const RegPack& r) {
-    using namespace dsl_syntax;
-    return r.type != T_STACK;
-}
-
 void EbpfChecker::check_access_stack(NumAbsDomain& inv, const LinearExpression& lb, const LinearExpression& ub) const {
     using namespace dsl_syntax;
     const Variable r10_stack_offset = reg_pack(R10_STACK_POINTER).stack_offset;
@@ -179,7 +162,7 @@ void EbpfChecker::operator()(const Comparable& s) const {
     using namespace dsl_syntax;
     if (types.same_type(s.r1, s.r2)) {
         // Same type. If both are numbers, that's okay. Otherwise:
-        const auto inv = values.when(reg_pack(s.r2).type != T_NUM);
+        const auto inv = values.when(type_is_not_number(s.r2));
         // We must check that they belong to a singleton region:
         if (!types.is_in_group(s.r1, TypeGroup::singleton_ptr) && !types.is_in_group(s.r1, TypeGroup::map_fd)) {
             require("Cannot subtract pointers to non-singleton regions");
@@ -191,30 +174,30 @@ void EbpfChecker::operator()(const Comparable& s) const {
     } else {
         // _Maybe_ different types, so r2 must be a number.
         // We checked in a previous assertion that r1 is a pointer or a number.
-        require(values, reg_pack(s.r2).type == T_NUM, "Cannot subtract pointers to different regions");
+        require(values, type_is_number(s.r2), "Cannot subtract pointers to different regions");
     }
 }
 
 void EbpfChecker::operator()(const Addable& s) const {
-    if (!types.implies(type_is_pointer(reg_pack(s.ptr)), type_is_number(s.num))) {
+    if (!types.implies(type_is_pointer(s.ptr), type_is_number(s.num))) {
         require("Only numbers can be added to pointers");
     }
 }
 
 void EbpfChecker::operator()(const ValidDivisor& s) const {
     using namespace dsl_syntax;
-    const auto reg = reg_pack(s.reg);
-    if (!types.implies(type_is_pointer(reg), type_is_number(s.reg))) {
+    if (!types.implies(type_is_pointer(s.reg), type_is_number(s.reg))) {
         require("Only numbers can be used as divisors");
     }
     if (!thread_local_options.allow_division_by_zero) {
+        const auto reg = reg_pack(s.reg);
         const auto v = s.is_signed ? reg.svalue : reg.uvalue;
         require(values, v != 0, "Possible division by zero");
     }
 }
 
 void EbpfChecker::operator()(const ValidStore& s) const {
-    if (!types.implies(type_is_not_stack(reg_pack(s.mem)), type_is_number(s.val))) {
+    if (!types.implies(type_is_not_stack(s.mem), type_is_number(s.val))) {
         require("Only numbers can be stored to externally-visible regions");
     }
 }

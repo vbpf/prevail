@@ -7,11 +7,34 @@
 #include <optional>
 
 #include "arith/variable.hpp"
+#include "arith/dsl_syntax.hpp"
 #include "asm_syntax.hpp" // for Reg
 #include "crab/split_dbm.hpp"
 #include "crab/type_encoding.hpp"
 
 namespace prevail {
+
+Variable reg_type(const Reg& lhs);
+
+inline LinearConstraint type_is_pointer(const Reg& r) {
+    using namespace dsl_syntax;
+    return reg_type(r) >= T_CTX;
+}
+
+inline LinearConstraint type_is_number(const Reg& r) {
+    using namespace dsl_syntax;
+    return reg_type(r) == T_NUM;
+}
+
+inline LinearConstraint type_is_not_stack(const Reg& r) {
+    using namespace dsl_syntax;
+    return reg_type(r) != T_STACK;
+}
+
+inline LinearConstraint type_is_not_number(const Reg& r) {
+    using namespace dsl_syntax;
+    return reg_type(r) != T_NUM;
+}
 
 struct TypeDomain {
     SplitDBM inv;

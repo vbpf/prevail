@@ -32,7 +32,7 @@ std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg, con
 }
 
 std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg, const TypeToNumDomain& inv) const {
-    return get_type_offset_variable(reg, inv.types.get_type(reg_pack(reg).type));
+    return get_type_offset_variable(reg, inv.types.get_type(reg));
 }
 
 std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg) const {
