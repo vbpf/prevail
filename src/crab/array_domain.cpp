@@ -772,14 +772,13 @@ std::optional<Variable> ArrayDomain::store(NumAbsDomain& inv, const DataKind kin
     return {};
 }
 
-std::optional<Variable> ArrayDomain::store_type(NumAbsDomain& inv, const LinearExpression& idx,
+std::optional<Variable> ArrayDomain::store_type(TypeDomain& inv, const LinearExpression& idx,
                                                 const LinearExpression& elem_size, const LinearExpression& val) {
     constexpr auto kind = DataKind::types;
-    if (auto maybe_cell = split_and_find_var(*this, inv, kind, idx, elem_size)) {
+    if (auto maybe_cell = split_and_find_var(*this, inv.inv, kind, idx, elem_size)) {
         // perform strong update
         auto [offset, size] = *maybe_cell;
-        const std::optional<Number> t = inv.eval_interval(val).singleton();
-        if (t == Number{T_NUM}) {
+        if (inv.get_type(val) == T_NUM) {
             num_bytes.reset(offset, size);
         } else {
             num_bytes.havoc(offset, size);

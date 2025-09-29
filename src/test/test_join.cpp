@@ -351,7 +351,7 @@ TEST_CASE("join does not retain ctx_offset if resulting type excludes T_CTX", "[
 // 21) Multi-register per-type field preservation under mixed joins
 TEST_CASE("join preserves multi-register per-type field", "[join][lattice]") {
     using namespace dsl_syntax;
-    require_join({r6_type == T_PACKET}, {r6.packet_offset == 4, r7_type == T_NUM},
+    require_join({r6_type == T_PACKET, r7_type == T_NUM}, {r6.packet_offset == 4},
                  {r6_type == T_NUM, r7_type == T_STACK}, {r7.stack_offset == 128},
                  {r6_type >= T_NUM, r6_type <= T_PACKET, r7_type >= T_NUM, r7_type <= T_STACK},
                  {r6.packet_offset == 4, r7.stack_offset == 128});

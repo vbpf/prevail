@@ -11,15 +11,16 @@
 #include "crab/interval.hpp"
 #include "crab/split_dbm.hpp"
 #include "string_constraints.hpp"
+#include "var_registry.hpp"
 
 namespace prevail {
 
 class FiniteDomain {
     SplitDBM dom;
 
+public:
     explicit FiniteDomain(const SplitDBM& dom) : dom{dom} {}
 
-  public:
     explicit FiniteDomain() = default;
 
     FiniteDomain(const FiniteDomain& o) = default;
@@ -127,7 +128,9 @@ class FiniteDomain {
     void sign_extend(Variable svalue, Variable uvalue, const LinearExpression& right_svalue, int target_width,
                      int source_width);
 
-    bool add_constraint(const LinearConstraint& cst) { return dom.add_constraint(cst); }
+    bool add_constraint(const LinearConstraint& cst) {
+        return dom.add_constraint(cst);
+    }
 
     void set(const Variable x, const Interval& intv) { dom.set(x, intv); }
 

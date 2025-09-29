@@ -27,6 +27,7 @@
 
 #include "arith/variable.hpp"
 #include "crab/add_bottom.hpp"
+#include "crab/type_domain.hpp"
 #include "crab/bitset_domain.hpp"
 
 namespace prevail {
@@ -70,7 +71,7 @@ class ArrayDomain final {
                                          int width) const;
     std::optional<Variable> store(NumAbsDomain& inv, DataKind kind, const LinearExpression& idx,
                                   const LinearExpression& elem_size, const LinearExpression& val);
-    std::optional<Variable> store_type(NumAbsDomain& inv, const LinearExpression& idx,
+    std::optional<Variable> store_type(TypeDomain& inv, const LinearExpression& idx,
                                        const LinearExpression& elem_size, const LinearExpression& val);
     void havoc(NumAbsDomain& inv, DataKind kind, const LinearExpression& idx, const LinearExpression& elem_size);
 

@@ -149,8 +149,8 @@ static void havoc_register(NumAbsDomain& inv, const Reg& reg) {
 }
 
 void EbpfTransformer::scratch_caller_saved_registers() {
-    for (int i = R1_ARG; i <= R5_ARG; i++) {
-        Reg r{gsl::narrow<uint8_t>(i)};
+    for (uint8_t i = R1_ARG; i <= R5_ARG; i++) {
+        Reg r{i};
         havoc_register(m_inv, r);
         dom.rcp.types.havoc_type(r);
     }
@@ -159,7 +159,7 @@ void EbpfTransformer::scratch_caller_saved_registers() {
 void EbpfTransformer::save_callee_saved_registers(const std::string& prefix) {
     // Create variables specific to the new call stack frame that store
     // copies of the states of r6 through r9.
-    for (int r = R6; r <= R9; r++) {
+    for (uint8_t r = R6; r <= R9; r++) {
         for (const DataKind kind : iterate_kinds()) {
             const Variable src_var = variable_registry->reg(kind, r);
             if (!m_inv.eval_interval(src_var).is_top()) {
@@ -577,10 +577,7 @@ void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
 void EbpfTransformer::do_store_stack(TypeToNumDomain& rcp, const LinearExpression& addr, const int width,
                                      const LinearExpression& val_type, const LinearExpression& val_svalue,
                                      const LinearExpression& val_uvalue, const std::optional<RegPack>& opt_val_reg) {
-    {
-        const std::optional<Variable> var = stack.store_type(rcp.values, addr, width, val_type);
-        rcp.types.assign_type(var, val_type);
-    }
+    rcp.types.assign_type(stack.store_type(rcp.types, addr, width, val_type), val_type);
     if (width == 8) {
         rcp.values.assign(stack.store(rcp.values, DataKind::svalues, addr, width, val_svalue), val_svalue);
         rcp.values.assign(stack.store(rcp.values, DataKind::uvalues, addr, width, val_uvalue), val_uvalue);
@@ -642,6 +639,7 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& rcp, const LinearExpressio
                 rcp.values->overflow_bounds(*stack_uvalue, width * 8, false);
             }
         } else {
+            stack.havoc(rcp.types.inv, DataKind::types, addr, width);
             stack.havoc(rcp.values, DataKind::svalues, addr, width);
             stack.havoc(rcp.values, DataKind::uvalues, addr, width);
         }
@@ -1393,59 +1391,18 @@ void EbpfTransformer::operator()(const Bin& bin) {
         }
         case Bin::Op::MOV:
             // Keep relational information if operation is a no-op.
-            if (dst.svalue == src.svalue &&
-                m_inv.eval_interval(dst.uvalue) <= Interval::unsigned_int(bin.is64 ? 64 : 32)) {
-                return;
+            if (dst.svalue == src.svalue) {
+                if (bin.is64 || m_inv.eval_interval(dst.uvalue) <= Interval::unsigned_int(32)) {
+                    return;
+                }
             }
-            m_inv.assign(dst.svalue, src.svalue);
-            m_inv.assign(dst.uvalue, src.uvalue);
-            havoc_offsets(bin.dst);
-            dom.rcp = dom.rcp.join_over_types(src_reg, [&](TypeToNumDomain& rcp, const TypeEncoding type) {
-                switch (type) {
-                case T_CTX:
-                    if (bin.is64) {
-                        rcp.types.assign_type(bin.dst, type);
-                        rcp.values.assign(dst.ctx_offset, src.ctx_offset);
-                    }
-                    break;
-                case T_MAP:
-                case T_MAP_PROGRAMS:
-                    if (bin.is64) {
-                        rcp.types.assign_type(bin.dst, type);
-                        rcp.values.assign(dst.map_fd, src.map_fd);
-                    }
-                    break;
-                case T_PACKET:
-                    if (bin.is64) {
-                        rcp.types.assign_type(bin.dst, type);
-                        rcp.values.assign(dst.packet_offset, src.packet_offset);
-                    }
-                    break;
-                case T_SHARED:
-                    if (bin.is64) {
-                        rcp.types.assign_type(bin.dst, type);
-                        rcp.values.assign(dst.shared_region_size, src.shared_region_size);
-                        rcp.values.assign(dst.shared_offset, src.shared_offset);
-                    }
-                    break;
-                case T_STACK:
-                    if (bin.is64) {
-                        rcp.types.assign_type(bin.dst, type);
-                        rcp.values.assign(dst.stack_offset, src.stack_offset);
-                        rcp.values.assign(dst.stack_numeric_size, src.stack_numeric_size);
-                    }
-                    break;
-                default: rcp.types.assign_type(bin.dst, type); break;
-                }
-            });
-            if (bin.is64) {
-                // Add dst.type=src.type invariant.
-                if (bin.dst.v != std::get<Reg>(bin.v).v || dom.rcp.types.get_type(bin.dst) == T_UNINIT) {
-                    // Only forget the destination type if we're copying from a different register,
-                    // or from the same uninitialized register.
-                    dom.rcp.types.havoc_type(bin.dst);
-                }
-                dom.rcp.types.assign_type(bin.dst, std::get<Reg>(bin.v));
+            if (bin.is64 || m_inv.entail(type_is_number(src_reg))) {
+                // the 32bit case is handled below
+                dom.rcp.assign(bin.dst, src_reg);
+            } else {
+                // If src is not a number, we don't know how to truncate a pointer.
+                havoc_register(m_inv, bin.dst);
+                dom.rcp.types.havoc_type(bin.dst);
             }
             break;
         }

@@ -228,7 +228,7 @@ messages:
 ---
 test-case: assign register combination value
 
-pre: ["r1.type=[-1,0]", "r1.shared_offset=0", "r1.shared_region_size=16", "r1.stack_offset=500", "r1.stack_numeric_size=16"]
+pre: ["r1.type in {stack, shared}", "r1.shared_offset=0", "r1.shared_region_size=16", "r1.stack_offset=500", "r1.stack_numeric_size=16"]
 
 code:
   <start>: |

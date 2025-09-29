@@ -35,9 +35,13 @@ namespace prevail {
 #define PLUSMINUS R"_((\s*[+-])\s*)_"
 #define LPAREN R"_(\s*\(\s*)_"
 #define RPAREN R"_(\s*\)\s*)_"
+
 #define PAREN(x) LPAREN x RPAREN
 #define STAR R"_(\s*\*\s*)_"
 #define DEREF STAR PAREN("u(\\d+)" STAR)
+
+#define IN R"_(\s*in\s*)_"
+#define TYPE_SET R"_(\s*\{\s*([^}]*)\s*\}\s*)_"
 
 #define CMPOP R"_(\s*(&?[=!]=|s?[<>]=?)\s*)_"
 #define LABEL R"_((<\w[a-zA-Z_0-9]*>))_"
@@ -326,6 +330,39 @@ parse_linear_constraints(const std::set<std::string>& constraints, std::vector<I
                                              "=" TYPE))) {
             Variable d = variable_registry->reg(DataKind::types, regnum(m[1]));
             type_csts.push_back(d == string_to_type_encoding(m[2]));
+        } else if (regex_match(cst_text, m, regex(REG DOT "type" IN TYPE_SET))) {
+            Variable d = variable_registry->reg(DataKind::types, regnum(m[1]));
+            const std::string inside = m[2]; // everything between the braces
+
+            // Tokenize items inside {...} using the existing TYPE regex.
+            static const regex type_tok_regex(TYPE);
+
+            bool any = false;
+            Number lb = 0, ub = 0; // initialize once we see the first item
+
+            for (std::sregex_iterator it(inside.begin(), inside.end(), type_tok_regex), end; it != end; ++it) {
+                // TYPE has a single capturing group with the symbolic token
+                const auto sym = (*it)[1].str();
+                const auto enc = string_to_type_encoding(sym);
+
+                // Convert to Number for the DSL constraints
+                const Number n = static_cast<int>(enc);
+                if (!any) {
+                    lb = ub = n;
+                    any = true;
+                } else {
+                    if (n < lb) lb = n;
+                    if (n > ub) ub = n;
+                }
+            }
+
+            if (!any) {
+                throw std::runtime_error("Empty type set in 'in { ... }' constraint: " + cst_text);
+            }
+
+            // Emit interval over-approx: lb <= d <= ub
+            type_csts.push_back(lb <= d);
+            type_csts.push_back(d <= ub);
         } else if (regex_match(cst_text, m, regex(REG DOT KIND "=" IMM))) {
             Variable d = variable_registry->reg(regkind(m[2]), regnum(m[1]));
             Number value;
@@ -382,7 +419,7 @@ parse_linear_constraints(const std::set<std::string>& constraints, std::vector<I
             throw std::runtime_error(std::string("Unknown constraint: ") + cst_text);
         }
     }
-    return {value_csts, type_csts};
+    return {type_csts, value_csts};
 }
 
 // return a-b, taking account potential optional-none

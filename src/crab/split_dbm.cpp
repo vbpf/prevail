@@ -756,6 +756,7 @@ void SplitDBM::havoc(const Variable v) {
     }
 }
 
+// return false if becomes bottom
 bool SplitDBM::add_constraint(const LinearConstraint& cst) {
     CrabStats::count("SplitDBM.count.add_constraints");
     ScopedCrabStats __st__("SplitDBM.add_constraints");

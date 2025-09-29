@@ -37,10 +37,12 @@ inline LinearConstraint type_is_not_number(const Reg& r) {
 }
 
 struct TypeDomain {
-    SplitDBM inv;
+    // Underlying numerical domain should be different, but for interop with ArrayDomain we reuse NumAbsDomain.
+    using T = NumAbsDomain;
+    T inv;
 
-    TypeDomain() : inv(SplitDBM::top()) {}
-    explicit TypeDomain(const SplitDBM& other) : inv(other) {};
+    TypeDomain() : inv(T::top()) {}
+    explicit TypeDomain(const T& other) : inv(other) {};
 
     TypeDomain(const TypeDomain& other) = default;
     TypeDomain(TypeDomain&& other) noexcept : inv(std::move(other.inv)) {}
@@ -54,8 +56,8 @@ struct TypeDomain {
     TypeDomain operator|(const TypeDomain& other) const { return TypeDomain{inv | other.inv}; }
 
     std::optional<TypeDomain> meet(const TypeDomain& other) const {
-        if (auto dom = inv.meet(other.inv)) {
-            return TypeDomain{std::move(*dom)};
+        if (auto res = this->inv & other.inv) {
+            return TypeDomain{std::move(res)};
         }
         return {};
     }
@@ -80,7 +82,7 @@ struct TypeDomain {
 
     [[nodiscard]]
     bool implies(const LinearConstraint& premise, const LinearConstraint& conclusion) const {
-        return inv.implies(premise, conclusion);
+        return inv.when(premise).entail(conclusion);
     }
 
     [[nodiscard]]

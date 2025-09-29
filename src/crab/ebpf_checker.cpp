@@ -16,7 +16,6 @@
 #include "crab/var_registry.hpp"
 #include "platform.hpp"
 #include "program.hpp"
-#include "string_constraints.hpp"
 
 namespace prevail {
 
@@ -162,9 +161,10 @@ void EbpfChecker::operator()(const Comparable& s) const {
     using namespace dsl_syntax;
     if (types.same_type(s.r1, s.r2)) {
         // Same type. If both are numbers, that's okay. Otherwise:
-        const auto inv = values.when(type_is_not_number(s.r2));
+        TypeDomain non_number_types = dom.rcp.types;
+        non_number_types.add_constraint(type_is_not_number(s.r2));
         // We must check that they belong to a singleton region:
-        if (!types.is_in_group(s.r1, TypeGroup::singleton_ptr) && !types.is_in_group(s.r1, TypeGroup::map_fd)) {
+        if (!non_number_types.is_in_group(s.r1, TypeGroup::singleton_ptr) && !non_number_types.is_in_group(s.r1, TypeGroup::map_fd)) {
             require("Cannot subtract pointers to non-singleton regions");
             return;
         }

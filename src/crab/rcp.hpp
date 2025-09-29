@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <ranges>
+
 #include "arith/variable.hpp"
 #include "crab/add_bottom.hpp"
 #include "crab/interval.hpp"
@@ -44,6 +46,8 @@ inline const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
     {T_PACKET, {DataKind::packet_offsets}},
     {T_SHARED, {DataKind::shared_offsets, DataKind::shared_region_sizes}},
     {T_STACK, {DataKind::stack_offsets, DataKind::stack_numeric_sizes}},
+    {T_UNINIT, {}},
+    {T_NUM, {}}, // TODO: DataKind::svalues
 };
 
 /** TypeToNumDomain implements a Reduced Cardinal Power Domain between TypeDomain and NumAbsDomain.
@@ -84,7 +88,7 @@ struct TypeToNumDomain {
      * To ensure a correct comparison, this function first identifies these "Bottom" variables.
      * It then `havoc`s them in a temporary copy of the `other` domain, which sets them to
      * Top. The final numerical check `values <= tmp.values` is then sound, as it
-     * evaluates `Bottom <= Top` for all irrelevant variables on the left-hand side.
+     * evaluates `x <= Top` for all irrelevant variables on the left-hand side.
      */
     bool operator<=(const TypeToNumDomain& other) const {
         if (is_bottom()) {
@@ -101,7 +105,7 @@ struct TypeToNumDomain {
         }
         // Then, check the numeric domain with consideration of type-specific variables.
         TypeToNumDomain tmp{other.types, other.values};
-        for (const Variable& v : get_nonexistent_kind_variables()) {
+        for (const Variable& v : this->get_nonexistent_kind_variables()) {
             tmp.values.havoc(v);
         }
         return values <= tmp.values;
@@ -135,6 +139,7 @@ struct TypeToNumDomain {
 
     TypeToNumDomain operator&(const TypeToNumDomain& other) const {
         if (auto type_inv = types.meet(other.types)) {
+            // TODO: remove unuseful variables from the numeric domain
             return TypeToNumDomain{std::move(*type_inv), values & other.values};
         }
         return TypeToNumDomain{TypeDomain::top(), NumAbsDomain::bottom()};
@@ -203,6 +208,9 @@ struct TypeToNumDomain {
 
         for (const Variable& type_var : variable_registry->get_type_variables()) {
             for (const auto& [type, kinds] : type_to_kinds) {
+                if (kinds.empty()) {
+                    continue;
+                }
                 const bool in_left = types.may_have_type(type_var, type);
                 const bool in_right = right.types.may_have_type(type_var, type);
 
@@ -245,13 +253,48 @@ struct TypeToNumDomain {
      */
     TypeToNumDomain join_over_types(const Reg& reg,
                                     const std::function<void(TypeToNumDomain&, TypeEncoding)>& transition) const {
+        using namespace dsl_syntax;
         TypeToNumDomain res = bottom();
-        for (const TypeEncoding type : types.iterate_types(reg)) {
+        const std::vector<TypeEncoding> valid_types = types.iterate_types(reg);
+        std::map<TypeEncoding, std::vector<DataKind>> valid_type_to_kinds;
+        for (const TypeEncoding type : valid_types) {
+            valid_type_to_kinds.emplace(type, type_to_kinds.at(type));
+        }
+        for (const TypeEncoding type : valid_types) {
             TypeToNumDomain tmp(*this);
+            tmp.types.add_constraint(reg_type(reg) == type);
+            // This might have changed the type variable of reg.
+            // It might also have changed the type variable of other registers, but we don't deal with that.
+            for (const auto& [other_type, kinds] : valid_type_to_kinds) {
+                if (other_type != type) {
+                    for (const auto kind : kinds) {
+                        tmp.values.havoc(variable_registry->kind_var(kind, reg_type(reg)));
+                    }
+                }
+            }
             transition(tmp, type);
             res |= tmp;
         }
         return res;
+    }
+
+    void assign(const Reg& lhs, const Reg& rhs) {
+        types.assign_type(lhs, rhs);
+
+        values.assign(reg_pack(lhs).svalue, reg_pack(rhs).svalue);
+        values.assign(reg_pack(lhs).uvalue, reg_pack(rhs).uvalue);
+
+        for (const auto& [type, kinds] : type_to_kinds) {
+            const bool valid = types.may_have_type(rhs, type);
+            for (const auto kind : kinds) {
+                const auto lhs_var = variable_registry->kind_var(kind, reg_type(lhs));
+                if (valid) {
+                    values.assign(lhs_var, variable_registry->kind_var(kind, reg_type(rhs)));
+                } else {
+                    values.havoc(lhs_var);
+                }
+            }
+        }
     }
 
     TypeToNumDomain widen(const TypeToNumDomain& rcp) const {
