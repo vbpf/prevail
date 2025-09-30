@@ -49,6 +49,16 @@ inline const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
     {T_NUM, {}}, // TODO: DataKind::svalues
 };
 
+inline const std::map<DataKind, std::vector<TypeEncoding>> kind_to_types{
+    {DataKind::ctx_offsets, {T_CTX}},
+    {DataKind::map_fds, {T_MAP, T_MAP_PROGRAMS}},
+    {DataKind::packet_offsets, {T_PACKET}},
+    {DataKind::shared_offsets, {T_SHARED}},
+    {DataKind::shared_region_sizes, {T_SHARED}},
+    {DataKind::stack_offsets, {T_STACK}},
+    {DataKind::stack_numeric_sizes, {T_STACK}},
+};
+
 /** TypeToNumDomain implements a Reduced Cardinal Power Domain between TypeDomain and NumAbsDomain.
  * This struct is used to represent the eBPF abstract domain where type information (TypeDomain) is used to guide the
  * precision of the numeric domain(NumAbsDomain). For example, if a register is known to be of type stack, then the
@@ -283,19 +293,21 @@ struct TypeToNumDomain {
     }
 
     void assign(const Reg& lhs, const Reg& rhs) {
+        if (lhs == rhs) {
+            return;
+        }
         types.assign_type(lhs, rhs);
 
         values.assign(reg_pack(lhs).svalue, reg_pack(rhs).svalue);
         values.assign(reg_pack(lhs).uvalue, reg_pack(rhs).uvalue);
 
-        for (const auto& [type, kinds] : type_to_kinds) {
-            const bool valid = types.may_have_type(rhs, type);
-            for (const auto kind : kinds) {
-                const auto lhs_var = variable_registry->kind_var(kind, reg_type(lhs));
-                if (valid) {
+        for (const auto& kind : iterate_kinds(DataKind::ctx_offsets)) {
+            const auto lhs_var = variable_registry->kind_var(kind, reg_type(lhs));
+            values.havoc(lhs_var);
+            for (const auto type : kind_to_types.at(kind)) {
+                if (types.may_have_type(rhs, type)) {
                     values.assign(lhs_var, variable_registry->kind_var(kind, reg_type(rhs)));
-                } else {
-                    values.havoc(lhs_var);
+                    break;
                 }
             }
         }
