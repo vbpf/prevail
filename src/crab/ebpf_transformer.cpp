@@ -1418,14 +1418,11 @@ void EbpfTransformer::operator()(const Bin& bin) {
         }
         case Bin::Op::MOV:
             // Keep relational information if operation is a no-op.
-            if (dst.svalue == src.svalue) {
-                if (bin.is64 || m_inv.eval_interval(dst.uvalue) <= Interval::unsigned_int(32)) {
-                    return;
-                }
-            }
             if (bin.is64 || dom.rcp.types.type_is_number(src_reg)) {
-                // the 32bit case is handled below
-                dom.rcp.assign(bin.dst, src_reg);
+                if (bin.dst != src_reg) {
+                    // the 32bit case is handled below
+                    dom.rcp.assign(bin.dst, src_reg);
+                }
             } else {
                 // If src is not a number, we don't know how to truncate a pointer.
                 havoc_register(m_inv, bin.dst);
