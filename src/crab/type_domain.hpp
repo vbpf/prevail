@@ -72,6 +72,7 @@ struct TypeDomain {
     void assign_type(std::optional<Variable> lhs, const LinearExpression& t);
     void add_constraint(const LinearConstraint& cst) { inv.add_constraint(cst); }
     void havoc_type(const Reg& r);
+    void havoc_type(const Variable& v);
 
     bool type_is_pointer(const Reg& r) const {
         using namespace dsl_syntax;

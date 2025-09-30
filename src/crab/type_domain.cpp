@@ -146,6 +146,7 @@ void TypeDomain::assign_type(const Reg& lhs, const std::optional<LinearExpressio
 }
 
 void TypeDomain::havoc_type(const Reg& r) { inv.havoc(reg_type(r)); }
+void TypeDomain::havoc_type(const Variable& v) { inv.havoc(v); }
 
 TypeEncoding TypeDomain::get_type(const LinearExpression& v) const {
     const auto res = inv.eval_interval(v).singleton();

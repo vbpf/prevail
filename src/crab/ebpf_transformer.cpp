@@ -160,26 +160,48 @@ void EbpfTransformer::save_callee_saved_registers(const std::string& prefix) {
     // Create variables specific to the new call stack frame that store
     // copies of the states of r6 through r9.
     for (uint8_t r = R6; r <= R9; r++) {
-        for (const DataKind kind : iterate_kinds()) {
-            const Variable src_var = variable_registry->reg(kind, r);
-            if (!m_inv.eval_interval(src_var).is_top()) {
-                m_inv.assign(variable_registry->stack_frame_var(kind, r, prefix), src_var);
+        const Variable type_var = variable_registry->type_reg(r);
+        if (!dom.rcp.types.may_have_type(type_var, T_UNINIT)) {
+            dom.rcp.types.assign_type(variable_registry->stack_frame_var(DataKind::types, r, prefix), type_var);
+            for (const TypeEncoding type : dom.rcp.types.iterate_types(Reg{r})) {
+                auto kinds = type_to_kinds.at(type);
+                kinds.push_back(DataKind::uvalues);
+                kinds.push_back(DataKind::svalues);
+                for (const DataKind kind : kinds) {
+                    const Variable src_var = variable_registry->reg(kind, r);
+                    const Variable dst_var = variable_registry->stack_frame_var(kind, r, prefix);
+                    if (!m_inv.eval_interval(src_var).is_top()) {
+                        m_inv.assign(dst_var, src_var);
+                    }
+                }
             }
         }
     }
 }
 
 void EbpfTransformer::restore_callee_saved_registers(const std::string& prefix) {
-    for (int r = R6; r <= R9; r++) {
-        for (const DataKind kind : iterate_kinds()) {
-            const Variable src_var = variable_registry->stack_frame_var(kind, r, prefix);
-            if (!m_inv.eval_interval(src_var).is_top()) {
-                m_inv.assign(variable_registry->reg(kind, r), src_var);
-            } else {
-                m_inv.havoc(variable_registry->reg(kind, r));
+    for (uint8_t r = R6; r <= R9; r++) {
+        Reg reg{r};
+        const Variable type_var = variable_registry->stack_frame_var(DataKind::types, r, prefix);
+        if (!dom.rcp.types.may_have_type(type_var, T_UNINIT)) {
+            dom.rcp.types.assign_type(reg, type_var);
+            for (const TypeEncoding type : dom.rcp.types.iterate_types(reg)) {
+                auto kinds = type_to_kinds.at(type);
+                kinds.push_back(DataKind::uvalues);
+                kinds.push_back(DataKind::svalues);
+                for (const DataKind kind : kinds) {
+                    const Variable src_var = variable_registry->stack_frame_var(kind, r, prefix);
+                    const Variable dst_var = variable_registry->reg(kind, r);
+                    if (!m_inv.eval_interval(src_var).is_top()) {
+                        m_inv.assign(dst_var, src_var);
+                    } else {
+                        m_inv.havoc(dst_var);
+                    }
+                    m_inv.havoc(src_var);
+                }
             }
-            m_inv.havoc(src_var);
         }
+        dom.rcp.types.havoc_type(type_var);
     }
 }
 
@@ -190,7 +212,11 @@ void EbpfTransformer::havoc_subprogram_stack(const std::string& prefix) {
         return;
     }
     const int64_t stack_start = intv.singleton()->cast_to<int64_t>() - EBPF_SUBPROGRAM_STACK_SIZE;
+    stack.havoc(dom.rcp.types.inv, DataKind::types, stack_start, EBPF_SUBPROGRAM_STACK_SIZE);
     for (const DataKind kind : iterate_kinds()) {
+        if (kind == DataKind::types) {
+            continue;
+        }
         stack.havoc(m_inv, kind, stack_start, EBPF_SUBPROGRAM_STACK_SIZE);
     }
 }
@@ -200,10 +226,12 @@ void EbpfTransformer::forget_packet_pointers() {
 
     for (const Variable type_variable : variable_registry->get_type_variables()) {
         if (dom.rcp.types.may_have_type(type_variable, T_PACKET)) {
-            m_inv.havoc(variable_registry->kind_var(DataKind::types, type_variable));
-            m_inv.havoc(variable_registry->kind_var(DataKind::packet_offsets, type_variable));
+            dom.rcp.types.havoc_type(type_variable);
             m_inv.havoc(variable_registry->kind_var(DataKind::svalues, type_variable));
             m_inv.havoc(variable_registry->kind_var(DataKind::uvalues, type_variable));
+            for (const DataKind kind : type_to_kinds.at(T_PACKET)) {
+                m_inv.havoc(variable_registry->kind_var(kind, type_variable));
+            }
         }
     }
 
