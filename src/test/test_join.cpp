@@ -136,8 +136,9 @@ TEST_CASE("join with matching memory types but different offsets", "[join][latti
 
 TEST_CASE("join with different types and unknown offsets", "[join][lattice]") {
     using namespace dsl_syntax;
-    require_join({r0_type == T_MAP}, {r0.svalue == 1}, {r0_type == T_STACK}, {r0.svalue == 2}, {r0_type <= T_STACK},
-                 {r0_type >= T_MAP, r0.svalue >= 1, r0.svalue <= 2});
+    require_join({r0_type == T_MAP}, {r0.svalue == 1},
+                 {r0_type == T_STACK}, {r0.svalue == 2},
+                 {r0_type <= T_STACK, r0_type >= T_MAP}, {r0.svalue >= 1, r0.svalue <= 2});
 }
 
 // 6) Shared memory offsets and sizes
