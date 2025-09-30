@@ -60,7 +60,7 @@ std::vector<TypeEncoding> TypeDomain::iterate_types(const Reg& reg) const {
     if (allowed_types.contains(T_UNINIT)) {
         return {T_UNINIT};
     }
-    auto [lb, ub] = allowed_types.bound(T_MIN, T_MAX);
+    auto [lb, ub] = allowed_types.bound(T_MIN_VALID, T_MAX);
     return prevail::iterate_types(lb, ub);
 }
 
@@ -162,6 +162,18 @@ TypeEncoding TypeDomain::get_type(const Reg& r) const {
         return T_UNINIT;
     }
     return res->narrow<TypeEncoding>();
+}
+
+[[nodiscard]]
+bool TypeDomain::is_initialized(const Reg& r) const {
+    using namespace dsl_syntax;
+    return inv.entail(reg_type(r) != T_UNINIT);
+}
+
+[[nodiscard]]
+bool TypeDomain::is_initialized(const LinearExpression& v) const {
+    using namespace dsl_syntax;
+    return inv.entail(v != T_UNINIT);
 }
 
 // Check whether a given type value is within the range of a given type variable's value.

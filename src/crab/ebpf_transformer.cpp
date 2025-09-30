@@ -160,8 +160,8 @@ void EbpfTransformer::save_callee_saved_registers(const std::string& prefix) {
     // Create variables specific to the new call stack frame that store
     // copies of the states of r6 through r9.
     for (uint8_t r = R6; r <= R9; r++) {
-        const Variable type_var = variable_registry->type_reg(r);
-        if (!dom.rcp.types.may_have_type(type_var, T_UNINIT)) {
+        if (dom.rcp.types.is_initialized(Reg{r})) {
+            const Variable type_var = variable_registry->type_reg(r);
             dom.rcp.types.assign_type(variable_registry->stack_frame_var(DataKind::types, r, prefix), type_var);
             for (const TypeEncoding type : dom.rcp.types.iterate_types(Reg{r})) {
                 auto kinds = type_to_kinds.at(type);
@@ -183,7 +183,7 @@ void EbpfTransformer::restore_callee_saved_registers(const std::string& prefix) 
     for (uint8_t r = R6; r <= R9; r++) {
         Reg reg{r};
         const Variable type_var = variable_registry->stack_frame_var(DataKind::types, r, prefix);
-        if (!dom.rcp.types.may_have_type(type_var, T_UNINIT)) {
+        if (dom.rcp.types.is_initialized(type_var)) {
             dom.rcp.types.assign_type(reg, type_var);
             for (const TypeEncoding type : dom.rcp.types.iterate_types(reg)) {
                 auto kinds = type_to_kinds.at(type);
@@ -593,7 +593,7 @@ void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
             do_load_packet_or_shared(rcp, target_reg, addr, width);
             break;
         }
-        default: {
+        case T_SHARED: {
             LinearExpression addr = mem_reg.shared_offset + offset;
             do_load_packet_or_shared(rcp, target_reg, addr, width);
             break;
@@ -765,8 +765,7 @@ void EbpfTransformer::operator()(const Atomic& a) {
     if (m_inv.is_bottom()) {
         return;
     }
-    if (!dom.rcp.types.type_is_pointer(a.access.basereg) ||
-        !dom.rcp.types.type_is_number(a.valreg)) {
+    if (!dom.rcp.types.type_is_pointer(a.access.basereg) || !dom.rcp.types.type_is_number(a.valreg)) {
         return;
     }
     if (dom.rcp.types.type_is_not_stack(a.access.basereg)) {
@@ -1110,7 +1109,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
 
     // TODO: Unusable states and values should be better handled.
     //       Probably by propagating an error state.
-    if (dom.rcp.types.may_have_type(bin.dst, T_UNINIT) &&
+    if (!dom.rcp.types.is_initialized(bin.dst) &&
         !std::set{Bin::Op::MOV, Bin::Op::MOVSX8, Bin::Op::MOVSX16, Bin::Op::MOVSX32}.contains(bin.op)) {
         havoc_register(m_inv, bin.dst);
         dom.rcp.types.havoc_type(bin.dst);
@@ -1206,7 +1205,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
         // dst op= src
         auto src_reg = std::get<Reg>(bin.v);
         auto src = reg_pack(src_reg);
-        if (dom.rcp.types.may_have_type(src_reg, T_UNINIT)) {
+        if (!dom.rcp.types.is_initialized(src_reg)) {
             havoc_register(m_inv, bin.dst);
             dom.rcp.types.havoc_type(bin.dst);
             return;
@@ -1350,7 +1349,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
             havoc_offsets(bin.dst);
             break;
         case Bin::Op::LSH:
-            if (dom.rcp.types.type_is_number(src_reg))  {
+            if (dom.rcp.types.type_is_number(src_reg)) {
                 auto src_interval = m_inv.eval_interval(src.uvalue);
                 if (std::optional<Number> sn = src_interval.singleton()) {
                     // truncate to uint64?

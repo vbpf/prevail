@@ -46,7 +46,6 @@ inline const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
     {T_PACKET, {DataKind::packet_offsets}},
     {T_SHARED, {DataKind::shared_offsets, DataKind::shared_region_sizes}},
     {T_STACK, {DataKind::stack_offsets, DataKind::stack_numeric_sizes}},
-    {T_UNINIT, {}},
     {T_NUM, {}}, // TODO: DataKind::svalues
 };
 
@@ -254,6 +253,11 @@ struct TypeToNumDomain {
     TypeToNumDomain join_over_types(const Reg& reg,
                                     const std::function<void(TypeToNumDomain&, TypeEncoding)>& transition) const {
         using namespace dsl_syntax;
+        if (!types.is_initialized(reg)) {
+            TypeToNumDomain res = *this;
+            transition(res, T_UNINIT);
+            return res;
+        }
         TypeToNumDomain res = bottom();
         const std::vector<TypeEncoding> valid_types = types.iterate_types(reg);
         std::map<TypeEncoding, std::vector<DataKind>> valid_type_to_kinds;

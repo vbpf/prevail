@@ -112,6 +112,12 @@ struct TypeDomain {
     bool may_have_type(const Reg& r, TypeEncoding type) const;
 
     [[nodiscard]]
+    bool is_initialized(const Reg& r) const;
+
+    [[nodiscard]]
+    bool is_initialized(const LinearExpression& v) const;
+
+    [[nodiscard]]
     bool same_type(const Reg& a, const Reg& b) const;
 
     [[nodiscard]]

@@ -41,6 +41,7 @@ enum TypeEncoding {
 };
 
 constexpr TypeEncoding T_MIN = T_UNINIT;
+constexpr TypeEncoding T_MIN_VALID = T_MAP_PROGRAMS;
 constexpr TypeEncoding T_MAX = T_SHARED;
 
 std::vector<TypeEncoding> iterate_types(TypeEncoding lb, TypeEncoding ub);
