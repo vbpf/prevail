@@ -174,7 +174,7 @@ void EbpfChecker::operator()(const Comparable& s) const {
     } else {
         // _Maybe_ different types, so r2 must be a number.
         // We checked in a previous assertion that r1 is a pointer or a number.
-        require(values, type_is_number(s.r2), "Cannot subtract pointers to different regions");
+        require(dom.rcp.types.inv, type_is_number(s.r2), "Cannot subtract pointers to different regions");
     }
 }
 
