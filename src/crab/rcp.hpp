@@ -292,6 +292,13 @@ struct TypeToNumDomain {
         return res;
     }
 
+    void assume_type(const LinearConstraint& cst) {
+        types.add_constraint(cst);
+        if (types.inv.is_bottom()) {
+            values.set_to_bottom();
+        }
+    }
+
     void assign(const Reg& lhs, const Reg& rhs) {
         if (lhs == rhs) {
             return;
