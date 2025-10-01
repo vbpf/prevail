@@ -302,11 +302,24 @@ ExtendedNumber EbpfDomain::get_loop_count_upper_bound() const {
 
 Interval EbpfDomain::get_r0() const { return rcp.values.eval_interval(reg_pack(R0_RETURN_VALUE).svalue); }
 
+std::ostream& operator<<(std::ostream& o, const TypeDomain& dom) {
+    return o << dom.inv;
+}
+
+std::ostream& operator<<(std::ostream& o, const TypeToNumDomain& dom) {
+    if (dom.is_bottom()) {
+        o << "_|_";
+    } else {
+        o << dom.types << dom.values;
+    }
+    return o;
+}
+
 std::ostream& operator<<(std::ostream& o, const EbpfDomain& dom) {
     if (dom.is_bottom()) {
         o << "_|_";
     } else {
-        o << dom.rcp.values << "\nStack: " << dom.stack;
+        o << dom.rcp << "\nStack: " << dom.stack;
     }
     return o;
 }

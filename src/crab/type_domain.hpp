@@ -124,6 +124,7 @@ struct TypeDomain {
     bool is_in_group(const Reg& r, TypeGroup group) const;
 
     StringInvariant to_set() const { return inv.to_set(); }
+    friend std::ostream& operator<<(std::ostream& o, const TypeDomain& dom);
 };
 
 } // namespace prevail

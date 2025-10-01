@@ -327,5 +327,6 @@ struct TypeToNumDomain {
         }
         return types.to_set() + values.to_set();
     }
+    friend std::ostream& operator<<(std::ostream& o, const TypeToNumDomain& dom);
 };
 } // namespace prevail
