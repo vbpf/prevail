@@ -617,52 +617,49 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& rcp, const LinearExpressio
     if (opt_val_reg && !rcp.types.is_initialized(*opt_val_reg)) {
         stack.havoc(rcp.values, DataKind::svalues, addr, width);
         stack.havoc(rcp.values, DataKind::uvalues, addr, width);
-        return;
-    }
+    } else {
+        // opt_val_reg is unset when storing an immediate value.
+        const bool must_be_num = !opt_val_reg || rcp.types.type_is_number(*opt_val_reg);
+        const LinearExpression val_type =
+            must_be_num ? LinearExpression{T_NUM} : variable_registry->type_reg(opt_val_reg->v);
+        rcp.types.assign_type(stack.store_type(rcp.types, addr, width, val_type), val_type);
 
-    // opt_val_reg is unset when storing an immediate value.
-    const bool must_be_num = !opt_val_reg || rcp.types.type_is_number(*opt_val_reg);
-    const LinearExpression val_type =
-        must_be_num ? LinearExpression{T_NUM} : variable_registry->type_reg(opt_val_reg->v);
-    rcp.types.assign_type(stack.store_type(rcp.types, addr, width, val_type), val_type);
+        if (width == 8) {
+            stack.havoc(rcp.values, DataKind::svalues, addr, width);
+            stack.havoc(rcp.values, DataKind::uvalues, addr, width);
+            rcp.values.assign(stack.store(rcp.values, DataKind::svalues, addr, width, val_svalue), val_svalue);
+            rcp.values.assign(stack.store(rcp.values, DataKind::uvalues, addr, width, val_uvalue), val_uvalue);
 
-    if (width == 8) {
-        stack.havoc(rcp.values, DataKind::svalues, addr, width);
-        stack.havoc(rcp.values, DataKind::uvalues, addr, width);
-        rcp.values.assign(stack.store(rcp.values, DataKind::svalues, addr, width, val_svalue), val_svalue);
-        rcp.values.assign(stack.store(rcp.values, DataKind::uvalues, addr, width, val_uvalue), val_uvalue);
-
-        if (!must_be_num) {
-            for (TypeEncoding type : rcp.types.iterate_types(*opt_val_reg)) {
-                for (const DataKind kind : type_to_kinds.at(type)) {
-                    const Variable src_var = variable_registry->reg(kind, opt_val_reg->v);
-                    rcp.values.assign(stack.store(rcp.values, kind, addr, width, src_var), src_var);
+            if (!must_be_num) {
+                for (TypeEncoding type : rcp.types.iterate_types(*opt_val_reg)) {
+                    for (const DataKind kind : type_to_kinds.at(type)) {
+                        const Variable src_var = variable_registry->reg(kind, opt_val_reg->v);
+                        rcp.values.assign(stack.store(rcp.values, kind, addr, width, src_var), src_var);
+                    }
                 }
             }
-        }
-    } else if ((width == 1 || width == 2 || width == 4) && must_be_num) {
-        // Keep track of numbers on the stack that might be used as array indices.
-        if (const auto stack_svalue = stack.store(rcp.values, DataKind::svalues, addr, width, val_svalue)) {
-            rcp.values.assign(stack_svalue, val_svalue);
-            rcp.values->overflow_bounds(*stack_svalue, width * 8, true);
+        } else if ((width == 1 || width == 2 || width == 4) && must_be_num) {
+            // Keep track of numbers on the stack that might be used as array indices.
+            if (const auto stack_svalue = stack.store(rcp.values, DataKind::svalues, addr, width, val_svalue)) {
+                rcp.values.assign(stack_svalue, val_svalue);
+                rcp.values->overflow_bounds(*stack_svalue, width * 8, true);
+            } else {
+                stack.havoc(rcp.values, DataKind::svalues, addr, width);
+            }
+            if (const auto stack_uvalue = stack.store(rcp.values, DataKind::uvalues, addr, width, val_uvalue)) {
+                rcp.values.assign(stack_uvalue, val_uvalue);
+                rcp.values->overflow_bounds(*stack_uvalue, width * 8, false);
+            } else {
+                stack.havoc(rcp.values, DataKind::uvalues, addr, width);
+            }
         } else {
             stack.havoc(rcp.values, DataKind::svalues, addr, width);
-        }
-        if (const auto stack_uvalue = stack.store(rcp.values, DataKind::uvalues, addr, width, val_uvalue)) {
-            rcp.values.assign(stack_uvalue, val_uvalue);
-            rcp.values->overflow_bounds(*stack_uvalue, width * 8, false);
-        } else {
             stack.havoc(rcp.values, DataKind::uvalues, addr, width);
         }
-    } else {
-        stack.havoc(rcp.values, DataKind::svalues, addr, width);
-        stack.havoc(rcp.values, DataKind::uvalues, addr, width);
     }
 
     // Update stack_numeric_size for any stack type variables.
     // stack_numeric_size holds the number of continuous bytes starting from stack_offset that are known to be numeric.
-    auto updated_lb = m_inv.eval_interval(addr).lb();
-    auto updated_ub = m_inv.eval_interval(addr).ub() + width;
     for (const Variable type_variable : variable_registry->get_type_variables()) {
         if (!rcp.types.may_have_type(type_variable, T_STACK)) {
             continue;
@@ -674,7 +671,7 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& rcp, const LinearExpressio
         using namespace dsl_syntax;
         // See if the variable's numeric interval overlaps with changed bytes.
         if (m_inv.intersect(dsl_syntax::operator<=(addr, stack_offset_variable + stack_numeric_size_variable)) &&
-            m_inv.intersect(operator>=(addr + width, stack_offset_variable))) {
+            m_inv.intersect(dsl_syntax::operator>=(addr + width, stack_offset_variable))) {
             m_inv.havoc(stack_numeric_size_variable);
             recompute_stack_numeric_size(rcp, type_variable);
         }
