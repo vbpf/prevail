@@ -164,7 +164,8 @@ void EbpfChecker::operator()(const Comparable& s) const {
         TypeDomain non_number_types = dom.rcp.types;
         non_number_types.add_constraint(type_is_not_number(s.r2));
         // We must check that they belong to a singleton region:
-        if (!non_number_types.is_in_group(s.r1, TypeGroup::singleton_ptr) && !non_number_types.is_in_group(s.r1, TypeGroup::map_fd)) {
+        if (!non_number_types.is_in_group(s.r1, TypeGroup::singleton_ptr) &&
+            !non_number_types.is_in_group(s.r1, TypeGroup::map_fd)) {
             require("Cannot subtract pointers to non-singleton regions");
             return;
         }
@@ -282,12 +283,12 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
 
     dom.rcp = dom.rcp.join_over_types(s.access_reg, [&](TypeToNumDomain& rcp, TypeEncoding access_reg_type) {
         if (access_reg_type == T_STACK) {
-            Variable lb = access_reg.stack_offset;
-            LinearExpression ub = lb + width;
-            if (!stack.all_num(rcp.values, lb, ub)) {
-                auto lb_is = rcp.values.eval_interval(lb).lb().number();
+            Interval offset = rcp.values.eval_interval(access_reg.stack_offset);
+            if (!stack.all_num(offset, Interval{width})) {
+                auto lb_is = offset.lb().number();
                 std::string lb_s = lb_is && lb_is->fits<int32_t>() ? std::to_string(lb_is->narrow<int32_t>()) : "-oo";
-                auto ub_is = rcp.values.eval_interval(ub).ub().number();
+                Interval ub = offset + Interval{width};
+                auto ub_is = ub.ub().number();
                 std::string ub_s = ub_is && ub_is->fits<int32_t>() ? std::to_string(ub_is->narrow<int32_t>()) : "oo";
                 require(rcp.values, LinearConstraint::false_const(),
                         "Illegal map update with a non-numerical value [" + lb_s + "-" + ub_s + ")");
@@ -362,7 +363,7 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             // if within bounds, it can never be null
             if (s.access_type == AccessType::read) {
                 // Require that the stack range contains numbers.
-                if (!stack.all_num(rcp.values, lb, ub)) {
+                if (!stack.all_num(rcp.values.eval_interval(lb), rcp.values.eval_interval(ub - lb))) {
                     if (s.offset < 0) {
                         require("Stack content is not numeric");
                     } else if (const auto pimm = std::get_if<Imm>(&s.width)) {

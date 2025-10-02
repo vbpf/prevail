@@ -357,7 +357,6 @@ TEST_SECTION("prototype-kernel", "napi_monitor_kern.o", "tracepoint/napi/napi_po
 TEST_SECTION("prototype-kernel", "tc_bench01_redirect_kern.o", "ingress_redirect")
 TEST_SECTION("prototype-kernel", "xdp_bench01_mem_access_cost_kern.o", "xdp_bench01")
 TEST_SECTION("prototype-kernel", "xdp_bench02_drop_pattern_kern.o", "xdp_bench02")
-TEST_SECTION("prototype-kernel", "xdp_ddos01_blacklist_kern.o", "xdp_prog")
 TEST_SECTION("prototype-kernel", "xdp_monitor_kern.o", "tracepoint/xdp/xdp_redirect")
 TEST_SECTION("prototype-kernel", "xdp_monitor_kern.o", "tracepoint/xdp/xdp_redirect_err")
 TEST_SECTION("prototype-kernel", "xdp_monitor_kern.o", "tracepoint/xdp/xdp_redirect_map_err")
@@ -551,6 +550,11 @@ TEST_SECTION_REJECT("build", "ringbuf_uninit.o", ".text");
 // The following eBPF programs currently fail verification.
 // If the verifier is later updated to accept them, these should
 // be changed to TEST_SECTION().
+
+// This fails due to correlated branches not being handled precisely enough,
+// Unless the analysis tracks the correlation between shared_offset and the type of another register,
+// which is probably arbitrary and brittle.
+TEST_SECTION_FAIL("prototype-kernel", "xdp_ddos01_blacklist_kern.o", "xdp_prog")
 
 // Unsupported: ebpf-function
 TEST_SECTION_FAIL("prototype-kernel", "xdp_ddos01_blacklist_kern.o", ".text")

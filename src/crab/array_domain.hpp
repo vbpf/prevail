@@ -27,8 +27,8 @@
 
 #include "arith/variable.hpp"
 #include "crab/add_bottom.hpp"
-#include "crab/type_domain.hpp"
 #include "crab/bitset_domain.hpp"
+#include "crab/type_domain.hpp"
 
 namespace prevail {
 
@@ -63,23 +63,22 @@ class ArrayDomain final {
     [[nodiscard]]
     StringInvariant to_set() const;
 
-    bool all_num(const NumAbsDomain& inv, const LinearExpression& lb, const LinearExpression& ub) const;
+    [[nodiscard]]
+    bool all_num(const Interval& lb, const Interval& ub) const;
     [[nodiscard]]
     int min_all_num_size(const NumAbsDomain& inv, Variable offset) const;
 
-    std::optional<LinearExpression> load(const NumAbsDomain& inv, DataKind kind, const LinearExpression& i,
-                                         int width) const;
-    std::optional<Variable> store(NumAbsDomain& inv, DataKind kind, const LinearExpression& idx,
-                                  const LinearExpression& elem_size, const LinearExpression& val);
-    std::optional<Variable> store_type(TypeDomain& inv, const LinearExpression& idx,
-                                       const LinearExpression& elem_size, const LinearExpression& val);
-    void havoc(NumAbsDomain& inv, DataKind kind, const LinearExpression& idx, const LinearExpression& elem_size);
+    [[nodiscard]]
+    std::optional<LinearExpression> load(const NumAbsDomain& inv, DataKind kind, const Interval& i, int width) const;
+    std::optional<Variable> store(NumAbsDomain& inv, DataKind kind, const Interval& idx, const Interval& elem_size,
+                                  const LinearExpression& val);
+    std::optional<Variable> store_type(TypeDomain& inv, const Interval& idx, const Interval& width, bool is_num);
+    void havoc(NumAbsDomain& inv, DataKind kind, const Interval& idx, const Interval& elem_size);
 
     // Perform array stores over an array segment
-    void store_numbers(const NumAbsDomain& inv, Variable _idx, Variable _width);
+    void store_numbers(const Interval& _idx, const Interval& _width);
 
-    void split_number_var(NumAbsDomain& inv, DataKind kind, const LinearExpression& i,
-                          const LinearExpression& elem_size) const;
+    void split_number_var(NumAbsDomain& inv, DataKind kind, const Interval& ii, const Interval& elem_size) const;
     void split_cell(NumAbsDomain& inv, DataKind kind, int cell_start_index, unsigned int len) const;
 
     void initialize_numbers(int lb, int width);

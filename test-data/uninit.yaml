@@ -12,7 +12,7 @@ code:
   <start>: |
     r0 += r3
 
-post: []
+post: [ ]
 
 messages:
   - "0: Invalid type (r3.type in {number, ctx, stack, packet, shared})"
@@ -29,7 +29,7 @@ code:
   <start>: |
     r0 -= r3
 
-post: []
+post: [ ]
 
 messages:
   - "0: Cannot subtract pointers to different regions (r3.type == number or r0.type == r3.type in {ctx, stack, packet})"
@@ -46,7 +46,7 @@ code:
   <start>: |
     r0 *= r3
 
-post: []
+post: [ ]
 
 messages:
   - "0: Invalid type (r3.type == number)"
@@ -63,7 +63,7 @@ code:
   <start>: |
     r0 /= r3
 
-post: []
+post: [ ]
 
 messages:
   - "0: Only numbers can be used as divisors (r3 != 0)"
@@ -80,7 +80,7 @@ code:
   <start>: |
     r0 s/= r3
 
-post: []
+post: [ ]
 
 messages:
   - "0: Only numbers can be used as divisors (r3 != 0)"
@@ -97,7 +97,7 @@ code:
   <start>: |
     r0 %= r3
 
-post: []
+post: [ ]
 
 messages:
   - "0: Only numbers can be used as divisors (r3 != 0)"
@@ -114,7 +114,7 @@ code:
   <start>: |
     r0 s%= r3
 
-post: []
+post: [ ]
 
 messages:
   - "0: Only numbers can be used as divisors (r3 != 0)"
@@ -131,7 +131,7 @@ code:
   <start>: |
     r0 &= r3
 
-post: []
+post: [ ]
 
 messages:
   - "0: Invalid type (r3.type == number)"
@@ -148,7 +148,7 @@ code:
   <start>: |
     r0 |= r3
 
-post: []
+post: [ ]
 
 messages:
   - "0: Invalid type (r3.type == number)"
@@ -165,7 +165,7 @@ code:
   <start>: |
     r0 ^= r3
 
-post: []
+post: [ ]
 
 messages:
   - "0: Invalid type (r3.type == number)"
@@ -182,7 +182,7 @@ code:
   <start>: |
     r0 <<= r3
 
-post: []
+post: [ ]
 
 messages:
   - "0: Invalid type (r3.type == number)"
@@ -199,7 +199,7 @@ code:
   <start>: |
     r0 >>= r3
 
-post: []
+post: [ ]
 
 messages:
   - "0: Invalid type (r3.type == number)"
@@ -216,7 +216,7 @@ code:
   <start>: |
     r0 s>>= r3
 
-post: []
+post: [ ]
 
 messages:
   - "0: Invalid type (r3.type == number)"
@@ -233,7 +233,7 @@ code:
   <start>: |
     r0 s8= r3
 
-post: []
+post: [ ]
 
 messages:
   - "0: Invalid type (r3.type == number)"
@@ -250,7 +250,7 @@ code:
   <start>: |
     r0 s16= r3
 
-post: []
+post: [ ]
 
 messages:
   - "0: Invalid type (r3.type == number)"
@@ -267,7 +267,7 @@ code:
   <start>: |
     r0 s32= r3
 
-post: []
+post: [ ]
 
 messages:
   - "0: Invalid type (r3.type == number)"
@@ -284,7 +284,7 @@ code:
   <start>: |
     r0 = r3
 
-post: []
+post: [ ]
 
 ---
 test-case: Store uninitialized register to context - 8 bytes
@@ -480,20 +480,10 @@ code:
     r0 = *(u64 *)(r10 - 16)
 
 post:
-  - "s[496...503].ctx_offset=r0.ctx_offset"
-  - "s[496...503].map_fd=r0.map_fd"
-  - "s[496...503].packet_offset=r0.packet_offset"
-  - "s[496...503].shared_offset=r0.shared_offset"
-  - "s[496...503].shared_region_size=r0.shared_region_size"
-  - "s[496...503].stack_numeric_size=r0.stack_numeric_size"
-  - "s[496...503].stack_offset=r0.stack_offset"
-  - "s[496...503].svalue=r0.svalue"
-  - "s[496...503].type=r0.type"
-  - "s[496...503].uvalue=r0.uvalue"
   - "r10.stack_offset=512"
   - "r10.type=stack"
 
-messages: []
+messages: [ ]
 
 ---
 test-case: Read uninitialized stack range - aligned
@@ -507,20 +497,10 @@ code:
     r0 = *(u64 *)(r10 - 8)
 
 post:
-  - "s[504...511].ctx_offset=r0.ctx_offset"
-  - "s[504...511].map_fd=r0.map_fd"
-  - "s[504...511].packet_offset=r0.packet_offset"
-  - "s[504...511].shared_offset=r0.shared_offset"
-  - "s[504...511].shared_region_size=r0.shared_region_size"
-  - "s[504...511].stack_numeric_size=r0.stack_numeric_size"
-  - "s[504...511].stack_offset=r0.stack_offset"
-  - "s[504...511].svalue=r0.svalue"
-  - "s[504...511].type=r0.type"
-  - "s[504...511].uvalue=r0.uvalue"
   - "r10.stack_offset=512"
   - "r10.type=stack"
 
-messages: []
+messages: [ ]
 ---
 test-case: Read uninitialized stack range - unaligned
 
@@ -533,17 +513,7 @@ code:
     r0 = *(u64 *)(r10 - 10)
 
 post:
-  - "s[502...509].ctx_offset=r0.ctx_offset"
-  - "s[502...509].map_fd=r0.map_fd"
-  - "s[502...509].packet_offset=r0.packet_offset"
-  - "s[502...509].shared_offset=r0.shared_offset"
-  - "s[502...509].shared_region_size=r0.shared_region_size"
-  - "s[502...509].stack_numeric_size=r0.stack_numeric_size"
-  - "s[502...509].stack_offset=r0.stack_offset"
-  - "s[502...509].svalue=r0.svalue"
-  - "s[502...509].type=r0.type"
-  - "s[502...509].uvalue=r0.uvalue"
   - "r10.stack_offset=512"
   - "r10.type=stack"
 
-messages: []
+messages: [ ]
