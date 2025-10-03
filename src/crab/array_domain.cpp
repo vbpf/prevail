@@ -471,7 +471,6 @@ void ArrayDomain::split_number_var(NumAbsDomain& inv, DataKind kind, const Inter
     const std::vector<Cell> cells = offset_map.get_overlap_cells(o, size);
     for (Cell const& c : cells) {
         const auto [cell_start_index, cell_end_index] = c.to_interval().pair<int>();
-        assert(cell_start_index < cell_end_index);
         if (!this->num_bytes.all_num(cell_start_index, cell_end_index + 1) ||
             cell_end_index + 1UL < cell_start_index + sizeof(int64_t)) {
             // We can only split numeric cells of size 8 or less.
