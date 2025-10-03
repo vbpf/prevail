@@ -471,7 +471,7 @@ void ArrayDomain::split_number_var(NumAbsDomain& inv, DataKind kind, const Inter
     const std::vector<Cell> cells = offset_map.get_overlap_cells(o, size);
     for (Cell const& c : cells) {
         const auto [cell_start_index, cell_end_index] = c.to_interval().pair<int>();
-
+        assert(cell_start_index < cell_end_index);
         if (!this->num_bytes.all_num(cell_start_index, cell_end_index + 1) ||
             cell_end_index + 1UL < cell_start_index + sizeof(int64_t)) {
             // We can only split numeric cells of size 8 or less.
@@ -532,11 +532,20 @@ static std::optional<std::pair<offset_t, unsigned>> kill_and_find_var(NumAbsDoma
     return res;
 }
 static std::tuple<int, int> as_numbytes_range(const Interval& index, const Interval& width) {
-    return (index | (index + width)).bound(0, EBPF_TOTAL_STACK_SIZE - 1);
+    return (index | (index + width)).bound(0, EBPF_TOTAL_STACK_SIZE);
 }
 
-bool ArrayDomain::all_num(const Interval& index, const Interval& width) const {
+bool ArrayDomain::all_num_lb_ub(const Interval& lb, const Interval& ub) const {
+    const auto [min_lb, max_ub] = (lb | ub).bound(0, EBPF_TOTAL_STACK_SIZE);
+    if (min_lb > max_ub) {
+        return false;
+    }
+    return this->num_bytes.all_num(min_lb, max_ub);
+}
+
+bool ArrayDomain::all_num_width(const Interval& index, const Interval& width) const {
     const auto [min_lb, max_ub] = as_numbytes_range(index, width);
+    assert(min_lb < max_ub);
     return this->num_bytes.all_num(min_lb, max_ub);
 }
 

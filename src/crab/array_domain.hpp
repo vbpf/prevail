@@ -64,7 +64,9 @@ class ArrayDomain final {
     StringInvariant to_set() const;
 
     [[nodiscard]]
-    bool all_num(const Interval& lb, const Interval& ub) const;
+    bool all_num_width(const Interval& index, const Interval& width) const;
+    [[nodiscard]]
+    bool all_num_lb_ub(const Interval& lb, const Interval& ub) const;
     [[nodiscard]]
     int min_all_num_size(const NumAbsDomain& inv, Variable offset) const;
 

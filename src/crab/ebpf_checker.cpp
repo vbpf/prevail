@@ -284,7 +284,7 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
     dom.rcp = dom.rcp.join_over_types(s.access_reg, [&](TypeToNumDomain& rcp, TypeEncoding access_reg_type) {
         if (access_reg_type == T_STACK) {
             Interval offset = rcp.values.eval_interval(access_reg.stack_offset);
-            if (!stack.all_num(offset, Interval{width})) {
+            if (!stack.all_num_width(offset, Interval{width})) {
                 auto lb_is = offset.lb().number();
                 std::string lb_s = lb_is && lb_is->fits<int32_t>() ? std::to_string(lb_is->narrow<int32_t>()) : "-oo";
                 Interval ub = offset + Interval{width};
@@ -362,7 +362,7 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             check_access_stack(rcp.values, lb, ub);
             // if within bounds, it can never be null
             if (s.access_type == AccessType::read &&
-                !stack.all_num(rcp.values.eval_interval(lb), rcp.values.eval_interval(ub - lb))) {
+                !stack.all_num_lb_ub(rcp.values.eval_interval(lb), rcp.values.eval_interval(ub))) {
 
                 if (s.offset < 0) {
                     require("Stack content is not numeric");
