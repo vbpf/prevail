@@ -24,11 +24,10 @@ namespace prevail {
 class EbpfTransformer final {
     EbpfDomain& dom;
     // shorthands:
-    NumAbsDomain& m_inv;
     ArrayDomain& stack;
 
   public:
-    explicit EbpfTransformer(EbpfDomain& _dom) : dom(_dom), m_inv(_dom.rcp.values), stack(_dom.stack) {}
+    explicit EbpfTransformer(EbpfDomain& _dom) : dom(_dom), stack(_dom.stack) {}
 
     // abstract transformers
     void operator()(const Assume&);
@@ -147,7 +146,7 @@ static void havoc_register(NumAbsDomain& inv, const Reg& reg) {
 void EbpfTransformer::scratch_caller_saved_registers() {
     for (uint8_t i = R1_ARG; i <= R5_ARG; i++) {
         Reg r{i};
-        havoc_register(m_inv, r);
+        havoc_register(dom.rcp.values, r);
         dom.rcp.types.havoc_type(r);
     }
 }
@@ -166,8 +165,8 @@ void EbpfTransformer::save_callee_saved_registers(const std::string& prefix) {
                 for (const DataKind kind : kinds) {
                     const Variable src_var = variable_registry->reg(kind, r);
                     const Variable dst_var = variable_registry->stack_frame_var(kind, r, prefix);
-                    if (!m_inv.eval_interval(src_var).is_top()) {
-                        m_inv.assign(dst_var, src_var);
+                    if (!dom.rcp.values.eval_interval(src_var).is_top()) {
+                        dom.rcp.values.assign(dst_var, src_var);
                     }
                 }
             }
@@ -188,12 +187,12 @@ void EbpfTransformer::restore_callee_saved_registers(const std::string& prefix) 
                 for (const DataKind kind : kinds) {
                     const Variable src_var = variable_registry->stack_frame_var(kind, r, prefix);
                     const Variable dst_var = variable_registry->reg(kind, r);
-                    if (!m_inv.eval_interval(src_var).is_top()) {
-                        m_inv.assign(dst_var, src_var);
+                    if (!dom.rcp.values.eval_interval(src_var).is_top()) {
+                        dom.rcp.values.assign(dst_var, src_var);
                     } else {
-                        m_inv.havoc(dst_var);
+                        dom.rcp.values.havoc(dst_var);
                     }
-                    m_inv.havoc(src_var);
+                    dom.rcp.values.havoc(src_var);
                 }
             }
         }
@@ -203,7 +202,7 @@ void EbpfTransformer::restore_callee_saved_registers(const std::string& prefix) 
 
 void EbpfTransformer::havoc_subprogram_stack(const std::string& prefix) {
     const Variable r10_stack_offset = reg_pack(R10_STACK_POINTER).stack_offset;
-    const auto intv = m_inv.eval_interval(r10_stack_offset);
+    const auto intv = dom.rcp.values.eval_interval(r10_stack_offset);
     if (!intv.is_singleton()) {
         return;
     }
@@ -213,7 +212,7 @@ void EbpfTransformer::havoc_subprogram_stack(const std::string& prefix) {
         if (kind == DataKind::types) {
             continue;
         }
-        stack.havoc(m_inv, kind, Interval{stack_start}, Interval{EBPF_SUBPROGRAM_STACK_SIZE});
+        stack.havoc(dom.rcp.values, kind, Interval{stack_start}, Interval{EBPF_SUBPROGRAM_STACK_SIZE});
     }
 }
 
@@ -223,10 +222,10 @@ void EbpfTransformer::forget_packet_pointers() {
     for (const Variable type_variable : variable_registry->get_type_variables()) {
         if (dom.rcp.types.may_have_type(type_variable, T_PACKET)) {
             dom.rcp.types.havoc_type(type_variable);
-            m_inv.havoc(variable_registry->kind_var(DataKind::svalues, type_variable));
-            m_inv.havoc(variable_registry->kind_var(DataKind::uvalues, type_variable));
+            dom.rcp.values.havoc(variable_registry->kind_var(DataKind::svalues, type_variable));
+            dom.rcp.values.havoc(variable_registry->kind_var(DataKind::uvalues, type_variable));
             for (const DataKind kind : type_to_kinds.at(T_PACKET)) {
-                m_inv.havoc(variable_registry->kind_var(kind, type_variable));
+                dom.rcp.values.havoc(variable_registry->kind_var(kind, type_variable));
             }
         }
     }
@@ -234,7 +233,7 @@ void EbpfTransformer::forget_packet_pointers() {
     dom.initialize_packet();
 }
 
-void EbpfTransformer::havoc_offsets(const Reg& reg) { prevail::havoc_offsets(m_inv, reg); }
+void EbpfTransformer::havoc_offsets(const Reg& reg) { prevail::havoc_offsets(dom.rcp.values, reg); }
 
 /** Linear constraint for a pointer comparison.
  */
@@ -289,12 +288,13 @@ void EbpfTransformer::operator()(const Assume& s) {
             // We should only reach here if `--assume-assert` is off
             assert(!thread_local_options.assume_assertions || dom.is_bottom());
             // be sound in any case, it happens to flush out bugs:
-            m_inv.set_to_top();
+            dom.rcp.values.set_to_top();
         }
     } else {
         const int64_t imm = gsl::narrow_cast<int64_t>(std::get<Imm>(cond.right).v);
-        for (const LinearConstraint& cst : m_inv->assume_cst_imm(cond.op, cond.is64, dst.svalue, dst.uvalue, imm)) {
-            m_inv.add_constraint(cst);
+        for (const LinearConstraint& cst :
+             dom.rcp.values->assume_cst_imm(cond.op, cond.is64, dst.svalue, dst.uvalue, imm)) {
+            dom.rcp.values.add_constraint(cst);
         }
     }
 }
@@ -314,14 +314,14 @@ void EbpfTransformer::operator()(const Un& stmt) {
     const auto dst = reg_pack(stmt.dst);
     auto swap_endianness = [&](const Variable v, auto be_or_le) {
         if (dom.rcp.types.type_is_number(stmt.dst)) {
-            if (const auto n = m_inv.eval_interval(v).singleton()) {
+            if (const auto n = dom.rcp.values.eval_interval(v).singleton()) {
                 if (n->fits_cast_to<int64_t>()) {
-                    m_inv.set(v, Interval{be_or_le(n->cast_to<int64_t>())});
+                    dom.rcp.values.set(v, Interval{be_or_le(n->cast_to<int64_t>())});
                     return;
                 }
             }
         }
-        m_inv.havoc(v);
+        dom.rcp.values.havoc(v);
         havoc_offsets(stmt.dst);
     };
     // Swap bytes if needed.  For 64-bit types we need the weights to fit in a
@@ -389,7 +389,7 @@ void EbpfTransformer::operator()(const Un& stmt) {
         swap_endianness(dst.uvalue, boost::endian::endian_reverse<uint64_t>);
         break;
     case Un::Op::NEG:
-        m_inv->neg(dst.svalue, dst.uvalue, stmt.is64 ? 64 : 32);
+        dom.rcp.values->neg(dst.svalue, dst.uvalue, stmt.is64 ? 64 : 32);
         havoc_offsets(stmt.dst);
         break;
     }
@@ -424,8 +424,8 @@ void EbpfTransformer::operator()(const Packet& a) {
     constexpr Reg r0_reg{R0_RETURN_VALUE};
     dom.rcp.types.assign_type(r0_reg, T_NUM);
     havoc_offsets(r0_reg);
-    m_inv.havoc(reg.svalue);
-    m_inv.havoc(reg.uvalue);
+    dom.rcp.values.havoc(reg.svalue);
+    dom.rcp.values.havoc(reg.uvalue);
     scratch_caller_saved_registers();
 }
 
@@ -604,12 +604,13 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& rcp, const LinearExpressio
     stack.havoc(rcp.values, DataKind::stack_offsets, addr, width);
     stack.havoc(rcp.values, DataKind::shared_region_sizes, addr, width);
     stack.havoc(rcp.values, DataKind::stack_numeric_sizes, addr, width);
+    bool must_be_num = false;
     if (opt_val_reg && !rcp.types.is_initialized(*opt_val_reg)) {
         stack.havoc(rcp.values, DataKind::svalues, addr, width);
         stack.havoc(rcp.values, DataKind::uvalues, addr, width);
     } else {
         // opt_val_reg is unset when storing an immediate value.
-        const bool must_be_num = !opt_val_reg || rcp.types.type_is_number(*opt_val_reg);
+        must_be_num = !opt_val_reg || rcp.types.type_is_number(*opt_val_reg);
         const LinearExpression val_type =
             must_be_num ? LinearExpression{T_NUM} : variable_registry->type_reg(opt_val_reg->v);
         rcp.types.assign_type(stack.store_type(rcp.types, addr, width, must_be_num), val_type);
@@ -651,7 +652,7 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& rcp, const LinearExpressio
     // Update stack_numeric_size for any stack type variables.
     // stack_numeric_size holds the number of continuous bytes starting from stack_offset that are known to be numeric.
     for (const Variable type_variable : variable_registry->get_type_variables()) {
-        if (!rcp.types.may_have_type(type_variable, T_STACK)) {
+        if (!rcp.types.is_initialized(type_variable) || !rcp.types.may_have_type(type_variable, T_STACK)) {
             continue;
         }
         const Variable stack_offset_variable = variable_registry->kind_var(DataKind::stack_offsets, type_variable);
@@ -660,9 +661,12 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& rcp, const LinearExpressio
 
         using namespace dsl_syntax;
         // See if the variable's numeric interval overlaps with changed bytes.
-        if (m_inv.intersect(dsl_syntax::operator<=(symb_addr, stack_offset_variable + stack_numeric_size_variable)) &&
-            m_inv.intersect(dsl_syntax::operator>=(symb_addr + exact_width, stack_offset_variable))) {
-            m_inv.havoc(stack_numeric_size_variable);
+        if (rcp.values.intersect(
+                dsl_syntax::operator<=(symb_addr, stack_offset_variable + stack_numeric_size_variable)) &&
+            rcp.values.intersect(dsl_syntax::operator>=(symb_addr + exact_width, stack_offset_variable))) {
+            if (!must_be_num) {
+                rcp.values.havoc(stack_numeric_size_variable);
+            }
             recompute_stack_numeric_size(rcp, type_variable);
         }
     }
@@ -694,7 +698,7 @@ void EbpfTransformer::do_mem_store(const Mem& b, const LinearExpression& val_sva
     const Number offset{b.access.offset};
     if (b.access.basereg.v == R10_STACK_POINTER) {
         const auto r10_stack_offset = reg_pack(b.access.basereg).stack_offset;
-        const auto r10_interval = m_inv.eval_interval(r10_stack_offset);
+        const auto r10_interval = dom.rcp.values.eval_interval(r10_stack_offset);
         if (r10_interval.is_singleton()) {
             const int32_t stack_offset = r10_interval.singleton()->cast_to<int32_t>();
             const Number base_addr{stack_offset};
@@ -737,9 +741,9 @@ void EbpfTransformer::operator()(const Atomic& a) {
         // Shared memory regions are volatile so we can just havoc
         // any register that will be updated.
         if (a.op == Atomic::Op::CMPXCHG) {
-            havoc_register(m_inv, Reg{R0_RETURN_VALUE});
+            havoc_register(dom.rcp.values, Reg{R0_RETURN_VALUE});
         } else if (a.fetch) {
-            havoc_register(m_inv, a.valreg);
+            havoc_register(dom.rcp.values, a.valreg);
         }
         return;
     }
@@ -760,7 +764,7 @@ void EbpfTransformer::operator()(const Atomic& a) {
         // 2) dst.value != r0.value : don't modify R11
         // 3) dst.value may or may not == r0.value : set R11 to the union of R11 and valreg
         // For now we just havoc the value of R11.
-        havoc_register(m_inv, r11);
+        havoc_register(dom.rcp.values, r11);
     } else if (a.fetch) {
         // For other FETCH operations, store the original value in the src register.
         (*this)(Mem{.access = a.access, .value = a.valreg, .is_load = true});
@@ -772,7 +776,7 @@ void EbpfTransformer::operator()(const Atomic& a) {
     (*this)(Mem{.access = a.access, .value = r11, .is_load = false});
 
     // Clear the R11 pseudo-register.
-    havoc_register(m_inv, r11);
+    havoc_register(dom.rcp.values, r11);
     dom.rcp.types.havoc_type(r11);
 }
 
@@ -808,8 +812,8 @@ void EbpfTransformer::operator()(const Call& call) {
                 // checked by the checker
                 break;
             }
-            Interval addr = m_inv.eval_interval(variable.value());
-            Interval width = m_inv.eval_interval(reg_pack(param.size).svalue);
+            Interval addr = dom.rcp.values.eval_interval(variable.value());
+            Interval width = dom.rcp.values.eval_interval(reg_pack(param.size).svalue);
 
             dom.rcp = dom.rcp.join_over_types(param.mem, [&](TypeToNumDomain& rcp, const TypeEncoding type) {
                 if (type == T_STACK) {
@@ -836,7 +840,7 @@ void EbpfTransformer::operator()(const Call& call) {
 
     constexpr Reg r0_reg{R0_RETURN_VALUE};
     const auto r0_pack = reg_pack(r0_reg);
-    m_inv.havoc(r0_pack.stack_numeric_size);
+    dom.rcp.values.havoc(r0_pack.stack_numeric_size);
     if (call.is_map_lookup) {
         // This is the only way to get a null pointer
         if (maybe_fd_reg) {
@@ -848,21 +852,21 @@ void EbpfTransformer::operator()(const Call& call) {
                     }
                 } else {
                     assign_valid_ptr(r0_reg, true);
-                    m_inv.assign(r0_pack.shared_offset, 0);
-                    m_inv.set(r0_pack.shared_region_size, dom.get_map_value_size(*maybe_fd_reg));
+                    dom.rcp.values.assign(r0_pack.shared_offset, 0);
+                    dom.rcp.values.set(r0_pack.shared_region_size, dom.get_map_value_size(*maybe_fd_reg));
                     dom.rcp.types.assign_type(r0_reg, T_SHARED);
                 }
             }
         }
         assign_valid_ptr(r0_reg, true);
-        m_inv.assign(r0_pack.shared_offset, 0);
+        dom.rcp.values.assign(r0_pack.shared_offset, 0);
         dom.rcp.types.assign_type(r0_reg, T_SHARED);
     } else {
-        m_inv.havoc(r0_pack.svalue);
-        m_inv.havoc(r0_pack.uvalue);
+        dom.rcp.values.havoc(r0_pack.svalue);
+        dom.rcp.values.havoc(r0_pack.uvalue);
         havoc_offsets(r0_reg);
         dom.rcp.types.assign_type(r0_reg, T_NUM);
-        // m_inv.add_constraint(r0_pack.value < 0); for INTEGER_OR_NO_RETURN_IF_SUCCEED.
+        // dom.rcp.values.add_constraint(r0_pack.value < 0); for INTEGER_OR_NO_RETURN_IF_SUCCEED.
     }
 out:
     scratch_caller_saved_registers();
@@ -891,7 +895,7 @@ void EbpfTransformer::operator()(const Callx& callx) {
 
     // Look up the helper function id.
     const RegPack& reg = reg_pack(callx.func);
-    const auto src_interval = m_inv.eval_interval(reg.svalue);
+    const auto src_interval = dom.rcp.values.eval_interval(reg.svalue);
     if (const auto sn = src_interval.singleton()) {
         if (sn->fits<int32_t>()) {
             // We can now process it as if the id was immediate.
@@ -914,7 +918,7 @@ void EbpfTransformer::do_load_mapfd(const Reg& dst_reg, const int mapfd, const b
         dom.rcp.types.assign_type(dst_reg, T_MAP);
     }
     const RegPack& dst = reg_pack(dst_reg);
-    m_inv.assign(dst.map_fd, mapfd);
+    dom.rcp.values.assign(dst.map_fd, mapfd);
     assign_valid_ptr(dst_reg, maybe_null);
 }
 
@@ -936,8 +940,8 @@ void EbpfTransformer::do_load_map_address(const Reg& dst_reg, const int mapfd, c
     // Set the shared region size and offset for the map.
     dom.rcp.types.assign_type(dst_reg, T_SHARED);
     const RegPack& dst = reg_pack(dst_reg);
-    m_inv.assign(dst.shared_offset, offset);
-    m_inv.assign(dst.shared_region_size, desc.value_size);
+    dom.rcp.values.assign(dst.shared_offset, offset);
+    dom.rcp.values.assign(dst.shared_region_size, desc.value_size);
     assign_valid_ptr(dst_reg, false);
 }
 
@@ -951,15 +955,15 @@ void EbpfTransformer::operator()(const LoadMapAddress& ins) {
 void EbpfTransformer::assign_valid_ptr(const Reg& dst_reg, const bool maybe_null) {
     using namespace dsl_syntax;
     const RegPack& reg = reg_pack(dst_reg);
-    m_inv.havoc(reg.svalue);
-    m_inv.havoc(reg.uvalue);
+    dom.rcp.values.havoc(reg.svalue);
+    dom.rcp.values.havoc(reg.uvalue);
     if (maybe_null) {
-        m_inv.add_constraint(0 <= reg.svalue);
+        dom.rcp.values.add_constraint(0 <= reg.svalue);
     } else {
-        m_inv.add_constraint(0 < reg.svalue);
+        dom.rcp.values.add_constraint(0 < reg.svalue);
     }
-    m_inv.add_constraint(reg.svalue <= PTR_MAX);
-    m_inv.assign(reg.uvalue, reg.svalue);
+    dom.rcp.values.add_constraint(reg.svalue <= PTR_MAX);
+    dom.rcp.values.assign(reg.uvalue, reg.svalue);
 }
 
 // If nothing is known of the stack_numeric_size,
@@ -987,15 +991,15 @@ void EbpfTransformer::recompute_stack_numeric_size(TypeToNumDomain& rcp, const R
 
 void EbpfTransformer::add(const Reg& dst_reg, const int imm, const int finite_width) {
     const auto dst = reg_pack(dst_reg);
-    m_inv->add_overflow(dst.svalue, dst.uvalue, imm, finite_width);
+    dom.rcp.values->add_overflow(dst.svalue, dst.uvalue, imm, finite_width);
     if (const auto offset = dom.get_type_offset_variable(dst_reg)) {
-        m_inv->add(*offset, imm);
+        dom.rcp.values->add(*offset, imm);
         if (imm > 0) {
             // Since the start offset is increasing but
             // the end offset is not, the numeric size decreases.
-            m_inv->sub(dst.stack_numeric_size, imm);
+            dom.rcp.values->sub(dst.stack_numeric_size, imm);
         } else if (imm < 0) {
-            m_inv.havoc(dst.stack_numeric_size);
+            dom.rcp.values.havoc(dst.stack_numeric_size);
         }
         recompute_stack_numeric_size(dom.rcp, dst_reg);
     }
@@ -1008,10 +1012,10 @@ void EbpfTransformer::shl(const Reg& dst_reg, int imm, const int finite_width) {
     imm &= finite_width - 1;
     const RegPack dst = reg_pack(dst_reg);
     if (dom.rcp.types.type_is_number(dst_reg)) {
-        m_inv->shl(dst.svalue, dst.uvalue, imm, finite_width);
+        dom.rcp.values->shl(dst.svalue, dst.uvalue, imm, finite_width);
     } else {
-        m_inv.havoc(dst.svalue);
-        m_inv.havoc(dst.uvalue);
+        dom.rcp.values.havoc(dst.svalue);
+        dom.rcp.values.havoc(dst.uvalue);
     }
 }
 
@@ -1022,10 +1026,10 @@ void EbpfTransformer::lshr(const Reg& dst_reg, int imm, int finite_width) {
     imm &= finite_width - 1;
     const RegPack dst = reg_pack(dst_reg);
     if (dom.rcp.types.type_is_number(dst_reg)) {
-        m_inv->lshr(dst.svalue, dst.uvalue, imm, finite_width);
+        dom.rcp.values->lshr(dst.svalue, dst.uvalue, imm, finite_width);
     } else {
-        m_inv.havoc(dst.svalue);
-        m_inv.havoc(dst.uvalue);
+        dom.rcp.values.havoc(dst.svalue);
+        dom.rcp.values.havoc(dst.uvalue);
     }
 }
 
@@ -1034,10 +1038,10 @@ void EbpfTransformer::ashr(const Reg& dst_reg, const LinearExpression& right_sva
 
     const RegPack dst = reg_pack(dst_reg);
     if (dom.rcp.types.type_is_number(dst_reg)) {
-        m_inv->ashr(dst.svalue, dst.uvalue, right_svalue, finite_width);
+        dom.rcp.values->ashr(dst.svalue, dst.uvalue, right_svalue, finite_width);
     } else {
-        m_inv.havoc(dst.svalue);
-        m_inv.havoc(dst.uvalue);
+        dom.rcp.values.havoc(dst.svalue);
+        dom.rcp.values.havoc(dst.uvalue);
     }
 }
 
@@ -1048,7 +1052,7 @@ void EbpfTransformer::sign_extend(const Reg& dst_reg, const LinearExpression& ri
     dom.rcp.types.assign_type(dst_reg, T_NUM);
 
     const RegPack dst = reg_pack(dst_reg);
-    m_inv->sign_extend(dst.svalue, dst.uvalue, right_svalue, target_width, source_width);
+    dom.rcp.values->sign_extend(dst.svalue, dst.uvalue, right_svalue, target_width, source_width);
 }
 
 static int _movsx_bits(const Bin::Op op) {
@@ -1073,7 +1077,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
     //       Probably by propagating an error state.
     if (!dom.rcp.types.is_initialized(bin.dst) &&
         !std::set{Bin::Op::MOV, Bin::Op::MOVSX8, Bin::Op::MOVSX16, Bin::Op::MOVSX32}.contains(bin.op)) {
-        havoc_register(m_inv, bin.dst);
+        havoc_register(dom.rcp.values, bin.dst);
         dom.rcp.types.havoc_type(bin.dst);
         return;
     }
@@ -1089,18 +1093,18 @@ void EbpfTransformer::operator()(const Bin& bin) {
             // If this is a 32-bit operation and the destination is not proven a number, forget the register.
             if (dom.rcp.types.type_is_number(bin.dst)) {
                 // Safe to zero-extend the low 32 bits; even if it's also bin.src, only the 32-bit value is used.
-                m_inv->bitwise_and(dst.svalue, dst.uvalue, std::numeric_limits<uint32_t>::max());
+                dom.rcp.values->bitwise_and(dst.svalue, dst.uvalue, std::numeric_limits<uint32_t>::max());
             } else {
-                havoc_register(m_inv, bin.dst);
+                havoc_register(dom.rcp.values, bin.dst);
                 havoc_offsets(bin.dst);
                 dom.rcp.types.havoc_type(bin.dst);
             }
         }
         switch (bin.op) {
         case Bin::Op::MOV:
-            m_inv.assign(dst.svalue, imm);
-            m_inv.assign(dst.uvalue, imm);
-            m_inv->overflow_bounds(dst.uvalue, bin.is64 ? 64 : 32, false);
+            dom.rcp.values.assign(dst.svalue, imm);
+            dom.rcp.values.assign(dst.uvalue, imm);
+            dom.rcp.values->overflow_bounds(dst.uvalue, bin.is64 ? 64 : 32, false);
             dom.rcp.types.assign_type(bin.dst, T_NUM);
             havoc_offsets(bin.dst);
             break;
@@ -1120,38 +1124,38 @@ void EbpfTransformer::operator()(const Bin& bin) {
             add(bin.dst, gsl::narrow<int>(-imm), finite_width);
             break;
         case Bin::Op::MUL:
-            m_inv->mul(dst.svalue, dst.uvalue, imm, finite_width);
+            dom.rcp.values->mul(dst.svalue, dst.uvalue, imm, finite_width);
             havoc_offsets(bin.dst);
             break;
         case Bin::Op::UDIV:
-            m_inv->udiv(dst.svalue, dst.uvalue, imm, finite_width);
+            dom.rcp.values->udiv(dst.svalue, dst.uvalue, imm, finite_width);
             havoc_offsets(bin.dst);
             break;
         case Bin::Op::UMOD:
-            m_inv->urem(dst.svalue, dst.uvalue, imm, finite_width);
+            dom.rcp.values->urem(dst.svalue, dst.uvalue, imm, finite_width);
             havoc_offsets(bin.dst);
             break;
         case Bin::Op::SDIV:
-            m_inv->sdiv(dst.svalue, dst.uvalue, imm, finite_width);
+            dom.rcp.values->sdiv(dst.svalue, dst.uvalue, imm, finite_width);
             havoc_offsets(bin.dst);
             break;
         case Bin::Op::SMOD:
-            m_inv->srem(dst.svalue, dst.uvalue, imm, finite_width);
+            dom.rcp.values->srem(dst.svalue, dst.uvalue, imm, finite_width);
             havoc_offsets(bin.dst);
             break;
         case Bin::Op::OR:
-            m_inv->bitwise_or(dst.svalue, dst.uvalue, imm);
+            dom.rcp.values->bitwise_or(dst.svalue, dst.uvalue, imm);
             havoc_offsets(bin.dst);
             break;
         case Bin::Op::AND:
             // FIX: what to do with ptr&-8 as in counter/simple_loop_unrolled?
-            m_inv->bitwise_and(dst.svalue, dst.uvalue, imm);
+            dom.rcp.values->bitwise_and(dst.svalue, dst.uvalue, imm);
             if (gsl::narrow<int32_t>(imm) > 0) {
                 // AND with immediate is only a 32-bit operation so svalue and uvalue are the same.
-                m_inv.add_constraint(dst.svalue <= imm);
-                m_inv.add_constraint(dst.uvalue <= imm);
-                m_inv.add_constraint(0 <= dst.svalue);
-                m_inv.add_constraint(0 <= dst.uvalue);
+                dom.rcp.values.add_constraint(dst.svalue <= imm);
+                dom.rcp.values.add_constraint(dst.uvalue <= imm);
+                dom.rcp.values.add_constraint(0 <= dst.svalue);
+                dom.rcp.values.add_constraint(0 <= dst.uvalue);
             }
             havoc_offsets(bin.dst);
             break;
@@ -1159,7 +1163,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
         case Bin::Op::RSH: lshr(bin.dst, gsl::narrow<int32_t>(imm), finite_width); break;
         case Bin::Op::ARSH: ashr(bin.dst, gsl::narrow<int32_t>(imm), finite_width); break;
         case Bin::Op::XOR:
-            m_inv->bitwise_xor(dst.svalue, dst.uvalue, imm);
+            dom.rcp.values->bitwise_xor(dst.svalue, dst.uvalue, imm);
             havoc_offsets(bin.dst);
             break;
         }
@@ -1168,7 +1172,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
         auto src_reg = std::get<Reg>(bin.v);
         auto src = reg_pack(src_reg);
         if (!dom.rcp.types.is_initialized(src_reg)) {
-            havoc_register(m_inv, bin.dst);
+            havoc_register(dom.rcp.values, bin.dst);
             dom.rcp.types.havoc_type(bin.dst);
             return;
         }
@@ -1176,7 +1180,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
         case Bin::Op::ADD: {
             if (dom.rcp.types.same_type(bin.dst, std::get<Reg>(bin.v))) {
                 // both must have been checked to be numbers
-                m_inv->add_overflow(dst.svalue, dst.uvalue, src.svalue, finite_width);
+                dom.rcp.values->add_overflow(dst.svalue, dst.uvalue, src.svalue, finite_width);
             } else {
                 // Here we're not sure that lhs and rhs are the same type; they might be.
                 // But previous assertions should fail unless we know that exactly one of lhs or rhs is a pointer.
@@ -1224,7 +1228,8 @@ void EbpfTransformer::operator()(const Bin& bin) {
                     });
                 });
                 // careful: change dst.value only after dealing with offset
-                m_inv->apply_signed(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.svalue, src.svalue, finite_width);
+                dom.rcp.values->apply_signed(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.svalue, src.svalue,
+                                             finite_width);
             }
             break;
         }
@@ -1258,94 +1263,94 @@ void EbpfTransformer::operator()(const Bin& bin) {
                 // We're not sure that lhs and rhs are the same type.
                 // Either they're different, or at least one is not a singleton.
                 if (dom.rcp.types.type_is_number(std::get<Reg>(bin.v))) {
-                    m_inv->sub_overflow(dst.svalue, dst.uvalue, src.svalue, finite_width);
+                    dom.rcp.values->sub_overflow(dst.svalue, dst.uvalue, src.svalue, finite_width);
                     if (auto dst_offset = dom.get_type_offset_variable(bin.dst)) {
-                        m_inv->sub(dst_offset.value(), src.svalue);
+                        dom.rcp.values->sub(dst_offset.value(), src.svalue);
                         if (dom.rcp.types.may_have_type(bin.dst, T_STACK)) {
                             // Reduce the numeric size.
                             using namespace dsl_syntax;
-                            if (m_inv.intersect(src.svalue > 0)) {
-                                m_inv.havoc(dst.stack_numeric_size);
+                            if (dom.rcp.values.intersect(src.svalue > 0)) {
+                                dom.rcp.values.havoc(dst.stack_numeric_size);
                                 recompute_stack_numeric_size(dom.rcp, bin.dst);
                             } else {
-                                m_inv->apply(ArithBinOp::ADD, dst.stack_numeric_size, dst.stack_numeric_size,
-                                             src.svalue);
+                                dom.rcp.values->apply(ArithBinOp::ADD, dst.stack_numeric_size, dst.stack_numeric_size,
+                                                      src.svalue);
                             }
                         }
                     }
                 } else {
                     dom.rcp.types.havoc_type(bin.dst);
-                    m_inv.havoc(dst.svalue);
-                    m_inv.havoc(dst.uvalue);
+                    dom.rcp.values.havoc(dst.svalue);
+                    dom.rcp.values.havoc(dst.uvalue);
                     havoc_offsets(bin.dst);
                 }
             }
             break;
         }
         case Bin::Op::MUL:
-            m_inv->mul(dst.svalue, dst.uvalue, src.svalue, finite_width);
+            dom.rcp.values->mul(dst.svalue, dst.uvalue, src.svalue, finite_width);
             havoc_offsets(bin.dst);
             break;
         case Bin::Op::UDIV:
-            m_inv->udiv(dst.svalue, dst.uvalue, src.uvalue, finite_width);
+            dom.rcp.values->udiv(dst.svalue, dst.uvalue, src.uvalue, finite_width);
             havoc_offsets(bin.dst);
             break;
         case Bin::Op::UMOD:
-            m_inv->urem(dst.svalue, dst.uvalue, src.uvalue, finite_width);
+            dom.rcp.values->urem(dst.svalue, dst.uvalue, src.uvalue, finite_width);
             havoc_offsets(bin.dst);
             break;
         case Bin::Op::SDIV:
-            m_inv->sdiv(dst.svalue, dst.uvalue, src.svalue, finite_width);
+            dom.rcp.values->sdiv(dst.svalue, dst.uvalue, src.svalue, finite_width);
             havoc_offsets(bin.dst);
             break;
         case Bin::Op::SMOD:
-            m_inv->srem(dst.svalue, dst.uvalue, src.svalue, finite_width);
+            dom.rcp.values->srem(dst.svalue, dst.uvalue, src.svalue, finite_width);
             havoc_offsets(bin.dst);
             break;
         case Bin::Op::OR:
-            m_inv->bitwise_or(dst.svalue, dst.uvalue, src.uvalue, finite_width);
+            dom.rcp.values->bitwise_or(dst.svalue, dst.uvalue, src.uvalue, finite_width);
             havoc_offsets(bin.dst);
             break;
         case Bin::Op::AND:
-            m_inv->bitwise_and(dst.svalue, dst.uvalue, src.uvalue, finite_width);
+            dom.rcp.values->bitwise_and(dst.svalue, dst.uvalue, src.uvalue, finite_width);
             havoc_offsets(bin.dst);
             break;
         case Bin::Op::LSH:
             if (dom.rcp.types.type_is_number(src_reg)) {
-                auto src_interval = m_inv.eval_interval(src.uvalue);
+                auto src_interval = dom.rcp.values.eval_interval(src.uvalue);
                 if (std::optional<Number> sn = src_interval.singleton()) {
                     // truncate to uint64?
                     uint64_t imm = sn->cast_to<uint64_t>() & (bin.is64 ? 63 : 31);
                     if (imm <= std::numeric_limits<int32_t>::max()) {
                         if (!bin.is64) {
                             // Use only the low 32 bits of the value.
-                            m_inv->bitwise_and(dst.svalue, dst.uvalue, std::numeric_limits<uint32_t>::max());
+                            dom.rcp.values->bitwise_and(dst.svalue, dst.uvalue, std::numeric_limits<uint32_t>::max());
                         }
                         shl(bin.dst, gsl::narrow_cast<int32_t>(imm), finite_width);
                         break;
                     }
                 }
             }
-            m_inv->shl_overflow(dst.svalue, dst.uvalue, src.uvalue);
+            dom.rcp.values->shl_overflow(dst.svalue, dst.uvalue, src.uvalue);
             havoc_offsets(bin.dst);
             break;
         case Bin::Op::RSH:
             if (dom.rcp.types.type_is_number(src_reg)) {
-                auto src_interval = m_inv.eval_interval(src.uvalue);
+                auto src_interval = dom.rcp.values.eval_interval(src.uvalue);
                 if (std::optional<Number> sn = src_interval.singleton()) {
                     uint64_t imm = sn->cast_to<uint64_t>() & (bin.is64 ? 63 : 31);
                     if (imm <= std::numeric_limits<int32_t>::max()) {
                         if (!bin.is64) {
                             // Use only the low 32 bits of the value.
-                            m_inv->bitwise_and(dst.svalue, dst.uvalue, std::numeric_limits<uint32_t>::max());
+                            dom.rcp.values->bitwise_and(dst.svalue, dst.uvalue, std::numeric_limits<uint32_t>::max());
                         }
                         lshr(bin.dst, gsl::narrow_cast<int32_t>(imm), finite_width);
                         break;
                     }
                 }
             }
-            m_inv.havoc(dst.svalue);
-            m_inv.havoc(dst.uvalue);
+            dom.rcp.values.havoc(dst.svalue);
+            dom.rcp.values.havoc(dst.uvalue);
             havoc_offsets(bin.dst);
             break;
         case Bin::Op::ARSH:
@@ -1353,12 +1358,12 @@ void EbpfTransformer::operator()(const Bin& bin) {
                 ashr(bin.dst, src.svalue, finite_width);
                 break;
             }
-            m_inv.havoc(dst.svalue);
-            m_inv.havoc(dst.uvalue);
+            dom.rcp.values.havoc(dst.svalue);
+            dom.rcp.values.havoc(dst.uvalue);
             havoc_offsets(bin.dst);
             break;
         case Bin::Op::XOR:
-            m_inv->bitwise_xor(dst.svalue, dst.uvalue, src.uvalue, finite_width);
+            dom.rcp.values->bitwise_xor(dst.svalue, dst.uvalue, src.uvalue, finite_width);
             havoc_offsets(bin.dst);
             break;
         case Bin::Op::MOVSX8:
@@ -1366,15 +1371,16 @@ void EbpfTransformer::operator()(const Bin& bin) {
         case Bin::Op::MOVSX32: {
             const int source_width = _movsx_bits(bin.op);
             // Keep relational information if operation is a no-op.
-            if (dst.svalue == src.svalue && m_inv.eval_interval(dst.svalue) <= Interval::signed_int(source_width)) {
+            if (dst.svalue == src.svalue &&
+                dom.rcp.values.eval_interval(dst.svalue) <= Interval::signed_int(source_width)) {
                 return;
             }
             if (dom.rcp.types.type_is_number(src_reg)) {
                 sign_extend(bin.dst, src.svalue, finite_width, source_width);
                 break;
             }
-            m_inv.havoc(dst.svalue);
-            m_inv.havoc(dst.uvalue);
+            dom.rcp.values.havoc(dst.svalue);
+            dom.rcp.values.havoc(dst.uvalue);
             havoc_offsets(bin.dst);
             break;
         }
@@ -1387,19 +1393,19 @@ void EbpfTransformer::operator()(const Bin& bin) {
                 }
             } else {
                 // If src is not a number, we don't know how to truncate a pointer.
-                havoc_register(m_inv, bin.dst);
+                havoc_register(dom.rcp.values, bin.dst);
                 dom.rcp.types.havoc_type(bin.dst);
             }
             break;
         }
     }
     if (!bin.is64) {
-        m_inv->bitwise_and(dst.svalue, dst.uvalue, std::numeric_limits<uint32_t>::max());
+        dom.rcp.values->bitwise_and(dst.svalue, dst.uvalue, std::numeric_limits<uint32_t>::max());
     }
 }
 
 void EbpfTransformer::initialize_loop_counter(const Label& label) {
-    m_inv.assign(variable_registry->loop_counter(to_string(label)), 0);
+    dom.rcp.values.assign(variable_registry->loop_counter(to_string(label)), 0);
 }
 
 void EbpfTransformer::operator()(const IncrementLoopCounter& ins) {
@@ -1407,7 +1413,7 @@ void EbpfTransformer::operator()(const IncrementLoopCounter& ins) {
         return;
     }
     const auto counter = variable_registry->loop_counter(to_string(ins.name));
-    m_inv->add(counter, 1);
+    dom.rcp.values->add(counter, 1);
 }
 
 void ebpf_domain_initialize_loop_counter(EbpfDomain& dom, const Label& label) {
