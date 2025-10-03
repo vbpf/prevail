@@ -359,6 +359,58 @@ post:
   - r10.stack_offset=512
   - s[505...511].type=number
 ---
+test-case: havoc numeric size r6
+
+pre: ["r2.type=stack", "r2.stack_offset=504", "r2.stack_numeric_size=8",
+      "r6.type=stack", "r6.stack_offset=506", "r3.type in {ctx,packet}",
+      "s[504...511].type=number"]
+
+code:
+  <start>: |
+    *(u64 *)(r6 - 8) = r3 ; this should force r2.stack_numeric_size to become 0
+
+post:
+  - r2.type=stack
+  - r2.stack_offset=504
+  - s[498...505].type=r3.type
+  - s[498...505].ctx_offset=r3.ctx_offset
+  - s[498...505].packet_offset=r3.packet_offset
+  - s[498...505].svalue=r3.svalue
+  - s[498...505].uvalue=r3.uvalue
+  - s[506...511].type=number
+  - r3.type in {ctx, packet}
+  - r6.type=stack
+  - r6.stack_offset=506
+  - r6.stack_numeric_size=6
+---
+test-case: stack_numeric_size facts persist across 4-byte store
+
+pre: ["r1.type=stack",
+      "r1.stack_offset=[4032, 4088]",
+      "r1.stack_numeric_size=[-24, 4]",
+      "r7.type=stack",
+      "r7.stack_offset=[4032, 4060]",
+      "r7.stack_numeric_size=4",
+      "r2.type=number", "r2.svalue=0", "r2.uvalue=0"]
+
+code:
+  <start>: |
+    *(u32 *)(r1 + 0) = r2
+
+post:
+  # whitelist stable facts
+  - r1.type=stack
+  - r1.stack_offset=[4032, 4088]
+  - r7.type=stack
+  - r7.stack_offset=[4032, 4060]
+  - r2.type=number
+  - r2.svalue=0
+  - r2.uvalue=0
+
+  # numeric-size descriptors must remain
+  - r7.stack_numeric_size=4
+  - r1.stack_numeric_size=[-24, 4]
+---
 test-case: shorten numeric size from int64* to int32*
 
 pre: ["r2.type=stack", "r2.stack_offset=504", "r2.stack_numeric_size=8",
@@ -671,7 +723,7 @@ post:
 ---
 test-case: stack store 64bit through r6 records number type
 
-pre: ["r6.type=stack",  "r6.stack_offset=0",
+pre: ["r6.type=stack", "r6.stack_offset=0",
       "r1.type=number", "r1.svalue=0", "r1.uvalue=0"]
 
 code:
@@ -691,7 +743,7 @@ post:
 ---
 test-case: stack store 32bit records number type
 
-pre: ["r6.type=stack",  "r6.stack_offset=0",
+pre: ["r6.type=stack", "r6.stack_offset=0",
       "r1.type=number", "r1.svalue=0", "r1.uvalue=0"]
 
 code:
@@ -708,3 +760,18 @@ post:
   - s[0...3].type=number
   - s[0...3].svalue=0
   - s[0...3].uvalue=0
+---
+test-case: stack window - negative lower bound allows aligned read
+pre: ["r7.type=stack",
+      "r7.stack_offset=[4032, 4092]",
+      "r7.svalue=r7.stack_offset", "r7.uvalue=r7.stack_offset",
+      "r7.stack_numeric_size=[-16, 12]",
+      "r10.type=stack", "r10.stack_offset=4096"]
+code:
+  <start>: |
+    r0 = *(u32 *)(r7 + 0)
+post:
+  - r7.type=stack
+  - r7.stack_offset=[4032, 4092]
+  - r7.stack_numeric_size=[-16, 12]
+  - r0.type=number
