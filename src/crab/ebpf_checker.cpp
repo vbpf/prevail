@@ -361,21 +361,18 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             auto [lb, ub] = lb_ub_access_pair(s, reg.stack_offset);
             check_access_stack(rcp.values, lb, ub);
             // if within bounds, it can never be null
-            if (s.access_type == AccessType::read) {
-                // Require that the stack range contains numbers.
-                if (!stack.all_num(rcp.values.eval_interval(lb), rcp.values.eval_interval(ub - lb))) {
-                    if (s.offset < 0) {
-                        require("Stack content is not numeric");
-                    } else if (const auto pimm = std::get_if<Imm>(&s.width)) {
-                        if (!rcp.values.entail(gsl::narrow<int>(pimm->v) <= reg.stack_numeric_size - s.offset)) {
-                            require("Stack content is not numeric");
-                        }
-                    } else {
-                        if (!rcp.values.entail(reg_pack(std::get<Reg>(s.width)).svalue <=
-                                               reg.stack_numeric_size - s.offset)) {
-                            require("Stack content is not numeric");
-                        }
-                    }
+            if (s.access_type == AccessType::read &&
+                !stack.all_num(rcp.values.eval_interval(lb), rcp.values.eval_interval(ub - lb))) {
+
+                if (s.offset < 0) {
+                    require("Stack content is not numeric");
+                } else {
+                    using namespace dsl_syntax;
+                    LinearExpression w = std::holds_alternative<Imm>(s.width)
+                                             ? LinearExpression{std::get<Imm>(s.width).v}
+                                             : reg_pack(std::get<Reg>(s.width)).svalue;
+
+                    require(rcp.values, w <= reg.stack_numeric_size - s.offset, "Stack content is not numeric");
                 }
             }
             break;
