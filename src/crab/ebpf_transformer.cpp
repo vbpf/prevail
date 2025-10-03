@@ -972,10 +972,6 @@ void EbpfTransformer::recompute_stack_numeric_size(TypeToNumDomain& rcp, const V
     const Variable stack_numeric_size_variable =
         variable_registry->kind_var(DataKind::stack_numeric_sizes, type_variable);
 
-    if (!rcp.values.eval_interval(stack_numeric_size_variable).is_top()) {
-        return;
-    }
-
     if (rcp.types.may_have_type(type_variable, T_STACK)) {
         const int numeric_size =
             stack.min_all_num_size(rcp.values, variable_registry->kind_var(DataKind::stack_offsets, type_variable));
