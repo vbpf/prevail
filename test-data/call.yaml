@@ -3,9 +3,9 @@
 ---
 test-case: bpf_map_lookup_elem
 
-pre: [ "r1.type=map_fd", "r1.map_fd=1",
-       "r2.type=stack", "r2.stack_offset=504",
-       "s[504...511].type=number" ]
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=stack", "r2.stack_offset=504",
+      "s[504...511].type=number"]
 
 code:
   <start>: |
@@ -21,8 +21,8 @@ post:
 ---
 test-case: bpf_map_lookup_elem shared key
 
-pre: [ "r1.type=map_fd", "r1.map_fd=1",
-       "r2.type=shared", "r2.shared_offset=0", "r2.shared_region_size=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=[1, 2147418112]" ]
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=shared", "r2.shared_offset=0", "r2.shared_region_size=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=[1, 2147418112]"]
 
 code:
   <start>: |
@@ -37,9 +37,9 @@ post:
 ---
 test-case: bpf_map_lookup_elem packet key
 
-pre: [ "meta_offset=0",
-       "r1.type=map_fd", "r1.map_fd=1",
-       "r2.type=packet", "r2.packet_offset=0", "packet_size=4" ]
+pre: ["meta_offset=0",
+      "r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=packet", "r2.packet_offset=0", "packet_size=4"]
 
 code:
   <start>: |
@@ -56,8 +56,8 @@ post:
 ---
 test-case: bpf_map_lookup_elem shared key - maybe null
 
-pre: [ "r1.type=map_fd", "r1.map_fd=1",
-       "r2.type=shared", "r2.shared_offset=0", "r2.shared_region_size=4", "r2.svalue=[0, 2147418112]", "r2.uvalue=[0, 2147418112]" ]
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=shared", "r2.shared_offset=0", "r2.shared_region_size=4", "r2.svalue=[0, 2147418112]", "r2.uvalue=[0, 2147418112]"]
 
 code:
   <start>: |
@@ -76,8 +76,8 @@ messages:
 ---
 test-case: bpf_map_lookup_elem shared key - too small
 
-pre: [ "r1.type=map_fd", "r1.map_fd=1",
-       "r2.type=shared", "r2.shared_offset=0", "r2.shared_region_size=2", "r2.svalue=[1, 2147418112]", "r2.uvalue=[1, 2147418112]" ]
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=shared", "r2.shared_offset=0", "r2.shared_region_size=2", "r2.svalue=[1, 2147418112]", "r2.uvalue=[1, 2147418112]"]
 
 code:
   <start>: |
@@ -95,8 +95,8 @@ messages:
 ---
 test-case: bpf_map_lookup_elem shared key - too small
 
-pre: [ "r1.type=map_fd", "r1.map_fd=1",
-       "r2.type=shared", "r2.shared_offset=-2", "r2.shared_region_size=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=[1, 2147418112]" ]
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=shared", "r2.shared_offset=-2", "r2.shared_region_size=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=[1, 2147418112]"]
 
 code:
   <start>: |
@@ -114,8 +114,8 @@ messages:
 ---
 test-case: bpf_map_lookup_elem with non-numeric stack key
 
-pre: [ "r1.type=map_fd", "r1.map_fd=1",
-       "r2.type=stack" ]
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=stack"]
 
 code:
   <start>: |
@@ -133,11 +133,11 @@ messages:
 ---
 test-case: bpf_map_update_elem with numeric stack value
 
-pre: [ "r1.type=map_fd", "r1.map_fd=1",
-       "r2.type=stack", "r2.stack_offset=504",
-       "r3.type=stack", "r3.stack_offset=496",
-       "r4.type=number",
-       "s[496...511].type=number" ]
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=stack", "r2.stack_offset=504",
+      "r3.type=stack", "r3.stack_offset=496",
+      "r4.type=number",
+      "s[496...511].type=number"]
 
 code:
   <start>: |
@@ -150,11 +150,11 @@ post:
 ---
 test-case: bpf_map_update_elem with shared value
 
-pre: [ "r1.type=map_fd", "r1.map_fd=1",
-       "r2.type=stack", "r2.stack_offset=504",
-       "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=4", "r3.svalue=[1, 2147418112]", "r3.uvalue=[1, 2147418112]",
-       "r4.type=number",
-       "s[496...511].type=number" ]
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=stack", "r2.stack_offset=504",
+      "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=4", "r3.svalue=[1, 2147418112]", "r3.uvalue=[1, 2147418112]",
+      "r4.type=number",
+      "s[496...511].type=number"]
 
 code:
   <start>: |
@@ -167,11 +167,11 @@ post:
 ---
 test-case: bpf_map_update_elem with shared value too small
 
-pre: [ "r1.type=map_fd", "r1.map_fd=1",
-       "r2.type=stack", "r2.stack_offset=504",
-       "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=2", "r3.svalue=[1, 2147418112]", "r3.uvalue=[1, 2147418112]",
-       "r4.type=number",
-       "s[496...511].type=number" ]
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=stack", "r2.stack_offset=504",
+      "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=2", "r3.svalue=[1, 2147418112]", "r3.uvalue=[1, 2147418112]",
+      "r4.type=number",
+      "s[496...511].type=number"]
 
 code:
   <start>: |
@@ -187,11 +187,11 @@ messages:
 ---
 test-case: bpf_map_update_elem with shared value larger than target region
 
-pre: [ "r1.type=map_fd", "r1.map_fd=1",
-       "r2.type=stack", "r2.stack_offset=504",
-       "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=64", "r3.svalue=[1, 2147418112]", "r3.uvalue=[1, 2147418112]",
-       "r4.type=number",
-       "s[496...511].type=number" ]
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=stack", "r2.stack_offset=504",
+      "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=64", "r3.svalue=[1, 2147418112]", "r3.uvalue=[1, 2147418112]",
+      "r4.type=number",
+      "s[496...511].type=number"]
 
 code:
   <start>: |
@@ -204,11 +204,11 @@ post:
 ---
 test-case: bpf_map_update_elem with shared value may be null
 
-pre: [ "r1.type=map_fd", "r1.map_fd=1",
-       "r2.type=stack", "r2.stack_offset=504",
-       "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=4", "r3.svalue=[0, 2147418112]", "r3.uvalue=[0, 2147418112]",
-       "r4.type=number",
-       "s[496...511].type=number" ]
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=stack", "r2.stack_offset=504",
+      "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=4", "r3.svalue=[0, 2147418112]", "r3.uvalue=[0, 2147418112]",
+      "r4.type=number",
+      "s[496...511].type=number"]
 
 code:
   <start>: |
@@ -224,12 +224,12 @@ messages:
 ---
 test-case: bpf_map_update_elem with packet value
 
-pre: [ "meta_offset=0",
-       "r1.type=map_fd", "r1.map_fd=1",
-       "r2.type=stack", "r2.stack_offset=504",
-       "r3.type=packet", "r3.packet_offset=0", "packet_size=4",
-       "r4.type=number",
-       "s[496...511].type=number" ]
+pre: ["meta_offset=0",
+      "r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=stack", "r2.stack_offset=504",
+      "r3.type=packet", "r3.packet_offset=0", "packet_size=4",
+      "r4.type=number",
+      "s[496...511].type=number"]
 
 code:
   <start>: |
@@ -244,11 +244,11 @@ post:
 ---
 test-case: bpf_map_update_elem with non-numeric stack value
 
-pre: [ "r1.type=map_fd", "r1.map_fd=1",
-       "r2.type=stack", "r2.stack_offset=504",
-       "r3.type=stack", "r3.stack_offset=496",
-       "r4.type=number",
-       "s[504...511].type=number" ]
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=stack", "r2.stack_offset=504",
+      "r3.type=stack", "r3.stack_offset=496",
+      "r4.type=number",
+      "s[504...511].type=number"]
 
 code:
   <start>: |
@@ -263,11 +263,11 @@ messages:
 ---
 test-case: bpf_map_update_elem with context value
 
-pre: [ "r1.type=map_fd", "r1.map_fd=1",
-       "r2.type=stack", "r2.stack_offset=504",
-       "r3.type=ctx", "r3.ctx_offset=0",
-       "r4.type=number",
-       "s[504...511].type=number" ]
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=stack", "r2.stack_offset=504",
+      "r3.type=ctx", "r3.ctx_offset=0",
+      "r4.type=number",
+      "s[504...511].type=number"]
 
 code:
   <start>: |
@@ -283,12 +283,12 @@ messages:
 ---
 test-case: bpf_ringbuf_output with numeric stack value
 
-pre: [ "r1.type=map_fd", "r1.map_fd=1",
-       "r2.type=stack", "r2.stack_offset=504",
-       "r3.type=number", "r3.svalue=8", "r3.uvalue=8",
-       "r4.type=number",
-       "r10.type=stack", "r10.stack_offset=512",
-       "s[504...511].type=number" ]
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=stack", "r2.stack_offset=504",
+      "r3.type=number", "r3.svalue=8", "r3.uvalue=8",
+      "r4.type=number",
+      "r10.type=stack", "r10.stack_offset=512",
+      "s[504...511].type=number"]
 
 code:
   <start>: |
@@ -302,11 +302,11 @@ post:
 ---
 test-case: bpf_ringbuf_output with non-numeric stack value
 
-pre: [ "r1.type=map_fd", "r1.map_fd=1",
-       "r2.type=stack", "r2.stack_offset=504",
-       "r3.type=number", "r3.svalue=8", "r3.uvalue=8",
-       "r4.type=number",
-       "r10.type=stack", "r10.stack_offset=512" ]
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=stack", "r2.stack_offset=504",
+      "r3.type=number", "r3.svalue=8", "r3.uvalue=8",
+      "r4.type=number",
+      "r10.type=stack", "r10.stack_offset=512"]
 
 code:
   <start>: |
@@ -322,11 +322,11 @@ messages:
 ---
 test-case: bpf_ringbuf_output with context value
 
-pre: [ "r1.type=map_fd", "r1.map_fd=1",
-       "r2.type=ctx", "r2.ctx_offset=0",
-       "r3.type=number", "r3.svalue=8", "r3.uvalue=8",
-       "r4.type=number",
-       "s[504...511].type=number" ]
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=ctx", "r2.ctx_offset=0",
+      "r3.type=number", "r3.svalue=8", "r3.uvalue=8",
+      "r4.type=number",
+      "s[504...511].type=number"]
 
 code:
   <start>: |
@@ -341,11 +341,11 @@ messages:
 ---
 test-case: bpf_get_stack simple
 
-pre: [ "r1.type=ctx", "r1.ctx_offset=0",
-       "r2.type=stack", "r2.stack_offset=504",
-       "r3.type=number", "r3.svalue=8", "r3.uvalue=8",
-       "r4.type=number",
-       "r10.type=stack", "r10.stack_offset=512" ]
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r2.type=stack", "r2.stack_offset=504",
+      "r3.type=number", "r3.svalue=8", "r3.uvalue=8",
+      "r4.type=number",
+      "r10.type=stack", "r10.stack_offset=512"]
 
 code:
   <start>: |
@@ -359,10 +359,10 @@ post:
 ---
 test-case: bpf_get_stack overwriting ctx
 
-pre: [ "r1.type=ctx", "r1.ctx_offset=0",
-       "r2.type=ctx", "r2.ctx_offset=0",
-       "r3.type=number", "r3.svalue=8", "r3.uvalue=8",
-       "r4.type=number" ]
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r2.type=ctx", "r2.ctx_offset=0",
+      "r3.type=number", "r3.svalue=8", "r3.uvalue=8",
+      "r4.type=number"]
 
 code:
   <start>: |
@@ -376,10 +376,10 @@ messages:
 ---
 test-case: bpf_get_stack writing into shared memory
 
-pre: [ "r1.type=ctx", "r1.ctx_offset=0",
-       "r2.type=shared", "r2.shared_offset=0", "r2.shared_region_size=64", "r2.svalue=[1, 2147418112]", "r2.uvalue=[1, 2147418112]",
-       "r3.type=number", "r3.svalue=64", "r3.uvalue=64",
-       "r4.type=number" ]
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r2.type=shared", "r2.shared_offset=0", "r2.shared_region_size=64", "r2.svalue=[1, 2147418112]", "r2.uvalue=[1, 2147418112]",
+      "r3.type=number", "r3.svalue=64", "r3.uvalue=64",
+      "r4.type=number"]
 
 code:
   <start>: |
@@ -390,9 +390,9 @@ post:
 ---
 test-case: bpf_trace_printk with negative size buffer
 
-pre: [ "r1.type=stack", "r1.stack_offset=504",
-       "r2.type=number", "r2.svalue=-13", "r2.uvalue=18446744073709551603",
-       "r10.type=stack", "r10.stack_offset=512" ]
+pre: ["r1.type=stack", "r1.stack_offset=504",
+      "r2.type=number", "r2.svalue=-13", "r2.uvalue=18446744073709551603",
+      "r10.type=stack", "r10.stack_offset=512"]
 
 code:
   <start>: |
