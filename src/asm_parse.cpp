@@ -49,7 +49,7 @@ namespace prevail {
 
 #define SPECIAL_VAR R"_(\s*(packet_size|meta_offset)\s*)_"
 #define KIND \
-    R"_(\s*(svalue|uvalue|ctx_offset|map_fd|packet_offset|shared_offset|stack_offset|shared_region_size|stack_numeric_size)\s*)_"
+    R"_(\s*(svalue|uvalue|ctx_offset|map_fd|map_fd_programs|packet_offset|shared_offset|stack_offset|shared_region_size|stack_numeric_size)\s*)_"
 #define INTERVAL R"_(\s*\[([-+]?\d+),\s*([-+]?\d+)\]?\s*)_"
 #define ARRAY_RANGE R"_(\s*\[([-+]?\d+)\.\.\.\s*([-+]?\d+)\]?\s*)_"
 
@@ -61,6 +61,9 @@ namespace prevail {
 
 // Match map_fd fd
 #define MAP_FD R"_(\s*map_fd\s+(\d+)\s*)_"
+
+// Match map_fd fd
+#define MAP_FD_PROGRAMS R"_(\s*map_fd_programs\s+(\d+)\s*)_"
 
 static const std::map<std::string, Bin::Op> str_to_binop = {
     {"", Bin::Op::MOV},        {"+", Bin::Op::ADD},   {"-", Bin::Op::SUB},     {"*", Bin::Op::MUL},
@@ -175,6 +178,9 @@ Instruction parse_instruction(const std::string& line, const std::map<std::strin
     if (regex_match(text, m, regex(WREG ASSIGN MAP_VAL))) {
         return LoadMapAddress{
             .dst = reg(m[1]), .mapfd = boost::lexical_cast<int>(m[2]), .offset = boost::lexical_cast<int>(m[3])};
+    }
+    if (regex_match(text, m, regex(WREG ASSIGN MAP_FD_PROGRAMS))) {
+        return LoadMapFd{.dst = reg(m[1]), .mapfd = boost::lexical_cast<int>(m[2])};
     }
     if (regex_match(text, m, regex(WREG ASSIGN MAP_FD))) {
         return LoadMapFd{.dst = reg(m[1]), .mapfd = boost::lexical_cast<int>(m[2])};
@@ -351,8 +357,12 @@ parse_linear_constraints(const std::set<std::string>& constraints, std::vector<I
                     lb = ub = n;
                     any = true;
                 } else {
-                    if (n < lb) lb = n;
-                    if (n > ub) ub = n;
+                    if (n < lb) {
+                        lb = n;
+                    }
+                    if (n > ub) {
+                        ub = n;
+                    }
                 }
             }
 

@@ -14,6 +14,7 @@ struct RegPack {
     Variable uvalue; // uint64_t value.
     Variable ctx_offset;
     Variable map_fd;
+    Variable map_fd_programs;
     Variable packet_offset;
     Variable shared_offset;
     Variable stack_offset;
@@ -27,6 +28,7 @@ inline RegPack reg_pack(const int i) {
         .uvalue = variable_registry->reg(DataKind::uvalues, i),
         .ctx_offset = variable_registry->reg(DataKind::ctx_offsets, i),
         .map_fd = variable_registry->reg(DataKind::map_fds, i),
+        .map_fd_programs = variable_registry->reg(DataKind::map_fd_programs, i),
         .packet_offset = variable_registry->reg(DataKind::packet_offsets, i),
         .shared_offset = variable_registry->reg(DataKind::shared_offsets, i),
         .stack_offset = variable_registry->reg(DataKind::stack_offsets, i),
@@ -39,21 +41,11 @@ inline RegPack reg_pack(const Reg r) { return reg_pack(r.v); }
 inline const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
     {T_CTX, {DataKind::ctx_offsets}},
     {T_MAP, {DataKind::map_fds}},
-    {T_MAP_PROGRAMS, {DataKind::map_fds}},
+    {T_MAP_PROGRAMS, {DataKind::map_fd_programs}},
     {T_PACKET, {DataKind::packet_offsets}},
     {T_SHARED, {DataKind::shared_offsets, DataKind::shared_region_sizes}},
     {T_STACK, {DataKind::stack_offsets, DataKind::stack_numeric_sizes}},
     {T_NUM, {}}, // TODO: DataKind::svalues
-};
-
-inline const std::map<DataKind, std::vector<TypeEncoding>> kind_to_types{
-    {DataKind::ctx_offsets, {T_CTX}},
-    {DataKind::map_fds, {T_MAP, T_MAP_PROGRAMS}},
-    {DataKind::packet_offsets, {T_PACKET}},
-    {DataKind::shared_offsets, {T_SHARED}},
-    {DataKind::shared_region_sizes, {T_SHARED}},
-    {DataKind::stack_offsets, {T_STACK}},
-    {DataKind::stack_numeric_sizes, {T_STACK}},
 };
 
 std::optional<Variable> get_type_offset_variable(const Reg& reg, int type);

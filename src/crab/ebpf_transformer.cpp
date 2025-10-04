@@ -599,6 +599,7 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& rcp, const LinearExpressio
     stack.havoc(rcp.types.inv, DataKind::types, addr, width);
     stack.havoc(rcp.values, DataKind::ctx_offsets, addr, width);
     stack.havoc(rcp.values, DataKind::map_fds, addr, width);
+    stack.havoc(rcp.values, DataKind::map_fd_programs, addr, width);
     stack.havoc(rcp.values, DataKind::packet_offsets, addr, width);
     stack.havoc(rcp.values, DataKind::shared_offsets, addr, width);
     stack.havoc(rcp.values, DataKind::stack_offsets, addr, width);

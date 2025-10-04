@@ -14,6 +14,7 @@ enum class DataKind {
     uvalues,
     ctx_offsets,
     map_fds,
+    map_fd_programs,
     packet_offsets,
     shared_offsets,
     stack_offsets,

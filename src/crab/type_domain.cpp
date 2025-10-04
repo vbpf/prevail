@@ -77,6 +77,7 @@ std::string name_of(const DataKind kind) {
     switch (kind) {
     case DataKind::ctx_offsets: return "ctx_offset";
     case DataKind::map_fds: return "map_fd";
+    case DataKind::map_fd_programs: return "map_fd_programs";
     case DataKind::packet_offsets: return "packet_offset";
     case DataKind::shared_offsets: return "shared_offset";
     case DataKind::shared_region_sizes: return "shared_region_size";
@@ -94,6 +95,7 @@ DataKind regkind(const std::string& s) {
         {"type", DataKind::types},
         {"ctx_offset", DataKind::ctx_offsets},
         {"map_fd", DataKind::map_fds},
+        {"map_fd_programs", DataKind::map_fd_programs},
         {"packet_offset", DataKind::packet_offsets},
         {"shared_offset", DataKind::shared_offsets},
         {"stack_offset", DataKind::stack_offsets},

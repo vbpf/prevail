@@ -400,30 +400,30 @@ messages:
 ---
 test-case: assign register map programs value
 
-pre: ["r1.type=map_fd_programs", "r1.map_fd=1"]
+pre: ["r1.type=map_fd_programs", "r1.map_fd_programs=1"]
 
 code:
   <start>: |
     r2 = r1
 
 post:
-  - r1.map_fd=1
+  - r1.map_fd_programs=1
   - r1.type=map_fd_programs
-  - r2.map_fd=1
+  - r2.map_fd_programs=1
   - r2.type=map_fd_programs
   - r2.svalue=r1.svalue
   - r2.uvalue=r1.uvalue
 ---
 test-case: 32-bit assign register map programs value
 
-pre: ["r1.type=map_fd_programs", "r1.map_fd=1"]
+pre: ["r1.type=map_fd_programs", "r1.map_fd_programs=1"]
 
 code:
   <start>: |
     w2 = r1
 
 post:
-  - r1.map_fd=1
+  - r1.map_fd_programs=1
   - r1.type=map_fd_programs
   - r2.svalue=[0, 4294967295]
   - r2.uvalue=r2.svalue

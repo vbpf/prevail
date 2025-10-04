@@ -14,8 +14,8 @@ std::optional<Variable> get_type_offset_variable(const Reg& reg, const int type)
     RegPack r = reg_pack(reg);
     switch (type) {
     case T_CTX: return r.ctx_offset;
-    case T_MAP:
-    case T_MAP_PROGRAMS: return r.map_fd;
+    case T_MAP: return r.map_fd;
+    case T_MAP_PROGRAMS: return r.map_fd_programs;
     case T_PACKET: return r.packet_offset;
     case T_SHARED: return r.shared_offset;
     case T_STACK: return r.stack_offset;
@@ -85,10 +85,13 @@ TypeToNumDomain TypeToNumDomain::operator&(const TypeToNumDomain& other) const {
 std::vector<Variable> TypeToNumDomain::get_nonexistent_kind_variables() const {
     std::vector<Variable> res;
     for (const Variable v : variable_registry->get_type_variables()) {
-        for (const auto& [kind, candidate_types] : kind_to_types) {
-            if (std::ranges::none_of(candidate_types,
-                                     [&](const TypeEncoding type) { return types.may_have_type(v, type); })) {
-                res.push_back(variable_registry->kind_var(kind, v));
+        for (const auto& [type, kinds] : type_to_kinds) {
+            if (types.may_have_type(v, type)) {
+                continue;
+            }
+            for (const auto kind : kinds) {
+                Variable type_offset = variable_registry->kind_var(kind, v);
+                res.push_back(type_offset);
             }
         }
     }
@@ -175,14 +178,15 @@ void TypeToNumDomain::assign(const Reg& lhs, const Reg& rhs) {
     values.assign(reg_pack(lhs).svalue, reg_pack(rhs).svalue);
     values.assign(reg_pack(lhs).uvalue, reg_pack(rhs).uvalue);
 
-    for (const auto& kind : iterate_kinds(DataKind::ctx_offsets)) {
-        const auto lhs_var = variable_registry->kind_var(kind, reg_type(lhs));
-        values.havoc(lhs_var);
-        for (const auto type : kind_to_types.at(kind)) {
-            if (types.may_have_type(rhs, type)) {
-                values.assign(lhs_var, variable_registry->kind_var(kind, reg_type(rhs)));
-                break;
-            }
+    for (const auto& type : types.iterate_types(lhs)) {
+        for (const auto& kind : type_to_kinds.at(type)) {
+            values.havoc(variable_registry->kind_var(kind, reg_type(lhs)));
+        }
+    }
+    for (const auto& type : types.iterate_types(rhs)) {
+        for (const auto kind : type_to_kinds.at(type)) {
+            const auto lhs_var = variable_registry->kind_var(kind, reg_type(lhs));
+            values.assign(lhs_var, variable_registry->kind_var(kind, reg_type(rhs)));
         }
     }
 }
