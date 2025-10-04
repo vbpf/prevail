@@ -430,18 +430,19 @@ void EbpfTransformer::operator()(const Packet& a) {
 void EbpfTransformer::do_load_stack(TypeToNumDomain& rcp, const Reg& target_reg, const LinearExpression& symb_addr,
                                     const int width, const Reg& src_reg) {
     const Interval addr = rcp.values.eval_interval(symb_addr);
-    rcp.types.assign_type(target_reg, stack.load_type(addr, width));
     using namespace dsl_syntax;
     if (rcp.values.entail(width <= reg_pack(src_reg).stack_numeric_size)) {
         rcp.types.assign_type(target_reg, T_NUM);
+    } else {
+        rcp.types.assign_type(target_reg, stack.load_type(addr, width));
+        if (!rcp.types.is_initialized(target_reg)) {
+            // We don't know what we loaded, so just havoc the destination register.
+            rcp.types.havoc_type(target_reg);
+            havoc_register(rcp.values, target_reg);
+            return;
+        }
     }
 
-    if (!rcp.types.is_initialized(target_reg)) {
-        // We don't know what we loaded, so just havoc the destination register.
-        rcp.types.havoc_type(target_reg);
-        havoc_register(rcp.values, target_reg);
-        return;
-    }
     const RegPack& target = reg_pack(target_reg);
     if (width == 1 || width == 2 || width == 4 || width == 8) {
         // Use the addr before we havoc the destination register since we might be getting the
