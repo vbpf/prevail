@@ -618,26 +618,26 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& rcp, const LinearExpressio
         if (exact_width == 8) {
             stack.havoc(rcp.values, DataKind::svalues, addr, width);
             stack.havoc(rcp.values, DataKind::uvalues, addr, width);
-            rcp.values.assign(stack.store(rcp.values, DataKind::svalues, addr, width, val_svalue), val_svalue);
-            rcp.values.assign(stack.store(rcp.values, DataKind::uvalues, addr, width, val_uvalue), val_uvalue);
+            rcp.values.assign(stack.store(rcp.values, DataKind::svalues, addr, width), val_svalue);
+            rcp.values.assign(stack.store(rcp.values, DataKind::uvalues, addr, width), val_uvalue);
 
             if (!must_be_num) {
                 for (TypeEncoding type : rcp.types.iterate_types(*opt_val_reg)) {
                     for (const DataKind kind : type_to_kinds.at(type)) {
                         const Variable src_var = variable_registry->reg(kind, opt_val_reg->v);
-                        rcp.values.assign(stack.store(rcp.values, kind, addr, width, src_var), src_var);
+                        rcp.values.assign(stack.store(rcp.values, kind, addr, width), src_var);
                     }
                 }
             }
         } else if ((exact_width == 1 || exact_width == 2 || exact_width == 4) && must_be_num) {
             // Keep track of numbers on the stack that might be used as array indices.
-            if (const auto stack_svalue = stack.store(rcp.values, DataKind::svalues, addr, width, val_svalue)) {
+            if (const auto stack_svalue = stack.store(rcp.values, DataKind::svalues, addr, width)) {
                 rcp.values.assign(stack_svalue, val_svalue);
                 rcp.values->overflow_bounds(*stack_svalue, exact_width * 8, true);
             } else {
                 stack.havoc(rcp.values, DataKind::svalues, addr, width);
             }
-            if (const auto stack_uvalue = stack.store(rcp.values, DataKind::uvalues, addr, width, val_uvalue)) {
+            if (const auto stack_uvalue = stack.store(rcp.values, DataKind::uvalues, addr, width)) {
                 rcp.values.assign(stack_uvalue, val_uvalue);
                 rcp.values->overflow_bounds(*stack_uvalue, exact_width * 8, false);
             } else {

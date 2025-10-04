@@ -17,7 +17,6 @@
 #include "crab/array_domain.hpp"
 #include "crab/var_registry.hpp"
 #include "crab_utils/num_safety.hpp"
-#include "spec_type_descriptors.hpp"
 
 namespace prevail {
 
@@ -455,21 +454,21 @@ void ArrayDomain::split_number_var(NumAbsDomain& inv, DataKind kind, const Inter
                                    const Interval& elem_size) const {
     assert(kind == DataKind::svalues || kind == DataKind::uvalues);
     offset_map_t& offset_map = lookup_array_map(kind);
-    std::optional<Number> n = ii.singleton();
+    const std::optional<Number> n = ii.singleton();
     if (!n) {
         // We can only split a singleton offset.
         return;
     }
-    std::optional<Number> n_bytes = elem_size.singleton();
+    const std::optional<Number> n_bytes = elem_size.singleton();
     if (!n_bytes) {
         // We can only split a singleton size.
         return;
     }
-    auto size = n_bytes->narrow<unsigned int>();
-    offset_t o(n->narrow<Index>());
+    const auto size = n_bytes->narrow<unsigned int>();
+    const offset_t o(n->narrow<Index>());
 
     const std::vector<Cell> cells = offset_map.get_overlap_cells(o, size);
-    for (Cell const& c : cells) {
+    for (const Cell& c : cells) {
         const auto [cell_start_index, cell_end_index] = c.to_interval().pair<int>();
         if (!this->num_bytes.all_num(cell_start_index, cell_end_index + 1) ||
             cell_end_index + 1UL < cell_start_index + sizeof(int64_t)) {
@@ -500,8 +499,8 @@ static std::optional<std::pair<offset_t, unsigned>> kill_and_find_var(NumAbsDoma
 
     offset_map_t& offset_map = lookup_array_map(kind);
     std::vector<Cell> cells;
-    if (std::optional<Number> n = ii.singleton()) {
-        if (auto n_bytes = elem_size.singleton()) {
+    if (const std::optional<Number> n = ii.singleton()) {
+        if (const auto n_bytes = elem_size.singleton()) {
             auto size = n_bytes->narrow<unsigned int>();
             // -- Constant index: kill overlapping cells
             offset_t o(n->narrow<Index>());
@@ -544,7 +543,7 @@ bool ArrayDomain::all_num_lb_ub(const Interval& lb, const Interval& ub) const {
 
 bool ArrayDomain::all_num_width(const Interval& index, const Interval& width) const {
     const auto [min_lb, max_ub] = as_numbytes_range(index, width);
-    assert(min_lb < max_ub);
+    assert(min_lb <= max_ub);
     return this->num_bytes.all_num(min_lb, max_ub);
 }
 
@@ -726,18 +725,10 @@ static std::optional<std::pair<offset_t, unsigned>> split_and_find_var(const Arr
 }
 
 std::optional<Variable> ArrayDomain::store(NumAbsDomain& inv, const DataKind kind, const Interval& idx,
-                                           const Interval& elem_size, const LinearExpression& val) {
+                                           const Interval& elem_size) {
     if (auto maybe_cell = split_and_find_var(*this, inv, kind, idx, elem_size)) {
         // perform strong update
         auto [offset, size] = *maybe_cell;
-        if (kind == DataKind::types) {
-            const std::optional<Number> t = inv.eval_interval(val).singleton();
-            if (t == Number{T_NUM}) {
-                num_bytes.reset(offset, size);
-            } else {
-                num_bytes.havoc(offset, size);
-            }
-        }
         Variable v = lookup_array_map(kind).mk_cell(offset, size).get_scalar(kind);
         return v;
     }

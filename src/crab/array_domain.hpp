@@ -72,8 +72,7 @@ class ArrayDomain final {
 
     [[nodiscard]]
     std::optional<LinearExpression> load(const NumAbsDomain& inv, DataKind kind, const Interval& i, int width) const;
-    std::optional<Variable> store(NumAbsDomain& inv, DataKind kind, const Interval& idx, const Interval& elem_size,
-                                  const LinearExpression& val);
+    std::optional<Variable> store(NumAbsDomain& inv, DataKind kind, const Interval& idx, const Interval& elem_size);
     std::optional<Variable> store_type(TypeDomain& inv, const Interval& idx, const Interval& width, bool is_num);
     void havoc(NumAbsDomain& inv, DataKind kind, const Interval& idx, const Interval& elem_size);
 
