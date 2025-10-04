@@ -162,6 +162,8 @@ struct TypeToNumDomain {
     TypeToNumDomain join_over_types(const Reg& reg,
                                     const std::function<void(TypeToNumDomain&, TypeEncoding)>& transition) const;
 
+    void havoc_all_locations_having_type(TypeEncoding type);
+
     void assume_type(const LinearConstraint& cst);
 
     void assign(const Reg& lhs, const Reg& rhs);

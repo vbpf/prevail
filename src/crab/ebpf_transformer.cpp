@@ -215,19 +215,7 @@ void EbpfTransformer::havoc_subprogram_stack(const std::string& prefix) {
 }
 
 void EbpfTransformer::forget_packet_pointers() {
-    using namespace dsl_syntax;
-
-    for (const Variable type_variable : variable_registry->get_type_variables()) {
-        if (dom.rcp.types.may_have_type(type_variable, T_PACKET)) {
-            dom.rcp.types.havoc_type(type_variable);
-            dom.rcp.values.havoc(variable_registry->kind_var(DataKind::svalues, type_variable));
-            dom.rcp.values.havoc(variable_registry->kind_var(DataKind::uvalues, type_variable));
-            for (const DataKind kind : type_to_kinds.at(T_PACKET)) {
-                dom.rcp.values.havoc(variable_registry->kind_var(kind, type_variable));
-            }
-        }
-    }
-
+    dom.rcp.havoc_all_locations_having_type(T_PACKET);
     dom.initialize_packet();
 }
 

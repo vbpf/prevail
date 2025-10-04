@@ -162,6 +162,19 @@ TypeToNumDomain::join_over_types(const Reg& reg,
     return res;
 }
 
+void TypeToNumDomain::havoc_all_locations_having_type(const TypeEncoding type) {
+    for (const Variable type_variable : variable_registry->get_type_variables()) {
+        if (types.may_have_type(type_variable, type)) {
+            types.havoc_type(type_variable);
+            values.havoc(variable_registry->kind_var(DataKind::svalues, type_variable));
+            values.havoc(variable_registry->kind_var(DataKind::uvalues, type_variable));
+            for (const DataKind kind : type_to_kinds.at(type)) {
+                values.havoc(variable_registry->kind_var(kind, type_variable));
+            }
+        }
+    }
+}
+
 void TypeToNumDomain::assume_type(const LinearConstraint& cst) {
     types.add_constraint(cst);
     if (types.inv.is_bottom()) {
