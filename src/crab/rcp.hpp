@@ -56,6 +56,8 @@ inline const std::map<DataKind, std::vector<TypeEncoding>> kind_to_types{
     {DataKind::stack_numeric_sizes, {T_STACK}},
 };
 
+std::optional<Variable> get_type_offset_variable(const Reg& reg, int type);
+
 /** TypeToNumDomain implements a Reduced Cardinal Power Domain between TypeDomain and NumAbsDomain.
  * This struct is used to represent the eBPF abstract domain where type information (TypeDomain) is used to guide the
  * precision of the numeric domain(NumAbsDomain). For example, if a register is known to be of type stack, then the
@@ -104,6 +106,8 @@ struct TypeToNumDomain {
 
     TypeToNumDomain operator&(const TypeToNumDomain& other) const;
 
+    std::optional<Variable> get_type_offset_variable(const Reg& reg) const;
+
     /**
      * @brief Identifies type-specific ("kind") variables that are meaningless for the given domain.
      *
@@ -143,8 +147,7 @@ struct TypeToNumDomain {
      * @return A vector containing the variable, which domain it came from (`true` if left),
      * and its interval value, for each type-specific constraint to be preserved.
      */
-    std::vector<std::tuple<Variable, bool, Interval>>
-    collect_type_dependent_constraints(const TypeToNumDomain& right) const;
+    std::vector<std::tuple<Variable, Interval>> collect_type_dependent_constraints(const TypeToNumDomain& right) const;
 
     /**
      * @brief Applies a transition function for each possible type of a given register.
@@ -171,7 +174,7 @@ struct TypeToNumDomain {
 
     void assign(const Reg& lhs, const Reg& rhs);
 
-    TypeToNumDomain widen(const TypeToNumDomain& rcp) const;
+    TypeToNumDomain widen(const TypeToNumDomain& other) const;
 
     TypeToNumDomain narrow(const TypeToNumDomain& rcp) const;
 

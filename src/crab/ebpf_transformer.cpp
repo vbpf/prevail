@@ -276,8 +276,8 @@ void EbpfTransformer::operator()(const Assume& s) {
                 } else {
                     // Either pointers to a singleton region,
                     // or an equality comparison on map descriptors/pointers to non-singleton locations
-                    if (const auto dst_offset = dom.get_type_offset_variable(cond.left, type)) {
-                        if (const auto src_offset = dom.get_type_offset_variable(src_reg, type)) {
+                    if (const auto dst_offset = get_type_offset_variable(cond.left, type)) {
+                        if (const auto src_offset = get_type_offset_variable(src_reg, type)) {
                             rcp.values.add_constraint(
                                 assume_cst_offsets_reg(cond.op, dst_offset.value(), src_offset.value()));
                         }
@@ -807,7 +807,7 @@ void EbpfTransformer::operator()(const Call& call) {
 
         case ArgPair::Kind::PTR_TO_WRITABLE_MEM: {
             bool store_numbers = true;
-            auto variable = dom.get_type_offset_variable(param.mem);
+            auto variable = dom.rcp.get_type_offset_variable(param.mem);
             if (!variable.has_value()) {
                 // checked by the checker
                 break;
@@ -988,7 +988,7 @@ void EbpfTransformer::recompute_stack_numeric_size(TypeToNumDomain& rcp, const R
 void EbpfTransformer::add(const Reg& dst_reg, const int imm, const int finite_width) {
     const auto dst = reg_pack(dst_reg);
     dom.rcp.values->add_overflow(dst.svalue, dst.uvalue, imm, finite_width);
-    if (const auto offset = dom.get_type_offset_variable(dst_reg)) {
+    if (const auto offset = dom.rcp.get_type_offset_variable(dst_reg)) {
         dom.rcp.values->add(*offset, imm);
         if (imm > 0) {
             // Since the start offset is increasing but
@@ -1185,9 +1185,9 @@ void EbpfTransformer::operator()(const Bin& bin) {
                         if (dst_type == T_NUM && src_type != T_NUM) {
                             // num += ptr
                             rcp.types.assign_type(bin.dst, src_type);
-                            if (const auto dst_offset = dom.get_type_offset_variable(bin.dst, src_type)) {
+                            if (const auto dst_offset = get_type_offset_variable(bin.dst, src_type)) {
                                 rcp.values->apply(ArithBinOp::ADD, dst_offset.value(), dst.svalue,
-                                                  dom.get_type_offset_variable(src_reg, src_type).value());
+                                                  get_type_offset_variable(src_reg, src_type).value());
                             }
                             if (src_type == T_SHARED) {
                                 rcp.values.assign(dst.shared_region_size, src.shared_region_size);
@@ -1195,7 +1195,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
                         } else if (dst_type != T_NUM && src_type == T_NUM) {
                             // ptr += num
                             rcp.types.assign_type(bin.dst, dst_type);
-                            if (const auto dst_offset = dom.get_type_offset_variable(bin.dst, dst_type)) {
+                            if (const auto dst_offset = get_type_offset_variable(bin.dst, dst_type)) {
                                 rcp.values->apply(ArithBinOp::ADD, dst_offset.value(), dst_offset.value(), src.svalue);
                                 if (dst_type == T_STACK) {
                                     // Reduce the numeric size.
@@ -1245,9 +1245,9 @@ void EbpfTransformer::operator()(const Bin& bin) {
                     default:
                         // ptr -= ptr
                         // Assertions should make sure we only perform this on non-shared pointers.
-                        if (const auto dst_offset = dom.get_type_offset_variable(bin.dst, type)) {
+                        if (const auto dst_offset = get_type_offset_variable(bin.dst, type)) {
                             rcp.values->apply_signed(ArithBinOp::SUB, dst.svalue, dst.uvalue, dst_offset.value(),
-                                                     dom.get_type_offset_variable(src_reg, type).value(), finite_width);
+                                                     get_type_offset_variable(src_reg, type).value(), finite_width);
                             rcp.values.havoc(dst_offset.value());
                         }
                         prevail::havoc_offsets(rcp.values, bin.dst);
@@ -1260,7 +1260,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
                 // Either they're different, or at least one is not a singleton.
                 if (dom.rcp.types.type_is_number(std::get<Reg>(bin.v))) {
                     dom.rcp.values->sub_overflow(dst.svalue, dst.uvalue, src.svalue, finite_width);
-                    if (auto dst_offset = dom.get_type_offset_variable(bin.dst)) {
+                    if (auto dst_offset = dom.rcp.get_type_offset_variable(bin.dst)) {
                         dom.rcp.values->sub(dst_offset.value(), src.svalue);
                         if (dom.rcp.types.may_have_type(bin.dst, T_STACK)) {
                             // Reduce the numeric size.

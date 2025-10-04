@@ -10,6 +10,23 @@
 
 namespace prevail {
 
+std::optional<Variable> get_type_offset_variable(const Reg& reg, const int type) {
+    RegPack r = reg_pack(reg);
+    switch (type) {
+    case T_CTX: return r.ctx_offset;
+    case T_MAP:
+    case T_MAP_PROGRAMS: return r.map_fd;
+    case T_PACKET: return r.packet_offset;
+    case T_SHARED: return r.shared_offset;
+    case T_STACK: return r.stack_offset;
+    default: return {};
+    }
+}
+
+std::optional<Variable> TypeToNumDomain::get_type_offset_variable(const Reg& reg) const {
+    return prevail::get_type_offset_variable(reg, types.get_type(reg));
+}
+
 bool TypeToNumDomain::operator<=(const TypeToNumDomain& other) const {
     if (is_bottom()) {
         return true;
@@ -41,7 +58,7 @@ void TypeToNumDomain::join_selective(const TypeToNumDomain& right) {
     }
     auto extra_invariants = collect_type_dependent_constraints(right);
     this->values |= std::move(right.values);
-    for (const auto& [variable, in_left, interval] : extra_invariants) {
+    for (const auto& [variable, interval] : extra_invariants) {
         values.set(variable, interval);
     }
 }
@@ -68,26 +85,19 @@ TypeToNumDomain TypeToNumDomain::operator&(const TypeToNumDomain& other) const {
 std::vector<Variable> TypeToNumDomain::get_nonexistent_kind_variables() const {
     std::vector<Variable> res;
     for (const Variable v : variable_registry->get_type_variables()) {
-        for (const auto& [type, kinds] : type_to_kinds) {
-            if (types.may_have_type(v, type)) {
-                // This type might be present in the register's type set, so its kind
-                // variables are meaningful and should not be ignored.
-                continue;
-            }
-            for (const auto kind : kinds) {
-                // This type is definitely not present, so any associated kind variables
-                // are meaningless for this domain.
-                Variable type_offset = variable_registry->kind_var(kind, v);
-                res.push_back(type_offset);
+        for (const auto& [kind, candidate_types] : kind_to_types) {
+            if (std::ranges::none_of(candidate_types,
+                                     [&](const TypeEncoding type) { return types.may_have_type(v, type); })) {
+                res.push_back(variable_registry->kind_var(kind, v));
             }
         }
     }
     return res;
 }
 
-std::vector<std::tuple<Variable, bool, Interval>>
+std::vector<std::tuple<Variable, Interval>>
 TypeToNumDomain::collect_type_dependent_constraints(const TypeToNumDomain& right) const {
-    std::vector<std::tuple<Variable, bool, Interval>> result;
+    std::vector<std::tuple<Variable, Interval>> result;
 
     for (const Variable& type_var : variable_registry->get_type_variables()) {
         for (const auto& [type, kinds] : type_to_kinds) {
@@ -106,7 +116,7 @@ TypeToNumDomain::collect_type_dependent_constraints(const TypeToNumDomain& right
                     Variable var = variable_registry->kind_var(kind, type_var);
                     Interval value = source.eval_interval(var);
                     if (!value.is_top()) {
-                        result.emplace_back(var, in_left, value);
+                        result.emplace_back(var, value);
                     }
                 }
             }
@@ -177,8 +187,16 @@ void TypeToNumDomain::assign(const Reg& lhs, const Reg& rhs) {
     }
 }
 
-TypeToNumDomain TypeToNumDomain::widen(const TypeToNumDomain& rcp) const {
-    return TypeToNumDomain{types.widen(rcp.types), values.widen(rcp.values)};
+TypeToNumDomain TypeToNumDomain::widen(const TypeToNumDomain& other) const {
+    auto extra_invariants = collect_type_dependent_constraints(other);
+
+    TypeToNumDomain res{types.widen(other.types), values.widen(other.values)};
+
+    // Now add in the extra invariants saved above.
+    for (const auto& [variable, interval] : extra_invariants) {
+        res.values.set(variable, interval);
+    }
+    return res;
 }
 
 TypeToNumDomain TypeToNumDomain::narrow(const TypeToNumDomain& rcp) const {

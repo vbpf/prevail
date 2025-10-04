@@ -93,12 +93,6 @@ class EbpfDomain final {
     [[nodiscard]]
     Interval get_map_max_entries(const Reg& map_fd_reg) const;
 
-    static std::optional<Variable> get_type_offset_variable(const Reg& reg, int type);
-    [[nodiscard]]
-    std::optional<Variable> get_type_offset_variable(const Reg& reg, const TypeToNumDomain& inv) const;
-    [[nodiscard]]
-    std::optional<Variable> get_type_offset_variable(const Reg& reg) const;
-
     bool get_map_fd_range(const Reg& map_fd_reg, int32_t* start_fd, int32_t* end_fd) const;
 
     TypeToNumDomain rcp;

@@ -18,27 +18,6 @@
 
 namespace prevail {
 
-std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg, const int type) {
-    RegPack r = reg_pack(reg);
-    switch (type) {
-    case T_CTX: return r.ctx_offset;
-    case T_MAP:
-    case T_MAP_PROGRAMS: return r.map_fd;
-    case T_PACKET: return r.packet_offset;
-    case T_SHARED: return r.shared_offset;
-    case T_STACK: return r.stack_offset;
-    default: return {};
-    }
-}
-
-std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg, const TypeToNumDomain& inv) const {
-    return get_type_offset_variable(reg, inv.types.get_type(reg));
-}
-
-std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg) const {
-    return get_type_offset_variable(reg, rcp);
-}
-
 StringInvariant EbpfDomain::to_set() const { return rcp.to_set() + stack.to_set(); }
 
 EbpfDomain EbpfDomain::top() {
@@ -148,14 +127,7 @@ EbpfDomain EbpfDomain::calculate_constant_limits() {
 static const EbpfDomain constant_limits = EbpfDomain::calculate_constant_limits();
 
 EbpfDomain EbpfDomain::widen(const EbpfDomain& other, const bool to_constants) const {
-    auto extra_invariants = rcp.collect_type_dependent_constraints(other.rcp);
-
     EbpfDomain res{this->rcp.widen(other.rcp), stack.widen(other.stack)};
-
-    // Now add in the extra invariants saved above.
-    for (const auto& [variable, in_left, interval] : extra_invariants) {
-        res.rcp.values.set(variable, interval);
-    }
 
     if (to_constants) {
         return res & constant_limits;
@@ -302,9 +274,7 @@ ExtendedNumber EbpfDomain::get_loop_count_upper_bound() const {
 
 Interval EbpfDomain::get_r0() const { return rcp.values.eval_interval(reg_pack(R0_RETURN_VALUE).svalue); }
 
-std::ostream& operator<<(std::ostream& o, const TypeDomain& dom) {
-    return o << dom.inv;
-}
+std::ostream& operator<<(std::ostream& o, const TypeDomain& dom) { return o << dom.inv; }
 
 std::ostream& operator<<(std::ostream& o, const TypeToNumDomain& dom) {
     if (dom.is_bottom()) {
