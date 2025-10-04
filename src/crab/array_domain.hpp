@@ -72,9 +72,11 @@ class ArrayDomain final {
 
     [[nodiscard]]
     std::optional<LinearExpression> load(const NumAbsDomain& inv, DataKind kind, const Interval& i, int width) const;
+    std::optional<LinearExpression> load_type(const Interval& i, int width) const;
     std::optional<Variable> store(NumAbsDomain& inv, DataKind kind, const Interval& idx, const Interval& elem_size);
     std::optional<Variable> store_type(TypeDomain& inv, const Interval& idx, const Interval& width, bool is_num);
     void havoc(NumAbsDomain& inv, DataKind kind, const Interval& idx, const Interval& elem_size);
+    void havoc_type(TypeDomain& inv, const Interval& idx, const Interval& elem_size);
 
     // Perform array stores over an array segment
     void store_numbers(const Interval& _idx, const Interval& _width);

@@ -129,6 +129,7 @@ static void havoc_offsets(NumAbsDomain& inv, const Reg& reg) {
     const RegPack r = reg_pack(reg);
     inv.havoc(r.ctx_offset);
     inv.havoc(r.map_fd);
+    inv.havoc(r.map_fd_programs);
     inv.havoc(r.packet_offset);
     inv.havoc(r.shared_offset);
     inv.havoc(r.shared_region_size);
@@ -207,11 +208,8 @@ void EbpfTransformer::havoc_subprogram_stack(const std::string& prefix) {
         return;
     }
     const int64_t stack_start = intv.singleton()->cast_to<int64_t>() - EBPF_SUBPROGRAM_STACK_SIZE;
-    stack.havoc(dom.rcp.types.inv, DataKind::types, Interval{stack_start}, Interval{EBPF_SUBPROGRAM_STACK_SIZE});
+    stack.havoc_type(dom.rcp.types, Interval{stack_start}, Interval{EBPF_SUBPROGRAM_STACK_SIZE});
     for (const DataKind kind : iterate_kinds()) {
-        if (kind == DataKind::types) {
-            continue;
-        }
         stack.havoc(dom.rcp.values, kind, Interval{stack_start}, Interval{EBPF_SUBPROGRAM_STACK_SIZE});
     }
 }
@@ -432,7 +430,7 @@ void EbpfTransformer::operator()(const Packet& a) {
 void EbpfTransformer::do_load_stack(TypeToNumDomain& rcp, const Reg& target_reg, const LinearExpression& symb_addr,
                                     const int width, const Reg& src_reg) {
     const Interval addr = rcp.values.eval_interval(symb_addr);
-    rcp.types.assign_type(target_reg, stack.load(rcp.values, DataKind::types, addr, width));
+    rcp.types.assign_type(target_reg, stack.load_type(addr, width));
     using namespace dsl_syntax;
     if (rcp.values.entail(width <= reg_pack(src_reg).stack_numeric_size)) {
         rcp.types.assign_type(target_reg, T_NUM);
@@ -596,15 +594,13 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& rcp, const LinearExpressio
     const Interval addr = rcp.values.eval_interval(symb_addr);
     const Interval width{exact_width};
     // no aliasing of val - we don't move from stack to stack, so we can just havoc first
-    stack.havoc(rcp.types.inv, DataKind::types, addr, width);
-    stack.havoc(rcp.values, DataKind::ctx_offsets, addr, width);
-    stack.havoc(rcp.values, DataKind::map_fds, addr, width);
-    stack.havoc(rcp.values, DataKind::map_fd_programs, addr, width);
-    stack.havoc(rcp.values, DataKind::packet_offsets, addr, width);
-    stack.havoc(rcp.values, DataKind::shared_offsets, addr, width);
-    stack.havoc(rcp.values, DataKind::stack_offsets, addr, width);
-    stack.havoc(rcp.values, DataKind::shared_region_sizes, addr, width);
-    stack.havoc(rcp.values, DataKind::stack_numeric_sizes, addr, width);
+    stack.havoc_type(rcp.types, addr, width);
+    for (const DataKind kind : iterate_kinds()) {
+        if (kind == DataKind::svalues || kind == DataKind::uvalues) {
+            continue;
+        }
+        stack.havoc(rcp.values, kind, addr, width);
+    }
     bool must_be_num = false;
     if (opt_val_reg && !rcp.types.is_initialized(*opt_val_reg)) {
         stack.havoc(rcp.values, DataKind::svalues, addr, width);
@@ -821,9 +817,6 @@ void EbpfTransformer::operator()(const Call& call) {
                     // Pointer to a memory region that the called function may change,
                     // so we must havoc.
                     for (const DataKind kind : iterate_kinds()) {
-                        if (kind == DataKind::types) {
-                            continue;
-                        }
                         stack.havoc(rcp.values, kind, addr, width);
                     }
                 } else {

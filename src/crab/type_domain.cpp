@@ -53,7 +53,7 @@ std::vector<TypeEncoding> iterate_types(const TypeEncoding lb, const TypeEncodin
 }
 
 std::vector<TypeEncoding> TypeDomain::iterate_types(const Reg& reg) const {
-    const Interval allowed_types = inv.eval_interval(variable_registry->reg(DataKind::types, reg.v));
+    const Interval allowed_types = inv.eval_interval(reg_type(reg));
     if (!allowed_types) {
         return {};
     }

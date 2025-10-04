@@ -22,11 +22,12 @@ enum class DataKind {
     stack_numeric_sizes
 };
 constexpr auto KIND_MIN = DataKind::types;
+constexpr auto KIND_VALUE_MIN = DataKind::svalues;
 constexpr auto KIND_MAX = DataKind::stack_numeric_sizes;
 
 std::string name_of(DataKind kind);
 DataKind regkind(const std::string& s);
-std::vector<DataKind> iterate_kinds(DataKind lb = KIND_MIN, DataKind ub = KIND_MAX);
+std::vector<DataKind> iterate_kinds(DataKind lb = KIND_VALUE_MIN, DataKind ub = KIND_MAX);
 std::ostream& operator<<(std::ostream& o, const DataKind& s);
 
 // The exact numbers are taken advantage of in EbpfDomain

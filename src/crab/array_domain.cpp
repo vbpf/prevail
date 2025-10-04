@@ -598,23 +598,14 @@ std::optional<uint8_t> get_value_byte(const NumAbsDomain& inv, const offset_t o,
     return bytes[o % width];
 }
 
-std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, DataKind kind, const Interval& ii,
-                                                  int width) const {
-    if (std::optional<Number> n = ii.singleton()) {
+std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, const DataKind kind, const Interval& i,
+                                                  const int width) const {
+    if (const std::optional<Number> n = i.singleton()) {
         offset_map_t& offset_map = lookup_array_map(kind);
-        int64_t k = n->narrow<int64_t>();
-        if (kind == DataKind::types) {
-            auto [only_num, only_non_num] = num_bytes.uniformity(k, width);
-            if (only_num) {
-                return T_NUM;
-            }
-            if (!only_non_num || width != 8) {
-                return {};
-            }
-        }
-        offset_t o(k);
-        unsigned size = to_unsigned(width);
-        if (auto cell = lookup_array_map(kind).get_cell(o, size)) {
+        const int64_t k = n->narrow<int64_t>();
+        const offset_t o(k);
+        const unsigned size = to_unsigned(width);
+        if (const auto cell = lookup_array_map(kind).get_cell(o, size)) {
             return cell->get_scalar(kind);
         }
         if (kind == DataKind::svalues || kind == DataKind::uvalues) {
@@ -623,7 +614,7 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, DataK
             uint8_t result_buffer[8];
             bool found = true;
             for (unsigned int index = 0; index < size; index++) {
-                offset_t byte_offset{o + index};
+                const offset_t byte_offset{o + index};
                 std::optional<uint8_t> b = get_value_byte(inv, byte_offset, 8);
                 if (!b) {
                     b = get_value_byte(inv, byte_offset, 4);
@@ -677,9 +668,9 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, DataK
             }
         }
 
-        std::vector<Cell> cells = offset_map.get_overlap_cells(o, size);
+        const std::vector<Cell> cells = offset_map.get_overlap_cells(o, size);
         if (cells.empty()) {
-            Cell c = offset_map.mk_cell(o, size);
+            const Cell c = offset_map.mk_cell(o, size);
             // Here it's ok to do assignment (instead of expand) because c is not a summarized variable.
             // Otherwise, it would be unsound.
             return c.get_scalar(kind);
@@ -691,7 +682,44 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, DataK
                 to construct values of some type from a sequence of bytes.
                 It can be endian-independent but it would more precise if we choose between little- and big-endian.
         */
-    } else if (kind == DataKind::types) {
+    } else {
+        // TODO: we can be more precise here
+        CRAB_WARN("array expansion: ignored array load because of non-constant array index ", i);
+    }
+    return {};
+}
+
+std::optional<LinearExpression> ArrayDomain::load_type(const Interval& ii, int width) const {
+    if (std::optional<Number> n = ii.singleton()) {
+        offset_map_t& offset_map = lookup_array_map(DataKind::types);
+        int64_t k = n->narrow<int64_t>();
+        auto [only_num, only_non_num] = num_bytes.uniformity(k, width);
+        if (only_num) {
+            return T_NUM;
+        }
+        if (!only_non_num || width != 8) {
+            return {};
+        }
+        offset_t o(k);
+        unsigned size = to_unsigned(width);
+        if (auto cell = lookup_array_map(DataKind::types).get_cell(o, size)) {
+            return cell->get_scalar(DataKind::types);
+        }
+        std::vector<Cell> cells = offset_map.get_overlap_cells(o, size);
+        if (cells.empty()) {
+            Cell c = offset_map.mk_cell(o, size);
+            // Here it's ok to do assignment (instead of expand) because c is not a summarized variable.
+            // Otherwise, it would be unsound.
+            return c.get_scalar(DataKind::types);
+        }
+        CRAB_WARN("Ignored read from cell ", DataKind::types, "[", o, "...", o + size - 1, "]",
+                  " because it overlaps with ", cells.size(), " cells");
+        /*
+            TODO: we can apply here "Value Recomposition" a la Mine'06 (https://arxiv.org/pdf/cs/0703074.pdf)
+                to construct values of some type from a sequence of bytes.
+                It can be endian-independent but it would more precise if we choose between little- and big-endian.
+        */
+    } else {
         // Check whether the kind is uniform across the entire interval.
         auto lb = ii.lb().number();
         auto ub = ii.ub().number();
@@ -705,9 +733,6 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, DataK
                 }
             }
         }
-    } else {
-        // TODO: we can be more precise here
-        CRAB_WARN("array expansion: ignored array load because of non-constant array index ", ii);
     }
     return {};
 }
@@ -758,8 +783,13 @@ std::optional<Variable> ArrayDomain::store_type(TypeDomain& inv, const Interval&
 }
 
 void ArrayDomain::havoc(NumAbsDomain& inv, const DataKind kind, const Interval& idx, const Interval& elem_size) {
-    auto maybe_cell = split_and_find_var(*this, inv, kind, idx, elem_size);
-    if (maybe_cell && kind == DataKind::types) {
+    split_and_find_var(*this, inv, kind, idx, elem_size);
+}
+
+void ArrayDomain::havoc_type(TypeDomain& inv, const Interval& idx, const Interval& elem_size) {
+    constexpr auto kind = DataKind::types;
+    auto maybe_cell = split_and_find_var(*this, inv.inv, kind, idx, elem_size);
+    if (maybe_cell) {
         auto [offset, size] = *maybe_cell;
         num_bytes.havoc(offset, size);
     }

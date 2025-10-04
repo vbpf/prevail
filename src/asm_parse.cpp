@@ -328,16 +328,16 @@ parse_linear_constraints(const std::set<std::string>& constraints, std::vector<I
         } else if (regex_match(cst_text, m,
                                regex(REG DOT "type"
                                              "=" REG DOT "type"))) {
-            LinearExpression d = variable_registry->reg(DataKind::types, regnum(m[1]));
-            LinearExpression s = variable_registry->reg(DataKind::types, regnum(m[2]));
+            LinearExpression d = variable_registry->type_reg(regnum(m[1]));
+            LinearExpression s = variable_registry->type_reg(regnum(m[2]));
             type_csts.push_back(d == s);
         } else if (regex_match(cst_text, m,
                                regex(REG DOT "type"
                                              "=" TYPE))) {
-            Variable d = variable_registry->reg(DataKind::types, regnum(m[1]));
+            Variable d = variable_registry->type_reg(regnum(m[1]));
             type_csts.push_back(d == string_to_type_encoding(m[2]));
         } else if (regex_match(cst_text, m, regex(REG DOT "type" IN TYPE_SET))) {
-            Variable d = variable_registry->reg(DataKind::types, regnum(m[1]));
+            Variable d = variable_registry->type_reg(regnum(m[1]));
             const std::string inside = m[2]; // everything between the braces
 
             // Tokenize items inside {...} using the existing TYPE regex.
