@@ -224,4 +224,7 @@ class AddBottom final {
     }
 }; // class AddBottom
 
+// Numerical abstract domain.
+using NumAbsDomain = AddBottom;
+
 } // namespace prevail

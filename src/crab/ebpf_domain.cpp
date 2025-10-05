@@ -15,32 +15,10 @@
 #include "crab/array_domain.hpp"
 #include "crab/ebpf_domain.hpp"
 #include "crab/var_registry.hpp"
-#include "string_constraints.hpp"
 
 namespace prevail {
 
-std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg, const int type) {
-    RegPack r = reg_pack(reg);
-    switch (type) {
-    case T_CTX: return r.ctx_offset;
-    case T_MAP:
-    case T_MAP_PROGRAMS: return r.map_fd;
-    case T_PACKET: return r.packet_offset;
-    case T_SHARED: return r.shared_offset;
-    case T_STACK: return r.stack_offset;
-    default: return {};
-    }
-}
-
-std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg, const NumAbsDomain& inv) const {
-    return get_type_offset_variable(reg, type_inv.get_type(inv, reg_pack(reg).type));
-}
-
-std::optional<Variable> EbpfDomain::get_type_offset_variable(const Reg& reg) const {
-    return get_type_offset_variable(reg, m_inv);
-}
-
-StringInvariant EbpfDomain::to_set() const { return m_inv.to_set() + stack.to_set(); }
+StringInvariant EbpfDomain::to_set() const { return rcp.to_set() + stack.to_set(); }
 
 EbpfDomain EbpfDomain::top() {
     EbpfDomain abs;
@@ -54,70 +32,39 @@ EbpfDomain EbpfDomain::bottom() {
     return abs;
 }
 
-EbpfDomain::EbpfDomain() : m_inv(NumAbsDomain::top()) {}
+EbpfDomain::EbpfDomain() {}
 
-EbpfDomain::EbpfDomain(NumAbsDomain inv, ArrayDomain stack) : m_inv(std::move(inv)), stack(std::move(stack)) {}
+EbpfDomain::EbpfDomain(TypeToNumDomain rcp, ArrayDomain stack) : rcp(std::move(rcp)), stack(std::move(stack)) {}
 
 void EbpfDomain::set_to_top() {
-    m_inv.set_to_top();
+    rcp.values.set_to_top();
     stack.set_to_top();
 }
 
-void EbpfDomain::set_to_bottom() { m_inv.set_to_bottom(); }
+void EbpfDomain::set_to_bottom() { rcp.values.set_to_bottom(); }
 
-bool EbpfDomain::is_bottom() const { return m_inv.is_bottom(); }
+bool EbpfDomain::is_bottom() const { return rcp.values.is_bottom(); }
 
-bool EbpfDomain::is_top() const { return m_inv.is_top() && stack.is_top(); }
+bool EbpfDomain::is_top() const { return rcp.values.is_top() && stack.is_top(); }
 
-/**
- * @brief Determines if this abstract state is subsumed by another (*this <= other).
- *
- * @details This is a type-aware subsumption check that correctly handles type-specific
- * "kind" variables (e.g., `packet_offset`). A standard numerical comparison is
- * insufficient due to the special role these variables play: a kind variable associated
- * with a type that is not active in `this` domain is conceptually Bottom.
- * To ensure a correct comparison, this function first identifies these "Bottom" variables.
- * It then `havoc`s them in a temporary copy of the `other` domain, which sets them to
- * Top. The final numerical check `m_inv <= tmp.m_inv` is then sound, as it
- * evaluates `Bottom <= Top` for all irrelevant variables on the left-hand side.
- */
 bool EbpfDomain::operator<=(const EbpfDomain& other) const {
     if (!(stack <= other.stack)) {
         return false;
     }
-    EbpfDomain tmp{other};
-    for (const Variable& v : type_inv.get_nonexistent_kind_variables(m_inv)) {
-        tmp.m_inv.havoc(v);
-    }
-    return m_inv <= tmp.m_inv;
+    return rcp <= other.rcp;
 }
 
 bool EbpfDomain::operator==(const EbpfDomain& other) const {
-    return stack == other.stack && m_inv <= other.m_inv && other.m_inv <= m_inv;
-}
-
-void EbpfDomain::join_selective(NumAbsDomain& left, NumAbsDomain&& right) {
-    if (left.is_bottom()) {
-        left = std::move(right);
-        return;
-    }
-    if (right.is_bottom()) {
-        return;
-    }
-    auto extra_invariants = TypeDomain{}.collect_type_dependent_constraints(left, right);
-    left |= std::move(right);
-    for (const auto& [variable, in_left, interval] : extra_invariants) {
-        left.set(variable, interval);
-    }
+    return stack == other.stack && rcp <= other.rcp && other.rcp <= rcp;
 }
 
 void EbpfDomain::operator|=(EbpfDomain&& other) {
     if (is_bottom()) {
-        stack = std::move(other.stack);
+        stack = other.stack;
     } else if (!other.is_bottom()) {
-        stack |= std::move(other.stack);
+        stack |= other.stack;
     }
-    join_selective(m_inv, std::move(other.m_inv));
+    rcp |= std::move(other.rcp);
 }
 
 void EbpfDomain::operator|=(const EbpfDomain& other) {
@@ -144,7 +91,11 @@ EbpfDomain EbpfDomain::operator|(const EbpfDomain& other) && {
 }
 
 EbpfDomain EbpfDomain::operator&(const EbpfDomain& other) const {
-    return EbpfDomain(m_inv & other.m_inv, stack & other.stack);
+    auto res = rcp & other.rcp;
+    if (!res.is_bottom()) {
+        return EbpfDomain(res, stack & other.stack);
+    }
+    return bottom();
 }
 
 EbpfDomain EbpfDomain::calculate_constant_limits() {
@@ -152,21 +103,21 @@ EbpfDomain EbpfDomain::calculate_constant_limits() {
     using namespace dsl_syntax;
     for (const int i : {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}) {
         const auto r = reg_pack(i);
-        inv.add_constraint(r.svalue <= std::numeric_limits<int32_t>::max());
-        inv.add_constraint(r.svalue >= std::numeric_limits<int32_t>::min());
-        inv.add_constraint(r.uvalue <= std::numeric_limits<uint32_t>::max());
-        inv.add_constraint(r.uvalue >= 0);
-        inv.add_constraint(r.stack_offset <= EBPF_TOTAL_STACK_SIZE);
-        inv.add_constraint(r.stack_offset >= 0);
-        inv.add_constraint(r.shared_offset <= r.shared_region_size);
-        inv.add_constraint(r.shared_offset >= 0);
-        inv.add_constraint(r.packet_offset <= variable_registry->packet_size());
-        inv.add_constraint(r.packet_offset >= 0);
+        inv.add_value_constraint(r.svalue <= std::numeric_limits<int32_t>::max());
+        inv.add_value_constraint(r.svalue >= std::numeric_limits<int32_t>::min());
+        inv.add_value_constraint(r.uvalue <= std::numeric_limits<uint32_t>::max());
+        inv.add_value_constraint(r.uvalue >= 0);
+        inv.add_value_constraint(r.stack_offset <= EBPF_TOTAL_STACK_SIZE);
+        inv.add_value_constraint(r.stack_offset >= 0);
+        inv.add_value_constraint(r.shared_offset <= r.shared_region_size);
+        inv.add_value_constraint(r.shared_offset >= 0);
+        inv.add_value_constraint(r.packet_offset <= variable_registry->packet_size());
+        inv.add_value_constraint(r.packet_offset >= 0);
         if (thread_local_options.cfg_opts.check_for_termination) {
             for (const Variable counter : variable_registry->get_loop_counters()) {
-                inv.add_constraint(counter <= std::numeric_limits<int32_t>::max());
-                inv.add_constraint(counter >= 0);
-                inv.add_constraint(counter <= r.svalue);
+                inv.add_value_constraint(counter <= std::numeric_limits<int32_t>::max());
+                inv.add_value_constraint(counter >= 0);
+                inv.add_value_constraint(counter <= r.svalue);
             }
         }
     }
@@ -176,14 +127,7 @@ EbpfDomain EbpfDomain::calculate_constant_limits() {
 static const EbpfDomain constant_limits = EbpfDomain::calculate_constant_limits();
 
 EbpfDomain EbpfDomain::widen(const EbpfDomain& other, const bool to_constants) const {
-    auto extra_invariants = type_inv.collect_type_dependent_constraints(m_inv, other.m_inv);
-
-    EbpfDomain res{this->m_inv.widen(std::move(other.m_inv)), stack.widen(other.stack)};
-
-    // Now add in the extra invariants saved above.
-    for (const auto& [variable, in_left, interval] : extra_invariants) {
-        res.m_inv.set(variable, interval);
-    }
+    EbpfDomain res{this->rcp.widen(other.rcp), stack.widen(other.stack)};
 
     if (to_constants) {
         return res & constant_limits;
@@ -192,18 +136,23 @@ EbpfDomain EbpfDomain::widen(const EbpfDomain& other, const bool to_constants) c
 }
 
 EbpfDomain EbpfDomain::narrow(const EbpfDomain& other) const {
-    return EbpfDomain(m_inv.narrow(other.m_inv), stack & other.stack);
+    return EbpfDomain(rcp.narrow(other.rcp), stack & other.stack);
 }
 
-void EbpfDomain::add_constraint(const LinearConstraint& cst) { m_inv.add_constraint(cst); }
+void EbpfDomain::add_value_constraint(const LinearConstraint& cst) { rcp.values.add_constraint(cst); }
 
-void EbpfDomain::havoc(const Variable var) { m_inv.havoc(var); }
+void EbpfDomain::add_type_constraint(const LinearConstraint& cst) { rcp.types.add_constraint(cst); }
+
+void EbpfDomain::havoc(const Variable var) {
+    // TODO: type inv?
+    rcp.values.havoc(var);
+}
 
 // Get the start and end of the range of possible map fd values.
 // In the future, it would be cleaner to use a set rather than an interval
 // for map fds.
 bool EbpfDomain::get_map_fd_range(const Reg& map_fd_reg, int32_t* start_fd, int32_t* end_fd) const {
-    const Interval& map_fd_interval = m_inv.eval_interval(reg_pack(map_fd_reg).map_fd);
+    const Interval& map_fd_interval = rcp.values.eval_interval(reg_pack(map_fd_reg).map_fd);
     const auto lb = map_fd_interval.lb().number();
     const auto ub = map_fd_interval.ub().number();
     if (!lb || !lb->fits<int32_t>() || !ub || !ub->fits<int32_t>()) {
@@ -318,18 +267,29 @@ Interval EbpfDomain::get_map_max_entries(const Reg& map_fd_reg) const {
 ExtendedNumber EbpfDomain::get_loop_count_upper_bound() const {
     ExtendedNumber ub{0};
     for (const Variable counter : variable_registry->get_loop_counters()) {
-        ub = std::max(ub, m_inv.eval_interval(counter).ub());
+        ub = std::max(ub, rcp.values.eval_interval(counter).ub());
     }
     return ub;
 }
 
-Interval EbpfDomain::get_r0() const { return m_inv.eval_interval(reg_pack(R0_RETURN_VALUE).svalue); }
+Interval EbpfDomain::get_r0() const { return rcp.values.eval_interval(reg_pack(R0_RETURN_VALUE).svalue); }
+
+std::ostream& operator<<(std::ostream& o, const TypeDomain& dom) { return o << dom.inv; }
+
+std::ostream& operator<<(std::ostream& o, const TypeToNumDomain& dom) {
+    if (dom.is_bottom()) {
+        o << "_|_";
+    } else {
+        o << dom.types << dom.values;
+    }
+    return o;
+}
 
 std::ostream& operator<<(std::ostream& o, const EbpfDomain& dom) {
     if (dom.is_bottom()) {
         o << "_|_";
     } else {
-        o << dom.m_inv << "\nStack: " << dom.stack;
+        o << dom.rcp << "\nStack: " << dom.stack;
     }
     return o;
 }
@@ -340,21 +300,25 @@ void EbpfDomain::initialize_packet() {
     inv.havoc(variable_registry->packet_size());
     inv.havoc(variable_registry->meta_offset());
 
-    inv.add_constraint(0 <= variable_registry->packet_size());
-    inv.add_constraint(variable_registry->packet_size() < MAX_PACKET_SIZE);
+    inv.add_value_constraint(0 <= variable_registry->packet_size());
+    inv.add_value_constraint(variable_registry->packet_size() < MAX_PACKET_SIZE);
     const auto info = *thread_local_program_info;
     if (info.type.context_descriptor->meta >= 0) {
-        inv.add_constraint(variable_registry->meta_offset() <= 0);
-        inv.add_constraint(variable_registry->meta_offset() >= -4098);
+        inv.add_value_constraint(variable_registry->meta_offset() <= 0);
+        inv.add_value_constraint(variable_registry->meta_offset() >= -4098);
     } else {
-        inv.m_inv.assign(variable_registry->meta_offset(), 0);
+        inv.rcp.values.assign(variable_registry->meta_offset(), 0);
     }
 }
 
-EbpfDomain EbpfDomain::from_constraints(const std::vector<LinearConstraint>& constraints) {
+EbpfDomain EbpfDomain::from_constraints(const std::vector<LinearConstraint>& type_constraints,
+                                        const std::vector<LinearConstraint>& value_constraints) {
     EbpfDomain inv;
-    for (const auto& cst : constraints) {
-        inv.add_constraint(cst);
+    for (const auto& cst : type_constraints) {
+        inv.add_type_constraint(cst);
+    }
+    for (const auto& cst : value_constraints) {
+        inv.add_value_constraint(cst);
     }
     return inv;
 }
@@ -365,8 +329,12 @@ EbpfDomain EbpfDomain::from_constraints(const std::set<std::string>& constraints
         inv = setup_entry(false);
     }
     auto numeric_ranges = std::vector<Interval>();
-    for (const auto& cst : parse_linear_constraints(constraints, numeric_ranges)) {
-        inv.add_constraint(cst);
+    auto [type_constraints, value_constraints] = parse_linear_constraints(constraints, numeric_ranges);
+    for (const auto& cst : type_constraints) {
+        inv.add_type_constraint(cst);
+    }
+    for (const auto& cst : value_constraints) {
+        inv.add_value_constraint(cst);
     }
     for (const Interval& range : numeric_ranges) {
         const int start = range.lb().narrow<int>();
@@ -383,20 +351,20 @@ EbpfDomain EbpfDomain::setup_entry(const bool init_r1) {
     EbpfDomain inv;
     const auto r10 = reg_pack(R10_STACK_POINTER);
     constexpr Reg r10_reg{R10_STACK_POINTER};
-    inv.m_inv.add_constraint(EBPF_TOTAL_STACK_SIZE <= r10.svalue);
-    inv.m_inv.add_constraint(r10.svalue <= PTR_MAX);
-    inv.m_inv.assign(r10.stack_offset, EBPF_TOTAL_STACK_SIZE);
+    inv.rcp.values.add_constraint(EBPF_TOTAL_STACK_SIZE <= r10.svalue);
+    inv.rcp.values.add_constraint(r10.svalue <= PTR_MAX);
+    inv.rcp.values.assign(r10.stack_offset, EBPF_TOTAL_STACK_SIZE);
     // stack_numeric_size would be 0, but TOP has the same result
     // so no need to assign it.
-    inv.type_inv.assign_type(inv.m_inv, r10_reg, T_STACK);
+    inv.rcp.types.assign_type(r10_reg, T_STACK);
 
     if (init_r1) {
         const auto r1 = reg_pack(R1_ARG);
         constexpr Reg r1_reg{R1_ARG};
-        inv.m_inv.add_constraint(1 <= r1.svalue);
-        inv.m_inv.add_constraint(r1.svalue <= PTR_MAX);
-        inv.m_inv.assign(r1.ctx_offset, 0);
-        inv.type_inv.assign_type(inv.m_inv, r1_reg, T_CTX);
+        inv.rcp.values.add_constraint(1 <= r1.svalue);
+        inv.rcp.values.add_constraint(r1.svalue <= PTR_MAX);
+        inv.rcp.values.assign(r1.ctx_offset, 0);
+        inv.rcp.types.assign_type(r1_reg, T_CTX);
     }
 
     inv.initialize_packet();

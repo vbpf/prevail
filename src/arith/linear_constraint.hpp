@@ -4,7 +4,7 @@
 
 #include <gsl/narrow>
 
-#include "linear_expression.hpp"
+#include "arith/linear_expression.hpp"
 
 // A linear constraint is of the form:
 //    <linear expression> <operator> 0

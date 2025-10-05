@@ -17,22 +17,10 @@
 #include "crab/array_domain.hpp"
 #include "crab/var_registry.hpp"
 #include "crab_utils/num_safety.hpp"
-#include "spec_type_descriptors.hpp"
 
 namespace prevail {
 
 using Index = uint64_t;
-
-static bool maybe_between(const NumAbsDomain& dom, const ExtendedNumber& x, const LinearExpression& symb_lb,
-                          const LinearExpression& symb_ub) {
-    using namespace dsl_syntax;
-    assert(x.is_finite());
-    const LinearExpression num(*x.number());
-    NumAbsDomain tmp(dom);
-    tmp.add_constraint(num >= symb_lb);
-    tmp.add_constraint(num <= symb_ub);
-    return !tmp.is_bottom();
-}
 
 class offset_t final {
     Index _index{};
@@ -162,19 +150,14 @@ class Cell final {
     // Return true if [symb_lb, symb_ub] may overlap with the cell,
     // where symb_lb and symb_ub are not constant expressions.
     [[nodiscard]]
-    bool symbolic_overlap(const LinearExpression& symb_lb, const LinearExpression& symb_ub,
-                          const NumAbsDomain& dom) const;
+    bool symbolic_overlap(const Interval& range) const;
 
     friend std::ostream& operator<<(std::ostream& o, const Cell& c) { return o << "cell(" << c.to_interval() << ")"; }
 };
 
 // Return true if [symb_lb, symb_ub] may overlap with the cell,
 // where symb_lb and symb_ub are not constant expressions.
-bool Cell::symbolic_overlap(const LinearExpression& symb_lb, const LinearExpression& symb_ub,
-                            const NumAbsDomain& dom) const {
-    const Interval x = to_interval();
-    return maybe_between(dom, x.lb(), symb_lb, symb_ub) || maybe_between(dom, x.ub(), symb_lb, symb_ub);
-}
+bool Cell::symbolic_overlap(const Interval& range) const { return !(to_interval() & range).is_bottom(); }
 
 // Map offsets to cells
 class offset_map_t final {
@@ -236,8 +219,7 @@ class offset_map_t final {
     std::vector<Cell> get_overlap_cells(offset_t o, unsigned size);
 
     [[nodiscard]]
-    std::vector<Cell> get_overlap_cells_symbolic_offset(const NumAbsDomain& dom, const LinearExpression& symb_lb,
-                                                        const LinearExpression& symb_ub);
+    std::vector<Cell> get_overlap_cells_symbolic_offset(const Interval& range);
 
     friend std::ostream& operator<<(std::ostream& o, offset_map_t& m);
 
@@ -267,9 +249,7 @@ void offset_map_t::remove_cell(const Cell& c) {
 }
 
 [[nodiscard]]
-std::vector<Cell> offset_map_t::get_overlap_cells_symbolic_offset(const NumAbsDomain& dom,
-                                                                  const LinearExpression& symb_lb,
-                                                                  const LinearExpression& symb_ub) {
+std::vector<Cell> offset_map_t::get_overlap_cells_symbolic_offset(const Interval& range) {
     std::vector<Cell> out;
     for (const auto& [_offset, o_cells] : _map) {
         // All cells in o_cells have the same offset. They only differ in the size.
@@ -290,7 +270,7 @@ std::vector<Cell> offset_map_t::get_overlap_cells_symbolic_offset(const NumAbsDo
             }
         }
         if (!largest_cell.is_null()) {
-            if (largest_cell.symbolic_overlap(symb_lb, symb_ub, dom)) {
+            if (largest_cell.symbolic_overlap(range)) {
                 for (const auto& c : o_cells) {
                     out.push_back(c);
                 }
@@ -458,8 +438,8 @@ void ArrayDomain::split_cell(NumAbsDomain& inv, const DataKind kind, const int c
     assert(kind == DataKind::svalues || kind == DataKind::uvalues);
 
     // Get the values from the indicated stack range.
-    const std::optional<LinearExpression> svalue = load(inv, DataKind::svalues, Number(cell_start_index), len);
-    const std::optional<LinearExpression> uvalue = load(inv, DataKind::uvalues, Number(cell_start_index), len);
+    const std::optional<LinearExpression> svalue = load(inv, DataKind::svalues, Interval{cell_start_index}, len);
+    const std::optional<LinearExpression> uvalue = load(inv, DataKind::uvalues, Interval{cell_start_index}, len);
 
     // Create a new cell for that range.
     offset_map_t& offset_map = lookup_array_map(kind);
@@ -470,31 +450,26 @@ void ArrayDomain::split_cell(NumAbsDomain& inv, const DataKind kind, const int c
 
 // Prepare to havoc bytes in the middle of a cell by potentially splitting the cell if it is numeric,
 // into the part to the left of the havoced portion, and the part to the right of the havoced portion.
-void ArrayDomain::split_number_var(NumAbsDomain& inv, DataKind kind, const LinearExpression& i,
-                                   const LinearExpression& elem_size) const {
+void ArrayDomain::split_number_var(NumAbsDomain& inv, DataKind kind, const Interval& ii,
+                                   const Interval& elem_size) const {
     assert(kind == DataKind::svalues || kind == DataKind::uvalues);
     offset_map_t& offset_map = lookup_array_map(kind);
-    Interval ii = inv.eval_interval(i);
-    std::optional<Number> n = ii.singleton();
+    const std::optional<Number> n = ii.singleton();
     if (!n) {
         // We can only split a singleton offset.
         return;
     }
-    Interval i_elem_size = inv.eval_interval(elem_size);
-    std::optional<Number> n_bytes = i_elem_size.singleton();
+    const std::optional<Number> n_bytes = elem_size.singleton();
     if (!n_bytes) {
         // We can only split a singleton size.
         return;
     }
-    auto size = n_bytes->narrow<unsigned int>();
-    offset_t o(n->narrow<Index>());
+    const auto size = n_bytes->narrow<unsigned int>();
+    const offset_t o(n->narrow<Index>());
 
-    std::vector<Cell> cells = offset_map.get_overlap_cells(o, size);
-    for (Cell const& c : cells) {
-        Interval intv = c.to_interval();
-        int cell_start_index = intv.lb().narrow<int>();
-        int cell_end_index = intv.ub().narrow<int>();
-
+    const std::vector<Cell> cells = offset_map.get_overlap_cells(o, size);
+    for (const Cell& c : cells) {
+        const auto [cell_start_index, cell_end_index] = c.to_interval().pair<int>();
         if (!this->num_bytes.all_num(cell_start_index, cell_end_index + 1) ||
             cell_end_index + 1UL < cell_start_index + sizeof(int64_t)) {
             // We can only split numeric cells of size 8 or less.
@@ -518,16 +493,14 @@ void ArrayDomain::split_number_var(NumAbsDomain& inv, DataKind kind, const Linea
 }
 
 // we can only treat this as non-member because we use global state
-static std::optional<std::pair<offset_t, unsigned>>
-kill_and_find_var(NumAbsDomain& inv, DataKind kind, const LinearExpression& i, const LinearExpression& elem_size) {
+static std::optional<std::pair<offset_t, unsigned>> kill_and_find_var(NumAbsDomain& inv, DataKind kind,
+                                                                      const Interval& ii, const Interval& elem_size) {
     std::optional<std::pair<offset_t, unsigned>> res;
 
     offset_map_t& offset_map = lookup_array_map(kind);
-    Interval ii = inv.eval_interval(i);
     std::vector<Cell> cells;
-    if (std::optional<Number> n = ii.singleton()) {
-        Interval i_elem_size = inv.eval_interval(elem_size);
-        if (auto n_bytes = i_elem_size.singleton()) {
+    if (const std::optional<Number> n = ii.singleton()) {
+        if (const auto n_bytes = elem_size.singleton()) {
             auto size = n_bytes->narrow<unsigned int>();
             // -- Constant index: kill overlapping cells
             offset_t o(n->narrow<Index>());
@@ -537,7 +510,7 @@ kill_and_find_var(NumAbsDomain& inv, DataKind kind, const LinearExpression& i, c
     }
     if (!res) {
         // -- Non-constant index: kill overlapping cells
-        cells = offset_map.get_overlap_cells_symbolic_offset(inv, i, i.plus(elem_size));
+        cells = offset_map.get_overlap_cells_symbolic_offset(ii | (ii + elem_size));
     }
     if (!cells.empty()) {
         // Forget the scalars from the numerical domain
@@ -556,22 +529,22 @@ kill_and_find_var(NumAbsDomain& inv, DataKind kind, const LinearExpression& i, c
     }
     return res;
 }
+static std::tuple<int, int> as_numbytes_range(const Interval& index, const Interval& width) {
+    return (index | (index + width)).bound(0, EBPF_TOTAL_STACK_SIZE);
+}
 
-bool ArrayDomain::all_num(const NumAbsDomain& inv, const LinearExpression& lb, const LinearExpression& ub) const {
-    const auto min_lb = inv.eval_interval(lb).lb().number();
-    const auto max_ub = inv.eval_interval(ub).ub().number();
-    if (!min_lb || !max_ub || !min_lb->fits<int32_t>() || !max_ub->fits<int32_t>()) {
+bool ArrayDomain::all_num_lb_ub(const Interval& lb, const Interval& ub) const {
+    const auto [min_lb, max_ub] = (lb | ub).bound(0, EBPF_TOTAL_STACK_SIZE);
+    if (min_lb > max_ub) {
         return false;
     }
+    return this->num_bytes.all_num(min_lb, max_ub);
+}
 
-    // The all_num() call requires a legal range. If we have an illegal range,
-    // we should have already generated an error about the invalid range so just
-    // return true now to avoid an extra error about a non-numeric range.
-    if (*min_lb >= *max_ub) {
-        return true;
-    }
-
-    return this->num_bytes.all_num(min_lb->narrow<int32_t>(), max_ub->narrow<int32_t>());
+bool ArrayDomain::all_num_width(const Interval& index, const Interval& width) const {
+    const auto [min_lb, max_ub] = as_numbytes_range(index, width);
+    assert(min_lb <= max_ub);
+    return this->num_bytes.all_num(min_lb, max_ub);
 }
 
 // Get the number of bytes, starting at offset, that are known to be numbers.
@@ -625,24 +598,14 @@ std::optional<uint8_t> get_value_byte(const NumAbsDomain& inv, const offset_t o,
     return bytes[o % width];
 }
 
-std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, DataKind kind, const LinearExpression& i,
-                                                  int width) const {
-    Interval ii = inv.eval_interval(i);
-    if (std::optional<Number> n = ii.singleton()) {
+std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, const DataKind kind, const Interval& i,
+                                                  const int width) const {
+    if (const std::optional<Number> n = i.singleton()) {
         offset_map_t& offset_map = lookup_array_map(kind);
-        int64_t k = n->narrow<int64_t>();
-        if (kind == DataKind::types) {
-            auto [only_num, only_non_num] = num_bytes.uniformity(k, width);
-            if (only_num) {
-                return T_NUM;
-            }
-            if (!only_non_num || width != 8) {
-                return {};
-            }
-        }
-        offset_t o(k);
-        unsigned size = to_unsigned(width);
-        if (auto cell = lookup_array_map(kind).get_cell(o, size)) {
+        const int64_t k = n->narrow<int64_t>();
+        const offset_t o(k);
+        const unsigned size = to_unsigned(width);
+        if (const auto cell = lookup_array_map(kind).get_cell(o, size)) {
             return cell->get_scalar(kind);
         }
         if (kind == DataKind::svalues || kind == DataKind::uvalues) {
@@ -651,7 +614,7 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, DataK
             uint8_t result_buffer[8];
             bool found = true;
             for (unsigned int index = 0; index < size; index++) {
-                offset_t byte_offset{o + index};
+                const offset_t byte_offset{o + index};
                 std::optional<uint8_t> b = get_value_byte(inv, byte_offset, 8);
                 if (!b) {
                     b = get_value_byte(inv, byte_offset, 4);
@@ -705,9 +668,9 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, DataK
             }
         }
 
-        std::vector<Cell> cells = offset_map.get_overlap_cells(o, size);
+        const std::vector<Cell> cells = offset_map.get_overlap_cells(o, size);
         if (cells.empty()) {
-            Cell c = offset_map.mk_cell(o, size);
+            const Cell c = offset_map.mk_cell(o, size);
             // Here it's ok to do assignment (instead of expand) because c is not a summarized variable.
             // Otherwise, it would be unsound.
             return c.get_scalar(kind);
@@ -719,7 +682,44 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, DataK
                 to construct values of some type from a sequence of bytes.
                 It can be endian-independent but it would more precise if we choose between little- and big-endian.
         */
-    } else if (kind == DataKind::types) {
+    } else {
+        // TODO: we can be more precise here
+        CRAB_WARN("array expansion: ignored array load because of non-constant array index ", i);
+    }
+    return {};
+}
+
+std::optional<LinearExpression> ArrayDomain::load_type(const Interval& ii, int width) const {
+    if (std::optional<Number> n = ii.singleton()) {
+        offset_map_t& offset_map = lookup_array_map(DataKind::types);
+        int64_t k = n->narrow<int64_t>();
+        auto [only_num, only_non_num] = num_bytes.uniformity(k, width);
+        if (only_num) {
+            return T_NUM;
+        }
+        if (!only_non_num || width != 8) {
+            return {};
+        }
+        offset_t o(k);
+        unsigned size = to_unsigned(width);
+        if (auto cell = lookup_array_map(DataKind::types).get_cell(o, size)) {
+            return cell->get_scalar(DataKind::types);
+        }
+        std::vector<Cell> cells = offset_map.get_overlap_cells(o, size);
+        if (cells.empty()) {
+            Cell c = offset_map.mk_cell(o, size);
+            // Here it's ok to do assignment (instead of expand) because c is not a summarized variable.
+            // Otherwise, it would be unsound.
+            return c.get_scalar(DataKind::types);
+        }
+        CRAB_WARN("Ignored read from cell ", DataKind::types, "[", o, "...", o + size - 1, "]",
+                  " because it overlaps with ", cells.size(), " cells");
+        /*
+            TODO: we can apply here "Value Recomposition" a la Mine'06 (https://arxiv.org/pdf/cs/0703074.pdf)
+                to construct values of some type from a sequence of bytes.
+                It can be endian-independent but it would more precise if we choose between little- and big-endian.
+        */
+    } else {
         // Check whether the kind is uniform across the entire interval.
         auto lb = ii.lb().number();
         auto ub = ii.ub().number();
@@ -733,9 +733,6 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, DataK
                 }
             }
         }
-    } else {
-        // TODO: we can be more precise here
-        CRAB_WARN("array expansion: ignored array load because of non-constant array index ", i);
     }
     return {};
 }
@@ -745,87 +742,83 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, DataK
 // partially cover that range can be split such that any non-covered portions become new cells.
 static std::optional<std::pair<offset_t, unsigned>> split_and_find_var(const ArrayDomain& array_domain,
                                                                        NumAbsDomain& inv, const DataKind kind,
-                                                                       const LinearExpression& idx,
-                                                                       const LinearExpression& elem_size) {
+                                                                       const Interval& idx, const Interval& elem_size) {
     if (kind == DataKind::svalues || kind == DataKind::uvalues) {
         array_domain.split_number_var(inv, kind, idx, elem_size);
     }
     return kill_and_find_var(inv, kind, idx, elem_size);
 }
 
-std::optional<Variable> ArrayDomain::store(NumAbsDomain& inv, const DataKind kind, const LinearExpression& idx,
-                                           const LinearExpression& elem_size, const LinearExpression& val) {
+std::optional<Variable> ArrayDomain::store(NumAbsDomain& inv, const DataKind kind, const Interval& idx,
+                                           const Interval& elem_size) {
     if (auto maybe_cell = split_and_find_var(*this, inv, kind, idx, elem_size)) {
         // perform strong update
         auto [offset, size] = *maybe_cell;
-        if (kind == DataKind::types) {
-            const std::optional<Number> t = inv.eval_interval(val).singleton();
-            if (t == Number{T_NUM}) {
-                num_bytes.reset(offset, size);
-            } else {
-                num_bytes.havoc(offset, size);
-            }
-        }
         Variable v = lookup_array_map(kind).mk_cell(offset, size).get_scalar(kind);
         return v;
     }
     return {};
 }
 
-std::optional<Variable> ArrayDomain::store_type(NumAbsDomain& inv, const LinearExpression& idx,
-                                                const LinearExpression& elem_size, const LinearExpression& val) {
+std::optional<Variable> ArrayDomain::store_type(TypeDomain& inv, const Interval& idx, const Interval& width,
+                                                const bool is_num) {
     constexpr auto kind = DataKind::types;
-    if (auto maybe_cell = split_and_find_var(*this, inv, kind, idx, elem_size)) {
+    if (auto maybe_cell = split_and_find_var(*this, inv.inv, kind, idx, width)) {
         // perform strong update
         auto [offset, size] = *maybe_cell;
-        const std::optional<Number> t = inv.eval_interval(val).singleton();
-        if (t == Number{T_NUM}) {
+        if (is_num) {
             num_bytes.reset(offset, size);
         } else {
             num_bytes.havoc(offset, size);
         }
         Variable v = lookup_array_map(kind).mk_cell(offset, size).get_scalar(kind);
         return v;
+    } else {
+        using namespace dsl_syntax;
+        // havoc the entire range
+        const auto [lb, ub] = as_numbytes_range(idx, width);
+        num_bytes.havoc(lb, ub);
     }
     return {};
 }
 
-void ArrayDomain::havoc(NumAbsDomain& inv, const DataKind kind, const LinearExpression& idx,
-                        const LinearExpression& elem_size) {
-    auto maybe_cell = split_and_find_var(*this, inv, kind, idx, elem_size);
-    if (maybe_cell && kind == DataKind::types) {
+void ArrayDomain::havoc(NumAbsDomain& inv, const DataKind kind, const Interval& idx, const Interval& elem_size) {
+    split_and_find_var(*this, inv, kind, idx, elem_size);
+}
+
+void ArrayDomain::havoc_type(TypeDomain& inv, const Interval& idx, const Interval& elem_size) {
+    constexpr auto kind = DataKind::types;
+    auto maybe_cell = split_and_find_var(*this, inv.inv, kind, idx, elem_size);
+    if (maybe_cell) {
         auto [offset, size] = *maybe_cell;
         num_bytes.havoc(offset, size);
     }
 }
 
-void ArrayDomain::store_numbers(const NumAbsDomain& inv, const Variable _idx, const Variable _width) {
-
-    // TODO: this should be an user parameter.
-    const Number max_num_elems = EBPF_TOTAL_STACK_SIZE;
+void ArrayDomain::store_numbers(const Interval& _idx, const Interval& _width) {
 
     if (is_bottom()) {
         return;
     }
 
-    const std::optional<Number> idx_n = inv.eval_interval(_idx).singleton();
+    const std::optional<Number> idx_n = _idx.singleton();
     if (!idx_n) {
         CRAB_WARN("array expansion store range ignored because ", "lower bound is not constant");
         return;
     }
 
-    const std::optional<Number> width = inv.eval_interval(_width).singleton();
+    const std::optional<Number> width = _width.singleton();
     if (!width) {
         CRAB_WARN("array expansion store range ignored because ", "upper bound is not constant");
         return;
     }
 
-    if (*idx_n + *width > max_num_elems) {
+    if (*idx_n + *width > EBPF_TOTAL_STACK_SIZE) {
         CRAB_WARN("array expansion store range ignored because ",
-                  "the number of elements is larger than default limit of ", max_num_elems);
+                  "the number of elements is larger than default limit of ", EBPF_TOTAL_STACK_SIZE);
         return;
     }
-    num_bytes.reset(idx_n->narrow<size_t>(), width->narrow<int>());
+    num_bytes.reset(idx_n->narrow<int>(), width->narrow<int>());
 }
 
 void ArrayDomain::set_to_top() { num_bytes.set_to_top(); }

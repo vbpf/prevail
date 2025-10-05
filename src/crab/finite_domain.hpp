@@ -10,6 +10,7 @@
 #include "asm_syntax.hpp" // for Condition::Op
 #include "crab/interval.hpp"
 #include "crab/split_dbm.hpp"
+#include "crab/var_registry.hpp"
 #include "string_constraints.hpp"
 
 namespace prevail {
@@ -17,9 +18,9 @@ namespace prevail {
 class FiniteDomain {
     SplitDBM dom;
 
+  public:
     explicit FiniteDomain(const SplitDBM& dom) : dom{dom} {}
 
-  public:
     explicit FiniteDomain() = default;
 
     FiniteDomain(const FiniteDomain& o) = default;
