@@ -76,6 +76,11 @@ FAIL_ANALYZE("build", "badmapptr.o", "test")
         VERIFY_SECTION(project, filename, section, {}, &g_ebpf_platform_linux, true); \
     }
 
+#define TEST_SECTION_SLOW(project, filename, section)                                     \
+    TEST_CASE(project "/" filename " " section, "[verify][samples][slow][" project "]") { \
+        VERIFY_SECTION(project, filename, section, {}, &g_ebpf_platform_linux, true);     \
+    }
+
 #define TEST_PROGRAM(project, filename, section_name, program_name, count)                                      \
     TEST_CASE(project "/" filename " " program_name, "[verify][samples][" project "]") {                        \
         VERIFY_PROGRAM(project, filename, section_name, program_name, {}, &g_ebpf_platform_linux, true, count); \
@@ -129,38 +134,42 @@ FAIL_ANALYZE("build", "badmapptr.o", "test")
     TEST_SECTION(dirname, filename, sectionname)            \
     TEST_LEGACY(dirname, filename, sectionname)
 
+#define TEST_SECTION_LEGACY_SLOW(dirname, filename, sectionname) \
+    TEST_SECTION_SLOW(dirname, filename, sectionname)            \
+    TEST_LEGACY(dirname, filename, sectionname)
+
 #define TEST_SECTION_LEGACY_FAIL(dirname, filename, sectionname) \
     TEST_SECTION_FAIL(dirname, filename, sectionname)            \
     TEST_LEGACY(dirname, filename, sectionname)
 
-TEST_SECTION("bpf_cilium_test", "bpf_lxc_jit.o", "1/0xdc06")
+TEST_SECTION_SLOW("bpf_cilium_test", "bpf_lxc_jit.o", "1/0xdc06")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc_jit.o", "2/1")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc_jit.o", "2/3")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc_jit.o", "2/4")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc_jit.o", "2/5")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc_jit.o", "2/6")
-TEST_SECTION("bpf_cilium_test", "bpf_lxc_jit.o", "2/7")
-TEST_SECTION_LEGACY("bpf_cilium_test", "bpf_lxc_jit.o", "2/10")
+TEST_SECTION_SLOW("bpf_cilium_test", "bpf_lxc_jit.o", "2/7")
+TEST_SECTION_LEGACY_SLOW("bpf_cilium_test", "bpf_lxc_jit.o", "2/10")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc_jit.o", "from-container")
 
-TEST_SECTION("bpf_cilium_test", "bpf_lxc-DUNKNOWN.o", "1/0x1010")
+TEST_SECTION_SLOW("bpf_cilium_test", "bpf_lxc-DUNKNOWN.o", "1/0x1010")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc-DUNKNOWN.o", "2/1")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc-DUNKNOWN.o", "2/2")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc-DUNKNOWN.o", "2/3")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc-DUNKNOWN.o", "2/4")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc-DUNKNOWN.o", "2/5")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc-DUNKNOWN.o", "2/6")
-TEST_SECTION("bpf_cilium_test", "bpf_lxc-DUNKNOWN.o", "2/7")
-TEST_SECTION_LEGACY("bpf_cilium_test", "bpf_lxc-DUNKNOWN.o", "from-container")
+TEST_SECTION_SLOW("bpf_cilium_test", "bpf_lxc-DUNKNOWN.o", "2/7")
+TEST_SECTION_LEGACY_SLOW("bpf_cilium_test", "bpf_lxc-DUNKNOWN.o", "from-container")
 
-TEST_SECTION("bpf_cilium_test", "bpf_lxc-DDROP_ALL.o", "1/0x1010")
+TEST_SECTION_SLOW("bpf_cilium_test", "bpf_lxc-DDROP_ALL.o", "1/0x1010")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc-DDROP_ALL.o", "2/1")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc-DDROP_ALL.o", "2/2")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc-DDROP_ALL.o", "2/3")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc-DDROP_ALL.o", "2/4")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc-DDROP_ALL.o", "2/5")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc-DDROP_ALL.o", "2/6")
-TEST_SECTION("bpf_cilium_test", "bpf_lxc-DDROP_ALL.o", "2/7")
+TEST_SECTION_SLOW("bpf_cilium_test", "bpf_lxc-DDROP_ALL.o", "2/7")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc-DDROP_ALL.o", "from-container")
 
 TEST_SECTION("bpf_cilium_test", "bpf_netdev.o", "2/1")
@@ -168,7 +177,7 @@ TEST_SECTION("bpf_cilium_test", "bpf_netdev.o", "2/2")
 TEST_SECTION("bpf_cilium_test", "bpf_netdev.o", "2/3")
 TEST_SECTION("bpf_cilium_test", "bpf_netdev.o", "2/4")
 TEST_SECTION("bpf_cilium_test", "bpf_netdev.o", "2/5")
-TEST_SECTION("bpf_cilium_test", "bpf_netdev.o", "2/7")
+TEST_SECTION_SLOW("bpf_cilium_test", "bpf_netdev.o", "2/7")
 
 TEST_SECTION("bpf_cilium_test", "bpf_overlay.o", "2/1")
 TEST_SECTION("bpf_cilium_test", "bpf_overlay.o", "2/2")
@@ -177,7 +186,7 @@ TEST_SECTION("bpf_cilium_test", "bpf_overlay.o", "2/4")
 TEST_SECTION("bpf_cilium_test", "bpf_overlay.o", "2/5")
 TEST_SECTION("bpf_cilium_test", "bpf_overlay.o", "2/7")
 TEST_SECTION("bpf_cilium_test", "bpf_overlay.o", "3/2")
-TEST_SECTION_LEGACY("bpf_cilium_test", "bpf_overlay.o", "from-overlay")
+TEST_SECTION_LEGACY_SLOW("bpf_cilium_test", "bpf_overlay.o", "from-overlay")
 
 TEST_SECTION("bpf_cilium_test", "bpf_lb-DLB_L3.o", "2/1")
 TEST_SECTION("bpf_cilium_test", "bpf_lb-DLB_L3.o", "2/2")
@@ -606,11 +615,11 @@ TEST_SECTION_FAIL("linux", "test_map_in_map_kern.o", "kprobe/sys_connect")
 
 // Used to fail due to #679: sign extension (r1 s32= r1) leading to bottom
 TEST_SECTION_LEGACY("cilium", "bpf_netdev.o", "from-netdev")
-TEST_SECTION_LEGACY("bpf_cilium_test", "bpf_netdev.o", "from-netdev")
-TEST_SECTION("cilium", "bpf_lxc.o", "2/7")
-TEST_SECTION_LEGACY("cilium", "bpf_lxc.o", "2/10")
-TEST_SECTION("cilium", "bpf_lxc.o", "2/11")
-TEST_SECTION("cilium", "bpf_lxc.o", "2/12")
+TEST_SECTION_LEGACY_SLOW("bpf_cilium_test", "bpf_netdev.o", "from-netdev")
+TEST_SECTION_SLOW("cilium", "bpf_lxc.o", "2/7")
+TEST_SECTION_LEGACY_SLOW("cilium", "bpf_lxc.o", "2/10")
+TEST_SECTION_SLOW("cilium", "bpf_lxc.o", "2/11")
+TEST_SECTION_SLOW("cilium", "bpf_lxc.o", "2/12")
 
 static void test_analyze_thread(const Program* prog, const ProgramInfo* info, bool* res) {
     thread_local_program_info.set(*info);

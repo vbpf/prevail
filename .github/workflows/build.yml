@@ -19,6 +19,14 @@ jobs:
       matrix:
         configurations: [Debug, Release]
         target: [tests, library]
+        test-type: [regular, slow]
+        exclude:
+          # Only run test-type variations when target is 'tests'
+          - target: library
+            test-type: slow
+          # Only split tests for Debug mode
+          - configurations: Release
+            test-type: slow
     runs-on: ubuntu-latest
     env:
       # Configuration type to build.  For documentation on how build matrices work, see
@@ -50,12 +58,20 @@ jobs:
           fi
           cmake --build build -j $(nproc)
 
-      - name: Run unit tests
-        if: ${{matrix.target == 'tests'}}
+      - name: Run regular unit tests (Debug)
+        if: ${{matrix.target == 'tests' && matrix.configurations == 'Debug' && matrix.test-type == 'regular'}}
+        run: ./tests -d yes ~[slow]
+
+      - name: Run slow unit tests (Debug)
+        if: ${{matrix.target == 'tests' && matrix.configurations == 'Debug' && matrix.test-type == 'slow'}}
+        run: ./tests -d yes [slow]
+
+      - name: Run all unit tests (Release)
+        if: ${{matrix.target == 'tests' && matrix.configurations == 'Release'}}
         run: ./tests -d yes
 
       - name: Test for memory leaks
-        if: ${{matrix.target == 'tests'}}
+        if: ${{matrix.target == 'tests' && matrix.configurations == 'Debug' && matrix.test-type == 'regular'}}
         # Any memory leaks will cause the test to fail
         # This BPF program was chosen because it is the largest one in the repo
         run: valgrind --leak-check=full --errors-for-leak-kinds=all  --show-leak-kinds=all --error-exitcode=1 ./check ebpf-samples/cilium/bpf_xdp_snat_linux_v1.o 2/1
@@ -65,6 +81,14 @@ jobs:
       matrix:
         configurations: [Debug, Release]
         target: [tests, library]
+        test-type: [regular, slow]
+        exclude:
+          # Only run test-type variations when target is 'tests'
+          - target: library
+            test-type: slow
+          # Only split tests for Debug mode
+          - configurations: Release
+            test-type: slow
     runs-on: windows-2022
     env:
       # Configuration type to build.  For documentation on how build matrices work, see
@@ -86,6 +110,14 @@ jobs:
           }
           cmake --build build -j $(nproc) --config ${{env.BUILD_CONFIGURATION}}
 
-      - name: Run unit tests
-        if: ${{matrix.target == 'tests'}}
+      - name: Run regular unit tests (Debug)
+        if: ${{matrix.target == 'tests' && matrix.configurations == 'Debug' && matrix.test-type == 'regular'}}
+        run: ./${{env.BUILD_CONFIGURATION}}/tests -d yes ~[slow]
+
+      - name: Run slow unit tests (Debug)
+        if: ${{matrix.target == 'tests' && matrix.configurations == 'Debug' && matrix.test-type == 'slow'}}
+        run: ./${{env.BUILD_CONFIGURATION}}/tests -d yes [slow]
+
+      - name: Run all unit tests (Release)
+        if: ${{matrix.target == 'tests' && matrix.configurations == 'Release'}}
         run: ./${{env.BUILD_CONFIGURATION}}/tests -d yes
