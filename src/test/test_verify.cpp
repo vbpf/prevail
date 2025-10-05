@@ -114,6 +114,12 @@ FAIL_ANALYZE("build", "badmapptr.o", "test")
         VERIFY_SECTION(project, filename, section, {}, &g_ebpf_platform_linux, true);                              \
     }
 
+#define TEST_SECTION_FAIL_SLOW(project, filename, section)                            \
+    TEST_CASE("expect failure " project "/" filename " " section,                     \
+              "[!shouldfail][verify][samples][slow][" project "]") {                  \
+        VERIFY_SECTION(project, filename, section, {}, &g_ebpf_platform_linux, true); \
+    }
+
 #define TEST_SECTION_REJECT_FAIL(project, filename, section)                                                       \
     TEST_CASE("expect failure " project "/" filename " " section, "[!shouldfail][verify][samples][" project "]") { \
         VERIFY_SECTION(project, filename, section, {}, &g_ebpf_platform_linux, false);                             \
@@ -578,9 +584,9 @@ TEST_SECTION_FAIL("cilium", "bpf_xdp_dsr_linux.o", "2/7")
 // [-22, -1] which is not sufficient (at most -2 is needed)
 TEST_SECTION_FAIL("cilium", "bpf_xdp_dsr_linux.o", "2/10")
 TEST_SECTION_FAIL("cilium", "bpf_xdp_dsr_linux.o", "2/21")
-TEST_SECTION_FAIL("cilium", "bpf_xdp_dsr_linux.o", "2/24")
+TEST_SECTION_FAIL_SLOW("cilium", "bpf_xdp_dsr_linux.o", "2/24")
 
-TEST_SECTION_FAIL("cilium", "bpf_xdp_dsr_linux.o", "2/15")
+TEST_SECTION_FAIL_SLOW("cilium", "bpf_xdp_dsr_linux.o", "2/15")
 
 TEST_SECTION_FAIL("cilium", "bpf_xdp_dsr_linux.o", "2/17")
 
@@ -590,7 +596,7 @@ TEST_SECTION_FAIL("cilium", "bpf_xdp_dsr_linux.o", "2/18")
 TEST_SECTION_FAIL("cilium", "bpf_xdp_snat_linux.o", "2/10")
 TEST_SECTION_FAIL("cilium", "bpf_xdp_snat_linux.o", "2/18")
 
-TEST_SECTION_FAIL("cilium", "bpf_xdp_dsr_linux.o", "2/19")
+TEST_SECTION_FAIL_SLOW("cilium", "bpf_xdp_dsr_linux.o", "2/19")
 
 // Failure: 230: Upper bound must be at most packet_size (valid_access(r3.offset+32, width=8) for write)
 // r3.packet_offset=[0, 82] and packet_size=[34, 65534]
@@ -599,16 +605,16 @@ TEST_SECTION_FAIL("cilium", "bpf_xdp_dsr_linux.o", "2/19")
 TEST_SECTION_FAIL("cilium", "bpf_xdp_dsr_linux.o", "2/20")
 
 TEST_SECTION_FAIL("cilium", "bpf_xdp_snat_linux.o", "2/7")
-TEST_SECTION_FAIL("cilium", "bpf_xdp_snat_linux.o", "2/15")
+TEST_SECTION_FAIL_SLOW("cilium", "bpf_xdp_snat_linux.o", "2/15")
 TEST_SECTION_FAIL("cilium", "bpf_xdp_snat_linux.o", "2/17")
-TEST_SECTION_FAIL("cilium", "bpf_xdp_snat_linux.o", "2/19")
+TEST_SECTION_FAIL_SLOW("cilium", "bpf_xdp_snat_linux.o", "2/19")
 
 // Failure (&255): assert r5.type == number; w5 &= 255;
 // fails since in one branch (77) r5 is a number but in another (92:93) it is a packet
-TEST_SECTION_FAIL("cilium", "bpf_xdp_snat_linux.o", "2/24")
+TEST_SECTION_FAIL_SLOW("cilium", "bpf_xdp_snat_linux.o", "2/24")
 // Failure (&255): assert r3.type == number; w3 &= 255;
-TEST_SECTION_FAIL("cilium", "bpf_xdp_dsr_linux.o", "2/16")
-TEST_SECTION_FAIL("cilium", "bpf_xdp_snat_linux.o", "2/16")
+TEST_SECTION_FAIL_SLOW("cilium", "bpf_xdp_dsr_linux.o", "2/16")
+TEST_SECTION_FAIL_SLOW("cilium", "bpf_xdp_snat_linux.o", "2/16")
 
 // False positive, unknown cause
 TEST_SECTION_FAIL("linux", "test_map_in_map_kern.o", "kprobe/sys_connect")
