@@ -204,6 +204,30 @@ void TypeToNumDomain::assign(const Reg& lhs, const Reg& rhs) {
     }
 }
 
+void TypeToNumDomain::havoc_offsets(const Reg& reg) {
+    const RegPack r = reg_pack(reg);
+    values.havoc(r.ctx_offset);
+    values.havoc(r.map_fd);
+    values.havoc(r.map_fd_programs);
+    values.havoc(r.packet_offset);
+    values.havoc(r.shared_offset);
+    values.havoc(r.shared_region_size);
+    values.havoc(r.stack_offset);
+    values.havoc(r.stack_numeric_size);
+}
+
+void TypeToNumDomain::havoc_register_except_type(const Reg& reg) {
+    const RegPack r = reg_pack(reg);
+    havoc_offsets(reg);
+    values.havoc(r.svalue);
+    values.havoc(r.uvalue);
+}
+
+void TypeToNumDomain::havoc_register(const Reg& reg) {
+    types.havoc_type(reg);
+    havoc_register_except_type(reg);
+}
+
 TypeToNumDomain TypeToNumDomain::widen(const TypeToNumDomain& other) const {
     auto extra_invariants = collect_type_dependent_constraints(other);
 

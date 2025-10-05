@@ -363,7 +363,8 @@ test-case: havoc numeric size r6
 
 pre: ["r2.type=stack", "r2.stack_offset=504", "r2.stack_numeric_size=8",
       "r6.type=stack", "r6.stack_offset=506", "r3.type in {ctx,packet}",
-      "s[504...511].type=number"]
+      "s[504...511].type=number",
+      "r10.type=stack", "r10.stack_offset=512"]
 
 code:
   <start>: |
@@ -382,6 +383,8 @@ post:
   - r6.type=stack
   - r6.stack_offset=506
   - r6.stack_numeric_size=6
+  - r10.type=stack
+  - r10.stack_offset=512
 ---
 test-case: stack_numeric_size facts persist across 4-byte store
 
@@ -391,7 +394,8 @@ pre: ["r1.type=stack",
       "r7.type=stack",
       "r7.stack_offset=[4032, 4060]",
       "r7.stack_numeric_size=4",
-      "r2.type=number", "r2.svalue=0", "r2.uvalue=0"]
+      "r2.type=number", "r2.svalue=0", "r2.uvalue=0",
+      "r10.type=stack", "r10.stack_offset=512"]
 
 code:
   <start>: |
@@ -406,6 +410,8 @@ post:
   - r2.type=number
   - r2.svalue=0
   - r2.uvalue=0
+  - r10.type=stack
+  - r10.stack_offset=512
 
   # numeric-size descriptors must remain
   - r7.stack_numeric_size=4
@@ -707,9 +713,8 @@ post:
 ---
 test-case: stack load u32 with range yields number when numeric_size>=4
 
-pre: ["r7.type=stack",
-      "r7.stack_offset=[512, 516]",
-      "r7.stack_numeric_size=4"]
+pre: ["r7.type=stack", "r7.stack_offset=[512, 516]", "r7.stack_numeric_size=4",
+      "r10.type=stack", "r10.stack_offset=512"]
 
 code:
   <start>: |
@@ -719,12 +724,15 @@ post:
   - r7.type=stack
   - r7.stack_offset=[512, 516]
   - r7.stack_numeric_size=4
+  - r10.type=stack
+  - r10.stack_offset=512
   - r0.type=number
 ---
 test-case: stack store 64bit through r6 records number type
 
 pre: ["r6.type=stack", "r6.stack_offset=0",
-      "r1.type=number", "r1.svalue=0", "r1.uvalue=0"]
+      "r1.type=number", "r1.svalue=0", "r1.uvalue=0",
+      "r10.type=stack", "r10.stack_offset=512"]
 
 code:
   <start>: |
@@ -736,6 +744,8 @@ post:
   - r1.type=number
   - r1.svalue=0
   - r1.uvalue=0
+  - r10.type=stack
+  - r10.stack_offset=512
   - r6.stack_numeric_size=8
   - s[0...7].type=number
   - s[0...7].svalue=0
@@ -744,7 +754,8 @@ post:
 test-case: stack store 32bit records number type
 
 pre: ["r6.type=stack", "r6.stack_offset=0",
-      "r1.type=number", "r1.svalue=0", "r1.uvalue=0"]
+      "r1.type=number", "r1.svalue=0", "r1.uvalue=0",
+      "r10.type=stack", "r10.stack_offset=512"]
 
 code:
   <start>: |
@@ -756,6 +767,8 @@ post:
   - r1.type=number
   - r1.svalue=0
   - r1.uvalue=0
+  - r10.type=stack
+  - r10.stack_offset=512
   - r6.stack_numeric_size=4
   - s[0...3].type=number
   - s[0...3].svalue=0

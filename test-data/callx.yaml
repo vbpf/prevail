@@ -466,7 +466,8 @@ pre: ["r1.type=ctx", "r1.ctx_offset=0",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=number", "r3.svalue=8", "r3.uvalue=8",
       "r4.type=number",
-      "r8.type=number", "r8.svalue=67", "r8.uvalue=67"]
+      "r8.type=number", "r8.svalue=67", "r8.uvalue=67",
+      "r10.type=stack", "r10.stack_offset=512"]
 
 code:
   <start>: |
@@ -478,6 +479,8 @@ post:
   - r8.svalue=67
   - r8.uvalue=67
   - s[504...511].type=number
+  - r10.type=stack
+  - r10.stack_offset=512
 ---
 test-case: callx bpf_get_stack overwriting ctx
 

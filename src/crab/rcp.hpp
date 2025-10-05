@@ -168,6 +168,14 @@ struct TypeToNumDomain {
 
     void assign(const Reg& lhs, const Reg& rhs);
 
+    void assign_type(auto&&... args) { types.assign_type(std::forward<decltype(args)>(args)...); }
+
+    void havoc_offsets(const Reg& reg);
+
+    void havoc_register_except_type(const Reg& reg);
+
+    void havoc_register(const Reg& reg);
+
     TypeToNumDomain widen(const TypeToNumDomain& other) const;
 
     TypeToNumDomain narrow(const TypeToNumDomain& rcp) const;
