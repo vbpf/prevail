@@ -297,8 +297,8 @@ static Variable special_var(const std::string& s) {
     throw std::runtime_error(std::string() + "Bad special variable: " + s);
 }
 
-std::tuple<std::vector<LinearConstraint>, std::vector<LinearConstraint>>
-parse_linear_constraints(const std::set<std::string>& constraints, std::vector<Interval>& numeric_ranges) {
+TypeValueConstraints parse_linear_constraints(const std::set<std::string>& constraints,
+                                              std::vector<Interval>& numeric_ranges) {
     using namespace dsl_syntax;
 
     std::vector<LinearConstraint> value_csts;
