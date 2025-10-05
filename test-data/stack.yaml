@@ -340,10 +340,10 @@ post:
   - s[504...511].type=number
 
 ---
-test-case: havoc numeric size
+test-case: havoc numeric size r10
 
 pre: ["r2.type=stack", "r2.stack_offset=504", "r2.stack_numeric_size=8",
-      "r10.type=stack", "r10.stack_offset=512",
+      "r10.type=stack", "r10.stack_offset=512", "r3.type in {ctx,packet}",
       "s[504...511].type=number"]
 
 code:
@@ -354,15 +354,73 @@ post:
   - r2.type=stack
   - r2.stack_offset=504
   - s[504].type=r3.type
+  - r3.type in {ctx, packet}
   - r10.type=stack
   - r10.stack_offset=512
   - s[505...511].type=number
+---
+test-case: havoc numeric size r6
 
+pre: ["r2.type=stack", "r2.stack_offset=504", "r2.stack_numeric_size=8",
+      "r6.type=stack", "r6.stack_offset=506", "r3.type in {ctx,packet}",
+      "s[504...511].type=number",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    *(u64 *)(r6 - 8) = r3 ; this should force r2.stack_numeric_size to become 0
+
+post:
+  - r2.type=stack
+  - r2.stack_offset=504
+  - s[498...505].type=r3.type
+  - s[498...505].ctx_offset=r3.ctx_offset
+  - s[498...505].packet_offset=r3.packet_offset
+  - s[498...505].svalue=r3.svalue
+  - s[498...505].uvalue=r3.uvalue
+  - s[506...511].type=number
+  - r3.type in {ctx, packet}
+  - r6.type=stack
+  - r6.stack_offset=506
+  - r6.stack_numeric_size=6
+  - r10.type=stack
+  - r10.stack_offset=512
+---
+test-case: stack_numeric_size facts persist across 4-byte store
+
+pre: ["r1.type=stack",
+      "r1.stack_offset=[4032, 4088]",
+      "r1.stack_numeric_size=[-24, 4]",
+      "r7.type=stack",
+      "r7.stack_offset=[4032, 4060]",
+      "r7.stack_numeric_size=4",
+      "r2.type=number", "r2.svalue=0", "r2.uvalue=0",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    *(u32 *)(r1 + 0) = r2
+
+post:
+  # whitelist stable facts
+  - r1.type=stack
+  - r1.stack_offset=[4032, 4088]
+  - r7.type=stack
+  - r7.stack_offset=[4032, 4060]
+  - r2.type=number
+  - r2.svalue=0
+  - r2.uvalue=0
+  - r10.type=stack
+  - r10.stack_offset=512
+
+  # numeric-size descriptors must remain
+  - r7.stack_numeric_size=4
+  - r1.stack_numeric_size=[-24, 4]
 ---
 test-case: shorten numeric size from int64* to int32*
 
 pre: ["r2.type=stack", "r2.stack_offset=504", "r2.stack_numeric_size=8",
-      "r10.type=stack", "r10.stack_offset=512",
+      "r10.type=stack", "r10.stack_offset=512", "r3.type in {ctx,packet}",
       "s[504...511].type=number"]
 
 code:
@@ -374,6 +432,7 @@ post:
   - r2.stack_offset=504
   - r2.stack_numeric_size=4
   - s[508...511].type=r3.type
+  - r3.type in {ctx, packet}
   - r10.type=stack
   - r10.stack_offset=512
   - s[504...507].type=number
@@ -432,19 +491,17 @@ post:
 ---
 test-case: havoc if clobber stack bytes
 
-pre:
-  - r2.type=stack
-  - r2.stack_offset=[496, 504]
-  - r2.stack_numeric_size=[8, 16]
-  - r10.type=stack
-  - r10.stack_offset=512
-  - s[496...511].type=number
+pre: ["r0.type in {ctx, packet}",
+      "r2.type=stack", "r2.stack_offset=[496, 504]", "r2.stack_numeric_size=[8, 16]",
+      "r10.type=stack", "r10.stack_offset=512",
+      "s[496...511].type=number"]
 
 code:
   <start>: |
     *(u8 *)(r10 - 16) = r0 ; this should reset r2.stack_numeric_size to 0
 
 post:
+  - r0.type in {ctx, packet}
   - s[496].type=r0.type
   - r2.type=stack
   - r2.stack_offset=[496, 504]
@@ -653,3 +710,66 @@ post:
   - s[508...511].type=number
   - s[508...511].svalue=2147483648
   - s[508...511].uvalue=2147483648
+---
+test-case: stack load u32 with range yields number when numeric_size>=4
+
+pre: ["r7.type=stack", "r7.stack_offset=[512, 516]", "r7.stack_numeric_size=4",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    r0 = *(u32 *)(r7 + 0)
+
+post:
+  - r7.type=stack
+  - r7.stack_offset=[512, 516]
+  - r7.stack_numeric_size=4
+  - r10.type=stack
+  - r10.stack_offset=512
+  - r0.type=number
+---
+test-case: stack store 64bit through r6 records number type
+
+pre: ["r6.type=stack", "r6.stack_offset=0",
+      "r1.type=number", "r1.svalue=0", "r1.uvalue=0",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    *(u64 *)(r6 + 0) = r1
+
+post:
+  - r6.stack_offset=0
+  - r6.type=stack
+  - r1.type=number
+  - r1.svalue=0
+  - r1.uvalue=0
+  - r10.type=stack
+  - r10.stack_offset=512
+  - r6.stack_numeric_size=8
+  - s[0...7].type=number
+  - s[0...7].svalue=0
+  - s[0...7].uvalue=0
+---
+test-case: stack store 32bit records number type
+
+pre: ["r6.type=stack", "r6.stack_offset=0",
+      "r1.type=number", "r1.svalue=0", "r1.uvalue=0",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    *(u32 *)(r6 + 0) = r1
+
+post:
+  - r6.stack_offset=0
+  - r6.type=stack
+  - r1.type=number
+  - r1.svalue=0
+  - r1.uvalue=0
+  - r10.type=stack
+  - r10.stack_offset=512
+  - r6.stack_numeric_size=4
+  - s[0...3].type=number
+  - s[0...3].svalue=0
+  - s[0...3].uvalue=0

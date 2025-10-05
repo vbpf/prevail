@@ -4,70 +4,127 @@
 
 // This file is eBPF-specific, not derived from CRAB.
 
-#include <functional>
 #include <optional>
-#include <tuple>
-#include <vector>
 
 #include "arith/variable.hpp"
+#include "arith/dsl_syntax.hpp"
 #include "asm_syntax.hpp" // for Reg
-#include "crab/array_domain.hpp"
+#include "crab/split_dbm.hpp"
 #include "crab/type_encoding.hpp"
 
 namespace prevail {
 
-struct RegPack {
-    Variable svalue; // int64_t value.
-    Variable uvalue; // uint64_t value.
-    Variable ctx_offset;
-    Variable map_fd;
-    Variable packet_offset;
-    Variable shared_offset;
-    Variable stack_offset;
-    Variable type;
-    Variable shared_region_size;
-    Variable stack_numeric_size;
-};
+Variable reg_type(const Reg& lhs);
 
-RegPack reg_pack(int i);
-inline RegPack reg_pack(const Reg r) { return reg_pack(r.v); }
+inline LinearConstraint type_is_pointer(const Reg& r) {
+    using namespace dsl_syntax;
+    return reg_type(r) >= T_CTX;
+}
+
+inline LinearConstraint type_is_number(const Reg& r) {
+    using namespace dsl_syntax;
+    return reg_type(r) == T_NUM;
+}
+
+inline LinearConstraint type_is_not_stack(const Reg& r) {
+    using namespace dsl_syntax;
+    return reg_type(r) != T_STACK;
+}
+
+inline LinearConstraint type_is_not_number(const Reg& r) {
+    using namespace dsl_syntax;
+    return reg_type(r) != T_NUM;
+}
 
 struct TypeDomain {
-    void assign_type(NumAbsDomain& inv, const Reg& lhs, const Reg& rhs);
-    void assign_type(NumAbsDomain& inv, const Reg& lhs, const std::optional<LinearExpression>& rhs);
-    void assign_type(NumAbsDomain& inv, std::optional<Variable> lhs, const LinearExpression& t);
+    // Underlying numerical domain should be different, but for interop with ArrayDomain we reuse NumAbsDomain.
+    using T = NumAbsDomain;
+    T inv;
 
-    void havoc_type(NumAbsDomain& inv, const Reg& r);
+    TypeDomain() : inv(T::top()) {}
+    explicit TypeDomain(const T& other) : inv(other) {};
+
+    TypeDomain(const TypeDomain& other) = default;
+    TypeDomain(TypeDomain&& other) noexcept : inv(std::move(other.inv)) {}
+    TypeDomain& operator=(const TypeDomain& other) {
+        if (this != &other) {
+            inv = other.inv;
+        }
+        return *this;
+    }
+
+    TypeDomain operator|(const TypeDomain& other) const { return TypeDomain{inv | other.inv}; }
+
+    std::optional<TypeDomain> meet(const TypeDomain& other) const {
+        if (auto res = this->inv & other.inv) {
+            return TypeDomain{std::move(res)};
+        }
+        return {};
+    }
+    bool operator<=(const TypeDomain& other) const { return inv <= other.inv; }
+    void set_to_top() { inv.set_to_top(); }
+    static TypeDomain top() { return TypeDomain{}; }
+    TypeDomain widen(const TypeDomain& other) const { return TypeDomain{inv.widen(other.inv)}; }
+    TypeDomain narrow(const TypeDomain& other) const { return TypeDomain{inv.narrow(other.inv)}; }
+
+    void assign_type(const Reg& lhs, const Reg& rhs);
+    void assign_type(const Reg& lhs, const std::optional<LinearExpression>& rhs);
+    void assign_type(std::optional<Variable> lhs, const LinearExpression& t);
+    void add_constraint(const LinearConstraint& cst) { inv.add_constraint(cst); }
+    void havoc_type(const Reg& r);
+    void havoc_type(const Variable& v);
+
+    bool type_is_pointer(const Reg& r) const {
+        using namespace dsl_syntax;
+        return inv.entail(reg_type(r) >= T_CTX);
+    }
+
+    bool type_is_number(const Reg& r) const {
+        using namespace dsl_syntax;
+        return inv.entail(reg_type(r) == T_NUM);
+    }
+
+    bool type_is_not_stack(const Reg& r) const {
+        using namespace dsl_syntax;
+        return inv.entail(reg_type(r) != T_STACK);
+    }
+
+    bool type_is_not_number(const Reg& r) const {
+        using namespace dsl_syntax;
+        return inv.entail(reg_type(r) != T_NUM);
+    }
+
+    std::vector<TypeEncoding> iterate_types(const Reg& reg) const;
 
     [[nodiscard]]
-    TypeEncoding get_type(const NumAbsDomain& inv, const LinearExpression& v) const;
+    TypeEncoding get_type(const LinearExpression& v) const;
     [[nodiscard]]
-    TypeEncoding get_type(const NumAbsDomain& inv, const Reg& r) const;
+    TypeEncoding get_type(const Reg& r) const;
 
     [[nodiscard]]
-    bool may_have_type(const NumAbsDomain& inv, const LinearExpression& v, TypeEncoding type) const;
-    [[nodiscard]]
-    bool may_have_type(const NumAbsDomain& inv, const Reg& r, TypeEncoding type) const;
+    bool implies(const LinearConstraint& premise, const LinearConstraint& conclusion) const {
+        return inv.when(premise).entail(conclusion);
+    }
 
     [[nodiscard]]
-    bool same_type(const NumAbsDomain& inv, const Reg& a, const Reg& b) const;
+    bool may_have_type(const LinearExpression& v, TypeEncoding type) const;
     [[nodiscard]]
-    bool implies_type(const NumAbsDomain& inv, const LinearConstraint& a, const LinearConstraint& b) const;
+    bool may_have_type(const Reg& r, TypeEncoding type) const;
 
     [[nodiscard]]
-    NumAbsDomain join_over_types(const NumAbsDomain& inv, const Reg& reg,
-                                 const std::function<void(NumAbsDomain&, TypeEncoding)>& transition) const;
-    [[nodiscard]]
-    NumAbsDomain join_by_if_else(const NumAbsDomain& inv, const LinearConstraint& condition,
-                                 const std::function<void(NumAbsDomain&)>& if_true,
-                                 const std::function<void(NumAbsDomain&)>& if_false) const;
-
-    std::vector<Variable> get_nonexistent_kind_variables(const NumAbsDomain& dom) const;
-    std::vector<std::tuple<Variable, bool, Interval>>
-    collect_type_dependent_constraints(const NumAbsDomain& left, const NumAbsDomain& right) const;
+    bool is_initialized(const Reg& r) const;
 
     [[nodiscard]]
-    bool is_in_group(const NumAbsDomain& inv, const Reg& r, TypeGroup group) const;
+    bool is_initialized(const LinearExpression& v) const;
+
+    [[nodiscard]]
+    bool same_type(const Reg& a, const Reg& b) const;
+
+    [[nodiscard]]
+    bool is_in_group(const Reg& r, TypeGroup group) const;
+
+    StringInvariant to_set() const { return inv.to_set(); }
+    friend std::ostream& operator<<(std::ostream& o, const TypeDomain& dom);
 };
 
 } // namespace prevail

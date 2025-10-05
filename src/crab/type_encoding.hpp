@@ -14,6 +14,7 @@ enum class DataKind {
     uvalues,
     ctx_offsets,
     map_fds,
+    map_fd_programs,
     packet_offsets,
     shared_offsets,
     stack_offsets,
@@ -21,11 +22,12 @@ enum class DataKind {
     stack_numeric_sizes
 };
 constexpr auto KIND_MIN = DataKind::types;
+constexpr auto KIND_VALUE_MIN = DataKind::svalues;
 constexpr auto KIND_MAX = DataKind::stack_numeric_sizes;
 
 std::string name_of(DataKind kind);
 DataKind regkind(const std::string& s);
-std::vector<DataKind> iterate_kinds(DataKind lb = KIND_MIN, DataKind ub = KIND_MAX);
+std::vector<DataKind> iterate_kinds(DataKind lb = KIND_VALUE_MIN, DataKind ub = KIND_MAX);
 std::ostream& operator<<(std::ostream& o, const DataKind& s);
 
 // The exact numbers are taken advantage of in EbpfDomain
@@ -41,6 +43,7 @@ enum TypeEncoding {
 };
 
 constexpr TypeEncoding T_MIN = T_UNINIT;
+constexpr TypeEncoding T_MIN_VALID = T_MAP_PROGRAMS;
 constexpr TypeEncoding T_MAX = T_SHARED;
 
 std::vector<TypeEncoding> iterate_types(TypeEncoding lb, TypeEncoding ub);

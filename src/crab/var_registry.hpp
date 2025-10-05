@@ -33,6 +33,7 @@ class VariableRegistry final {
 
     std::vector<Variable> get_type_variables();
     Variable reg(DataKind, int);
+    Variable type_reg(int);
     Variable stack_frame_var(DataKind kind, int i, const std::string& prefix);
     Variable cell_var(DataKind array, const Number& offset, const Number& size);
     Variable kind_var(DataKind kind, Variable type_variable);

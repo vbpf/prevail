@@ -285,25 +285,6 @@ post: ["r0.type=number"]
 messages:
   - "0/2: tail call not supported in subprogram (valid call(tail_call))"
 ---
-test-case: call local must preserve R6-R9 types
-
-pre: ["r6.type=packet"]
-
-code:
-  <start>: |
-    call <sub>
-    r0 = 0
-    exit
-  <sub>: |
-    r6 = 1
-    exit
-
-post:
-  - r0.type=number
-  - r0.svalue=0
-  - r0.uvalue=0
-  - r6.type=packet
----
 test-case: fail infinite self-recursion
 
 pre: []

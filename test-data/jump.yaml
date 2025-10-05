@@ -337,7 +337,6 @@ post:
   - r1.type in {number, ctx}
   - r2.ctx_offset=0
   - r2.type in {number, ctx}
-  - r2.type-r0.uvalue<=-4
   - r8.ctx_offset=4
   - r8.type=ctx
   - r9.ctx_offset=0
@@ -379,10 +378,10 @@ post:
   - r2.type in {ctx, packet}
   - r3.ctx_offset=4
   - r3.packet_offset=4
-  - r3.type in {ctx, packet}
+  - r3.type=r2.type
   - r4.ctx_offset=4
   - r4.packet_offset=4
-  - r4.type in {ctx, packet}
+  - r4.type=r2.type
   - r8.ctx_offset=0
   - r8.type=ctx
   - r9.packet_offset=0
@@ -409,52 +408,35 @@ code:
     r3 += r2; the domain does not currently store inequalities so we can't yet tell that this is safe
 
 post:
+  - r2.svalue-r3.ctx_offset<=1020
+  - r3.ctx_offset-r0.uvalue<=1024
+  - r3.ctx_offset-r2.svalue<=1020
+  - r3.ctx_offset-r3.svalue<=1016
+  - r3.ctx_offset=[4, 1024]
+  - r3.svalue-r3.ctx_offset<=3068
   - r1.uvalue=r1.svalue
   - r2.uvalue=r2.svalue
   - r3.type=r1.type
   - r3.uvalue=r3.svalue
-  - r3.ctx_offset=r2.ctx_offset
   - r0.type=number
   - r0.uvalue=[0, +oo]
   - r1.ctx_offset=0
   - r1.type in {number, ctx}
-  - r1.type-r1.svalue<=-8
-  - r1.type-r3.svalue<=-12
-  - r1.svalue-r1.type<=1027
   - r1.svalue-r3.svalue<=-4
   - r1.svalue=[4, 1024]
   - r2.ctx_offset=0
   - r2.type in {number, ctx}
-  - r2.type-r2.svalue<=-8
-  - r2.type-r3.svalue<=-12
   - r2.svalue-r0.uvalue<=1023
-  - r2.svalue-r2.type<=1027
   - r2.svalue-r3.svalue<=-4
   - r2.svalue=[4, 1024]
-  - r2.type-r0.uvalue<=-4
   - r3.svalue-r0.uvalue<=3071
-  - r3.svalue-r1.type<=3075
   - r3.svalue-r1.svalue<=2048
-  - r3.svalue-r2.type<=3075
   - r3.svalue-r2.svalue<=2048
   - r3.svalue=[8, 3072]
   - r8.ctx_offset=0
   - r8.type=ctx
   - r8.svalue=1024
   - r8.uvalue=1024
-  - r1.svalue-r0.uvalue<=2048
-  - r1.svalue-r2.type<=2052
-  - r1.type-r0.uvalue<=1021
-  - r1.type-r2.type<=1025
-  - r2.ctx_offset-r0.uvalue<=1024
-  - r2.ctx_offset-r2.type<=1028
-  - r2.svalue-r1.svalue<=1024
-  - r2.svalue-r1.type<=2051
-  - r2.svalue-r2.ctx_offset<=2048
-  - r2.type-r1.svalue<=-3
-  - r2.type-r1.type<=1024
-  - r2.type-r2.ctx_offset<=1021
-  - r3.svalue-r2.ctx_offset<=4096
 
 messages:
   - "8: Only numbers can be added to pointers (r2.type in {ctx, stack, packet, shared} -> r3.type == number)"

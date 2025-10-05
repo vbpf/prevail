@@ -4,8 +4,8 @@
 
 #include <map>
 
-#include "num_big.hpp"
-#include "variable.hpp"
+#include "arith/num_big.hpp"
+#include "arith/variable.hpp"
 
 namespace prevail {
 

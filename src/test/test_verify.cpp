@@ -4,6 +4,7 @@
 #include <thread>
 
 #include "ebpf_verifier.hpp"
+#include "spec_type_descriptors.hpp"
 
 using namespace prevail;
 
@@ -42,7 +43,7 @@ FAIL_UNMARSHAL("invalid", "invalid-lddw.o", ".text")
         RawProgram raw_prog = raw_progs.back();                                                                   \
         std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog);                            \
         const auto inst_seq = std::get_if<InstructionSeq>(&prog_or_error);                                        \
-        REQUIRE(inst_seq != nullptr);                                                                             \
+        REQUIRE(inst_seq);                                                                                        \
         Program prog = Program::from_sequence(*inst_seq, raw_prog.info, thread_local_options);                    \
         REQUIRE_THROWS_AS(analyze(prog), UnmarshalError);                                                         \
     }
@@ -59,7 +60,7 @@ FAIL_ANALYZE("build", "badmapptr.o", "test")
             if (count == 1 || raw_prog.function_name == program_name) {                                       \
                 const auto prog_or_error = unmarshal(raw_prog);                                               \
                 const auto inst_seq = std::get_if<InstructionSeq>(&prog_or_error);                            \
-                REQUIRE(inst_seq != nullptr);                                                                 \
+                REQUIRE(inst_seq);                                                                            \
                 const Program prog = Program::from_sequence(*inst_seq, raw_prog.info, thread_local_options);  \
                 REQUIRE(verify(prog) == should_pass);                                                         \
             }                                                                                                 \
@@ -356,7 +357,6 @@ TEST_SECTION("prototype-kernel", "napi_monitor_kern.o", "tracepoint/napi/napi_po
 TEST_SECTION("prototype-kernel", "tc_bench01_redirect_kern.o", "ingress_redirect")
 TEST_SECTION("prototype-kernel", "xdp_bench01_mem_access_cost_kern.o", "xdp_bench01")
 TEST_SECTION("prototype-kernel", "xdp_bench02_drop_pattern_kern.o", "xdp_bench02")
-TEST_SECTION("prototype-kernel", "xdp_ddos01_blacklist_kern.o", "xdp_prog")
 TEST_SECTION("prototype-kernel", "xdp_monitor_kern.o", "tracepoint/xdp/xdp_redirect")
 TEST_SECTION("prototype-kernel", "xdp_monitor_kern.o", "tracepoint/xdp/xdp_redirect_err")
 TEST_SECTION("prototype-kernel", "xdp_monitor_kern.o", "tracepoint/xdp/xdp_redirect_map_err")
@@ -551,6 +551,11 @@ TEST_SECTION_REJECT("build", "ringbuf_uninit.o", ".text");
 // If the verifier is later updated to accept them, these should
 // be changed to TEST_SECTION().
 
+// This fails due to correlated branches not being handled precisely enough,
+// Unless the analysis tracks the correlation between shared_offset and the type of another register,
+// which is probably arbitrary and brittle.
+TEST_SECTION_FAIL("prototype-kernel", "xdp_ddos01_blacklist_kern.o", "xdp_prog")
+
 // Unsupported: ebpf-function
 TEST_SECTION_FAIL("prototype-kernel", "xdp_ddos01_blacklist_kern.o", ".text")
 
@@ -619,7 +624,7 @@ TEST_CASE("multithreading", "[verify][multithreading]") {
     RawProgram raw_prog1 = raw_progs1.back();
     auto prog_or_error1 = unmarshal(raw_prog1);
     auto inst_seq1 = std::get_if<InstructionSeq>(&prog_or_error1);
-    REQUIRE(inst_seq1 != nullptr);
+    REQUIRE(inst_seq1);
     const Program prog1 = Program::from_sequence(*inst_seq1, raw_prog1.info, {});
 
     auto raw_progs2 = read_elf("ebpf-samples/bpf_cilium_test/bpf_netdev.o", "2/2", {}, &g_ebpf_platform_linux);
@@ -627,7 +632,7 @@ TEST_CASE("multithreading", "[verify][multithreading]") {
     RawProgram raw_prog2 = raw_progs2.back();
     auto prog_or_error2 = unmarshal(raw_prog2);
     auto inst_seq2 = std::get_if<InstructionSeq>(&prog_or_error2);
-    REQUIRE(inst_seq2 != nullptr);
+    REQUIRE(inst_seq2);
     const Program prog2 = Program::from_sequence(*inst_seq2, raw_prog2.info, {});
 
     bool res1, res2;

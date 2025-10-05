@@ -80,8 +80,8 @@ messages:
 ---
 test-case: disallow subtraction of unequal dual-typed pointers
 
-pre: ["r2.type=[-2, -1]", "r2.packet_offset=4", "r2.stack_offset=4",
-      "r3.type=[-2, -1]", "r3.packet_offset=8", "r3.stack_offset=8"]
+pre: ["r2.type in {packet, stack}", "r2.packet_offset=4", "r2.stack_offset=4",
+      "r3.type in {packet, stack}", "r3.packet_offset=8", "r3.stack_offset=8"]
 
 code:
   <start>: |
@@ -98,8 +98,8 @@ messages:
 ---
 test-case: allow subtraction of equal dual-typed pointers
 
-pre: ["r2.type=[-2, -1]", "r2.packet_offset=4", "r2.stack_offset=4",
-      "r3.type=[-2, -1]", "r3.packet_offset=8", "r3.stack_offset=8",
+pre: ["r2.type in {packet, stack}", "r2.packet_offset=4", "r2.stack_offset=4",
+      "r3.type in {packet, stack}", "r3.packet_offset=8", "r3.stack_offset=8",
       "r2.type=r3.type", "meta_offset=-4", "packet_size=[16,32]",
       "r10.type=stack", "r10.stack_offset=512"]
 

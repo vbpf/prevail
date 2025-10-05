@@ -285,6 +285,19 @@ class SplitDBM final {
     [[nodiscard]]
     bool entail(const LinearConstraint& rhs) const;
 
+    /**
+     * Checks logical implication between two constraints in the current abstract state.
+     * Returns true if, for all states represented by this SplitDBM, whenever 'premise' holds,
+     * 'conclusion' also holds. This is implemented by adding 'premise' to the current state:
+     * - If 'premise' is inconsistent with the current state, implication holds vacuously (returns true).
+     * - Otherwise, checks if 'conclusion' is entailed by the state with 'premise' added.
+     */
+    [[nodiscard]]
+    bool implies(const LinearConstraint& premise, const LinearConstraint& conclusion) const {
+        SplitDBM result(*this);
+        return !result.add_constraint(premise) || result.entail(conclusion);
+    }
+
     friend std::ostream& operator<<(std::ostream& o, const SplitDBM& dom);
     [[nodiscard]]
     StringInvariant to_set() const;

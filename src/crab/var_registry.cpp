@@ -151,6 +151,10 @@ Variable VariableRegistry::reg(const DataKind kind, const int i) {
     return make("r" + std::to_string(i) + "." + name_of(kind));
 }
 
+Variable VariableRegistry::type_reg(const int i) {
+    return make("r" + std::to_string(i) + "." + name_of(DataKind::types));
+}
+
 Variable VariableRegistry::stack_frame_var(const DataKind kind, const int i, const std::string& prefix) {
     return make(prefix + STACK_FRAME_DELIMITER + "r" + std::to_string(i) + "." + name_of(kind));
 }

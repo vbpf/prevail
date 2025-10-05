@@ -314,8 +314,6 @@ struct AssertionPrinterVisitor {
         _os << variable_registry->loop_counter(to_string(a.name)) << " < " << a.limit;
     }
 
-    static Variable typereg(const Reg& r) { return variable_registry->reg(DataKind::types, r.v); }
-
     void operator()(ValidSize const& a) {
         const auto op = a.can_be_zero ? " >= " : " > ";
         _os << a.reg << ".value" << op << 0;
@@ -339,7 +337,8 @@ struct AssertionPrinterVisitor {
         if (a.or_r2_is_number) {
             _os << TypeConstraint{a.r2, TypeGroup::number} << " or ";
         }
-        _os << typereg(a.r1) << " == " << typereg(a.r2) << " in " << TypeGroup::singleton_ptr;
+        _os << variable_registry->type_reg(a.r1.v) << " == " << variable_registry->type_reg(a.r2.v) << " in "
+            << TypeGroup::singleton_ptr;
     }
 
     void operator()(Addable const& a) {
@@ -350,10 +349,10 @@ struct AssertionPrinterVisitor {
 
     void operator()(TypeConstraint const& tc) {
         const string cmp_op = is_singleton_type(tc.types) ? "==" : "in";
-        _os << typereg(tc.reg) << " " << cmp_op << " " << tc.types;
+        _os << variable_registry->type_reg(tc.reg.v) << " " << cmp_op << " " << tc.types;
     }
 
-    void operator()(FuncConstraint const& fc) { _os << typereg(fc.reg) << " is helper"; }
+    void operator()(FuncConstraint const& fc) { _os << variable_registry->type_reg(fc.reg.v) << " is helper"; }
 };
 
 // ReSharper disable CppMemberFunctionMayBeConst

@@ -4,9 +4,9 @@
 #pragma once
 
 #include <optional>
-#include <regex>
 #include <set>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include "arith/linear_constraint.hpp"
@@ -56,6 +56,11 @@ struct StringInvariant {
     friend std::ostream& operator<<(std::ostream&, const StringInvariant& inv);
 };
 
-std::vector<LinearConstraint> parse_linear_constraints(const std::set<std::string>& constraints,
-                                                       std::vector<Interval>& numeric_ranges);
+struct TypeValueConstraints {
+    std::vector<LinearConstraint> type_csts;
+    std::vector<LinearConstraint> value_csts;
+};
+
+TypeValueConstraints
+parse_linear_constraints(const std::set<std::string>& constraints, std::vector<Interval>& numeric_ranges);
 } // namespace prevail

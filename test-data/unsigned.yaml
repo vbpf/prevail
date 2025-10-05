@@ -749,7 +749,7 @@ code:
     assume r1 > r2
 post: ["r1.type=number", "r1.svalue=-1", "r1.uvalue=18446744073709551615",
        "r2.type=number", "r2.svalue=[1, 2]", "r2.uvalue=r2.svalue",
-       "r2.svalue-r1.uvalue<=-1"]
+       "r2.svalue-r1.uvalue<=-18446744073709551613"]
 ---
 test-case: "assume [-1, 1] >= 2 narrows"
 pre: ["r1.type=number", "r1.svalue=[-1, 1]"]
@@ -766,7 +766,7 @@ code:
     assume r1 > r2
 post: ["r1.type=number", "r1.svalue=-1", "r1.uvalue=18446744073709551615",
        "r2.type=number", "r2.svalue=[2, 3]", "r2.uvalue=r2.svalue",
-       "r2.svalue-r1.uvalue<=-1"]
+       "r2.svalue-r1.uvalue<=-18446744073709551612"]
 ---
 test-case: "assume [-1, 1] < -1 narrows"
 pre: ["r1.type=number", "r1.svalue=[-1, 1]"]
@@ -854,7 +854,7 @@ code:
     assume r1 > r2
 post: ["r1.type=number", "r1.svalue=-1", "r1.uvalue=18446744073709551615",
        "r2.type=number", "r2.svalue=9223372036854775807", "r2.uvalue=9223372036854775807",
-       "r2.uvalue-r1.uvalue<=-1"]
+       "r2.uvalue-r1.uvalue<=-9223372036854775808"]
 ---
 test-case: "assume -1 w> INT32_MAX nop"
 pre: []
@@ -872,7 +872,7 @@ code:
     assume r1 > r2
 post: ["r1.type=number", "r1.svalue=[-9223372036854775807, -1]", "r1.uvalue=[9223372036854775809, 18446744073709551615]",
        "r2.type=number", "r2.svalue=9223372036854775807", "r2.uvalue=9223372036854775807",
-       "r2.uvalue-r1.uvalue<=-1"]
+       "r2.uvalue-r1.uvalue<=-2"]
 ---
 test-case: "assume [INT32_MIN, -1] w> INT32_MAX nop"
 pre: ["r1.type=number", "r1.svalue=[-2147483648, -1]", "r1.uvalue=[18446744071562067968, 18446744073709551615]"]
@@ -889,7 +889,7 @@ code:
     assume r1 > r2
 post: ["r1.type=number", "r1.svalue=[-9223372036854775807, -1]", "r1.uvalue=[9223372036854775809, 18446744073709551615]",
        "r2.type=number", "r2.svalue=[0, 9223372036854775807]", "r2.uvalue=[0, 9223372036854775807]",
-       "r2.uvalue-r1.uvalue<=-1"]
+       "r2.uvalue-r1.uvalue<=-2"]
 ---
 test-case: "assume [INT32_MIN, -1] w> [0, INT32_MAX] nop"
 pre: ["r1.type=number", "r1.svalue=[-2147483648, -1]", "r1.uvalue=[18446744071562067968, 18446744073709551615]",

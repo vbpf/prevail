@@ -15,9 +15,10 @@ code:
 
 post:
   - r1.type=number
-  - r1.uvalue=[0, 5]
+  - r1.svalue=[0, 5]
+  - r1.uvalue=r1.svalue
   - r2.type=number
-  - r2.uvalue=r1.uvalue
+  - r2.uvalue=[0, 5]
 ---
 test-case: small sext relational nop
 

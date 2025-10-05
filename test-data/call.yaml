@@ -339,7 +339,7 @@ post:
 messages:
   - "0: Invalid type (r2.type in {stack, packet, shared})"
 ---
-test-case: bpf_get_stack
+test-case: bpf_get_stack simple
 
 pre: ["r1.type=ctx", "r1.ctx_offset=0",
       "r2.type=stack", "r2.stack_offset=504",
@@ -405,3 +405,4 @@ post:
 
 messages:
   - "0: Invalid size (r2.value > 0)"
+  - "0: Stack content is not numeric (valid_access(r1.offset, width=r2) for read)"

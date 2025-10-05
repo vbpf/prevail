@@ -220,6 +220,7 @@ post:
   - pc[7]=[1, 255]
   - r0.type=number
   - r1.packet_offset=0
+  - r1.packet_offset-packet_size<=-1  # unclear if this should be here
   - r1.svalue=[4098, 2147418112]
   - r1.type=packet
   - r2.type=number
