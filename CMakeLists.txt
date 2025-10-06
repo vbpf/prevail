@@ -134,10 +134,10 @@ endif ()
 add_library(prevail ${LIB_SRC})
 target_compile_definitions(prevail PRIVATE YAML_CPP_STATIC_DEFINE)
 
+add_executable(run_yaml src/main/run_yaml.cpp)
+add_executable(check src/main/check.cpp src/main/linux_verifier.cpp)
 if (VERIFIER_ENABLE_TESTS)
-    add_executable(check src/main/check.cpp src/main/linux_verifier.cpp)
     add_executable(tests ${ALL_TEST})
-    add_executable(run_yaml src/main/run_yaml.cpp)
     add_executable(conformance_check src/test/conformance_check.cpp)
 endif ()
 
