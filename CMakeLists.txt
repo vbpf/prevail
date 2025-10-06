@@ -186,7 +186,7 @@ set(yaml-cpp_GUID_CMAKE "98d56b8a-d8eb-3d98-b8ee-c83696b4d58a" CACHE INTERNAL "P
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
-
+# Core libraries
 target_link_libraries(prevail PRIVATE libbtf Microsoft.GSL::GSL)
 if (TARGET yaml-cpp::yaml-cpp)
     target_link_libraries(prevail PRIVATE yaml-cpp::yaml-cpp)
@@ -195,17 +195,24 @@ if (TARGET Boost::filesystem)
     target_link_libraries(prevail PRIVATE Boost::filesystem Boost::program_options Boost::process)
 endif ()
 
+# Main executables
+target_link_libraries(run_yaml PRIVATE prevail ${CMAKE_DL_LIBS} Threads::Threads)
+target_link_libraries(check PRIVATE prevail ${CMAKE_DL_LIBS} Threads::Threads)
+
 if (TARGET yaml-cpp::yaml-cpp)
     target_link_libraries(run_yaml PRIVATE yaml-cpp::yaml-cpp)
+    target_link_libraries(check PRIVATE yaml-cpp::yaml-cpp)
 endif ()
-
 if (TARGET Boost::filesystem)
     target_link_libraries(run_yaml PRIVATE Boost::filesystem Boost::program_options Boost::process)
+    target_link_libraries(check PRIVATE Boost::filesystem Boost::program_options Boost::process)
 endif ()
 
+# Tests
 if (VERIFIER_ENABLE_TESTS)
     target_link_libraries(conformance_check PRIVATE prevail bpf_conformance ${CMAKE_DL_LIBS} Threads::Threads Catch2::Catch2WithMain)
     target_link_libraries(tests PRIVATE prevail bpf_conformance ${CMAKE_DL_LIBS} Threads::Threads Catch2::Catch2WithMain)
+
     if (TARGET yaml-cpp::yaml-cpp)
         target_link_libraries(tests PRIVATE yaml-cpp::yaml-cpp)
     endif ()
