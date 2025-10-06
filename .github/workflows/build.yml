@@ -68,6 +68,7 @@ jobs:
         with:
           submodules: recursive
 
+      # --- Cache compiled vcpkg packages ---
       - name: Cache vcpkg artifacts
         uses: actions/cache@v4
         with:
@@ -79,21 +80,44 @@ jobs:
           restore-keys: |
             vcpkg-${{ runner.os }}-
 
+      # --- Install and configure vcpkg ---
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgJsonGlob: '**/vcpkg.json'
           vcpkgConfigurationJsonGlob: '**/vcpkg-configuration.json'
           runVcpkgInstall: true
+          vcpkgGitCommitId: 4334d8b4c8916018600212ab4dd4bbdc343065d1
 
-      - name: Build
+      # --- Instrumentation: verify environment and toolchain ---
+      - name: Inspect vcpkg environment
+        run: |
+          echo "---- Environment ----"
+          echo "VCPKG_ROOT=$env:VCPKG_ROOT"
+          echo "CMAKE_TOOLCHAIN_FILE=$env:CMAKE_TOOLCHAIN_FILE"
+          echo "Directory structure:"
+          if (Test-Path "$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake") {
+            Write-Host "Found vcpkg.cmake at $env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
+          } else {
+            Write-Host "vcpkg.cmake not found!"
+            dir $env:VCPKG_ROOT -Recurse -Depth 2
+          }
+
+      # --- Configure and build ---
+      - name: Configure CMake
         run: |
           mkdir build
           $enableTests = if ("${{ matrix.target }}" -eq "library") { "OFF" } else { "ON" }
           cmake -B build `
             -DVERIFIER_ENABLE_TESTS=$enableTests `
-            -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake
+            -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake `
+            -DVCPKG_FEATURE_FLAGS=manifests
+        shell: pwsh
+
+      - name: Build
+        run: |
           cmake --build build --config ${{ env.BUILD_CONFIGURATION }} -- /m:$env:NUMBER_OF_PROCESSORS
+        shell: pwsh
 
       - name: Run unit tests
         if: ${{ matrix.target == 'tests' }}
