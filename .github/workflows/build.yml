@@ -110,10 +110,7 @@ jobs:
           $enableTests = if ("${{ matrix.target }}" -eq "library") { "OFF" } else { "ON" }
           $toolchain = Join-Path $env:VCPKG_ROOT "scripts/buildsystems/vcpkg.cmake"
           echo "Using toolchain: $toolchain"
-          cmake -B build `
-            -DVERIFIER_ENABLE_TESTS=$enableTests `
-            -DCMAKE_TOOLCHAIN_FILE=$toolchain `
-            -DVCPKG_FEATURE_FLAGS=manifests
+          cmake -B build -DVERIFIER_ENABLE_TESTS=$enableTests "-DCMAKE_TOOLCHAIN_FILE=$toolchain" -DVCPKG_FEATURE_FLAGS=manifests
         shell: pwsh
 
       - name: Build
