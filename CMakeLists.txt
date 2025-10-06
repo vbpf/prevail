@@ -47,37 +47,36 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
     find_package(Boost REQUIRED)
     set(CMAKE_CXX_STANDARD 20)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
-    # … above, unchanged …
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-    # If the vcpkg toolchain is in use, just find packages normally.
+    set(CMAKE_CXX_STANDARD 20)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
     if (DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg.cmake")
         if (VERIFIER_ENABLE_TESTS)
             find_package(yaml-cpp CONFIG REQUIRED)
         endif ()
-        find_package(Boost CONFIG REQUIRED COMPONENTS filesystem program_options)
+        find_package(boost_filesystem CONFIG REQUIRED)
+        find_package(boost_program_options CONFIG REQUIRED)
+        find_package(boost_process CONFIG REQUIRED)
     else ()
-        # ---- NuGet + ExternalProject fallback ----
+        # Fallback for local Windows build without vcpkg
         find_program(NUGET nuget)
         if (NOT NUGET)
-            message("ERROR: You must first install nuget.exe from https://www.nuget.org/downloads")
-        else ()
-            execute_process(COMMAND ${NUGET} install "Boost" -Version 1.81.0 -ExcludeVersion -OutputDirectory ${CMAKE_BINARY_DIR}/packages)
-            set(BOOST_VERSION 1.81.0)
+            message(FATAL_ERROR "NuGet not found; install from https://www.nuget.org/downloads")
         endif ()
-        set(Boost_INCLUDE_DIRS ${CMAKE_BINARY_DIR}/packages/boost/lib/native/include)
-        set(Boost_LIBRARY_DIRS ${CMAKE_BINARY_DIR}/packages/boost_filesystem-vc143/lib/native)
-        if (VERIFIER_ENABLE_TESTS)
-            set(EXTERNAL_INSTALL_LOCATION ${CMAKE_BINARY_DIR}/packages/yaml-cpp)
-            include(ExternalProject)
-            ExternalProject_Add(yaml-cpp
-                    GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
-                    GIT_TAG "0.8.0" GIT_SHALLOW true
-                    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LOCATION}
-                    -DYAML_MSVC_SHARED_RT=ON -DYAML_CPP_BUILD_TESTS=OFF
-                    -DYAML_CPP_BUILD_TOOLS=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.14)
-            set(YAML_CPP_LIBRARIES ${EXTERNAL_INSTALL_LOCATION}/lib/yaml-cpp$<$<CONFIG:DEBUG>:d>.lib)
-            set(YAML_CPP_INCLUDE_DIR ${EXTERNAL_INSTALL_LOCATION}/include/)
-        endif ()
+
+        execute_process(
+                COMMAND ${NUGET} install boost_filesystem-vc143 -Version 1.87.0 -ExcludeVersion -OutputDirectory ${CMAKE_BINARY_DIR}/packages
+        )
+        execute_process(
+                COMMAND ${NUGET} install boost_program_options-vc143 -Version 1.87.0 -ExcludeVersion -OutputDirectory ${CMAKE_BINARY_DIR}/packages
+        )
+        execute_process(
+                COMMAND ${NUGET} install boost_process-vc143 -Version 1.87.0 -ExcludeVersion -OutputDirectory ${CMAKE_BINARY_DIR}/packages
+        )
+
+        set(Boost_INCLUDE_DIRS ${CMAKE_BINARY_DIR}/packages/boost_filesystem-vc143/lib/native/include)
+        include_directories(${Boost_INCLUDE_DIRS})
     endif ()
 endif ()
 

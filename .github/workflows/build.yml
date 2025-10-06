@@ -1,5 +1,4 @@
----
-name: C++ CI
+name: CPP CI
 
 on:
   pull_request:
@@ -12,96 +11,94 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ubuntu:
-    name: Ubuntu (${{ matrix.cfg }})${{ (matrix.cfg == 'Debug' && format(' shard {0}/{1}', matrix.shard_index, matrix.shards)) || '' }}
-    runs-on: ubuntu-latest
+  build_ubuntu:
     strategy:
-      fail-fast: false
       matrix:
-        cfg: [Debug, Release]
-        include:
-          - cfg: Debug
-            shards: 3
-            shard_index: 0
-          - cfg: Debug
-            shards: 3
-            shard_index: 1
-          - cfg: Debug
-            shards: 3
-            shard_index: 2
+        configurations: [Debug, Release]
+        target: [tests, library]
+    runs-on: ubuntu-latest
     env:
-      BUILD_CONFIGURATION: ${{ matrix.cfg }}
+      BUILD_CONFIGURATION: ${{ matrix.configurations }}
+
     steps:
       - uses: actions/checkout@v5
         with:
           submodules: recursive
 
-      - name: Install deps
+      - name: Install base dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ccache libboost-dev libboost-filesystem-dev libboost-program-options-dev libyaml-cpp-dev
-          echo 'max_size = 2G' | sudo tee /etc/ccache.conf
-          echo "CCACHE_BASEDIR=$GITHUB_WORKSPACE" >> $GITHUB_ENV
-          echo "CCACHE_DIR=$HOME/.ccache" >> $GITHUB_ENV
-          echo "CCACHE_COMPRESS=1" >> $GITHUB_ENV
+          sudo apt install -y \
+            libboost-dev libboost-filesystem-dev libboost-program-options-dev
 
-      - name: Cache ccache
-        uses: actions/cache@v4
-        with:
-          path: ~/.ccache
-          key: ${{ runner.os }}-ccache-${{ matrix.cfg }}-${{ hashFiles('**/CMakeLists.txt') }}
-
-      - name: Configure
-        run: |
-          cmake -S . -B build \
-            -DCMAKE_BUILD_TYPE=${BUILD_CONFIGURATION} \
-            -DVERIFIER_ENABLE_TESTS=ON \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+      - name: Install test dependencies
+        if: ${{ matrix.target == 'tests' }}
+        run: sudo apt install -y libyaml-cpp-dev valgrind
 
       - name: Build
-        run: cmake --build build -j $(nproc)
+        run: |
+          mkdir -p build
+          cmake -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} \
+                -DVERIFIER_ENABLE_TESTS=${{ matrix.target == 'tests' && 'ON' || 'OFF' }}
+          cmake --build build -j$(nproc)
 
-      - name: Run tests
-        if: ${{ matrix.cfg == 'Debug' }}
-        run: ./tests -d yes --shard-count ${{ matrix.shards }} --shard-index ${{ matrix.shard_index }}
-      - name: Run tests
-        if: ${{ matrix.cfg == 'Release' }}
+      - name: Run unit tests
+        if: ${{ matrix.target == 'tests' }}
         run: ./tests -d yes
 
-  windows_debug:
-    name: Windows (Debug, Tests)
+      - name: Test for memory leaks
+        if: ${{ matrix.target == 'tests' && matrix.configurations == 'Debug' }}
+        run: |
+          valgrind --leak-check=full --errors-for-leak-kinds=all \
+                   --show-leak-kinds=all --error-exitcode=1 \
+                   ./check ebpf-samples/cilium/bpf_xdp_snat_linux_v1.o 2/1
+
+  build_windows:
+    strategy:
+      matrix:
+        configurations: [Debug, Release]
+        target: [tests, library]
     runs-on: windows-2022
     env:
-      BUILD_CONFIGURATION: Debug
+      BUILD_CONFIGURATION: ${{ matrix.configurations }}
+      VCPKG_ROOT: C:\vcpkg
+
     steps:
       - uses: actions/checkout@v5
         with:
           submodules: recursive
 
-      # Setup vcpkg and enable binary caching automatically
-      - name: run-vcpkg (manifest mode)
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: |
+            C:\vcpkg\installed
+            C:\vcpkg\buildtrees
+            C:\vcpkg\downloads
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('**/vcpkg.json', '**/vcpkg-configuration.json') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-
+
+      - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
+          vcpkgGitCommitId: 2025.09.17
+          runVcpkgInstall: true
           vcpkgJsonGlob: '**/vcpkg.json'
-        env:
-          # static lib + dynamic CRT fits YAML_CPP_STATIC_DEFINE and MSVC Debug CRT
-          VCPKG_DEFAULT_TRIPLET: x64-windows-static-md
-          VCPKG_DEFAULT_HOST_TRIPLET: x64-windows-static-md
+          vcpkgConfigurationJsonGlob: '**/vcpkg-configuration.json'
 
-      - name: Configure
-        shell: pwsh
-        run: |
-          $toolchain = "$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake"
-          cmake -S . -B build `
-            -DVERIFIER_ENABLE_TESTS=ON `
-            -DCMAKE_TOOLCHAIN_FILE="$toolchain" `
-            -DCMAKE_BUILD_TYPE=$env:BUILD_CONFIGURATION
+      - name: Configure CMake
+        run: >
+          cmake -B build
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }}
+          -DVERIFIER_ENABLE_TESTS=${{ matrix.target == 'tests' && 'ON' || 'OFF' }}
+          -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake
 
       - name: Build
         shell: pwsh
         run: cmake --build build --config $env:BUILD_CONFIGURATION -- /m:$env:NUMBER_OF_PROCESSORS
 
-      - name: Run all unit tests (Debug)
-        shell: pwsh
+      - name: Run unit tests
+        if: ${{ matrix.target == 'tests' }}
+        working-directory: build
         run: .\${{ env.BUILD_CONFIGURATION }}\tests.exe -d yes
