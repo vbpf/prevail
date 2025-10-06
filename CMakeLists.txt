@@ -125,12 +125,12 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 endif ()
 
 add_library(prevail ${LIB_SRC})
-target_compile_definitions(prevail PRIVATE YAML_CPP_STATIC_DEFINE)
 
-add_executable(run_yaml src/main/run_yaml.cpp)
 add_executable(check src/main/check.cpp src/main/linux_verifier.cpp)
 if (VERIFIER_ENABLE_TESTS)
     add_executable(tests ${ALL_TEST})
+    target_compile_definitions(prevail PRIVATE YAML_CPP_STATIC_DEFINE)
+    add_executable(run_yaml src/test/run_yaml.cpp)
     add_executable(conformance_check src/test/conformance_check.cpp)
 endif ()
 
@@ -142,13 +142,11 @@ target_include_directories(prevail PUBLIC
         ${GSL_INCLUDE_DIRS}
 )
 
+set_target_properties(check
+        PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/..")
+
 if (VERIFIER_ENABLE_TESTS)
-    target_include_directories(run_yaml PRIVATE src/test)
-
-    set_target_properties(check
-            PROPERTIES
-            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/..")
-
     set_target_properties(tests
             PROPERTIES
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/..")
@@ -156,6 +154,14 @@ if (VERIFIER_ENABLE_TESTS)
     set_target_properties(run_yaml
             PROPERTIES
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/..")
+
+    target_include_directories(run_yaml PRIVATE
+            ${CMAKE_SOURCE_DIR}/src/test
+            ${CMAKE_SOURCE_DIR}/src
+            ${CMAKE_SOURCE_DIR}/external
+            ${CMAKE_SOURCE_DIR}/external/bpf_conformance/external/elfio
+            ${CMAKE_SOURCE_DIR}/external/libbtf
+    )
 
     set_target_properties(conformance_check
             PROPERTIES
@@ -195,27 +201,28 @@ if (TARGET Boost::filesystem)
 endif ()
 
 # Main executables
-target_link_libraries(run_yaml PRIVATE prevail ${CMAKE_DL_LIBS} Threads::Threads)
 target_link_libraries(check PRIVATE prevail ${CMAKE_DL_LIBS} Threads::Threads)
 
 if (TARGET yaml-cpp::yaml-cpp)
-    target_link_libraries(run_yaml PRIVATE yaml-cpp::yaml-cpp)
     target_link_libraries(check PRIVATE yaml-cpp::yaml-cpp)
 endif ()
 if (TARGET Boost::filesystem)
-    target_link_libraries(run_yaml PRIVATE Boost::filesystem Boost::program_options Boost::process)
     target_link_libraries(check PRIVATE Boost::filesystem Boost::program_options Boost::process)
 endif ()
 
 # Tests
 if (VERIFIER_ENABLE_TESTS)
-    target_link_libraries(conformance_check PRIVATE prevail bpf_conformance ${CMAKE_DL_LIBS} Threads::Threads Catch2::Catch2WithMain)
     target_link_libraries(tests PRIVATE prevail bpf_conformance ${CMAKE_DL_LIBS} Threads::Threads Catch2::Catch2WithMain)
+    target_link_libraries(run_yaml PRIVATE prevail ${CMAKE_DL_LIBS} Threads::Threads)
 
     if (TARGET yaml-cpp::yaml-cpp)
         target_link_libraries(tests PRIVATE yaml-cpp::yaml-cpp)
+        target_link_libraries(run_yaml PRIVATE yaml-cpp::yaml-cpp)
     endif ()
     if (TARGET Boost::filesystem)
         target_link_libraries(tests PRIVATE Boost::filesystem Boost::program_options Boost::process)
+        target_link_libraries(run_yaml PRIVATE Boost::filesystem Boost::program_options Boost::process)
     endif ()
+
+    target_link_libraries(conformance_check PRIVATE prevail bpf_conformance ${CMAKE_DL_LIBS} Threads::Threads Catch2::Catch2WithMain)
 endif ()
