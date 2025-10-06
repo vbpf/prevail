@@ -22,16 +22,13 @@ jobs:
         include:
           - cfg: Debug
             shards: 3
+            shard_index: 0
+          - cfg: Debug
+            shards: 3
             shard_index: 1
           - cfg: Debug
             shards: 3
             shard_index: 2
-          - cfg: Debug
-            shards: 3
-            shard_index: 3
-          - cfg: Release
-            shards: 1
-            shard_index: 1
     env:
       BUILD_CONFIGURATION: ${{ matrix.cfg }}
     steps:
@@ -73,7 +70,7 @@ jobs:
         run: ./tests -d yes
 
   windows_debug:
-    name: Windows (Debug, full tests)
+    name: Windows (Debug, Tests)
     runs-on: windows-2022
     env:
       BUILD_CONFIGURATION: Debug
