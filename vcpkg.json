@@ -7,6 +7,7 @@
     "boost-filesystem",
     "boost-program-options",
     "boost-process",
-    "boost-multiprecision"
+    "boost-multiprecision",
+    "boost-endian"
   ]
 }
