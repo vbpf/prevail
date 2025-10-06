@@ -62,21 +62,19 @@ jobs:
     runs-on: windows-2022
     env:
       BUILD_CONFIGURATION: ${{ matrix.configurations }}
-      VCPKG_ROOT: D:\a\prevail\prevail\vcpkg
 
     steps:
       - uses: actions/checkout@v5
         with:
           submodules: recursive
 
-      # Cache both packages and build trees
       - name: Cache vcpkg artifacts
         uses: actions/cache@v4
         with:
           path: |
-            D:\a\prevail\prevail\vcpkg\installed
-            D:\a\prevail\prevail\vcpkg\buildtrees
-            D:\a\prevail\prevail\vcpkg\downloads
+            vcpkg/installed
+            vcpkg/buildtrees
+            vcpkg/downloads
           key: vcpkg-${{ runner.os }}-${{ hashFiles('**/vcpkg.json', '**/vcpkg-configuration.json') }}
           restore-keys: |
             vcpkg-${{ runner.os }}-
@@ -84,11 +82,9 @@ jobs:
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
-          vcpkgDirectory: D:\a\prevail\prevail\vcpkg
-          vcpkgGitCommitId: 4334d8b4c8916018600212ab4dd4bbdc343065d1
-          runVcpkgInstall: true
           vcpkgJsonGlob: '**/vcpkg.json'
           vcpkgConfigurationJsonGlob: '**/vcpkg-configuration.json'
+          runVcpkgInstall: true
 
       - name: Build
         run: |
