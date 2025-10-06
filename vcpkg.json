@@ -1,6 +1,7 @@
 {
   "name": "prevail-deps",
   "version-string": "0.0.0",
+  "builtin-baseline": "a62ce77d56ee07513b4b67de1ec2daeaebfae51a",
   "dependencies": [
     "yaml-cpp",
     "boost-filesystem",
