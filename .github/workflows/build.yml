@@ -25,22 +25,23 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install base dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt install -y \
-            libboost-dev libboost-filesystem-dev libboost-program-options-dev
-
-      - name: Install test dependencies
-        if: ${{ matrix.target == 'tests' }}
-        run: sudo apt install -y libyaml-cpp-dev valgrind
+          sudo apt install -y libboost-dev libboost-filesystem-dev libboost-program-options-dev
+          if [ "${{ matrix.target }}" = "tests" ]; then
+            sudo apt install -y libyaml-cpp-dev valgrind
+          fi
 
       - name: Build
         run: |
-          mkdir -p build
-          cmake -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} \
-                -DVERIFIER_ENABLE_TESTS=${{ matrix.target == 'tests' && 'ON' || 'OFF' }}
-          cmake --build build -j$(nproc)
+          mkdir build
+          if [ "${{ matrix.target }}" = "library" ]; then
+            cmake -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} -DVERIFIER_ENABLE_TESTS=OFF
+          else
+            cmake -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} -DVERIFIER_ENABLE_TESTS=ON
+          fi
+          cmake --build build -j $(nproc)
 
       - name: Run unit tests
         if: ${{ matrix.target == 'tests' }}
@@ -48,10 +49,10 @@ jobs:
 
       - name: Test for memory leaks
         if: ${{ matrix.target == 'tests' && matrix.configurations == 'Debug' }}
-        run: |
-          valgrind --leak-check=full --errors-for-leak-kinds=all \
-                   --show-leak-kinds=all --error-exitcode=1 \
-                   ./check ebpf-samples/cilium/bpf_xdp_snat_linux_v1.o 2/1
+        run: >
+          valgrind --leak-check=full --errors-for-leak-kinds=all
+          --show-leak-kinds=all --error-exitcode=1
+          ./check ebpf-samples/cilium/bpf_xdp_snat_linux_v1.o 2/1
 
   build_windows:
     strategy:
@@ -61,20 +62,21 @@ jobs:
     runs-on: windows-2022
     env:
       BUILD_CONFIGURATION: ${{ matrix.configurations }}
-      VCPKG_ROOT: C:\vcpkg
+      VCPKG_ROOT: D:\a\prevail\prevail\vcpkg
 
     steps:
       - uses: actions/checkout@v5
         with:
           submodules: recursive
 
-      - name: Cache vcpkg
+      # Cache both packages and build trees
+      - name: Cache vcpkg artifacts
         uses: actions/cache@v4
         with:
           path: |
-            C:\vcpkg\installed
-            C:\vcpkg\buildtrees
-            C:\vcpkg\downloads
+            D:\a\prevail\prevail\vcpkg\installed
+            D:\a\prevail\prevail\vcpkg\buildtrees
+            D:\a\prevail\prevail\vcpkg\downloads
           key: vcpkg-${{ runner.os }}-${{ hashFiles('**/vcpkg.json', '**/vcpkg-configuration.json') }}
           restore-keys: |
             vcpkg-${{ runner.os }}-
@@ -82,21 +84,20 @@ jobs:
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
+          vcpkgDirectory: D:\a\prevail\prevail\vcpkg
           vcpkgGitCommitId: 4334d8b4c8916018600212ab4dd4bbdc343065d1
           runVcpkgInstall: true
           vcpkgJsonGlob: '**/vcpkg.json'
           vcpkgConfigurationJsonGlob: '**/vcpkg-configuration.json'
 
-      - name: Configure CMake
-        run: >
-          cmake -B build
-          -DCMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }}
-          -DVERIFIER_ENABLE_TESTS=${{ matrix.target == 'tests' && 'ON' || 'OFF' }}
-          -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake
-
       - name: Build
-        shell: pwsh
-        run: cmake --build build --config $env:BUILD_CONFIGURATION -- /m:$env:NUMBER_OF_PROCESSORS
+        run: |
+          mkdir build
+          $enableTests = if ("${{ matrix.target }}" -eq "library") { "OFF" } else { "ON" }
+          cmake -B build `
+            -DVERIFIER_ENABLE_TESTS=$enableTests `
+            -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake
+          cmake --build build --config ${{ env.BUILD_CONFIGURATION }} -- /m:$env:NUMBER_OF_PROCESSORS
 
       - name: Run unit tests
         if: ${{ matrix.target == 'tests' }}
