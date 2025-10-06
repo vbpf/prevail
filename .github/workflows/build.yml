@@ -82,7 +82,7 @@ jobs:
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
-          vcpkgGitCommitId: 2025.09.17
+          vcpkgGitCommitId: 4334d8b4c8916018600212ab4dd4bbdc343065d1
           runVcpkgInstall: true
           vcpkgJsonGlob: '**/vcpkg.json'
           vcpkgConfigurationJsonGlob: '**/vcpkg-configuration.json'
