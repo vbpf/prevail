@@ -79,13 +79,6 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
     endif ()
 endif ()
 
-include_directories(./external)
-include_directories(./external/bpf_conformance/external/elfio)
-include_directories(./src)
-include_directories(./external/libbtf)
-include_directories(${GSL_INCLUDE_DIRS})
-
-
 file(GLOB LIB_SRC
         "./src/*.cpp"
         "./src/arith/*.cpp"
@@ -141,7 +134,13 @@ if (VERIFIER_ENABLE_TESTS)
     add_executable(conformance_check src/test/conformance_check.cpp)
 endif ()
 
-target_include_directories(prevail PRIVATE ${GSL_INCLUDE_DIRS})
+target_include_directories(prevail PUBLIC
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external
+        ${CMAKE_SOURCE_DIR}/external/bpf_conformance/external/elfio
+        ${CMAKE_SOURCE_DIR}/external/libbtf
+        ${GSL_INCLUDE_DIRS}
+)
 
 if (VERIFIER_ENABLE_TESTS)
     target_include_directories(run_yaml PRIVATE src/test)
