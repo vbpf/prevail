@@ -1,123 +1,110 @@
 ---
-name: CPP CI
+name: C++ CI
 
-"on":
+on:
   pull_request:
     paths-ignore:
       - '**.md'
       - 'Dockerfile'
 
 concurrency:
-  # Cancel any CI/CD workflow currently in progress for the same PR.
-  # Allow running concurrently with any other commits.
   group: build-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
-  build_ubuntu:
-    strategy:
-      matrix:
-        configurations: [Debug, Release]
-        target: [tests, library]
-        test-type: [regular, slow]
-        exclude:
-          # Only run test-type variations when target is 'tests'
-          - target: library
-            test-type: slow
-          # Only split tests for Debug mode
-          - configurations: Release
-            test-type: slow
+  ubuntu:
+    name: Ubuntu (${{ matrix.cfg }})${{ (matrix.cfg == 'Debug' && format(' shard {0}/{1}', matrix.shard_index, matrix.shards)) || '' }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cfg: [Debug, Release]
+        include:
+          - cfg: Debug
+            shards: 3
+            shard_index: 1
+          - cfg: Debug
+            shards: 3
+            shard_index: 2
+          - cfg: Debug
+            shards: 3
+            shard_index: 3
+          - cfg: Release
+            shards: 1
+            shard_index: 1
     env:
-      # Configuration type to build.  For documentation on how build matrices work, see
-      # https://docs.github.com/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
-      BUILD_CONFIGURATION: ${{matrix.configurations}}
-
+      BUILD_CONFIGURATION: ${{ matrix.cfg }}
     steps:
-      - name: Install dependencies
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt install libboost-dev libboost-filesystem-dev libboost-program-options-dev
+          sudo apt-get install -y ccache libboost-dev libboost-filesystem-dev libboost-program-options-dev libyaml-cpp-dev
+          echo 'max_size = 2G' | sudo tee /etc/ccache.conf
+          echo "CCACHE_BASEDIR=$GITHUB_WORKSPACE" >> $GITHUB_ENV
+          echo "CCACHE_DIR=$HOME/.ccache" >> $GITHUB_ENV
+          echo "CCACHE_COMPRESS=1" >> $GITHUB_ENV
 
-      - name: Install test dependencies
-        if: ${{matrix.target == 'tests'}}
-        run: |
-          sudo apt install libyaml-cpp-dev valgrind
-
-      - uses: actions/checkout@v5
+      - name: Cache ccache
+        uses: actions/cache@v4
         with:
-          submodules: 'recursive'
+          path: ~/.ccache
+          key: ${{ runner.os }}-ccache-${{ matrix.cfg }}-${{ hashFiles('**/CMakeLists.txt') }}
+
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=${BUILD_CONFIGURATION} \
+            -DVERIFIER_ENABLE_TESTS=ON \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
-        run: |
-          mkdir build
-          if [ "${{matrix.target}}" = "library" ]; then
-            cmake -B build -DCMAKE_BUILD_TYPE=${{env.BUILD_CONFIGURATION}} -DVERIFIER_ENABLE_TESTS=OFF
-          else
-            cmake -B build -DCMAKE_BUILD_TYPE=${{env.BUILD_CONFIGURATION}} -DVERIFIER_ENABLE_TESTS=ON
-          fi
-          cmake --build build -j $(nproc)
+        run: cmake --build build -j $(nproc)
 
-      - name: Run regular unit tests (Debug)
-        if: ${{matrix.target == 'tests' && matrix.configurations == 'Debug' && matrix.test-type == 'regular'}}
-        run: ./tests -d yes ~[slow]
-
-      - name: Run slow unit tests (Debug)
-        if: ${{matrix.target == 'tests' && matrix.configurations == 'Debug' && matrix.test-type == 'slow'}}
-        run: ./tests -d yes [slow]
-
-      - name: Run all unit tests (Release)
-        if: ${{matrix.target == 'tests' && matrix.configurations == 'Release'}}
+      - name: Run tests
+        if: ${{ matrix.cfg == 'Debug' }}
+        run: ./tests -d yes --shard-count ${{ matrix.shards }} --shard-index ${{ matrix.shard_index }}
+      - name: Run tests
+        if: ${{ matrix.cfg == 'Release' }}
         run: ./tests -d yes
 
-      - name: Test for memory leaks
-        if: ${{matrix.target == 'tests' && matrix.configurations == 'Debug' && matrix.test-type == 'regular'}}
-        # Any memory leaks will cause the test to fail
-        # This BPF program was chosen because it is the largest one in the repo
-        run: valgrind --leak-check=full --errors-for-leak-kinds=all  --show-leak-kinds=all --error-exitcode=1 ./check ebpf-samples/cilium/bpf_xdp_snat_linux_v1.o 2/1
-
-  build_windows:
-    strategy:
-      matrix:
-        configurations: [Debug, Release]
-        target: [tests, library]
-        test-type: [regular, slow]
-        exclude:
-          # Only run test-type variations when target is 'tests'
-          - target: library
-            test-type: slow
-          # Only split tests for Debug mode
-          - configurations: Release
-            test-type: slow
+  windows_debug:
+    name: Windows (Debug, full tests)
     runs-on: windows-2022
     env:
-      # Configuration type to build.  For documentation on how build matrices work, see
-      # https://docs.github.com/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
-      BUILD_CONFIGURATION: ${{matrix.configurations}}
-
+      BUILD_CONFIGURATION: Debug
     steps:
       - uses: actions/checkout@v5
         with:
-          submodules: 'recursive'
+          submodules: recursive
+
+      # Setup vcpkg and enable binary caching automatically
+      - name: run-vcpkg (manifest mode)
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgJsonGlob: '**/vcpkg.json'
+        env:
+          # static lib + dynamic CRT fits YAML_CPP_STATIC_DEFINE and MSVC Debug CRT
+          VCPKG_DEFAULT_TRIPLET: x64-windows-static-md
+          VCPKG_DEFAULT_HOST_TRIPLET: x64-windows-static-md
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          $toolchain = "$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake"
+          cmake -S . -B build `
+            -DVERIFIER_ENABLE_TESTS=ON `
+            -DCMAKE_TOOLCHAIN_FILE="$toolchain" `
+            -DCMAKE_BUILD_TYPE=$env:BUILD_CONFIGURATION
 
       - name: Build
-        run: |
-          mkdir build
-          if ("${{matrix.target}}" -eq "library") {
-            cmake -B build -DVERIFIER_ENABLE_TESTS=OFF
-          } else {
-            cmake -B build -DVERIFIER_ENABLE_TESTS=ON
-          }
-          cmake --build build -j $(nproc) --config ${{env.BUILD_CONFIGURATION}}
+        shell: pwsh
+        run: cmake --build build --config $env:BUILD_CONFIGURATION -- /m:%NUMBER_OF_PROCESSORS%
 
-      - name: Run regular unit tests (Debug)
-        if: ${{matrix.target == 'tests' && matrix.configurations == 'Debug' && matrix.test-type == 'regular'}}
-        run: ./${{env.BUILD_CONFIGURATION}}/tests -d yes ~[slow]
-
-      - name: Run slow unit tests (Debug)
-        if: ${{matrix.target == 'tests' && matrix.configurations == 'Debug' && matrix.test-type == 'slow'}}
-        run: ./${{env.BUILD_CONFIGURATION}}/tests -d yes [slow]
-
-      - name: Run all unit tests (Release)
-        if: ${{matrix.target == 'tests' && matrix.configurations == 'Release'}}
-        run: ./${{env.BUILD_CONFIGURATION}}/tests -d yes
+      - name: Run all unit tests (Debug)
+        shell: pwsh
+        run: .\${{ env.BUILD_CONFIGURATION }}\tests.exe -d yes

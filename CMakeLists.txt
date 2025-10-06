@@ -47,42 +47,37 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
     find_package(Boost REQUIRED)
     set(CMAKE_CXX_STANDARD 20)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    # … above, unchanged …
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-    list(APPEND CMAKE_CONFIGURATION_TYPES FuzzerDebug)
-    list(REMOVE_DUPLICATES CMAKE_CONFIGURATION_TYPES)
-    set(CMAKE_CONFIGURATION_TYPES "${CMAKE_CONFIGURATION_TYPES}" CACHE STRING
-            "Add the configurations that we need"
-            FORCE)
-    set(CMAKE_EXE_LINKER_FLAGS_FUZZERDEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG}")
-    set(CMAKE_SHARED_LINKER_FLAGS_FUZZERDEBUG "${CMAKE_SHARED_LINKER_FLAGS_DEBUG}")
-    set(CMAKE_C_FLAGS_FUZZERDEBUG "${CMAKE_C_FLAGS_DEBUG} /fsanitize=address /fsanitize=fuzzer /fsanitize-coverage=inline-bool-flag /fsanitize-coverage=edge /fsanitize-coverage=trace-cmp /fsanitize-coverage=trace-div /ZH:SHA_256")
-    set(CMAKE_CXX_FLAGS_FUZZERDEBUG "${CMAKE_CXX_FLAGS_DEBUG} /fsanitize=address /fsanitize=fuzzer /fsanitize-coverage=inline-bool-flag /fsanitize-coverage=edge /fsanitize-coverage=trace-cmp /fsanitize-coverage=trace-div /ZH:SHA_256")
-
-    find_program(NUGET nuget)
-    if (NOT NUGET)
-        message("ERROR: You must first install nuget.exe from https://www.nuget.org/downloads")
+    # If the vcpkg toolchain is in use, just find packages normally.
+    if (DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg.cmake")
+        if (VERIFIER_ENABLE_TESTS)
+            find_package(yaml-cpp CONFIG REQUIRED)
+        endif ()
+        find_package(Boost CONFIG REQUIRED COMPONENTS filesystem program_options)
     else ()
-        execute_process(COMMAND ${NUGET} install "Boost" -Version 1.81.0 -ExcludeVersion -OutputDirectory ${CMAKE_BINARY_DIR}/packages)
-        set(BOOST_VERSION 1.81.0)
-    endif ()
-    set(Boost_INCLUDE_DIRS ${CMAKE_BINARY_DIR}/packages/boost/lib/native/include)
-    set(Boost_LIBRARY_DIRS ${CMAKE_BINARY_DIR}/packages/boost_filesystem-vc143/lib/native)
-
-    if (VERIFIER_ENABLE_TESTS)
-        set(EXTERNAL_INSTALL_LOCATION ${CMAKE_BINARY_DIR}/packages/yaml-cpp)
-        include(ExternalProject)
-        ExternalProject_Add(yaml-cpp
-                GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
-                GIT_TAG "0.8.0"
-                GIT_SHALLOW true
-                CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LOCATION}
-                -DYAML_MSVC_SHARED_RT=ON
-                -DYAML_CPP_BUILD_TESTS=OFF
-                -DYAML_CPP_BUILD_TOOLS=OFF
-                -DCMAKE_POLICY_VERSION_MINIMUM=3.14
-        )
-        set(YAML_CPP_LIBRARIES ${EXTERNAL_INSTALL_LOCATION}/lib/yaml-cpp$<$<CONFIG:DEBUG>:d>.lib)
-        set(YAML_CPP_INCLUDE_DIR ${EXTERNAL_INSTALL_LOCATION}/include/)
+        # ---- NuGet + ExternalProject fallback ----
+        find_program(NUGET nuget)
+        if (NOT NUGET)
+            message("ERROR: You must first install nuget.exe from https://www.nuget.org/downloads")
+        else ()
+            execute_process(COMMAND ${NUGET} install "Boost" -Version 1.81.0 -ExcludeVersion -OutputDirectory ${CMAKE_BINARY_DIR}/packages)
+            set(BOOST_VERSION 1.81.0)
+        endif ()
+        set(Boost_INCLUDE_DIRS ${CMAKE_BINARY_DIR}/packages/boost/lib/native/include)
+        set(Boost_LIBRARY_DIRS ${CMAKE_BINARY_DIR}/packages/boost_filesystem-vc143/lib/native)
+        if (VERIFIER_ENABLE_TESTS)
+            set(EXTERNAL_INSTALL_LOCATION ${CMAKE_BINARY_DIR}/packages/yaml-cpp)
+            include(ExternalProject)
+            ExternalProject_Add(yaml-cpp
+                    GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
+                    GIT_TAG "0.8.0" GIT_SHALLOW true
+                    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LOCATION}
+                    -DYAML_MSVC_SHARED_RT=ON -DYAML_CPP_BUILD_TESTS=OFF
+                    -DYAML_CPP_BUILD_TOOLS=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.14)
+            set(YAML_CPP_LIBRARIES ${EXTERNAL_INSTALL_LOCATION}/lib/yaml-cpp$<$<CONFIG:DEBUG>:d>.lib)
+            set(YAML_CPP_INCLUDE_DIR ${EXTERNAL_INSTALL_LOCATION}/include/)
+        endif ()
     endif ()
 endif ()
 

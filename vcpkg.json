@@ -1,0 +1,10 @@
+{
+  "name": "prevail-deps",
+  "version-string": "0.0.0",
+  "dependencies": [
+    "yaml-cpp",
+    "boost-filesystem",
+    "boost-program-options",
+    "boost-process"
+  ]
+}
