@@ -100,7 +100,7 @@ jobs:
 
       - name: Build
         shell: pwsh
-        run: cmake --build build --config $env:BUILD_CONFIGURATION -- /m:%NUMBER_OF_PROCESSORS%
+        run: cmake --build build --config $env:BUILD_CONFIGURATION -- /m:$env:NUMBER_OF_PROCESSORS
 
       - name: Run all unit tests (Debug)
         shell: pwsh
