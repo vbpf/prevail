@@ -6,6 +6,7 @@
     "yaml-cpp",
     "boost-filesystem",
     "boost-program-options",
-    "boost-process"
+    "boost-process",
+    "boost-multiprecision"
   ]
 }
