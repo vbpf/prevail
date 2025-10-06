@@ -195,6 +195,14 @@ if (TARGET Boost::filesystem)
     target_link_libraries(prevail PRIVATE Boost::filesystem Boost::program_options Boost::process)
 endif ()
 
+if (TARGET yaml-cpp::yaml-cpp)
+    target_link_libraries(run_yaml PRIVATE yaml-cpp::yaml-cpp)
+endif ()
+
+if (TARGET Boost::filesystem)
+    target_link_libraries(run_yaml PRIVATE Boost::filesystem Boost::program_options Boost::process)
+endif ()
+
 if (VERIFIER_ENABLE_TESTS)
     target_link_libraries(conformance_check PRIVATE prevail bpf_conformance ${CMAKE_DL_LIBS} Threads::Threads Catch2::Catch2WithMain)
     target_link_libraries(tests PRIVATE prevail bpf_conformance ${CMAKE_DL_LIBS} Threads::Threads Catch2::Catch2WithMain)
