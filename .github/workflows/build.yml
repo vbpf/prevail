@@ -76,7 +76,7 @@ jobs:
             vcpkg/installed
             vcpkg/buildtrees
             vcpkg/downloads
-          key: vcpkg-${{ runner.os }}-${{ hashFiles('**/vcpkg.json', '**/vcpkg-configuration.json') }}
+          key: vcpkg-${{ runner.os }}-v2-${{ hashFiles('**/vcpkg.json', '**/vcpkg-configuration.json') }}
           restore-keys: |
             vcpkg-${{ runner.os }}-
 
