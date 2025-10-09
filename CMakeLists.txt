@@ -27,15 +27,18 @@ FetchContent_Declare(GSL
 FetchContent_MakeAvailable(GSL)
 
 if (MSVC)
-    if (DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg.cmake")
+    # Detect vcpkg via environment or toolchain
+    if (DEFINED ENV{VCPKG_ROOT} OR
+    (DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg[\\/]scripts[\\/]buildsystems[\\/]vcpkg.cmake"))
+        message(STATUS "Using vcpkg for dependencies")
         find_package(yaml-cpp CONFIG REQUIRED)
-        find_package(Boost REQUIRED COMPONENTS filesystem program_options process)
+        find_package(Boost CONFIG REQUIRED COMPONENTS filesystem program_options process)
     else ()
+        message(STATUS "Using NuGet fallback for dependencies")
         find_program(NUGET nuget)
         if (NOT NUGET)
-            message(FATAL_ERROR "NuGet not found; install from https://www.nuget.org/downloads")
+            message(FATAL_ERROR "NuGet not found. Install via winget or add to PATH.")
         endif ()
-        # NuGet fallback
         foreach (pkg IN ITEMS filesystem program_options process)
             execute_process(
                     COMMAND ${NUGET} install boost_${pkg}-vc143 -Version 1.87.0 -ExcludeVersion

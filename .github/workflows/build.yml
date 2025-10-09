@@ -62,6 +62,9 @@ jobs:
     runs-on: windows-2022
     env:
       BUILD_CONFIGURATION: ${{ matrix.configurations }}
+      VCPKG_BINARY_SOURCES: clear;nuget,readwrite
+      VCPKG_NUGET_REPOSITORY: https://api.nuget.org/v3/index.json
+      VCPKG_FEATURE_FLAGS: manifests
 
     steps:
       - uses: actions/checkout@v5
@@ -106,12 +109,8 @@ jobs:
       # --- Configure and build ---
       - name: Configure CMake
         run: |
-          mkdir build
-          $enableTests = if ("${{ matrix.target }}" -eq "library") { "OFF" } else { "ON" }
-          $toolchain = Join-Path $env:VCPKG_ROOT "scripts/buildsystems/vcpkg.cmake"
-          echo "Using toolchain: $toolchain"
-          cmake -B build -DVERIFIER_ENABLE_TESTS=$enableTests "-DCMAKE_TOOLCHAIN_FILE=$toolchain" -DVCPKG_FEATURE_FLAGS=manifests
-        shell: pwsh
+          $env:CMAKE_TOOLCHAIN_FILE = Join-Path $env:VCPKG_ROOT "scripts/buildsystems/vcpkg.cmake"
+          cmake -B build -DVERIFIER_ENABLE_TESTS=ON -DCMAKE_TOOLCHAIN_FILE=$env:CMAKE_TOOLCHAIN_FILE -DVCPKG_FEATURE_FLAGS=manifests
 
       - name: Build
         run: |
