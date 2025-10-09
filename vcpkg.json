@@ -1,13 +1,30 @@
 {
   "name": "prevail-deps",
   "version-string": "0.0.0",
-  "builtin-baseline": "4334d8b4c8916018600212ab4dd4bbdc343065d1",
   "dependencies": [
-    "yaml-cpp",
-    "boost-filesystem",
-    "boost-program-options",
-    "boost-process",
-    "boost-multiprecision",
-    "boost-endian"
+    {
+      "name": "yaml-cpp",
+      "version>=": "0.8.0"
+    },
+    {
+      "name": "boost-filesystem",
+      "version>=": "1.87.0"
+    },
+    {
+      "name": "boost-program-options",
+      "version>=": "1.87.0"
+    },
+    {
+      "name": "boost-process",
+      "version>=": "1.87.0"
+    },
+    {
+      "name": "boost-multiprecision",
+      "version>=": "1.87.0"
+    },
+    {
+      "name": "boost-endian",
+      "version>=": "1.87.0"
+    }
   ]
 }

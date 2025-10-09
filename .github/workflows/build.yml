@@ -62,9 +62,8 @@ jobs:
     runs-on: windows-2022
     env:
       BUILD_CONFIGURATION: ${{ matrix.configurations }}
-      VCPKG_BINARY_SOURCES: clear;nuget,readwrite
-      VCPKG_NUGET_REPOSITORY: https://api.nuget.org/v3/index.json
       VCPKG_FEATURE_FLAGS: manifests
+      VCPKG_BINARY_SOURCES: clear;gha,readwrite
 
     steps:
       - uses: actions/checkout@v5
@@ -94,6 +93,7 @@ jobs:
 
       # --- Configure and build ---
       - name: Configure CMake
+        shell: pwsh
         run: |
           $toolchain = Join-Path $env:VCPKG_ROOT "scripts/buildsystems/vcpkg.cmake"
           Write-Host "Using toolchain: $toolchain"

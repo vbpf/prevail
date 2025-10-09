@@ -5,6 +5,7 @@ cmake_minimum_required(VERSION 3.16)
 if (POLICY CMP0167)
     cmake_policy(SET CMP0167 NEW)
 endif ()
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 
 project(prevail)
 
@@ -26,15 +27,10 @@ FetchContent_Declare(GSL
 )
 FetchContent_MakeAvailable(GSL)
 
+option(VERIFIER_USE_NUGET_FALLBACK "Use NuGet to fetch Boost on MSVC when vcpkg toolchain isn't provided" OFF)
+
 if (MSVC)
-    # Detect vcpkg via environment or toolchain
-    if (DEFINED ENV{VCPKG_ROOT} OR
-    (DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg[\\/]scripts[\\/]buildsystems[\\/]vcpkg.cmake"))
-        message(STATUS "Using vcpkg for dependencies")
-        find_package(yaml-cpp CONFIG REQUIRED)
-        find_package(Boost CONFIG REQUIRED COMPONENTS filesystem program_options process)
-    else ()
-        message(STATUS "Using NuGet fallback for dependencies")
+    if (VERIFIER_USE_NUGET_FALLBACK)
         find_program(NUGET nuget)
         if (NOT NUGET)
             message(FATAL_ERROR "NuGet not found. Install via winget or add to PATH.")
@@ -46,6 +42,9 @@ if (MSVC)
             )
         endforeach ()
         file(GLOB_RECURSE Boost_INCLUDE_DIRS "${CMAKE_BINARY_DIR}/packages/boost_*/lib/native/include")
+    else ()
+        find_package(yaml-cpp CONFIG REQUIRED)
+        find_package(Boost CONFIG REQUIRED COMPONENTS filesystem program_options process)
     endif ()
 else ()
     if (VERIFIER_ENABLE_TESTS)
