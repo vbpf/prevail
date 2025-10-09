@@ -92,25 +92,12 @@ jobs:
           runVcpkgInstall: true
           vcpkgGitCommitId: 4334d8b4c8916018600212ab4dd4bbdc343065d1
 
-      # --- Instrumentation: verify environment and toolchain ---
-      - name: Inspect vcpkg environment
-        run: |
-          echo "---- Environment ----"
-          echo "VCPKG_ROOT=$env:VCPKG_ROOT"
-          echo "CMAKE_TOOLCHAIN_FILE=$env:CMAKE_TOOLCHAIN_FILE"
-          echo "Directory structure:"
-          if (Test-Path "$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake") {
-            Write-Host "Found vcpkg.cmake at $env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
-          } else {
-            Write-Host "vcpkg.cmake not found!"
-            dir $env:VCPKG_ROOT -Recurse -Depth 2
-          }
-
       # --- Configure and build ---
       - name: Configure CMake
         run: |
-          $env:CMAKE_TOOLCHAIN_FILE = Join-Path $env:VCPKG_ROOT "scripts/buildsystems/vcpkg.cmake"
-          cmake -B build -DVERIFIER_ENABLE_TESTS=ON -DCMAKE_TOOLCHAIN_FILE=$env:CMAKE_TOOLCHAIN_FILE -DVCPKG_FEATURE_FLAGS=manifests
+          $toolchain = Join-Path $env:VCPKG_ROOT "scripts/buildsystems/vcpkg.cmake"
+          Write-Host "Using toolchain: $toolchain"
+          cmake -B build -DVERIFIER_ENABLE_TESTS=ON "-DCMAKE_TOOLCHAIN_FILE=$toolchain" -DVCPKG_FEATURE_FLAGS=manifests
 
       - name: Build
         run: |
