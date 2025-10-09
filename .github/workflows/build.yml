@@ -59,7 +59,7 @@ jobs:
       matrix:
         configurations: [Debug, Release]
         target: [tests, library]
-    runs-on: windows-2022
+    runs-on: windows-2025
     env:
       BUILD_CONFIGURATION: ${{ matrix.configurations }}
       VCPKG_FEATURE_FLAGS: manifests
