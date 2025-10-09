@@ -64,7 +64,8 @@ jobs:
       BUILD_CONFIGURATION: ${{ matrix.configurations }}
       VCPKG_FEATURE_FLAGS: manifests
       VCPKG_BINARY_SOURCES: clear;gha,readwrite
-
+      VCPKG_DEFAULT_TRIPLET: x64-windows
+      VCPKG_DEFAULT_BINARY_CACHE: D:/a/vcpkg_cache
     steps:
       - uses: actions/checkout@v5
         with:
@@ -82,27 +83,23 @@ jobs:
           restore-keys: |
             vcpkg-${{ runner.os }}-
 
-      # --- Install and configure vcpkg ---
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgJsonGlob: '**/vcpkg.json'
-          vcpkgConfigurationJsonGlob: '**/vcpkg-configuration.json'
-          runVcpkgInstall: true
-          vcpkgGitCommitId: 4334d8b4c8916018600212ab4dd4bbdc343065d1
-
       # --- Configure and build ---
       - name: Configure CMake
         shell: pwsh
         run: |
-          $toolchain = Join-Path $env:VCPKG_ROOT "scripts/buildsystems/vcpkg.cmake"
-          Write-Host "Using toolchain: $toolchain"
-          cmake -B build -DVERIFIER_ENABLE_TESTS=ON "-DCMAKE_TOOLCHAIN_FILE=$toolchain" -DVCPKG_FEATURE_FLAGS=manifests
+          cmake -B build -DVERIFIER_ENABLE_TESTS=ON -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake
 
       - name: Build
         run: |
           cmake --build build --config ${{ env.BUILD_CONFIGURATION }} -- /m:$env:NUMBER_OF_PROCESSORS
         shell: pwsh
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            build/vcpkg_installed
+            build/CMakeCache.txt
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
 
       - name: Run unit tests
         if: ${{ matrix.target == 'tests' }}
