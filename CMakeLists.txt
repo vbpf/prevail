@@ -29,8 +29,24 @@ FetchContent_MakeAvailable(GSL)
 
 if (MSVC)
     set(BOOST_ROOT "${CMAKE_BINARY_DIR}/packages/boost-vc143.1.87.0/lib/native")
-    find_package(yaml-cpp CONFIG REQUIRED)
     find_package(Boost CONFIG REQUIRED COMPONENTS process)
+
+    if (VERIFIER_ENABLE_TESTS)
+        set(EXTERNAL_INSTALL_LOCATION ${CMAKE_BINARY_DIR}/packages/yaml-cpp)
+        include(ExternalProject)
+        ExternalProject_Add(yaml-cpp
+                GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
+                GIT_TAG "0.8.0"
+                GIT_SHALLOW true
+                CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LOCATION}
+                -DYAML_MSVC_SHARED_RT=ON
+                -DYAML_CPP_BUILD_TESTS=OFF
+                -DYAML_CPP_BUILD_TOOLS=OFF
+                -DCMAKE_POLICY_VERSION_MINIMUM=3.14
+        )
+        set(YAML_CPP_LIBRARIES ${EXTERNAL_INSTALL_LOCATION}/lib/yaml-cpp$<$<CONFIG:DEBUG>:d>.lib)
+        set(YAML_CPP_INCLUDE_DIR ${EXTERNAL_INSTALL_LOCATION}/include/)
+    endif ()
 else ()
     if (VERIFIER_ENABLE_TESTS)
         find_package(yaml-cpp REQUIRED)

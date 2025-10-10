@@ -62,7 +62,7 @@ jobs:
       - name: Configure CMake (Windows)
         if: ${{ matrix.os == 'windows-2025' }}
         run: |
-          cmake -S . -B build -G "Visual Studio 17 2022" `
+          cmake -S . -B build `
             -D CMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} `
             -D VERIFIER_ENABLE_TESTS=$([bool](${env:matrix_target} -eq 'tests'))
         shell: pwsh
