@@ -77,7 +77,7 @@ jobs:
       - name: Install vcpkg (latest manifest mode)
         if: ${{ matrix.os == 'windows-2025' }}
         run: |
-          git clone https://github.com/microsoft/vcpkg.git
+          git clone --depth=1 https://github.com/microsoft/vcpkg.git
           cd vcpkg
           .\bootstrap-vcpkg.bat -disableMetrics
         shell: pwsh
@@ -111,18 +111,4 @@ jobs:
         if: ${{ matrix.os == 'windows-2025' && matrix.target == 'tests' }}
         working-directory: build/${{ env.BUILD_CONFIGURATION }}
         run: .\tests.exe -d yes
-        shell: pwsh
-
-      # ---------- Optional: NuGet fallback ----------
-      - name: NuGet fallback (if vcpkg unavailable)
-        if: ${{ matrix.os == 'windows-2025' && failure() }}
-        run: |
-          choco install nuget.commandline -y
-          cmake -S . -B build-nuget -G "${env:CMAKE_GENERATOR}" `
-            -D VERIFIER_USE_NUGET_FALLBACK=ON `
-            -D VERIFIER_ENABLE_TESTS=$([bool](${env:matrix_target} -eq 'tests'))
-          cmake --build build-nuget --config ${{ env.BUILD_CONFIGURATION }} --parallel
-          if (Test-Path ".\build-nuget\${{ env.BUILD_CONFIGURATION }}\tests.exe") {
-            .\build-nuget\${{ env.BUILD_CONFIGURATION }}\tests.exe --reporter compact
-          }
         shell: pwsh

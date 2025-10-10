@@ -30,27 +30,12 @@ FetchContent_MakeAvailable(GSL)
 option(VERIFIER_USE_NUGET_FALLBACK "Use NuGet to fetch Boost on MSVC when vcpkg toolchain isn't provided" OFF)
 
 if (MSVC)
-    if (VERIFIER_USE_NUGET_FALLBACK)
-        find_program(NUGET nuget)
-        if (NOT NUGET)
-            message(FATAL_ERROR "NuGet not found. Install via winget or add to PATH.")
-        endif ()
-        foreach (pkg IN ITEMS filesystem program_options process)
-            execute_process(
-                    COMMAND ${NUGET} install boost_${pkg}-vc143 -Version 1.87.0 -ExcludeVersion
-                    -OutputDirectory ${CMAKE_BINARY_DIR}/packages
-            )
-        endforeach ()
-        file(GLOB_RECURSE Boost_INCLUDE_DIRS "${CMAKE_BINARY_DIR}/packages/boost_*/lib/native/include")
-    else ()
-        find_package(yaml-cpp CONFIG REQUIRED)
-        find_package(Boost CONFIG REQUIRED COMPONENTS filesystem program_options process)
-    endif ()
+    find_package(yaml-cpp CONFIG REQUIRED)
+    find_package(Boost CONFIG REQUIRED COMPONENTS process)
 else ()
     if (VERIFIER_ENABLE_TESTS)
         find_package(yaml-cpp REQUIRED)
     endif ()
-    find_package(Boost REQUIRED COMPONENTS filesystem program_options)
     add_compile_definitions(BOOST_PROCESS_USE_STD_FS)
     add_library(Boost::process INTERFACE IMPORTED)
     target_include_directories(Boost::process INTERFACE ${Boost_INCLUDE_DIRS})
@@ -126,8 +111,6 @@ set(yaml-cpp_GUID_CMAKE "98d56b8a-d8eb-3d98-b8ee-c83696b4d58a" CACHE INTERNAL "P
 target_link_libraries(prevail PRIVATE
         libbtf
         bpf_conformance
-        Boost::filesystem
-        Boost::program_options
         Boost::process
 )
 target_link_libraries(prevail PUBLIC Microsoft.GSL::GSL)

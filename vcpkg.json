@@ -7,14 +7,6 @@
       "version>=": "0.8.0"
     },
     {
-      "name": "boost-filesystem",
-      "version>=": "1.87.0"
-    },
-    {
-      "name": "boost-program-options",
-      "version>=": "1.87.0"
-    },
-    {
       "name": "boost-process",
       "version>=": "1.87.0"
     },
