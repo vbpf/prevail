@@ -29,6 +29,11 @@ FetchContent_MakeAvailable(GSL)
 
 if (MSVC)
     set(BOOST_VERSION 1.87.0)
+    set(BOOST_ROOT "${CMAKE_BINARY_DIR}/packages/boost-vc143.${BOOST_VERSION}/lib/native")
+    set(BOOST_INCLUDEDIR "${BOOST_ROOT}/include")
+    set(BOOST_LIBRARYDIR "${BOOST_ROOT}/lib")
+    set(CMAKE_PREFIX_PATH "${BOOST_ROOT};${CMAKE_PREFIX_PATH}")
+
     find_package(Boost ${BOOST_VERSION} EXACT REQUIRED COMPONENTS process)
 
     if (VERIFIER_ENABLE_TESTS)
