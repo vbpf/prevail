@@ -27,9 +27,8 @@ FetchContent_Declare(GSL
 )
 FetchContent_MakeAvailable(GSL)
 
-option(VERIFIER_USE_NUGET_FALLBACK "Use NuGet to fetch Boost on MSVC when vcpkg toolchain isn't provided" OFF)
-
 if (MSVC)
+    set(VCPKG_MANIFEST_FEATURES "no-nuget-boost")
     find_package(yaml-cpp CONFIG REQUIRED)
     find_package(Boost CONFIG REQUIRED COMPONENTS process)
 else ()
