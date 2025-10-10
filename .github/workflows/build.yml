@@ -80,7 +80,6 @@ jobs:
           git clone --depth=1 https://github.com/microsoft/vcpkg.git
           cd vcpkg
           .\bootstrap-vcpkg.bat -disableMetrics
-          vcpkg install boost:x64-windows
         shell: pwsh
 
       - name: Configure CMake (Windows)

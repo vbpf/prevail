@@ -3,8 +3,6 @@
   "version-string": "0.0.0",
   "dependencies": [
     "yaml-cpp",
-    "boost-process",
-    "boost-multiprecision",
-    "boost-endian"
+    "boost"
   ]
 }
