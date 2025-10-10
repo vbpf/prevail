@@ -26,6 +26,33 @@ FetchContent_Declare(GSL
         GIT_SHALLOW ON
 )
 FetchContent_MakeAvailable(GSL)
+
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
+        "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    set(COMMON_FLAGS -Wall -Wfatal-errors)
+
+    include(CheckTypeSize)
+    check_type_size("void*" SIZEOF_VOID_P)
+    check_type_size("long" SIZEOF_LONG)
+    add_compile_definitions(SIZEOF_VOID_P=${SIZEOF_VOID_P} SIZEOF_LONG=${SIZEOF_LONG})
+
+    set(RELEASE_FLAGS -O2 -flto=auto)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT ipo_supported)
+    if (ipo_supported)
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+    endif ()
+
+    set(RELWITHDEBINFO_FLAGS ${RELEASE_FLAGS} -g3)
+    set(DEBUG_FLAGS -O0 -g3 -fno-omit-frame-pointer)
+
+    set(SANITIZE_FLAGS -fsanitize=address -O1 -fno-omit-frame-pointer)
+endif ()
+
 if (MSVC)
     # --- Boost setup (NuGet prebuilt) ---
     set(Boost_VERSION 1.87.0)
@@ -35,9 +62,6 @@ if (MSVC)
 
     # Look for a BoostConfig.cmake (CONFIG mode, CMP0167 compliant)
     find_package(Boost CONFIG REQUIRED COMPONENTS process)
-
-    target_include_directories(prevail PRIVATE ${Boost_INCLUDE_DIR})
-    target_link_libraries(prevail PRIVATE Boost::process)
 
     # --- yaml-cpp (only if tests enabled) ---
     if (VERIFIER_ENABLE_TESTS)
@@ -77,31 +101,6 @@ file(GLOB LIB_SRC CONFIGURE_DEPENDS
         "./src/linux/linux_platform.cpp"
 )
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
-        "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-    set(COMMON_FLAGS -Wall -Wfatal-errors)
-
-    include(CheckTypeSize)
-    check_type_size("void*" SIZEOF_VOID_P)
-    check_type_size("long" SIZEOF_LONG)
-    add_compile_definitions(SIZEOF_VOID_P=${SIZEOF_VOID_P} SIZEOF_LONG=${SIZEOF_LONG})
-
-    set(RELEASE_FLAGS -O2 -flto=auto)
-    include(CheckIPOSupported)
-    check_ipo_supported(RESULT ipo_supported)
-    if (ipo_supported)
-        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
-    endif ()
-
-    set(RELWITHDEBINFO_FLAGS ${RELEASE_FLAGS} -g3)
-    set(DEBUG_FLAGS -O0 -g3 -fno-omit-frame-pointer)
-
-    set(SANITIZE_FLAGS -fsanitize=address -O1 -fno-omit-frame-pointer)
-endif ()
-
 add_library(prevail ${LIB_SRC})
 
 target_include_directories(prevail PUBLIC
@@ -111,6 +110,7 @@ target_include_directories(prevail SYSTEM PUBLIC
         ${CMAKE_SOURCE_DIR}/external
         ${CMAKE_SOURCE_DIR}/external/bpf_conformance/external/elfio
         ${CMAKE_SOURCE_DIR}/external/libbtf
+        ${Boost_INCLUDE_DIR}
 )
 
 target_compile_options(prevail PRIVATE
