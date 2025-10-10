@@ -59,13 +59,12 @@ jobs:
           ./build/check ebpf-samples/cilium/bpf_xdp_snat_linux_v1.o 2/1
 
       # ---------- Windows Build ----------
-      - name: Restore cached Boost binaries
-        if: ${{ matrix.os == 'windows-2025' }}
+      - name: Cache Boost packages
         id: cache-boost
         uses: actions/cache@v4
         with:
-          path: packages/boost-vc143
-          key: boost-vc143-1.87.0
+          path: D:\a\prevail\prevail\build\packages
+          key: boost-${{ runner.os }}-1.87.0
 
       - name: Install Boost (NuGet prebuilt)
         if: ${{ matrix.os == 'windows-2025' && steps.cache-boost.outputs.cache-hit != 'true' }}
@@ -98,12 +97,13 @@ jobs:
         if: ${{ matrix.os == 'windows-2025' }}
         shell: pwsh
         run: |
-          $boostDir = "${{ github.workspace }}/packages/boost-vc143/lib/native/lib/cmake/Boost"
+          $boostDir = "D:\a\prevail\prevail\build\packages\boost-vc143\lib\native\lib\cmake\Boost"
           $enableTests = if ($env:matrix_target -eq 'tests') {'ON'} else {'OFF'}
           cmake -S . -B build `
                 -G "Visual Studio 17 2022" `
                 -D CMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} `
-                -D CMAKE_PREFIX_PATH="$boostDir" `
+                -D CMAKE_PREFIX_PATH="$boostDir/lib/cmake/Boost" `
+                -D Boost_DIR="$boostDir/lib/cmake/Boost" `
                 -D VERIFIER_ENABLE_TESTS=$enableTests
 
       - name: Build (Windows)
