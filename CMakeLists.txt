@@ -54,14 +54,25 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
 endif ()
 
 if (MSVC)
-    # --- Boost setup (NuGet prebuilt) ---
-    set(Boost_VERSION 1.87.0)
-    set(Boost_ROOT "${CMAKE_BINARY_DIR}/packages/boost-vc143.${Boost_VERSION}/lib/native")
-    set(Boost_INCLUDE_DIR "${Boost_ROOT}/include")
-    set(Boost_LIBRARY_DIR "${Boost_ROOT}/lib")
+    # Windows: use NuGet prebuilt Boost (headers + libs) installed by CI
+    set(BOOST_VERSION 1.87.0)
 
-    # Look for a BoostConfig.cmake (CONFIG mode, CMP0167 compliant)
-    find_package(Boost CONFIG REQUIRED COMPONENTS process)
+    # Headers (from the 'boost' NuGet package)
+    set(BOOST_HEADERS_ROOT "${CMAKE_BINARY_DIR}/packages/boost/lib/native")
+
+    # Libraries (from the 'boost-vc143' NuGet package)
+    set(BOOST_LIBS_ROOT "${CMAKE_BINARY_DIR}/packages/boost-vc143/lib/native")
+
+    # Silence old SDK warning from bpf_conformance / Boost.Process on GH runners
+    add_compile_definitions(_WIN32_WINNT=0x0A00)
+
+    # Header-only targets we need (make them ourselves; no find_package)
+    add_library(Boost::headers INTERFACE IMPORTED)
+    target_include_directories(Boost::headers INTERFACE "${BOOST_HEADERS_ROOT}/include")
+
+    # Boost.Process is header-only; provide an alias target so the rest of the project stays modern
+    add_library(Boost::process INTERFACE IMPORTED)
+    target_link_libraries(Boost::process INTERFACE Boost::headers)
 
     # --- yaml-cpp (only if tests enabled) ---
     if (VERIFIER_ENABLE_TESTS)
