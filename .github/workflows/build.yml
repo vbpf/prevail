@@ -1,4 +1,4 @@
-name: CPP CI
+name: C++ CI
 
 on:
   pull_request:
@@ -66,42 +66,49 @@ jobs:
       VCPKG_BINARY_SOURCES: clear;gha,readwrite
       VCPKG_DEFAULT_TRIPLET: x64-windows
       VCPKG_DEFAULT_BINARY_CACHE: D:/a/vcpkg_cache
+      CMAKE_GENERATOR: Ninja
+
     steps:
       - uses: actions/checkout@v5
         with:
           submodules: recursive
 
-      # --- Cache compiled vcpkg packages ---
-      - name: Cache vcpkg artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            vcpkg/installed
-            vcpkg/buildtrees
-            vcpkg/downloads
-          key: vcpkg-${{ runner.os }}-v2-${{ hashFiles('**/vcpkg.json', '**/vcpkg-configuration.json') }}
-          restore-keys: |
-            vcpkg-${{ runner.os }}-
+      - name: Setup CMake and Ninja
+        uses: lukka/get-cmake@latest
 
-      # --- Configure and build ---
-      - name: Configure CMake
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+
+      - name: Configure (vcpkg manifest mode)
         shell: pwsh
         run: |
-          cmake -B build -DVERIFIER_ENABLE_TESTS=ON -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake
+          $toolchain = "vcpkg/scripts/buildsystems/vcpkg.cmake"
+          cmake -S . -B build `
+            -G "${env:CMAKE_GENERATOR}" `
+            -D CMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} `
+            -D CMAKE_TOOLCHAIN_FILE=$toolchain `
+            -D CMAKE_C_COMPILER_LAUNCHER=sccache `
+            -D CMAKE_CXX_COMPILER_LAUNCHER=sccache `
+            -D VERIFIER_ENABLE_TESTS=$([bool](${env:matrix_target} -eq 'tests'))
 
       - name: Build
-        run: |
-          cmake --build build --config ${{ env.BUILD_CONFIGURATION }} -- /m:$env:NUMBER_OF_PROCESSORS
-        shell: pwsh
-
-      - uses: actions/cache@v4
-        with:
-          path: |
-            build/vcpkg_installed
-            build/CMakeCache.txt
-          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
+        run: cmake --build build --config ${{ env.BUILD_CONFIGURATION }} --parallel
 
       - name: Run unit tests
         if: ${{ matrix.target == 'tests' }}
         working-directory: build
-        run: .\${{ env.BUILD_CONFIGURATION }}\tests.exe -d yes
+        run: .\${{ env.BUILD_CONFIGURATION }}\tests.exe --reporter compact
+
+      - name: "Fallback: NuGet build"
+        if: failure()
+        shell: pwsh
+        run: |
+          choco install nuget.commandline -y
+          cmake -S . -B build-nuget `
+            -G "${env:CMAKE_GENERATOR}" `
+            -D VERIFIER_USE_NUGET_FALLBACK=ON `
+            -D VERIFIER_ENABLE_TESTS=$([bool](${env:matrix_target} -eq 'tests'))
+          cmake --build build-nuget --config ${{ env.BUILD_CONFIGURATION }} --parallel
+          .\build-nuget\${{ env.BUILD_CONFIGURATION }}\tests.exe --reporter compact
