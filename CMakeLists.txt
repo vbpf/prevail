@@ -149,9 +149,8 @@ set(yaml-cpp_GUID_CMAKE "98d56b8a-d8eb-3d98-b8ee-c83696b4d58a" CACHE INTERNAL "P
 target_link_libraries(prevail PRIVATE
         libbtf
         bpf_conformance
-        Boost::process
 )
-target_link_libraries(prevail PUBLIC Microsoft.GSL::GSL)
+target_link_libraries(prevail PUBLIC Boost::process Microsoft.GSL::GSL)
 set_target_properties(prevail PROPERTIES
         CXX_VISIBILITY_PRESET hidden
         VISIBILITY_INLINES_HIDDEN YES)
