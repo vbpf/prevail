@@ -100,7 +100,7 @@ jobs:
       - name: Build (Windows)
         if: ${{ matrix.os == 'windows-2025' }}
         shell: pwsh
-        run: cmake --build build --config ${{ env.BUILD_CONFIGURATION }} --parallel
+        run: cmake --build build --parallel
 
       - name: Run unit tests (Windows)
         if: ${{ matrix.os == 'windows-2025' && matrix.target == 'tests' }}
