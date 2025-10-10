@@ -32,9 +32,18 @@ if (MSVC)
     set(BOOST_ROOT "${CMAKE_BINARY_DIR}/packages/boost-vc143.${BOOST_VERSION}/lib/native")
     set(BOOST_INCLUDEDIR "${BOOST_ROOT}/include")
     set(BOOST_LIBRARYDIR "${BOOST_ROOT}/lib")
-    set(CMAKE_PREFIX_PATH "${BOOST_ROOT};${CMAKE_PREFIX_PATH}")
 
-    find_package(Boost ${BOOST_VERSION} EXACT REQUIRED COMPONENTS process)
+    # Ensure CMake respects BOOST_ROOT and uses module mode
+    cmake_policy(SET CMP0144 NEW)
+    set(Boost_NO_BOOST_CMAKE ON)
+
+    list(APPEND CMAKE_INCLUDE_PATH "${BOOST_INCLUDEDIR}")
+    list(APPEND CMAKE_LIBRARY_PATH "${BOOST_LIBRARYDIR}")
+
+    find_package(Boost ${BOOST_VERSION} EXACT REQUIRED COMPONENTS process filesystem program_options)
+
+    target_include_directories(prevail PRIVATE ${Boost_INCLUDE_DIRS})
+    target_link_libraries(prevail PRIVATE Boost::process Boost::filesystem Boost::program_options)
 
     if (VERIFIER_ENABLE_TESTS)
         set(EXTERNAL_INSTALL_LOCATION ${CMAKE_BINARY_DIR}/packages/yaml-cpp)
@@ -43,7 +52,8 @@ if (MSVC)
                 GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
                 GIT_TAG "0.8.0"
                 GIT_SHALLOW true
-                CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LOCATION}
+                CMAKE_ARGS
+                -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LOCATION}
                 -DYAML_MSVC_SHARED_RT=ON
                 -DYAML_CPP_BUILD_TESTS=OFF
                 -DYAML_CPP_BUILD_TOOLS=OFF
@@ -52,6 +62,7 @@ if (MSVC)
         set(YAML_CPP_LIBRARIES ${EXTERNAL_INSTALL_LOCATION}/lib/yaml-cpp$<$<CONFIG:DEBUG>:d>.lib)
         set(YAML_CPP_INCLUDE_DIR ${EXTERNAL_INSTALL_LOCATION}/include/)
     endif ()
+
 else ()
     if (VERIFIER_ENABLE_TESTS)
         find_package(yaml-cpp REQUIRED)
