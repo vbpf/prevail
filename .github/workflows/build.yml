@@ -81,10 +81,18 @@ jobs:
         env:
           SCCACHE_GHA_ENABLED: "true"
 
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgJsonGlob: '**/vcpkg.json'
+          vcpkgConfigurationJsonGlob: '**/vcpkg-configuration.json'
+          runVcpkgInstall: true
+          vcpkgGitCommitId: 4334d8b4c8916018600212ab4dd4bbdc343065d1
+
       - name: Configure (vcpkg manifest mode)
         shell: pwsh
         run: |
-          $toolchain = "vcpkg/scripts/buildsystems/vcpkg.cmake"
+          $toolchain = "$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
           cmake -S . -B build `
             -G "${env:CMAKE_GENERATOR}" `
             -D CMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} `
@@ -106,7 +114,9 @@ jobs:
         shell: pwsh
         run: |
           choco install nuget.commandline -y
-          cmake -S . -B build-nuget `
+          cmake -S . -B build -A x64 `
+            -D CMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} `
+            -D CMAKE_TOOLCHAIN_FILE=$toolchain `
             -G "${env:CMAKE_GENERATOR}" `
             -D VERIFIER_USE_NUGET_FALLBACK=ON `
             -D VERIFIER_ENABLE_TESTS=$([bool](${env:matrix_target} -eq 'tests'))
