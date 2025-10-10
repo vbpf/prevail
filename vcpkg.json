@@ -2,21 +2,9 @@
   "name": "prevail-deps",
   "version-string": "0.0.0",
   "dependencies": [
-    {
-      "name": "yaml-cpp",
-      "version>=": "0.8.0"
-    },
-    {
-      "name": "boost-process",
-      "version>=": "1.87.0"
-    },
-    {
-      "name": "boost-multiprecision",
-      "version>=": "1.87.0"
-    },
-    {
-      "name": "boost-endian",
-      "version>=": "1.87.0"
-    }
+    "yaml-cpp",
+    "boost-process",
+    "boost-multiprecision",
+    "boost-endian"
   ]
 }
