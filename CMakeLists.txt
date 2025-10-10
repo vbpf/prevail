@@ -28,19 +28,19 @@ FetchContent_Declare(GSL
 FetchContent_MakeAvailable(GSL)
 
 if (MSVC)
+    set(CMAKE_MODULE_PATH "${CMAKE_ROOT}/Modules" ${CMAKE_MODULE_PATH})
+    cmake_policy(SET CMP0144 NEW)
+    set(Boost_NO_BOOST_CMAKE ON)
+
     set(BOOST_VERSION 1.87.0)
     set(BOOST_ROOT "${CMAKE_BINARY_DIR}/packages/boost-vc143.${BOOST_VERSION}/lib/native")
     set(BOOST_INCLUDEDIR "${BOOST_ROOT}/include")
     set(BOOST_LIBRARYDIR "${BOOST_ROOT}/lib")
 
-    # Ensure CMake respects BOOST_ROOT and uses module mode
-    cmake_policy(SET CMP0144 NEW)
-    set(Boost_NO_BOOST_CMAKE ON)
-
     list(APPEND CMAKE_INCLUDE_PATH "${BOOST_INCLUDEDIR}")
     list(APPEND CMAKE_LIBRARY_PATH "${BOOST_LIBRARYDIR}")
 
-    find_package(Boost ${BOOST_VERSION} EXACT REQUIRED COMPONENTS process filesystem program_options)
+    find_package(Boost ${BOOST_VERSION} EXACT REQUIRED COMPONENTS process)
 
     target_include_directories(prevail PRIVATE ${Boost_INCLUDE_DIRS})
     target_link_libraries(prevail PRIVATE Boost::process Boost::filesystem Boost::program_options)
