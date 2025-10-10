@@ -73,7 +73,7 @@ jobs:
           $root = "D:\a\prevail\prevail\build\packages"
           New-Item -ItemType Directory -Force -Path $root | Out-Null
 
-          nuget install boost -Version 1.87.0 -ExcludeVersion -OutputDirectory $root
+          nuget install boost -Version 1.87.0 -ExcludeVersion -DirectDownload -OutputDirectory $root
           # Prevent bpf_conformance from reinstalling boost packages
           nuget install boost_filesystem-vc143 -Version 1.87.0 -ExcludeVersion -OutputDirectory $root
           nuget install boost_program_options-vc143 -Version 1.87.0 -ExcludeVersion -OutputDirectory $root
@@ -99,12 +99,13 @@ jobs:
         run: |
           $boostDir = "D:\a\prevail\prevail\build\packages\boost-vc143\lib\native\lib\cmake\Boost"
           $enableTests = if ($env:matrix_target -eq 'tests') {'ON'} else {'OFF'}
+
           cmake -S . -B build `
-                -G "Visual Studio 17 2022" `
-                -D CMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} `
-                -D CMAKE_PREFIX_PATH="$boostDir/lib/cmake/Boost" `
-                -D Boost_DIR="$boostDir/lib/cmake/Boost" `
-                -D VERIFIER_ENABLE_TESTS=$enableTests
+            -G "Visual Studio 17 2022" `
+            -D CMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} `
+            -D CMAKE_PREFIX_PATH="$boostDir" `
+            -D Boost_DIR="$boostDir" `
+            -D VERIFIER_ENABLE_TESTS=$enableTests
 
       - name: Build (Windows)
         if: ${{ matrix.os == 'windows-2025' }}
