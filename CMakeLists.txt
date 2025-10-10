@@ -28,7 +28,7 @@ FetchContent_Declare(GSL
 FetchContent_MakeAvailable(GSL)
 
 if (MSVC)
-    set(VCPKG_MANIFEST_FEATURES "no-nuget-boost")
+    set(BOOST_ROOT "${CMAKE_BINARY_DIR}/packages/boost-vc143.1.87.0/lib/native")
     find_package(yaml-cpp CONFIG REQUIRED)
     find_package(Boost CONFIG REQUIRED COMPONENTS process)
 else ()
