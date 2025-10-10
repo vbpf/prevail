@@ -7,8 +7,6 @@
 #include <set>
 #include <variant>
 
-#include <boost/algorithm/string.hpp>
-
 #include <yaml-cpp/yaml.h>
 
 #include "asm_parse.hpp"
