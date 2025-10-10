@@ -11,96 +11,118 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build_ubuntu:
+  build:
     strategy:
       matrix:
-        configurations: [Debug, Release]
-        target: [tests, library]
-    runs-on: ubuntu-latest
+        os: [ubuntu-latest, windows-2025]
+        configuration: [Debug, Release]
+        target: [library, tests]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+
     env:
-      BUILD_CONFIGURATION: ${{ matrix.configurations }}
+      BUILD_CONFIGURATION: ${{ matrix.configuration }}
+      CMAKE_GENERATOR: Ninja
+      VCPKG_FEATURE_FLAGS: manifests
+      VCPKG_DEFAULT_TRIPLET: x64-windows
+
+      # --- Binary caching: NuGet feed hosted on GitHub Packages ---
+      VCPKG_BINARY_SOURCES: clear;nuget,https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json,readwrite
+      VCPKG_NUGET_REPOSITORY: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
+      VCPKG_NUGET_USER: ${{ github.repository_owner }}
+      VCPKG_NUGET_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - uses: actions/checkout@v5
         with:
           submodules: recursive
 
-      - name: Install dependencies
+      # ---------- Linux Build ----------
+      - name: Install dependencies (Ubuntu)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           sudo apt-get update
-          sudo apt install -y libboost-dev libboost-filesystem-dev libboost-program-options-dev
+          sudo apt install -y cmake ninja-build g++ \
+            libboost-dev libboost-filesystem-dev libboost-program-options-dev
           if [ "${{ matrix.target }}" = "tests" ]; then
             sudo apt install -y libyaml-cpp-dev valgrind
           fi
 
-      - name: Build
+      - name: Build (Linux)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
-          mkdir build
-          if [ "${{ matrix.target }}" = "library" ]; then
-            cmake -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} -DVERIFIER_ENABLE_TESTS=OFF
-          else
-            cmake -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} -DVERIFIER_ENABLE_TESTS=ON
-          fi
-          cmake --build build -j $(nproc)
+          cmake -S . -B build -G Ninja \
+            -D CMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} \
+            -D VERIFIER_ENABLE_TESTS=$([ "${{ matrix.target }}" = "tests" ] && echo ON || echo OFF)
+          cmake --build build -- -j $(nproc)
 
-      - name: Run unit tests
-        if: ${{ matrix.target == 'tests' }}
-        run: ./tests -d yes
+      - name: Run unit tests (Linux)
+        if: ${{ matrix.os == 'ubuntu-latest' && matrix.target == 'tests' }}
+        run: ./build/tests -d yes
 
-      - name: Test for memory leaks
-        if: ${{ matrix.target == 'tests' && matrix.configurations == 'Debug' }}
+      - name: Memory leak test (Linux Debug only)
+        if: ${{ matrix.os == 'ubuntu-latest' && matrix.target == 'tests' && matrix.configuration == 'Debug' }}
         run: >
           valgrind --leak-check=full --errors-for-leak-kinds=all
           --show-leak-kinds=all --error-exitcode=1
-          ./check ebpf-samples/cilium/bpf_xdp_snat_linux_v1.o 2/1
+          ./build/check ebpf-samples/cilium/bpf_xdp_snat_linux_v1.o 2/1
 
-  build_windows:
-    runs-on: windows-2025
-    strategy:
-      matrix:
-        configurations: [Debug, Release]
-        target: [tests, library]
-    env:
-      BUILD_CONFIGURATION: ${{ matrix.configurations }}
-      CMAKE_GENERATOR: "Visual Studio 17 2022"
-      CMAKE_ARCHITECTURE: x64
-      VCPKG_FEATURE_FLAGS: manifests
-      VCPKG_BINARY_SOURCES: clear;x-gha,readwrite
-
-    steps:
-      - uses: actions/checkout@v5
+      # ---------- Windows Build ----------
+      - name: Enable MSVC Developer Command Prompt
+        if: ${{ matrix.os == 'windows-2025' }}
+        uses: ilammy/msvc-dev-cmd@v1
         with:
-          submodules: recursive
+          arch: x64
 
-      - uses: lukka/get-cmake@latest
-      - uses: mozilla-actions/sccache-action@v0.0.9
-        env:
-          SCCACHE_GHA_ENABLED: "true"
-
-      # ✅ ensures vcpkg is available at $VCPKG_ROOT
-      - uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgJsonGlob: '**/vcpkg.json'
-          vcpkgConfigurationJsonGlob: '**/vcpkg-configuration.json'
-          runVcpkgInstall: true
-          vcpkgGitCommitId: 4334d8b4c8916018600212ab4dd4bbdc343065d1
-
-      - name: Configure
-        shell: pwsh
+      - name: Install vcpkg (latest manifest mode)
+        if: ${{ matrix.os == 'windows-2025' }}
         run: |
-          $toolchain = "$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
-          cmake -S . -B build -A $env:CMAKE_ARCHITECTURE `
-            -G "$env:CMAKE_GENERATOR" `
+          git clone https://github.com/microsoft/vcpkg.git
+          cd vcpkg
+          .\bootstrap-vcpkg.bat -disableMetrics
+        shell: pwsh
+
+      - name: Configure CMake (Windows)
+        if: ${{ matrix.os == 'windows-2025' }}
+        run: |
+          $toolchain = "vcpkg/scripts/buildsystems/vcpkg.cmake"
+          cmake -S . -B build -G "${env:CMAKE_GENERATOR}" `
             -D CMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} `
             -D CMAKE_TOOLCHAIN_FILE=$toolchain `
-            -D CMAKE_C_COMPILER_LAUNCHER=sccache `
-            -D CMAKE_CXX_COMPILER_LAUNCHER=sccache `
             -D VERIFIER_ENABLE_TESTS=$([bool](${env:matrix_target} -eq 'tests'))
+        shell: pwsh
 
-      - name: Build
+      - name: Cache vcpkg artifacts
+        if: ${{ matrix.os == 'windows-2025' }}
+        uses: actions/cache@v4
+        with:
+          path: |
+            vcpkg/downloads
+            vcpkg/buildtrees
+            vcpkg/installed
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
+
+      - name: Build (Windows)
+        if: ${{ matrix.os == 'windows-2025' }}
         run: cmake --build build --config ${{ env.BUILD_CONFIGURATION }} --parallel
+        shell: pwsh
 
-      - name: Run tests
-        if: ${{ matrix.target == 'tests' }}
-        working-directory: build
-        run: .\${{ env.BUILD_CONFIGURATION }}\tests.exe --reporter compact
+      - name: Run unit tests (Windows)
+        if: ${{ matrix.os == 'windows-2025' && matrix.target == 'tests' }}
+        working-directory: build/${{ env.BUILD_CONFIGURATION }}
+        run: .\tests.exe -d yes
+        shell: pwsh
+
+      # ---------- Optional: NuGet fallback ----------
+      - name: NuGet fallback (if vcpkg unavailable)
+        if: ${{ matrix.os == 'windows-2025' && failure() }}
+        run: |
+          choco install nuget.commandline -y
+          cmake -S . -B build-nuget -G "${env:CMAKE_GENERATOR}" `
+            -D VERIFIER_USE_NUGET_FALLBACK=ON `
+            -D VERIFIER_ENABLE_TESTS=$([bool](${env:matrix_target} -eq 'tests'))
+          cmake --build build-nuget --config ${{ env.BUILD_CONFIGURATION }} --parallel
+          if (Test-Path ".\build-nuget\${{ env.BUILD_CONFIGURATION }}\tests.exe") {
+            .\build-nuget\${{ env.BUILD_CONFIGURATION }}\tests.exe --reporter compact
+          }
+        shell: pwsh
