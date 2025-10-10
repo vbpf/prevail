@@ -59,6 +59,12 @@ jobs:
           ./build/check ebpf-samples/cilium/bpf_xdp_snat_linux_v1.o 2/1
 
       # ---------- Windows Build ----------
+      - name: Install boost (latest manifest mode)
+        if: ${{ matrix.os == 'windows-2025' }}
+        run: |
+          nuget install boost-vc143 -Version 1.87.0
+        shell: pwsh
+
       - name: Configure CMake (Windows)
         if: ${{ matrix.os == 'windows-2025' }}
         run: |

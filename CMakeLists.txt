@@ -28,8 +28,8 @@ FetchContent_Declare(GSL
 FetchContent_MakeAvailable(GSL)
 
 if (MSVC)
-    set(BOOST_ROOT "${CMAKE_BINARY_DIR}/packages/boost-vc143.1.87.0/lib/native")
-    find_package(Boost CONFIG REQUIRED COMPONENTS process)
+    set(BOOST_VERSION 1.87.0)
+    find_package(Boost ${BOOST_VERSION} EXACT REQUIRED COMPONENTS process)
 
     if (VERIFIER_ENABLE_TESTS)
         set(EXTERNAL_INSTALL_LOCATION ${CMAKE_BINARY_DIR}/packages/yaml-cpp)
