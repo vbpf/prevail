@@ -54,25 +54,27 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
 endif ()
 
 if (MSVC)
-    # Windows: use NuGet prebuilt Boost (headers + libs) installed by CI
-    set(BOOST_VERSION 1.87.0)
+    message(STATUS "Configuring Boost from NuGet packages...")
 
-    # Headers (from the 'boost' NuGet package)
+    # Header-only distribution (contains multiprecision, endian, container, etc.)
     set(BOOST_HEADERS_ROOT "${CMAKE_BINARY_DIR}/packages/boost/lib/native")
 
-    # Libraries (from the 'boost-vc143' NuGet package)
+    # Prebuilt binaries for compiled libs
     set(BOOST_LIBS_ROOT "${CMAKE_BINARY_DIR}/packages/boost-vc143/lib/native")
 
-    # Silence old SDK warning from bpf_conformance / Boost.Process on GH runners
-    add_compile_definitions(_WIN32_WINNT=0x0A00)
-
-    # Header-only targets we need (make them ourselves; no find_package)
+    # Propagate include dirs for all targets
     add_library(Boost::headers INTERFACE IMPORTED)
     target_include_directories(Boost::headers INTERFACE "${BOOST_HEADERS_ROOT}/include")
 
-    # Boost.Process is header-only; provide an alias target so the rest of the project stays modern
+    # Define Boost::process as a header-only target (no .lib needed)
     add_library(Boost::process INTERFACE IMPORTED)
     target_link_libraries(Boost::process INTERFACE Boost::headers)
+
+    # Optional: link directories for other compiled Boost libs if ever needed
+    link_directories("${BOOST_LIBS_ROOT}/lib")
+
+    # Define Windows version target to silence _WIN32_WINNT warnings
+    add_compile_definitions(_WIN32_WINNT=0x0A00)
 
     # --- yaml-cpp (only if tests enabled) ---
     if (VERIFIER_ENABLE_TESTS)
