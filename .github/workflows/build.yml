@@ -74,7 +74,7 @@ jobs:
           $root = "D:\a\prevail\prevail\build\packages"
           New-Item -ItemType Directory -Force -Path $root | Out-Null
 
-          nuget install boost-vc143 -Version 1.87.0 -ExcludeVersion -OutputDirectory $root
+          nuget install boost -Version 1.87.0 -ExcludeVersion -OutputDirectory $root
           # Prevent bpf_conformance from reinstalling boost packages
           nuget install boost_filesystem-vc143 -Version 1.87.0 -ExcludeVersion -OutputDirectory $root
           nuget install boost_program_options-vc143 -Version 1.87.0 -ExcludeVersion -OutputDirectory $root
