@@ -26,25 +26,20 @@ FetchContent_Declare(GSL
         GIT_SHALLOW ON
 )
 FetchContent_MakeAvailable(GSL)
-
 if (MSVC)
-    set(CMAKE_MODULE_PATH "${CMAKE_ROOT}/Modules" ${CMAKE_MODULE_PATH})
-    cmake_policy(SET CMP0144 NEW)
-    set(Boost_NO_BOOST_CMAKE ON)
+    # --- Boost setup (NuGet prebuilt) ---
+    set(Boost_VERSION 1.87.0)
+    set(Boost_ROOT "${CMAKE_BINARY_DIR}/packages/boost-vc143.${Boost_VERSION}/lib/native")
+    set(Boost_INCLUDE_DIR "${Boost_ROOT}/include")
+    set(Boost_LIBRARY_DIR "${Boost_ROOT}/lib")
 
-    set(BOOST_VERSION 1.87.0)
-    set(BOOST_ROOT "${CMAKE_BINARY_DIR}/packages/boost-vc143.${BOOST_VERSION}/lib/native")
-    set(BOOST_INCLUDEDIR "${BOOST_ROOT}/include")
-    set(BOOST_LIBRARYDIR "${BOOST_ROOT}/lib")
+    # Look for a BoostConfig.cmake (CONFIG mode, CMP0167 compliant)
+    find_package(Boost CONFIG REQUIRED COMPONENTS process)
 
-    list(APPEND CMAKE_INCLUDE_PATH "${BOOST_INCLUDEDIR}")
-    list(APPEND CMAKE_LIBRARY_PATH "${BOOST_LIBRARYDIR}")
+    target_include_directories(prevail PRIVATE ${Boost_INCLUDE_DIR})
+    target_link_libraries(prevail PRIVATE Boost::process)
 
-    find_package(Boost ${BOOST_VERSION} EXACT REQUIRED COMPONENTS process)
-
-    target_include_directories(prevail PRIVATE ${Boost_INCLUDE_DIRS})
-    target_link_libraries(prevail PRIVATE Boost::process Boost::filesystem Boost::program_options)
-
+    # --- yaml-cpp (only if tests enabled) ---
     if (VERIFIER_ENABLE_TESTS)
         set(EXTERNAL_INSTALL_LOCATION ${CMAKE_BINARY_DIR}/packages/yaml-cpp)
         include(ExternalProject)
@@ -71,7 +66,6 @@ else ()
     add_library(Boost::process INTERFACE IMPORTED)
     target_include_directories(Boost::process INTERFACE ${Boost_INCLUDE_DIRS})
 endif ()
-
 
 file(GLOB LIB_SRC CONFIGURE_DEPENDS
         "./src/*.cpp"

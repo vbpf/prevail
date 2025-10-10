@@ -59,25 +59,48 @@ jobs:
           ./build/check ebpf-samples/cilium/bpf_xdp_snat_linux_v1.o 2/1
 
       # ---------- Windows Build ----------
-      - name: Install boost (latest manifest mode)
+      - name: Restore cached Boost binaries
         if: ${{ matrix.os == 'windows-2025' }}
-        run: |
-          nuget install boost-vc143 -Version 1.87.0
+        id: cache-boost
+        uses: actions/cache@v4
+        with:
+          path: packages/boost-vc143
+          key: boost-vc143-1.87.0
+
+      - name: Install Boost (NuGet prebuilt)
+        if: ${{ matrix.os == 'windows-2025' && steps.cache-boost.outputs.cache-hit != 'true' }}
         shell: pwsh
+        run: |
+          nuget install boost-vc143 -Version 1.87.0 -ExcludeVersion -OutputDirectory packages
+          $boostRoot = "packages/boost-vc143/lib/native"
+          $cmakeDir  = "$boostRoot/lib/cmake/Boost"
+          New-Item -ItemType Directory -Force -Path $cmakeDir | Out-Null
+          @"
+          set(Boost_VERSION 1.87.0)
+          set(Boost_INCLUDE_DIR "${CMAKE_CURRENT_LIST_DIR}/../../../include")
+          set(Boost_LIBRARY_DIR "${CMAKE_CURRENT_LIST_DIR}/../../../lib")
+          set(Boost_INCLUDE_DIRS ${Boost_INCLUDE_DIR})
+          set(Boost_LIBRARY_DIRS ${Boost_LIBRARY_DIR})
+          add_library(Boost::process INTERFACE IMPORTED)
+          target_include_directories(Boost::process INTERFACE ${Boost_INCLUDE_DIR})
+          "@ | Set-Content -Path "$cmakeDir/BoostConfig.cmake"
 
       - name: Configure CMake (Windows)
         if: ${{ matrix.os == 'windows-2025' }}
-        run: |
-          cmake -S . -B build `
-            -G "Visual Studio 17 2022" `
-            -D CMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} `
-            -D VERIFIER_ENABLE_TESTS=$([bool](${env:matrix_target} -eq 'tests'))
         shell: pwsh
+        run: |
+          $boostDir = "${{ github.workspace }}/packages/boost-vc143/lib/native/lib/cmake/Boost"
+          $enableTests = if ($env:matrix_target -eq 'tests') {'ON'} else {'OFF'}
+          cmake -S . -B build `
+                -G "Visual Studio 17 2022" `
+                -D CMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} `
+                -D CMAKE_PREFIX_PATH="$boostDir" `
+                -D VERIFIER_ENABLE_TESTS=$enableTests
 
       - name: Build (Windows)
         if: ${{ matrix.os == 'windows-2025' }}
-        run: cmake --build build --config ${{ env.BUILD_CONFIGURATION }} --parallel
         shell: pwsh
+        run: cmake --build build --config ${{ env.BUILD_CONFIGURATION }} --parallel
 
       - name: Run unit tests (Windows)
         if: ${{ matrix.os == 'windows-2025' && matrix.target == 'tests' }}
