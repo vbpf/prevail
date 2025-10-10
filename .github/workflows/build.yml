@@ -65,7 +65,7 @@ jobs:
       CMAKE_GENERATOR: "Visual Studio 17 2022"
       CMAKE_ARCHITECTURE: x64
       VCPKG_FEATURE_FLAGS: manifests
-      VCPKG_BINARY_SOURCES: clear;gha,readwrite
+      VCPKG_BINARY_SOURCES: clear;x-gha,readwrite
 
     steps:
       - uses: actions/checkout@v5
