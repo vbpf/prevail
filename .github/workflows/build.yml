@@ -25,12 +25,12 @@ jobs:
       CMAKE_GENERATOR: Ninja
       VCPKG_FEATURE_FLAGS: manifests
       VCPKG_DEFAULT_TRIPLET: x64-windows
-
-      # --- Binary caching: NuGet feed hosted on GitHub Packages ---
-      VCPKG_BINARY_SOURCES: clear;nuget,https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json,readwrite
-      VCPKG_NUGET_REPOSITORY: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
-      VCPKG_NUGET_USER: ${{ github.repository_owner }}
-      VCPKG_NUGET_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    #
+    #      # --- Binary caching: NuGet feed hosted on GitHub Packages ---
+    #      VCPKG_BINARY_SOURCES: clear;nuget,https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json,readwrite
+    #      VCPKG_NUGET_REPOSITORY: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
+    #      VCPKG_NUGET_USER: ${{ github.repository_owner }}
+    #      VCPKG_NUGET_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - uses: actions/checkout@v5
@@ -86,7 +86,7 @@ jobs:
         if: ${{ matrix.os == 'windows-2025' }}
         run: |
           $toolchain = "vcpkg/scripts/buildsystems/vcpkg.cmake"
-          cmake -S . -B build -G "${env:CMAKE_GENERATOR}" `
+          cmake -S . -B build -G "Visual Studio 17 2022" `
             -D CMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} `
             -D CMAKE_TOOLCHAIN_FILE=$toolchain `
             -D VERIFIER_ENABLE_TESTS=$([bool](${env:matrix_target} -eq 'tests'))
