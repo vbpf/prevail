@@ -43,10 +43,9 @@ jobs:
       - name: Build (Linux)
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
-          $enableTests = if ($env:MATRIX_TARGET -eq "tests") { "ON" } else { "OFF" }
           cmake -S . -B build -G Ninja \
             -D CMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} \
-            -D VERIFIER_ENABLE_TESTS=$enableTests
+            -D VERIFIER_ENABLE_TESTS=$([ "${{ matrix.target }}" = "tests" ] && echo ON || echo OFF)
           cmake --build build -- -j $(nproc)
 
       - name: Run unit tests (Linux)
@@ -85,7 +84,7 @@ jobs:
         shell: pwsh
         run: |
           $boostDir = "D:\a\prevail\prevail\build\packages\boost-vc143\lib\native\lib\cmake\Boost"
-          $enableTests = if ($env:matrix_target -eq 'tests') {'ON'} else {'OFF'}
+          $enableTests = if ($env:MATRIX_TARGET -eq "tests") { "ON" } else { "OFF" }
 
           cmake -S . -B build `
             -G "Visual Studio 17 2022" `
