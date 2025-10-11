@@ -170,7 +170,6 @@ set(yaml-cpp_GUID_CMAKE "98d56b8a-d8eb-3d98-b8ee-c83696b4d58a" CACHE INTERNAL "P
 # Core libraries
 target_link_libraries(prevail PRIVATE
   libbtf
-  bpf_conformance
 )
 target_link_libraries(prevail PUBLIC Boost::process Microsoft.GSL::GSL)
 set_target_properties(prevail PROPERTIES
@@ -213,7 +212,7 @@ if (VERIFIER_ENABLE_TESTS)
     add_executable(conformance_check src/test/conformance_check.cpp)
 
     add_library(ebpf_yaml_lib STATIC src/test/ebpf_yaml.cpp)
-    target_link_libraries(ebpf_yaml_lib PRIVATE prevail yaml-cpp::yaml-cpp)
+    target_link_libraries(ebpf_yaml_lib PRIVATE prevail bpf_conformance yaml-cpp::yaml-cpp)
 
     foreach (tgt tests run_yaml conformance_check)
         set_target_properties(${tgt} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/..")
