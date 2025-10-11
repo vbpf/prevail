@@ -78,24 +78,31 @@ if (MSVC)
 
     # --- yaml-cpp (only if tests enabled) ---
     if (VERIFIER_ENABLE_TESTS)
-        set(EXTERNAL_INSTALL_LOCATION ${CMAKE_BINARY_DIR}/packages/yaml-cpp)
         include(ExternalProject)
+
+        set(EXTERNAL_INSTALL_LOCATION ${CMAKE_BINARY_DIR}/packages/yaml-cpp)
         ExternalProject_Add(yaml-cpp
-                GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
-                GIT_TAG "0.8.0"
-                GIT_SHALLOW true
-                CMAKE_ARGS
+            GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
+            GIT_TAG "0.8.0"
+            GIT_SHALLOW true
+            CMAKE_ARGS
                 -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LOCATION}
                 -DYAML_MSVC_SHARED_RT=ON
                 -DYAML_CPP_BUILD_TESTS=OFF
                 -DYAML_CPP_BUILD_TOOLS=OFF
-                -DCMAKE_POLICY_VERSION_MINIMUM=3.14
         )
+
+        # Create a placeholder imported target
         add_library(yaml-cpp::yaml-cpp STATIC IMPORTED GLOBAL)
+
+        # Link location (may not exist yet, but that's fine)
         set_target_properties(yaml-cpp::yaml-cpp PROPERTIES
             IMPORTED_LOCATION "${EXTERNAL_INSTALL_LOCATION}/lib/yaml-cpp$<$<CONFIG:Debug>:d>.lib"
-            INTERFACE_INCLUDE_DIRECTORIES "${EXTERNAL_INSTALL_LOCATION}/include"
+            # Use generator expression so missing directory doesn't break config
+            INTERFACE_INCLUDE_DIRECTORIES "$<BUILD_INTERFACE:${EXTERNAL_INSTALL_LOCATION}/include>"
         )
+
+        # Ensure it builds first
         add_dependencies(yaml-cpp::yaml-cpp yaml-cpp)
     endif ()
 
