@@ -81,31 +81,45 @@ if(VERIFIER_ENABLE_TESTS)
   endif()
 endif()
 
-if (MSVC)
+if(MSVC)
     # Header-only distribution (contains multiprecision, endian, container, etc.)
     set(BOOST_HEADERS_ROOT "${CMAKE_BINARY_DIR}/packages/boost/lib/native")
 
-    # Prebuilt binaries for compiled libs
-    set(BOOST_LIBS_ROOT "${CMAKE_BINARY_DIR}/packages/boost-vc143/lib/native")
+    # Force Boost to use release binaries even in Debug builds (for NuGet compatibility)
+    set(Boost_USE_STATIC_LIBS        ON)
+    set(Boost_USE_DEBUG_LIBS         OFF)
+    set(Boost_USE_RELEASE_LIBS       ON)
+    set(Boost_USE_MULTITHREADED      ON)
+    set(Boost_USE_STATIC_RUNTIME     OFF)
 
-    # Propagate include dirs for all targets
+    # Header-only interface
     add_library(Boost::headers INTERFACE IMPORTED)
     target_include_directories(Boost::headers INTERFACE "${BOOST_HEADERS_ROOT}/include")
 
-    # Define Boost::process as a header-only target (no .lib needed)
+    # Header-only Boost.Process
     add_library(Boost::process INTERFACE IMPORTED)
     target_link_libraries(Boost::process INTERFACE Boost::headers)
 
-    # Optional: link directories for other compiled Boost libs if ever needed
-    link_directories("${BOOST_LIBS_ROOT}/lib")
+    # Compiled Boost libraries
+    add_library(Boost::filesystem STATIC IMPORTED)
+    set_target_properties(Boost::filesystem PROPERTIES
+        IMPORTED_LOCATION "${CMAKE_BINARY_DIR}/packages/boost_filesystem-vc143/lib/native/lib/libboost_filesystem-vc143-mt-x64-1_87.lib"
+        INTERFACE_INCLUDE_DIRECTORIES "${BOOST_HEADERS_ROOT}/include"
+    )
 
-    # Define Windows version target to silence _WIN32_WINNT warnings
+    add_library(Boost::program_options STATIC IMPORTED)
+    set_target_properties(Boost::program_options PROPERTIES
+        IMPORTED_LOCATION "${CMAKE_BINARY_DIR}/packages/boost_program_options-vc143/lib/native/lib/libboost_program_options-vc143-mt-x64-1_87.lib"
+        INTERFACE_INCLUDE_DIRECTORIES "${BOOST_HEADERS_ROOT}/include"
+    )
+
+    # Silence Windows version warnings
     add_compile_definitions(_WIN32_WINNT=0x0A00)
-else ()
+else()
     add_compile_definitions(BOOST_PROCESS_USE_STD_FS)
     add_library(Boost::process INTERFACE IMPORTED)
     target_include_directories(Boost::process INTERFACE ${Boost_INCLUDE_DIRS})
-endif ()
+endif()
 
 file(GLOB LIB_SRC CONFIGURE_DEPENDS
         "./src/*.cpp"
