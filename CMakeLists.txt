@@ -20,14 +20,6 @@ endif ()
 
 message("Building tests: ${VERIFIER_ENABLE_TESTS}")
 
-FetchContent_Declare(GSL
-        GIT_REPOSITORY "https://github.com/microsoft/GSL"
-        GIT_TAG "v4.2.0"
-        GIT_SHALLOW ON
-)
-FetchContent_MakeAvailable(GSL)
-
-
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -53,9 +45,43 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
     set(SANITIZE_FLAGS -fsanitize=address -O1 -fno-omit-frame-pointer)
 endif ()
 
-if (MSVC)
-    message(STATUS "Configuring Boost from NuGet packages...")
+FetchContent_Declare(GSL
+        GIT_REPOSITORY "https://github.com/microsoft/GSL"
+        GIT_TAG "v4.2.0"
+        GIT_SHALLOW ON
+)
+FetchContent_MakeAvailable(GSL)
 
+if(VERIFIER_ENABLE_TESTS)
+  # First, try a proper package (Linux distros, vcpkg, user-provided install)
+  find_package(yaml-cpp CONFIG QUIET)
+
+  if(NOT yaml-cpp_FOUND)
+    include(FetchContent)
+
+    # Keep it lean/CI-friendly
+    set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+    set(YAML_CPP_INSTALL OFF CACHE BOOL "" FORCE)
+    # Use static or shared as you prefer:
+    # set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+
+    FetchContent_Declare(yaml-cpp
+      GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
+      GIT_TAG        0.8.0
+      GIT_SHALLOW    TRUE
+      FIND_PACKAGE_ARGS NAMES yaml-cpp # enables find_package fallback within FC
+    )
+    FetchContent_MakeAvailable(yaml-cpp)
+
+    # yaml-cpp defines target 'yaml-cpp'; provide the standard alias if missing
+    if(NOT TARGET yaml-cpp::yaml-cpp AND TARGET yaml-cpp)
+      add_library(yaml-cpp::yaml-cpp ALIAS yaml-cpp)
+    endif()
+  endif()
+endif()
+
+if (MSVC)
     # Header-only distribution (contains multiprecision, endian, container, etc.)
     set(BOOST_HEADERS_ROOT "${CMAKE_BINARY_DIR}/packages/boost/lib/native")
 
@@ -75,41 +101,7 @@ if (MSVC)
 
     # Define Windows version target to silence _WIN32_WINNT warnings
     add_compile_definitions(_WIN32_WINNT=0x0A00)
-
-    # --- yaml-cpp (only if tests enabled) ---
-    if (VERIFIER_ENABLE_TESTS)
-        include(ExternalProject)
-
-        set(EXTERNAL_INSTALL_LOCATION ${CMAKE_BINARY_DIR}/packages/yaml-cpp)
-        ExternalProject_Add(yaml-cpp
-            GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
-            GIT_TAG "0.8.0"
-            GIT_SHALLOW true
-            CMAKE_ARGS
-                -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LOCATION}
-                -DYAML_MSVC_SHARED_RT=ON
-                -DYAML_CPP_BUILD_TESTS=OFF
-                -DYAML_CPP_BUILD_TOOLS=OFF
-        )
-
-        # Create a placeholder imported target
-        add_library(yaml-cpp::yaml-cpp STATIC IMPORTED GLOBAL)
-
-        # Link location (may not exist yet, but that's fine)
-        set_target_properties(yaml-cpp::yaml-cpp PROPERTIES
-            IMPORTED_LOCATION "${EXTERNAL_INSTALL_LOCATION}/lib/yaml-cpp$<$<CONFIG:Debug>:d>.lib"
-            # Use generator expression so missing directory doesn't break config
-            INTERFACE_INCLUDE_DIRECTORIES "$<BUILD_INTERFACE:${EXTERNAL_INSTALL_LOCATION}/include>"
-        )
-
-        # Ensure it builds first
-        add_dependencies(yaml-cpp::yaml-cpp yaml-cpp)
-    endif ()
-
 else ()
-    if (VERIFIER_ENABLE_TESTS)
-        find_package(yaml-cpp REQUIRED)
-    endif ()
     add_compile_definitions(BOOST_PROCESS_USE_STD_FS)
     add_library(Boost::process INTERFACE IMPORTED)
     target_include_directories(Boost::process INTERFACE ${Boost_INCLUDE_DIRS})
