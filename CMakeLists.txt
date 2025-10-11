@@ -91,9 +91,12 @@ if (MSVC)
                 -DYAML_CPP_BUILD_TOOLS=OFF
                 -DCMAKE_POLICY_VERSION_MINIMUM=3.14
         )
-        set(YAML_CPP_LIBRARIES ${EXTERNAL_INSTALL_LOCATION}/lib/yaml-cpp$<$<CONFIG:DEBUG>:d>.lib)
-        set(YAML_CPP_INCLUDE_DIR ${EXTERNAL_INSTALL_LOCATION}/include/)
-        find_package(yaml-cpp CONFIG REQUIRED)
+        add_library(yaml-cpp::yaml-cpp STATIC IMPORTED GLOBAL)
+        set_target_properties(yaml-cpp::yaml-cpp PROPERTIES
+            IMPORTED_LOCATION "${EXTERNAL_INSTALL_LOCATION}/lib/yaml-cpp$<$<CONFIG:Debug>:d>.lib"
+            INTERFACE_INCLUDE_DIRECTORIES "${EXTERNAL_INSTALL_LOCATION}/include"
+        )
+        add_dependencies(yaml-cpp::yaml-cpp yaml-cpp)
     endif ()
 
 else ()
