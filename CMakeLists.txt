@@ -105,7 +105,7 @@ if(MSVC)
     # Silence Windows version warnings
     add_compile_definitions(_WIN32_WINNT=0x0A00)
 else()
-    add_compile_definitions(F)
+    add_compile_definitions(BOOST_PROCESS_USE_STD_FS)
     add_library(Boost::process INTERFACE IMPORTED)
     target_include_directories(Boost::process INTERFACE ${Boost_INCLUDE_DIRS})
 endif()
