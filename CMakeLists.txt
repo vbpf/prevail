@@ -212,7 +212,7 @@ if (VERIFIER_ENABLE_TESTS)
     target_link_libraries(ebpf_yaml_lib PRIVATE prevail yaml-cpp::yaml-cpp)
 
     foreach (tgt tests run_yaml conformance_check)
-        set_target_properties(${tgt} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/..")
+        set_target_properties(${tgt} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR})
     endforeach ()
 
     target_link_libraries(tests PRIVATE prevail ebpf_yaml_lib Catch2::Catch2WithMain Threads::Threads yaml-cpp::yaml-cpp)
