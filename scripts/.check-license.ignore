@@ -1,4 +1,6 @@
 # This file uses regular expressions, not shell globs!
+vcpkg.json
+vcpkg-configuration.json
 
 # File extensions that don't support embedding license info
 .*\.a$

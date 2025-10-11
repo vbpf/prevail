@@ -1,22 +1,22 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
-#include "../external/bpf_conformance/include/bpf_conformance.h"
-#include <boost/dll/runtime_symbol_info.hpp>
+#include "bpf_conformance/include/bpf_conformance.h"
 #include <catch2/catch_all.hpp>
 
 #define CONFORMANCE_TEST_PATH "external/bpf_conformance/tests/"
 
+#ifdef _WIN32
+static constexpr const char* plugin_path = "conformance_check.exe";
+#else
+static constexpr const char* plugin_path = "conformance_check";
+#endif
+
 static void test_conformance(const std::string& filename, const bpf_conformance_test_result_t& expected_result,
                              const std::string& expected_reason) {
     const std::vector<std::filesystem::path> test_files = {CONFORMANCE_TEST_PATH + filename};
-    boost::filesystem::path test_path = boost::dll::program_location();
-    const boost::filesystem::path extension = test_path.extension();
-    const std::filesystem::path plugin_path =
-        test_path.remove_filename().append("conformance_check" + extension.string()).string();
-    std::map<std::filesystem::path, std::tuple<bpf_conformance_test_result_t, std::string>> result =
-        bpf_conformance(test_files, plugin_path, {}, {}, {}, bpf_conformance_test_CPU_version_t::v4,
-                        bpf_conformance_groups_t::default_groups | bpf_conformance_groups_t::callx,
-                        bpf_conformance_list_instructions_t::LIST_INSTRUCTIONS_NONE, true);
+    auto result = bpf_conformance(test_files, plugin_path, {}, {}, {}, bpf_conformance_test_CPU_version_t::v4,
+                                  bpf_conformance_groups_t::default_groups | bpf_conformance_groups_t::callx,
+                                  bpf_conformance_list_instructions_t::LIST_INSTRUCTIONS_NONE, true);
     for (const auto& file : test_files) {
         auto& [file_result, reason] = result[file];
         REQUIRE(file_result == expected_result);

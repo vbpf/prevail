@@ -1,19 +1,19 @@
 # Copyright (c) Prevail Verifier contributors.
 # SPDX-License-Identifier: MIT
+
 # Set cmake version to 3.16 to use CMP0091 aka MSVC_RUNTIME_LIBRARY property.
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.24)
 if (POLICY CMP0167)
     cmake_policy(SET CMP0167 NEW)
 endif ()
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 
 project(prevail)
 
 include(FetchContent)
 
-if (IS_DIRECTORY "${PROJECT_SOURCE_DIR}/.git")
-    # Install Git pre-commit hook
-    file(COPY scripts/pre-commit scripts/commit-msg
-            DESTINATION "${PROJECT_SOURCE_DIR}/.git/hooks")
+if (EXISTS "${PROJECT_SOURCE_DIR}/.git" AND NOT CMAKE_CROSSCOMPILING)
+    file(COPY scripts/pre-commit scripts/commit-msg DESTINATION "${PROJECT_SOURCE_DIR}/.git/hooks")
     option(VERIFIER_ENABLE_TESTS "Build tests" ON)
 else ()
     option(VERIFIER_ENABLE_TESTS "Build tests" OFF)
@@ -21,164 +21,138 @@ endif ()
 
 message("Building tests: ${VERIFIER_ENABLE_TESTS}")
 
-FetchContent_Declare(GSL
-        GIT_REPOSITORY "https://github.com/microsoft/GSL"
-        GIT_TAG "v4.2.0"
-        GIT_SHALLOW ON
-)
-FetchContent_MakeAvailable(GSL)
-get_target_property(GSL_INCLUDE_DIRS Microsoft.GSL::GSL INTERFACE_INCLUDE_DIRECTORIES)
-
-if (VERIFIER_ENABLE_TESTS)
-    FetchContent_Declare(Catch2
-            GIT_REPOSITORY "https://github.com/catchorg/Catch2.git"
-            GIT_TAG "v3.11.0"
-            GIT_SHALLOW ON
-    )
-    FetchContent_MakeAvailable(Catch2)
-endif ()
-
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
-        "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-    if (VERIFIER_ENABLE_TESTS)
-        find_package(yaml-cpp REQUIRED)
-    endif ()
-    find_package(Boost REQUIRED)
-    set(CMAKE_CXX_STANDARD 20)
-    set(CMAKE_CXX_STANDARD_REQUIRED ON)
-elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-    list(APPEND CMAKE_CONFIGURATION_TYPES FuzzerDebug)
-    list(REMOVE_DUPLICATES CMAKE_CONFIGURATION_TYPES)
-    set(CMAKE_CONFIGURATION_TYPES "${CMAKE_CONFIGURATION_TYPES}" CACHE STRING
-            "Add the configurations that we need"
-            FORCE)
-    set(CMAKE_EXE_LINKER_FLAGS_FUZZERDEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG}")
-    set(CMAKE_SHARED_LINKER_FLAGS_FUZZERDEBUG "${CMAKE_SHARED_LINKER_FLAGS_DEBUG}")
-    set(CMAKE_C_FLAGS_FUZZERDEBUG "${CMAKE_C_FLAGS_DEBUG} /fsanitize=address /fsanitize=fuzzer /fsanitize-coverage=inline-bool-flag /fsanitize-coverage=edge /fsanitize-coverage=trace-cmp /fsanitize-coverage=trace-div /ZH:SHA_256")
-    set(CMAKE_CXX_FLAGS_FUZZERDEBUG "${CMAKE_CXX_FLAGS_DEBUG} /fsanitize=address /fsanitize=fuzzer /fsanitize-coverage=inline-bool-flag /fsanitize-coverage=edge /fsanitize-coverage=trace-cmp /fsanitize-coverage=trace-div /ZH:SHA_256")
+  "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    set(COMMON_FLAGS -Wall -Wfatal-errors)
 
-    find_program(NUGET nuget)
-    if (NOT NUGET)
-        message("ERROR: You must first install nuget.exe from https://www.nuget.org/downloads")
-    else ()
-        execute_process(COMMAND ${NUGET} install "Boost" -Version 1.81.0 -ExcludeVersion -OutputDirectory ${CMAKE_BINARY_DIR}/packages)
-        set(BOOST_VERSION 1.81.0)
-    endif ()
-    set(Boost_INCLUDE_DIRS ${CMAKE_BINARY_DIR}/packages/boost/lib/native/include)
-    set(Boost_LIBRARY_DIRS ${CMAKE_BINARY_DIR}/packages/boost_filesystem-vc143/lib/native)
+    include(CheckTypeSize)
+    check_type_size("void*" SIZEOF_VOID_P)
+    check_type_size("long" SIZEOF_LONG)
+    add_compile_definitions(SIZEOF_VOID_P=${SIZEOF_VOID_P} SIZEOF_LONG=${SIZEOF_LONG})
 
-    if (VERIFIER_ENABLE_TESTS)
-        set(EXTERNAL_INSTALL_LOCATION ${CMAKE_BINARY_DIR}/packages/yaml-cpp)
-        include(ExternalProject)
-        ExternalProject_Add(yaml-cpp
-                GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
-                GIT_TAG "0.8.0"
-                GIT_SHALLOW true
-                CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LOCATION}
-                -DYAML_MSVC_SHARED_RT=ON
-                -DYAML_CPP_BUILD_TESTS=OFF
-                -DYAML_CPP_BUILD_TOOLS=OFF
-                -DCMAKE_POLICY_VERSION_MINIMUM=3.14
-        )
-        set(YAML_CPP_LIBRARIES ${EXTERNAL_INSTALL_LOCATION}/lib/yaml-cpp$<$<CONFIG:DEBUG>:d>.lib)
-        set(YAML_CPP_INCLUDE_DIR ${EXTERNAL_INSTALL_LOCATION}/include/)
-    endif ()
-endif ()
-
-include_directories(./external)
-include_directories(./external/bpf_conformance/external/elfio)
-include_directories(./src)
-include_directories(./external/libbtf)
-include_directories(${GSL_INCLUDE_DIRS})
-include_directories(${Boost_INCLUDE_DIRS})
-include_directories(${YAML_CPP_INCLUDE_DIR})
-
-link_directories(${YAML_CPP_LIBRARY_DIR})
-link_directories(${Boost_LIBRARY_DIRS})
-
-
-file(GLOB LIB_SRC
-        "./src/*.cpp"
-        "./src/arith/*.cpp"
-        "./src/cfg/*.cpp"
-        "./src/crab/*.cpp"
-        "./src/crab_utils/*.cpp"
-        "./src/linux/gpl/spec_prototypes.cpp"
-        "./src/linux/linux_platform.cpp"
-)
-
-if (VERIFIER_ENABLE_TESTS)
-    file(GLOB ALL_TEST
-            "./src/test/test_conformance.cpp"
-            "./src/test/test_join.cpp"
-            "./src/test/test_marshal.cpp"
-            "./src/test/test_print.cpp"
-            "./src/test/test_sign_extension.cpp"
-            "./src/test/test_subsumption.cpp"
-            "./src/test/test_verify.cpp"
-            "./src/test/test_wto.cpp"
-            "./src/test/test_yaml.cpp"
-    )
-
-    set(LIB_SRC ${LIB_SRC} "./src/test/ebpf_yaml.cpp")
-endif ()
-
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
-        "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-    set(COMMON_FLAGS -Wall -Wfatal-errors -DSIZEOF_VOID_P=8 -DSIZEOF_LONG=8)
-
-    if (NOT WIN32 AND NOT APPLE)
-        set(RELEASE_FLAGS -O2 -flto=auto -ffat-lto-objects)
-    else ()
-        set(RELEASE_FLAGS -O2 -flto=auto)
+    set(RELEASE_FLAGS -O2 -flto=auto)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT ipo_supported)
+    if (ipo_supported)
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
     endif ()
 
+    set(RELWITHDEBINFO_FLAGS ${RELEASE_FLAGS} -g3)
     set(DEBUG_FLAGS -O0 -g3 -fno-omit-frame-pointer)
 
     set(SANITIZE_FLAGS -fsanitize=address -O1 -fno-omit-frame-pointer)
-elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++20")
 endif ()
+
+FetchContent_Declare(GSL
+  GIT_REPOSITORY "https://github.com/microsoft/GSL"
+  GIT_TAG "v4.2.0"
+  GIT_SHALLOW ON
+)
+FetchContent_MakeAvailable(GSL)
+
+if (VERIFIER_ENABLE_TESTS)
+    # First, try a proper package (Linux distros, vcpkg, user-provided install)
+    find_package(yaml-cpp CONFIG QUIET)
+
+    if (NOT yaml-cpp_FOUND)
+        include(FetchContent)
+
+        # Keep it lean/CI-friendly
+        set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+        set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+        set(YAML_CPP_INSTALL OFF CACHE BOOL "" FORCE)
+        # Use static or shared as you prefer:
+        # set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+
+        FetchContent_Declare(yaml-cpp
+          GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
+          GIT_TAG 0.8.0
+          GIT_SHALLOW TRUE
+          FIND_PACKAGE_ARGS NAMES yaml-cpp # enables find_package fallback within FC
+        )
+        FetchContent_MakeAvailable(yaml-cpp)
+
+        # yaml-cpp defines target 'yaml-cpp'; provide the standard alias if missing
+        if (NOT TARGET yaml-cpp::yaml-cpp AND TARGET yaml-cpp)
+            add_library(yaml-cpp::yaml-cpp ALIAS yaml-cpp)
+        endif ()
+    endif ()
+endif ()
+
+add_compile_definitions(BOOST_PROCESS_USE_STD_FS)
+if (MSVC)
+    set(BOOST_HEADERS_ROOT "${CMAKE_BINARY_DIR}/packages/boost/lib/native")
+
+    add_library(Boost::headers INTERFACE IMPORTED)
+    target_include_directories(Boost::headers INTERFACE "${BOOST_HEADERS_ROOT}/include")
+
+    add_library(Boost::process INTERFACE IMPORTED)
+    target_link_libraries(Boost::process INTERFACE Boost::headers)
+
+    # Silence Windows version warnings
+    add_compile_definitions(_WIN32_WINNT=0x0A00)
+else ()
+    add_library(Boost::process INTERFACE IMPORTED)
+    target_include_directories(Boost::process INTERFACE ${Boost_INCLUDE_DIRS})
+endif ()
+
+if (MSVC)
+    # Add FuzzerDebug configuration (MSVC Address/Fuzzer sanitizer build)
+    list(APPEND CMAKE_CONFIGURATION_TYPES FuzzerDebug)
+    list(REMOVE_DUPLICATES CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_CONFIGURATION_TYPES "${CMAKE_CONFIGURATION_TYPES}" CACHE STRING
+      "Add the configurations that we need" FORCE)
+
+    # Derive base debug flags and add sanitizer instrumentation
+    set(CMAKE_C_FLAGS_FUZZERDEBUG
+      "${CMAKE_C_FLAGS_DEBUG} /fsanitize=address /fsanitize=fuzzer "
+      "/fsanitize-coverage=inline-bool-flag /fsanitize-coverage=edge "
+      "/fsanitize-coverage=trace-cmp /fsanitize-coverage=trace-div "
+      "/ZH:SHA_256")
+
+    set(CMAKE_CXX_FLAGS_FUZZERDEBUG
+      "${CMAKE_CXX_FLAGS_DEBUG} /fsanitize=address /fsanitize=fuzzer "
+      "/fsanitize-coverage=inline-bool-flag /fsanitize-coverage=edge "
+      "/fsanitize-coverage=trace-cmp /fsanitize-coverage=trace-div "
+      "/ZH:SHA_256")
+
+    # Propagate linker flags (same as Debug)
+    set(CMAKE_EXE_LINKER_FLAGS_FUZZERDEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG}")
+    set(CMAKE_SHARED_LINKER_FLAGS_FUZZERDEBUG "${CMAKE_SHARED_LINKER_FLAGS_DEBUG}")
+endif ()
+
+file(GLOB LIB_SRC CONFIGURE_DEPENDS
+  "./src/*.cpp"
+  "./src/arith/*.cpp"
+  "./src/cfg/*.cpp"
+  "./src/crab/*.cpp"
+  "./src/crab_utils/*.cpp"
+  "./src/linux/gpl/spec_prototypes.cpp"
+  "./src/linux/linux_platform.cpp"
+)
 
 add_library(prevail ${LIB_SRC})
-target_compile_definitions(prevail PRIVATE YAML_CPP_STATIC_DEFINE)
 
-if (VERIFIER_ENABLE_TESTS)
-    add_executable(check src/main/check.cpp src/main/linux_verifier.cpp)
-    add_executable(tests ${ALL_TEST})
-    add_executable(run_yaml src/main/run_yaml.cpp)
-    add_executable(conformance_check src/test/conformance_check.cpp)
-endif ()
+target_include_directories(prevail PUBLIC
+  ${CMAKE_SOURCE_DIR}/src
+)
+target_include_directories(prevail SYSTEM PUBLIC
+  ${CMAKE_SOURCE_DIR}/external
+  ${CMAKE_SOURCE_DIR}/external/bpf_conformance/external/elfio
+  ${CMAKE_SOURCE_DIR}/external/libbtf
+  ${Boost_INCLUDE_DIR}
+)
 
-target_include_directories(prevail PRIVATE ${GSL_INCLUDE_DIRS})
-
-if (VERIFIER_ENABLE_TESTS)
-    target_include_directories(run_yaml PRIVATE src/test)
-
-    set_target_properties(check
-            PROPERTIES
-            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/..")
-
-    set_target_properties(tests
-            PROPERTIES
-            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/..")
-
-    set_target_properties(run_yaml
-            PROPERTIES
-            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/..")
-
-    set_target_properties(conformance_check
-            PROPERTIES
-            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/..")
-
-    add_dependencies(tests conformance_check)
-endif ()
-
-target_compile_options(prevail PRIVATE ${COMMON_FLAGS})
-target_compile_options(prevail PUBLIC "$<$<CONFIG:DEBUG>:${DEBUG_FLAGS}>")
-target_compile_options(prevail PUBLIC "$<$<CONFIG:RELEASE>:${RELEASE_FLAGS}>")
-target_compile_options(prevail PUBLIC "$<$<CONFIG:SANITIZE>:${SANITIZE_FLAGS}>")
+target_compile_options(prevail PRIVATE
+  ${COMMON_FLAGS}
+  "$<$<CONFIG:DEBUG>:${DEBUG_FLAGS}>"
+  "$<$<CONFIG:RELEASE>:${RELEASE_FLAGS}>"
+  "$<$<CONFIG:RELWITHDEBINFO>:${RELWITHDEBINFO_FLAGS}>"
+  "$<$<CONFIG:SANITIZE>:${SANITIZE_FLAGS}>"
+)
 
 add_subdirectory("external/bpf_conformance/external/elfio")
 if (VERIFIER_ENABLE_TESTS)
@@ -193,33 +167,58 @@ add_subdirectory("external/libbtf")
 set(prevail_GUID_CMAKE "7d5b4e68-c0fa-3f86-9405-f6400219b440" CACHE INTERNAL "Project GUID")
 set(yaml-cpp_GUID_CMAKE "98d56b8a-d8eb-3d98-b8ee-c83696b4d58a" CACHE INTERNAL "Project GUID")
 
-set(THREADS_PREFER_PTHREAD_FLAG ON)
-find_package(Threads REQUIRED)
+# Core libraries
+target_link_libraries(prevail PRIVATE
+  libbtf
+)
+target_link_libraries(prevail PUBLIC Boost::process Microsoft.GSL::GSL)
+set_target_properties(prevail PROPERTIES
+  CXX_VISIBILITY_PRESET hidden
+  VISIBILITY_INLINES_HIDDEN YES)
 
-target_link_libraries(prevail PRIVATE ${YAML_CPP_LIBRARIES})
-target_link_libraries(prevail PRIVATE libbtf)
-target_link_libraries(prevail PRIVATE Microsoft.GSL::GSL)
-target_compile_options(prevail PRIVATE ${COMMON_FLAGS})
+# Main executables
+add_executable(check src/main/check.cpp src/main/linux_verifier.cpp)
+set_target_properties(check PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/..")
+target_link_libraries(check PRIVATE prevail ${CMAKE_DL_LIBS})
 
+# Tests
 if (VERIFIER_ENABLE_TESTS)
-    target_compile_options(check PRIVATE ${COMMON_FLAGS})
-    target_compile_options(check PUBLIC "$<$<CONFIG:DEBUG>:${DEBUG_FLAGS}>")
-    target_compile_options(check PUBLIC "$<$<CONFIG:RELEASE>:${RELEASE_FLAGS}>")
-    target_compile_options(check PUBLIC "$<$<CONFIG:SANITIZE>:${SANITIZE_FLAGS}>")
-    target_link_libraries(check PRIVATE prevail)
+    FetchContent_Declare(Catch2
+      GIT_REPOSITORY "https://github.com/catchorg/Catch2.git"
+      GIT_TAG "v3.11.0"
+      GIT_SHALLOW ON
+    )
+    FetchContent_MakeAvailable(Catch2)
 
-    message("Boost_LIBRARY_DIRS: ${Boost_LIBRARY_DIRS}")
-    target_compile_options(tests PRIVATE ${COMMON_FLAGS})
-    target_compile_options(tests PUBLIC "$<$<CONFIG:DEBUG>:${DEBUG_FLAGS}>")
-    target_compile_options(tests PUBLIC "$<$<CONFIG:RELEASE>:${RELEASE_FLAGS}>")
-    target_compile_options(tests PUBLIC "$<$<CONFIG:SANITIZE>:${SANITIZE_FLAGS}>")
-    target_link_libraries(tests PRIVATE prevail)
-    target_link_libraries(tests PRIVATE bpf_conformance)
-    target_link_libraries(tests PRIVATE ${CMAKE_DL_LIBS})
-    target_link_libraries(tests PRIVATE Threads::Threads)
-    target_link_libraries(tests PRIVATE Catch2::Catch2WithMain)
+    set(THREADS_PREFER_PTHREAD_FLAG ON)
+    find_package(Threads REQUIRED)
 
-    target_link_libraries(run_yaml PRIVATE prevail)
+    set(ALL_TEST
+      ${CMAKE_SOURCE_DIR}/src/test/test_conformance.cpp
+      ${CMAKE_SOURCE_DIR}/src/test/test_join.cpp
+      ${CMAKE_SOURCE_DIR}/src/test/test_marshal.cpp
+      ${CMAKE_SOURCE_DIR}/src/test/test_print.cpp
+      ${CMAKE_SOURCE_DIR}/src/test/test_sign_extension.cpp
+      ${CMAKE_SOURCE_DIR}/src/test/test_subsumption.cpp
+      ${CMAKE_SOURCE_DIR}/src/test/test_verify.cpp
+      ${CMAKE_SOURCE_DIR}/src/test/test_wto.cpp
+      ${CMAKE_SOURCE_DIR}/src/test/test_yaml.cpp
+    )
 
-    target_link_libraries(conformance_check PRIVATE prevail)
+    add_compile_definitions(YAML_CPP_STATIC_DEFINE)
+
+    add_executable(tests ${ALL_TEST})
+    add_executable(run_yaml src/test/run_yaml.cpp)
+    add_executable(conformance_check src/test/conformance_check.cpp)
+
+    add_library(ebpf_yaml_lib STATIC src/test/ebpf_yaml.cpp)
+    target_link_libraries(ebpf_yaml_lib PRIVATE prevail bpf_conformance yaml-cpp::yaml-cpp)
+
+    foreach (tgt tests run_yaml conformance_check)
+        set_target_properties(${tgt} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/..")
+    endforeach ()
+
+    target_link_libraries(tests PRIVATE prevail ebpf_yaml_lib Catch2::Catch2WithMain Threads::Threads yaml-cpp::yaml-cpp)
+    target_link_libraries(run_yaml PRIVATE prevail ebpf_yaml_lib)
+    target_link_libraries(conformance_check PRIVATE prevail ebpf_yaml_lib Threads::Threads)
 endif ()
