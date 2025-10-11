@@ -155,8 +155,10 @@ target_compile_options(prevail PRIVATE
 )
 
 add_subdirectory("external/bpf_conformance/external/elfio")
+if (VERIFIER_ENABLE_TESTS)
+    add_subdirectory("external/bpf_conformance/src")
+endif ()
 add_subdirectory("external/libbtf")
-add_subdirectory("external/bpf_conformance/src")
 
 # CMake derives a Visual Studio project GUID from the file path but can be overridden via a property
 # (see https://gitlab.kitware.com/cmake/cmake/-/commit/c85367f4).  Using a non-constant GUID
