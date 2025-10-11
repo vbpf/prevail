@@ -84,14 +84,6 @@ endif()
 if(MSVC)
     # Header-only distribution (contains multiprecision, endian, container, etc.)
     set(BOOST_HEADERS_ROOT "${CMAKE_BINARY_DIR}/packages/boost/lib/native")
-
-    # Force Boost to use release binaries even in Debug builds (for NuGet compatibility)
-    set(Boost_USE_STATIC_LIBS        ON)
-    set(Boost_USE_DEBUG_LIBS         OFF)
-    set(Boost_USE_RELEASE_LIBS       ON)
-    set(Boost_USE_MULTITHREADED      ON)
-    set(Boost_USE_STATIC_RUNTIME     OFF)
-
     # Header-only interface
     add_library(Boost::headers INTERFACE IMPORTED)
     target_include_directories(Boost::headers INTERFACE "${BOOST_HEADERS_ROOT}/include")
