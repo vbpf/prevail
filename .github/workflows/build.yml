@@ -21,6 +21,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     env:
+      MATRIX_TARGET: ${{ matrix.target }}
       BUILD_CONFIGURATION: ${{ matrix.configuration }}
       CMAKE_GENERATOR: Ninja
     steps:
@@ -42,9 +43,10 @@ jobs:
       - name: Build (Linux)
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
+          $enableTests = if ($env:MATRIX_TARGET -eq "tests") { "ON" } else { "OFF" }
           cmake -S . -B build -G Ninja \
             -D CMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} \
-            -D VERIFIER_ENABLE_TESTS=$([ "${{ matrix.target }}" = "tests" ] && echo ON || echo OFF)
+            -D VERIFIER_ENABLE_TESTS=$enableTests
           cmake --build build -- -j $(nproc)
 
       - name: Run unit tests (Linux)
