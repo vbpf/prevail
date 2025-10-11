@@ -100,6 +100,7 @@ if(MSVC)
     add_library(Boost::process INTERFACE IMPORTED)
     target_link_libraries(Boost::process INTERFACE Boost::headers)
 
+    add_compile_definitions(BOOST_PROCESS_USE_STD_FS)
     # Compiled Boost libraries
     add_library(Boost::filesystem STATIC IMPORTED)
     set_target_properties(Boost::filesystem PROPERTIES
