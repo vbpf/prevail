@@ -93,6 +93,7 @@ if (MSVC)
         )
         set(YAML_CPP_LIBRARIES ${EXTERNAL_INSTALL_LOCATION}/lib/yaml-cpp$<$<CONFIG:DEBUG>:d>.lib)
         set(YAML_CPP_INCLUDE_DIR ${EXTERNAL_INSTALL_LOCATION}/include/)
+        find_package(yaml-cpp CONFIG REQUIRED)
     endif ()
 
 else ()
