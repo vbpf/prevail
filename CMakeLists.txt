@@ -101,23 +101,11 @@ if(MSVC)
     target_link_libraries(Boost::process INTERFACE Boost::headers)
 
     add_compile_definitions(BOOST_PROCESS_USE_STD_FS)
-    # Compiled Boost libraries
-    add_library(Boost::filesystem STATIC IMPORTED)
-    set_target_properties(Boost::filesystem PROPERTIES
-        IMPORTED_LOCATION "${CMAKE_BINARY_DIR}/packages/boost_filesystem-vc143/lib/native/lib/libboost_filesystem-vc143-mt-x64-1_87.lib"
-        INTERFACE_INCLUDE_DIRECTORIES "${BOOST_HEADERS_ROOT}/include"
-    )
-
-    add_library(Boost::program_options STATIC IMPORTED)
-    set_target_properties(Boost::program_options PROPERTIES
-        IMPORTED_LOCATION "${CMAKE_BINARY_DIR}/packages/boost_program_options-vc143/lib/native/lib/libboost_program_options-vc143-mt-x64-1_87.lib"
-        INTERFACE_INCLUDE_DIRECTORIES "${BOOST_HEADERS_ROOT}/include"
-    )
 
     # Silence Windows version warnings
     add_compile_definitions(_WIN32_WINNT=0x0A00)
 else()
-    add_compile_definitions(BOOST_PROCESS_USE_STD_FS)
+    add_compile_definitions(F)
     add_library(Boost::process INTERFACE IMPORTED)
     target_include_directories(Boost::process INTERFACE ${Boost_INCLUDE_DIRS})
 endif()
