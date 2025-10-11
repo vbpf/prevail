@@ -1,5 +1,6 @@
 # Copyright (c) Prevail Verifier contributors.
 # SPDX-License-Identifier: MIT
+
 # Set cmake version to 3.16 to use CMP0091 aka MSVC_RUNTIME_LIBRARY property.
 cmake_minimum_required(VERSION 3.16)
 if (POLICY CMP0167)
@@ -24,7 +25,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
-        "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+  "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     set(COMMON_FLAGS -Wall -Wfatal-errors)
 
     include(CheckTypeSize)
@@ -46,43 +47,43 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
 endif ()
 
 FetchContent_Declare(GSL
-        GIT_REPOSITORY "https://github.com/microsoft/GSL"
-        GIT_TAG "v4.2.0"
-        GIT_SHALLOW ON
+  GIT_REPOSITORY "https://github.com/microsoft/GSL"
+  GIT_TAG "v4.2.0"
+  GIT_SHALLOW ON
 )
 FetchContent_MakeAvailable(GSL)
 
-if(VERIFIER_ENABLE_TESTS)
-  # First, try a proper package (Linux distros, vcpkg, user-provided install)
-  find_package(yaml-cpp CONFIG QUIET)
+if (VERIFIER_ENABLE_TESTS)
+    # First, try a proper package (Linux distros, vcpkg, user-provided install)
+    find_package(yaml-cpp CONFIG QUIET)
 
-  if(NOT yaml-cpp_FOUND)
-    include(FetchContent)
+    if (NOT yaml-cpp_FOUND)
+        include(FetchContent)
 
-    # Keep it lean/CI-friendly
-    set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
-    set(YAML_CPP_INSTALL OFF CACHE BOOL "" FORCE)
-    # Use static or shared as you prefer:
-    # set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+        # Keep it lean/CI-friendly
+        set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+        set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+        set(YAML_CPP_INSTALL OFF CACHE BOOL "" FORCE)
+        # Use static or shared as you prefer:
+        # set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
-    FetchContent_Declare(yaml-cpp
-      GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
-      GIT_TAG        0.8.0
-      GIT_SHALLOW    TRUE
-      FIND_PACKAGE_ARGS NAMES yaml-cpp # enables find_package fallback within FC
-    )
-    FetchContent_MakeAvailable(yaml-cpp)
+        FetchContent_Declare(yaml-cpp
+          GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
+          GIT_TAG 0.8.0
+          GIT_SHALLOW TRUE
+          FIND_PACKAGE_ARGS NAMES yaml-cpp # enables find_package fallback within FC
+        )
+        FetchContent_MakeAvailable(yaml-cpp)
 
-    # yaml-cpp defines target 'yaml-cpp'; provide the standard alias if missing
-    if(NOT TARGET yaml-cpp::yaml-cpp AND TARGET yaml-cpp)
-      add_library(yaml-cpp::yaml-cpp ALIAS yaml-cpp)
-    endif()
-  endif()
-endif()
+        # yaml-cpp defines target 'yaml-cpp'; provide the standard alias if missing
+        if (NOT TARGET yaml-cpp::yaml-cpp AND TARGET yaml-cpp)
+            add_library(yaml-cpp::yaml-cpp ALIAS yaml-cpp)
+        endif ()
+    endif ()
+endif ()
 
 add_compile_definitions(BOOST_PROCESS_USE_STD_FS)
-if(MSVC)
+if (MSVC)
     set(BOOST_HEADERS_ROOT "${CMAKE_BINARY_DIR}/packages/boost/lib/native")
 
     add_library(Boost::headers INTERFACE IMPORTED)
@@ -93,39 +94,64 @@ if(MSVC)
 
     # Silence Windows version warnings
     add_compile_definitions(_WIN32_WINNT=0x0A00)
-else()
+else ()
     add_library(Boost::process INTERFACE IMPORTED)
     target_include_directories(Boost::process INTERFACE ${Boost_INCLUDE_DIRS})
-endif()
+endif ()
+
+if (MSVC)
+    # Add FuzzerDebug configuration (MSVC Address/Fuzzer sanitizer build)
+    list(APPEND CMAKE_CONFIGURATION_TYPES FuzzerDebug)
+    list(REMOVE_DUPLICATES CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_CONFIGURATION_TYPES "${CMAKE_CONFIGURATION_TYPES}" CACHE STRING
+      "Add the configurations that we need" FORCE)
+
+    # Derive base debug flags and add sanitizer instrumentation
+    set(CMAKE_C_FLAGS_FUZZERDEBUG
+      "${CMAKE_C_FLAGS_DEBUG} /fsanitize=address /fsanitize=fuzzer "
+      "/fsanitize-coverage=inline-bool-flag /fsanitize-coverage=edge "
+      "/fsanitize-coverage=trace-cmp /fsanitize-coverage=trace-div "
+      "/ZH:SHA_256")
+
+    set(CMAKE_CXX_FLAGS_FUZZERDEBUG
+      "${CMAKE_CXX_FLAGS_DEBUG} /fsanitize=address /fsanitize=fuzzer "
+      "/fsanitize-coverage=inline-bool-flag /fsanitize-coverage=edge "
+      "/fsanitize-coverage=trace-cmp /fsanitize-coverage=trace-div "
+      "/ZH:SHA_256")
+
+    # Propagate linker flags (same as Debug)
+    set(CMAKE_EXE_LINKER_FLAGS_FUZZERDEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG}")
+    set(CMAKE_SHARED_LINKER_FLAGS_FUZZERDEBUG "${CMAKE_SHARED_LINKER_FLAGS_DEBUG}")
+endif ()
 
 file(GLOB LIB_SRC CONFIGURE_DEPENDS
-        "./src/*.cpp"
-        "./src/arith/*.cpp"
-        "./src/cfg/*.cpp"
-        "./src/crab/*.cpp"
-        "./src/crab_utils/*.cpp"
-        "./src/linux/gpl/spec_prototypes.cpp"
-        "./src/linux/linux_platform.cpp"
+  "./src/*.cpp"
+  "./src/arith/*.cpp"
+  "./src/cfg/*.cpp"
+  "./src/crab/*.cpp"
+  "./src/crab_utils/*.cpp"
+  "./src/linux/gpl/spec_prototypes.cpp"
+  "./src/linux/linux_platform.cpp"
 )
 
 add_library(prevail ${LIB_SRC})
 
 target_include_directories(prevail PUBLIC
-        ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/src
 )
 target_include_directories(prevail SYSTEM PUBLIC
-        ${CMAKE_SOURCE_DIR}/external
-        ${CMAKE_SOURCE_DIR}/external/bpf_conformance/external/elfio
-        ${CMAKE_SOURCE_DIR}/external/libbtf
-        ${Boost_INCLUDE_DIR}
+  ${CMAKE_SOURCE_DIR}/external
+  ${CMAKE_SOURCE_DIR}/external/bpf_conformance/external/elfio
+  ${CMAKE_SOURCE_DIR}/external/libbtf
+  ${Boost_INCLUDE_DIR}
 )
 
 target_compile_options(prevail PRIVATE
-        ${COMMON_FLAGS}
-        "$<$<CONFIG:DEBUG>:${DEBUG_FLAGS}>"
-        "$<$<CONFIG:RELEASE>:${RELEASE_FLAGS}>"
-        "$<$<CONFIG:RELWITHDEBINFO>:${RELWITHDEBINFO_FLAGS}>"
-        "$<$<CONFIG:SANITIZE>:${SANITIZE_FLAGS}>"
+  ${COMMON_FLAGS}
+  "$<$<CONFIG:DEBUG>:${DEBUG_FLAGS}>"
+  "$<$<CONFIG:RELEASE>:${RELEASE_FLAGS}>"
+  "$<$<CONFIG:RELWITHDEBINFO>:${RELWITHDEBINFO_FLAGS}>"
+  "$<$<CONFIG:SANITIZE>:${SANITIZE_FLAGS}>"
 )
 
 add_subdirectory("external/bpf_conformance/external/elfio")
@@ -141,13 +167,13 @@ set(yaml-cpp_GUID_CMAKE "98d56b8a-d8eb-3d98-b8ee-c83696b4d58a" CACHE INTERNAL "P
 
 # Core libraries
 target_link_libraries(prevail PRIVATE
-        libbtf
-        bpf_conformance
+  libbtf
+  bpf_conformance
 )
 target_link_libraries(prevail PUBLIC Boost::process Microsoft.GSL::GSL)
 set_target_properties(prevail PROPERTIES
-        CXX_VISIBILITY_PRESET hidden
-        VISIBILITY_INLINES_HIDDEN YES)
+  CXX_VISIBILITY_PRESET hidden
+  VISIBILITY_INLINES_HIDDEN YES)
 
 # Main executables
 add_executable(check src/main/check.cpp src/main/linux_verifier.cpp)
@@ -157,9 +183,9 @@ target_link_libraries(check PRIVATE prevail ${CMAKE_DL_LIBS})
 # Tests
 if (VERIFIER_ENABLE_TESTS)
     FetchContent_Declare(Catch2
-            GIT_REPOSITORY "https://github.com/catchorg/Catch2.git"
-            GIT_TAG "v3.11.0"
-            GIT_SHALLOW ON
+      GIT_REPOSITORY "https://github.com/catchorg/Catch2.git"
+      GIT_TAG "v3.11.0"
+      GIT_SHALLOW ON
     )
     FetchContent_MakeAvailable(Catch2)
 
@@ -167,15 +193,15 @@ if (VERIFIER_ENABLE_TESTS)
     find_package(Threads REQUIRED)
 
     set(ALL_TEST
-            ${CMAKE_SOURCE_DIR}/src/test/test_conformance.cpp
-            ${CMAKE_SOURCE_DIR}/src/test/test_join.cpp
-            ${CMAKE_SOURCE_DIR}/src/test/test_marshal.cpp
-            ${CMAKE_SOURCE_DIR}/src/test/test_print.cpp
-            ${CMAKE_SOURCE_DIR}/src/test/test_sign_extension.cpp
-            ${CMAKE_SOURCE_DIR}/src/test/test_subsumption.cpp
-            ${CMAKE_SOURCE_DIR}/src/test/test_verify.cpp
-            ${CMAKE_SOURCE_DIR}/src/test/test_wto.cpp
-            ${CMAKE_SOURCE_DIR}/src/test/test_yaml.cpp
+      ${CMAKE_SOURCE_DIR}/src/test/test_conformance.cpp
+      ${CMAKE_SOURCE_DIR}/src/test/test_join.cpp
+      ${CMAKE_SOURCE_DIR}/src/test/test_marshal.cpp
+      ${CMAKE_SOURCE_DIR}/src/test/test_print.cpp
+      ${CMAKE_SOURCE_DIR}/src/test/test_sign_extension.cpp
+      ${CMAKE_SOURCE_DIR}/src/test/test_subsumption.cpp
+      ${CMAKE_SOURCE_DIR}/src/test/test_verify.cpp
+      ${CMAKE_SOURCE_DIR}/src/test/test_wto.cpp
+      ${CMAKE_SOURCE_DIR}/src/test/test_yaml.cpp
     )
 
     add_compile_definitions(YAML_CPP_STATIC_DEFINE)
