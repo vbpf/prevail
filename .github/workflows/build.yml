@@ -100,5 +100,5 @@ jobs:
 
       - name: Run unit tests (Windows)
         if: ${{ matrix.os == 'windows-2025' && matrix.target == 'tests' }}
-        run: .\tests.exe -d yes
+        run: ./${{env.BUILD_CONFIGURATION}}/tests.exe -d yes
         shell: pwsh
