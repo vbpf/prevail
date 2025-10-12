@@ -16,7 +16,7 @@ static void test_conformance(const std::string& filename, const bpf_conformance_
     const std::vector<std::filesystem::path> test_files = {CONFORMANCE_TEST_PATH + filename};
     auto result = bpf_conformance(test_files, plugin_path, {}, {}, {}, bpf_conformance_test_CPU_version_t::v4,
                                   bpf_conformance_groups_t::default_groups | bpf_conformance_groups_t::callx,
-                                  bpf_conformance_list_instructions_t::LIST_INSTRUCTIONS_NONE, true);
+                                  bpf_conformance_list_instructions_t::LIST_INSTRUCTIONS_NONE, false);
     for (const auto& file : test_files) {
         auto& [file_result, reason] = result[file];
         REQUIRE(file_result == expected_result);

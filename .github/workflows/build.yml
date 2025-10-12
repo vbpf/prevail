@@ -1,6 +1,6 @@
 name: C++ CI
 
-on:
+"on":
   pull_request:
     paths-ignore:
       - '**.md'
@@ -11,15 +11,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  build_ubuntu:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-2025]
-        configuration: [Debug, Release]
-        target: [library, tests]
+        configurations: [ Debug, Release ]
+        target: [ tests, library ]
       fail-fast: false
-    runs-on: ${{ matrix.os }}
-
+    runs-on: ubuntu-latest
     env:
       MATRIX_TARGET: ${{ matrix.target }}
       BUILD_CONFIGURATION: ${{ matrix.configuration }}
@@ -29,37 +27,49 @@ jobs:
         with:
           submodules: recursive
 
-      # ---------- Linux Build ----------
       - name: Install dependencies (Ubuntu)
-        if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           sudo apt-get update
-          sudo apt install -y cmake ninja-build g++ \
-            libboost-dev libboost-filesystem-dev libboost-program-options-dev
+          sudo apt install -y cmake ninja-build g++ libboost-dev libboost-program-options-dev
           if [ "${{ matrix.target }}" = "tests" ]; then
             sudo apt install -y libyaml-cpp-dev valgrind
           fi
 
-      - name: Build (Linux)
-        if: ${{ matrix.os == 'ubuntu-latest' }}
+      - name: Build
         run: |
-          cmake -S . -B build -G Ninja \
+          cmake -S . -B build \
+            -G ${{ env.CMAKE_GENERATOR }} \
             -D CMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} \
             -D VERIFIER_ENABLE_TESTS=$([ "${{ matrix.target }}" = "tests" ] && echo ON || echo OFF)
           cmake --build build -- -j $(nproc)
 
-      - name: Run unit tests (Linux)
-        if: ${{ matrix.os == 'ubuntu-latest' && matrix.target == 'tests' }}
+      - name: Run unit tests
+        if: ${{ matrix.target == 'tests' }}
         run: ./tests -d yes
 
-      - name: Memory leak test (Linux Debug only)
-        if: ${{ matrix.os == 'ubuntu-latest' && matrix.target == 'tests' && matrix.configuration == 'Debug' }}
+      - name: Memory leak test (Debug only)
+        if: ${{ matrix.target == 'tests' && matrix.configuration == 'Debug' }}
         run: >
           valgrind --leak-check=full --errors-for-leak-kinds=all
           --show-leak-kinds=all --error-exitcode=1
           ./check ebpf-samples/cilium/bpf_xdp_snat_linux_v1.o 2/1
 
-      # ---------- Windows Build ----------
+  build_windows:
+    strategy:
+      matrix:
+        configurations: [ Debug, Release ]
+        target: [ tests, library ]
+      fail-fast: false
+    runs-on: windows-2025
+    env:
+      MATRIX_TARGET: ${{ matrix.target }}
+      BUILD_CONFIGURATION: ${{ matrix.configuration }}
+      CMAKE_GENERATOR: Visual Studio 17 2022
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
       - name: Cache Boost packages
         id: cache-boost
         uses: actions/cache@v4
@@ -68,7 +78,7 @@ jobs:
           key: boost-${{ runner.os }}-1.87.0
 
       - name: Install Boost (NuGet prebuilt)
-        if: ${{ matrix.os == 'windows-2025' && steps.cache-boost.outputs.cache-hit != 'true' }}
+        if: ${{ steps.cache-boost.outputs.cache-hit != 'true' }}
         shell: pwsh
         run: |
           $root = "D:\a\prevail\prevail\build\packages"
@@ -79,26 +89,24 @@ jobs:
           nuget install boost_filesystem-vc143 -Version 1.87.0 -ExcludeVersion -OutputDirectory $root
           nuget install boost_program_options-vc143 -Version 1.87.0 -ExcludeVersion -OutputDirectory $root
 
-      - name: Configure CMake (Windows)
-        if: ${{ matrix.os == 'windows-2025' }}
+      - name: Configure CMake
         shell: pwsh
         run: |
           $boostDir = "D:\a\prevail\prevail\build\packages\boost-vc143\lib\native\lib\cmake\Boost"
           $enableTests = if ($env:MATRIX_TARGET -eq "tests") { "ON" } else { "OFF" }
 
           cmake -S . -B build `
-            -G "Visual Studio 17 2022" `
+            -G ${{ env.CMAKE_GENERATOR }} `
             -D CMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} `
             -D CMAKE_PREFIX_PATH="$boostDir" `
             -D Boost_DIR="$boostDir" `
             -D VERIFIER_ENABLE_TESTS=$enableTests
 
-      - name: Build (Windows)
-        if: ${{ matrix.os == 'windows-2025' }}
+      - name: Build
         shell: pwsh
         run: cmake --build build --config ${{ env.BUILD_CONFIGURATION }} --parallel
 
-      - name: Run unit tests (Windows)
-        if: ${{ matrix.os == 'windows-2025' && matrix.target == 'tests' }}
+      - name: Run unit tests
+        if: ${{ matrix.target == 'tests' }}
         run: ./${{env.BUILD_CONFIGURATION}}/tests.exe -d yes
         shell: pwsh
