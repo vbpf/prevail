@@ -103,7 +103,7 @@ jobs:
 
       - name: Build
         shell: pwsh
-        run: cmake --build build --config ${{ env.BUILD_CONFIGURATION }} --parallel
+        run: cmake --build build --config "$env:BUILD_CONFIGURATION" --parallel
 
       - name: Run unit tests
         if: ${{ matrix.target == 'tests' }}
