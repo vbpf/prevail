@@ -62,6 +62,7 @@ jobs:
     runs-on: windows-2025
     env:
       MATRIX_TARGET: ${{ matrix.target }}
+      BUILD_CONFIGURATION: ${{ matrix.configuration }}
       CMAKE_GENERATOR: "Visual Studio 17 2022"
     steps:
       - uses: actions/checkout@v5
@@ -95,16 +96,16 @@ jobs:
 
           cmake -S . -B build `
             -G "${{ env.CMAKE_GENERATOR }}" `
-            -D CMAKE_BUILD_TYPE=${{ matrix.configuration }} `
+            -D CMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} `
             -D CMAKE_PREFIX_PATH="$boostDir" `
             -D Boost_DIR="$boostDir" `
             -D VERIFIER_ENABLE_TESTS=$enableTests
 
       - name: Build
         shell: pwsh
-        run: cmake --build build --config ${{ matrix.configuration }} --parallel
+        run: cmake --build build --config ${{ env.BUILD_CONFIGURATION }} --parallel
 
       - name: Run unit tests
         if: ${{ matrix.target == 'tests' }}
-        run: ./${{ matrix.configuration }}/tests.exe -d yes
+        run: ./${{ env.BUILD_CONFIGURATION }}/tests.exe -d yes
         shell: pwsh
