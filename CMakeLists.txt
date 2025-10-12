@@ -207,9 +207,10 @@ if (VERIFIER_ENABLE_TESTS)
 
     add_compile_definitions(YAML_CPP_STATIC_DEFINE)
 
-    add_executable(tests ${ALL_TEST})
     add_executable(run_yaml src/test/run_yaml.cpp)
     add_executable(conformance_check src/test/conformance_check.cpp)
+    add_executable(tests ${ALL_TEST})
+    add_dependencies(tests conformance_check)  # conformance tests use the conformance_check binary
 
     add_library(ebpf_yaml_lib STATIC src/test/ebpf_yaml.cpp)
     target_link_libraries(ebpf_yaml_lib PRIVATE prevail bpf_conformance yaml-cpp::yaml-cpp)
@@ -217,8 +218,7 @@ if (VERIFIER_ENABLE_TESTS)
     foreach (tgt tests run_yaml conformance_check)
         set_target_properties(${tgt} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/..")
     endforeach ()
-
-    target_link_libraries(tests PRIVATE prevail ebpf_yaml_lib Catch2::Catch2WithMain Threads::Threads yaml-cpp::yaml-cpp)
     target_link_libraries(run_yaml PRIVATE prevail ebpf_yaml_lib)
     target_link_libraries(conformance_check PRIVATE prevail ebpf_yaml_lib Threads::Threads)
+    target_link_libraries(tests PRIVATE prevail ebpf_yaml_lib Catch2::Catch2WithMain Threads::Threads yaml-cpp::yaml-cpp)
 endif ()
