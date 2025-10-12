@@ -95,8 +95,8 @@ jobs:
           $enableTests = if ($env:MATRIX_TARGET -eq "tests") { "ON" } else { "OFF" }
 
           cmake -S . -B build `
-            -G "${{ env.CMAKE_GENERATOR }}" `
-            -D CMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} `
+            -G "$env:CMAKE_GENERATOR" `
+            -D CMAKE_BUILD_TYPE="$env:BUILD_CONFIGURATION" `
             -D CMAKE_PREFIX_PATH="$boostDir" `
             -D Boost_DIR="$boostDir" `
             -D VERIFIER_ENABLE_TESTS=$enableTests
