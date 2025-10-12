@@ -47,7 +47,7 @@ jobs:
         run: ./tests -d yes
 
       - name: Memory leak test (Debug only)
-        if: ${{ matrix.target == 'tests' && matrix.configuration == 'Debug' }}
+        if: ${{ matrix.target == 'tests' && matrix.configurations == 'Debug' }}
         run: >
           valgrind --leak-check=full --errors-for-leak-kinds=all
           --show-leak-kinds=all --error-exitcode=1
@@ -62,8 +62,9 @@ jobs:
     runs-on: windows-2025
     env:
       MATRIX_TARGET: ${{ matrix.target }}
-      BUILD_CONFIGURATION: ${{ matrix.configuration }}
+      BUILD_CONFIGURATION: ${{ matrix.configurations }}
       CMAKE_GENERATOR: "Visual Studio 17 2022"
+      BOOST_VERSION: "1.87.0"
     steps:
       - uses: actions/checkout@v5
         with:
@@ -73,25 +74,25 @@ jobs:
         id: cache-boost
         uses: actions/cache@v4
         with:
-          path: D:\a\prevail\prevail\build\packages
+          path: ${{ github.workspace }}\build\packages
           key: boost-${{ runner.os }}-1.87.0
 
       - name: Install Boost (NuGet prebuilt)
         if: ${{ steps.cache-boost.outputs.cache-hit != 'true' }}
         shell: pwsh
         run: |
-          $root = "D:\a\prevail\prevail\build\packages"
+          $root = Join-Path $env:GITHUB_WORKSPACE "build\packages"
           New-Item -ItemType Directory -Force -Path $root | Out-Null
 
-          nuget install boost -Version 1.87.0 -ExcludeVersion -DirectDownload -OutputDirectory $root
+          nuget install boost -Version $env:BOOST_VERSION -ExcludeVersion -DirectDownload -OutputDirectory $root
           # Prevent bpf_conformance from reinstalling boost packages
-          nuget install boost_filesystem-vc143 -Version 1.87.0 -ExcludeVersion -OutputDirectory $root
-          nuget install boost_program_options-vc143 -Version 1.87.0 -ExcludeVersion -OutputDirectory $root
+          nuget install boost_filesystem-vc143 -Version $env:BOOST_VERSION -ExcludeVersion -OutputDirectory $root
+          nuget install boost_program_options-vc143 -Version $env:BOOST_VERSION -ExcludeVersion -OutputDirectory $root
 
       - name: Configure CMake
         shell: pwsh
         run: |
-          $boostDir = "D:\a\prevail\prevail\build\packages\boost-vc143\lib\native\lib\cmake\Boost"
+          $boostDir = Join-Path $env:GITHUB_WORKSPACE "\build\packages\boost-vc143\lib\native\lib\cmake\Boost"
           $enableTests = if ($env:MATRIX_TARGET -eq "tests") { "ON" } else { "OFF" }
 
           cmake -S . -B build `
