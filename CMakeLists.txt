@@ -1,7 +1,6 @@
 # Copyright (c) Prevail Verifier contributors.
 # SPDX-License-Identifier: MIT
 
-# Set cmake version to 3.16 to use CMP0091 aka MSVC_RUNTIME_LIBRARY property.
 cmake_minimum_required(VERSION 3.24)
 if (POLICY CMP0167)
     cmake_policy(SET CMP0167 NEW)
@@ -168,9 +167,7 @@ set(prevail_GUID_CMAKE "7d5b4e68-c0fa-3f86-9405-f6400219b440" CACHE INTERNAL "Pr
 set(yaml-cpp_GUID_CMAKE "98d56b8a-d8eb-3d98-b8ee-c83696b4d58a" CACHE INTERNAL "Project GUID")
 
 # Core libraries
-target_link_libraries(prevail PRIVATE
-  libbtf
-)
+target_link_libraries(prevail PRIVATE libbtf)
 target_link_libraries(prevail PUBLIC Boost::process Microsoft.GSL::GSL)
 set_target_properties(prevail PROPERTIES
   CXX_VISIBILITY_PRESET hidden

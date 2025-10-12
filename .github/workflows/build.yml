@@ -30,7 +30,7 @@ jobs:
       - name: Install dependencies (Ubuntu)
         run: |
           sudo apt-get update
-          sudo apt install -y cmake ninja-build g++ libboost-dev libboost-program-options-dev
+          sudo apt install -y cmake ninja-build g++ libboost-dev libboost-filesystem-dev libboost-program-options-dev
           if [ "${{ matrix.target }}" = "tests" ]; then
             sudo apt install -y libyaml-cpp-dev valgrind
           fi
@@ -38,7 +38,7 @@ jobs:
       - name: Build
         run: |
           cmake -S . -B build \
-            -G ${{ env.CMAKE_GENERATOR }} \
+            -G "${{ env.CMAKE_GENERATOR }}" \
             -D CMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} \
             -D VERIFIER_ENABLE_TESTS=$([ "${{ matrix.target }}" = "tests" ] && echo ON || echo OFF)
           cmake --build build -- -j $(nproc)
@@ -96,7 +96,7 @@ jobs:
           $enableTests = if ($env:MATRIX_TARGET -eq "tests") { "ON" } else { "OFF" }
 
           cmake -S . -B build `
-            -G ${{ env.CMAKE_GENERATOR }} `
+            -G "${{ env.CMAKE_GENERATOR }}" `
             -D CMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} `
             -D CMAKE_PREFIX_PATH="$boostDir" `
             -D Boost_DIR="$boostDir" `
