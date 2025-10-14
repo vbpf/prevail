@@ -3,17 +3,31 @@
 #include "bpf_conformance/include/bpf_conformance.h"
 #include <catch2/catch_all.hpp>
 
-#define CONFORMANCE_TEST_PATH "external/bpf_conformance/tests/"
-
 #ifdef _WIN32
-static constexpr const char* plugin_path = "conformance_check.exe";
+#include <windows.h>
+static std::filesystem::path get_plugin_path() {
+    wchar_t path[MAX_PATH];
+    GetModuleFileNameW(NULL, path, MAX_PATH);
+    return std::filesystem::path(path).parent_path() / "conformance_check.exe";
+}
 #else
-static constexpr const char* plugin_path = "conformance_check";
+#include <unistd.h>
+static std::filesystem::path get_plugin_path() {
+    char path[PATH_MAX];
+    const ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
+    if (len != -1) {
+        path[len] = '\0';
+        return std::filesystem::path(path).parent_path() / "conformance_check";
+    }
+    return "conformance_check";
+}
 #endif
 
 static void test_conformance(const std::string& filename, const bpf_conformance_test_result_t& expected_result,
                              const std::string& expected_reason) {
-    const std::vector<std::filesystem::path> test_files = {CONFORMANCE_TEST_PATH + filename};
+    static const std::filesystem::path conformance_test_path = "external/bpf_conformance/tests/";
+    static const std::filesystem::path plugin_path = get_plugin_path();
+    const std::vector test_files = {conformance_test_path / filename};
     auto result = bpf_conformance(test_files, plugin_path, {}, {}, {}, bpf_conformance_test_CPU_version_t::v4,
                                   bpf_conformance_groups_t::default_groups | bpf_conformance_groups_t::callx,
                                   bpf_conformance_list_instructions_t::LIST_INSTRUCTIONS_NONE, false);
