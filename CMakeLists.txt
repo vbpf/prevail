@@ -45,6 +45,33 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
   set(SANITIZE_FLAGS -fsanitize=address -O1 -fno-omit-frame-pointer)
 endif ()
 
+if (MSVC)
+  # Silence Windows version warnings
+  add_compile_definitions(_WIN32_WINNT=0x0A00)
+  # Add FuzzerDebug configuration (MSVC Address/Fuzzer sanitizer build)
+  list(APPEND CMAKE_CONFIGURATION_TYPES FuzzerDebug)
+  list(REMOVE_DUPLICATES CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_CONFIGURATION_TYPES "${CMAKE_CONFIGURATION_TYPES}" CACHE STRING
+    "Add the configurations that we need" FORCE)
+
+  # Derive base debug flags and add sanitizer instrumentation
+  set(CMAKE_C_FLAGS_FUZZERDEBUG
+    "${CMAKE_C_FLAGS_DEBUG} /fsanitize=address /fsanitize=fuzzer "
+    "/fsanitize-coverage=inline-bool-flag /fsanitize-coverage=edge "
+    "/fsanitize-coverage=trace-cmp /fsanitize-coverage=trace-div "
+    "/ZH:SHA_256")
+
+  set(CMAKE_CXX_FLAGS_FUZZERDEBUG
+    "${CMAKE_CXX_FLAGS_DEBUG} /fsanitize=address /fsanitize=fuzzer "
+    "/fsanitize-coverage=inline-bool-flag /fsanitize-coverage=edge "
+    "/fsanitize-coverage=trace-cmp /fsanitize-coverage=trace-div "
+    "/ZH:SHA_256")
+
+  # Propagate linker flags (same as Debug)
+  set(CMAKE_EXE_LINKER_FLAGS_FUZZERDEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG}")
+  set(CMAKE_SHARED_LINKER_FLAGS_FUZZERDEBUG "${CMAKE_SHARED_LINKER_FLAGS_DEBUG}")
+endif ()
+
 FetchContent_Declare(GSL
   GIT_REPOSITORY "https://github.com/microsoft/GSL"
   GIT_TAG "v4.2.0"
@@ -78,39 +105,64 @@ if (prevail_ENABLE_TESTS)
 endif ()
 
 add_compile_definitions(BOOST_PROCESS_USE_STD_FS)
-if (MSVC)
-  set(BOOST_HEADERS_ROOT "${CMAKE_BINARY_DIR}/packages/boost/lib/native")
 
-  add_library(Boost::headers INTERFACE IMPORTED)
-  target_include_directories(Boost::headers INTERFACE "${BOOST_HEADERS_ROOT}/include")
-
-  # Silence Windows version warnings
-  add_compile_definitions(_WIN32_WINNT=0x0A00)
+if (prevail_ENABLE_TESTS)
+  # Let bpf_conformance manage its own Boost (including NuGet libs on MSVC)
+  add_subdirectory("${CMAKE_SOURCE_DIR}/external/bpf_conformance/src")
 endif ()
 
-if (MSVC)
-  # Add FuzzerDebug configuration (MSVC Address/Fuzzer sanitizer build)
-  list(APPEND CMAKE_CONFIGURATION_TYPES FuzzerDebug)
-  list(REMOVE_DUPLICATES CMAKE_CONFIGURATION_TYPES)
-  set(CMAKE_CONFIGURATION_TYPES "${CMAKE_CONFIGURATION_TYPES}" CACHE STRING
-    "Add the configurations that we need" FORCE)
+# --- Provide Boost::headers iff we don't already have it (MSVC only) ---
+if (MSVC AND NOT TARGET Boost::headers)
+  # find_boost_headers_dir(<out-var> <pkgroot>)
+  # Sets <out-var> to a directory that contains boost/version.hpp, or empty if not found.
+  function(find_boost_headers_dir OUTVAR PKGROOT)
+    # Probe typical NuGet layouts (versioned and unversioned)
+    file(GLOB _candidates
+      "${PKGROOT}/boost/lib/native/include"
+      "${PKGROOT}/boost.*/lib/native/include"
+      "${PKGROOT}/boost/include"
+      "${PKGROOT}/boost.*/include"
+    )
+    set(_found "")
+    foreach (d IN LISTS _candidates)
+      if (EXISTS "${d}/boost/version.hpp")
+        set(_found "${d}")
+        break()
+      endif ()
+    endforeach ()
+    set(${OUTVAR} "${_found}" PARENT_SCOPE)
+  endfunction()
 
-  # Derive base debug flags and add sanitizer instrumentation
-  set(CMAKE_C_FLAGS_FUZZERDEBUG
-    "${CMAKE_C_FLAGS_DEBUG} /fsanitize=address /fsanitize=fuzzer "
-    "/fsanitize-coverage=inline-bool-flag /fsanitize-coverage=edge "
-    "/fsanitize-coverage=trace-cmp /fsanitize-coverage=trace-div "
-    "/ZH:SHA_256")
+  set(_pkgroot "${CMAKE_BINARY_DIR}/packages")
 
-  set(CMAKE_CXX_FLAGS_FUZZERDEBUG
-    "${CMAKE_CXX_FLAGS_DEBUG} /fsanitize=address /fsanitize=fuzzer "
-    "/fsanitize-coverage=inline-bool-flag /fsanitize-coverage=edge "
-    "/fsanitize-coverage=trace-cmp /fsanitize-coverage=trace-div "
-    "/ZH:SHA_256")
+  find_boost_headers_dir(_boost_inc "${_pkgroot}")
 
-  # Propagate linker flags (same as Debug)
-  set(CMAKE_EXE_LINKER_FLAGS_FUZZERDEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG}")
-  set(CMAKE_SHARED_LINKER_FLAGS_FUZZERDEBUG "${CMAKE_SHARED_LINKER_FLAGS_DEBUG}")
+  if (_boost_inc STREQUAL "")
+    # headers not present yet: fetch once (headers only)
+    find_program(NUGET nuget REQUIRED)
+    set(BOOST_VERSION "1.87.0")
+    file(MAKE_DIRECTORY "${_pkgroot}")
+    execute_process(
+      COMMAND "${NUGET}" install boost -Version ${BOOST_VERSION} -ExcludeVersion -OutputDirectory "${_pkgroot}"
+      RESULT_VARIABLE _res
+    )
+    if (NOT _res EQUAL 0)
+      message(FATAL_ERROR "NuGet Boost headers install failed (exit ${_res}).")
+    endif ()
+
+    # re-probe after install
+    find_boost_headers_dir(_boost_inc "${_pkgroot}")
+    if (_boost_inc STREQUAL "")
+      message(FATAL_ERROR "Could not locate Boost headers under ${_pkgroot}")
+    endif ()
+  endif ()
+
+  add_library(Boost::headers INTERFACE IMPORTED)
+  target_include_directories(Boost::headers INTERFACE "${_boost_inc}")
+
+  file(STRINGS "${_boost_inc}/boost/version.hpp" _ver_line REGEX "#define BOOST_LIB_VERSION")
+  string(REGEX REPLACE ".*\"([0-9_]+)\".*" "\\1" _boost_ver "${_ver_line}")
+  message(STATUS "Boost headers: ${_boost_ver} at ${_boost_inc}")
 endif ()
 
 file(GLOB_RECURSE prevail_LIB_SRC CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/*.cpp")
@@ -185,32 +237,6 @@ if (prevail_ENABLE_TESTS)
   set(THREADS_PREFER_PTHREAD_FLAG ON)
   find_package(Threads REQUIRED)
 
-  # ------------------------------------------------------------------
-  # Boost setup for bpf_conformance
-  # ------------------------------------------------------------------
-  if (MSVC)
-    # Set version and platform consistent with bpf_conformance expectations
-    set(BOOST_VERSION "1.87.0" CACHE STRING "Boost version for NuGet" FORCE)
-    if ("${CMAKE_GENERATOR}" MATCHES "Visual Studio 17 2022")
-      set(MSVC_PLATFORM "143")
-    elseif ("${CMAKE_GENERATOR}" MATCHES "Visual Studio 16 2019")
-      set(MSVC_PLATFORM "142")
-    else ()
-      message(FATAL_ERROR "Unsupported Visual Studio version")
-    endif ()
-
-    # Define the expected include and lib paths once
-    set(_boost_pkg_root "${CMAKE_BINARY_DIR}/packages")
-    set(Boost_INCLUDE_DIRS "${_boost_pkg_root}/boost/lib/native/include" CACHE PATH "" FORCE)
-    set(Boost_LIBRARY_DIRS
-      "${_boost_pkg_root}/boost_filesystem-vc${MSVC_PLATFORM}/lib/native"
-      "${_boost_pkg_root}/boost_program_options-vc${MSVC_PLATFORM}/lib/native"
-      CACHE PATH "" FORCE)
-
-    # Pre-create these directories so bpf_conformance’s NuGet calls succeed
-    file(MAKE_DIRECTORY "${_boost_pkg_root}")
-  endif ()
-  add_subdirectory("${CMAKE_SOURCE_DIR}/external/bpf_conformance/src")
   add_executable(conformance_check "${CMAKE_SOURCE_DIR}/src/test/conformance_check.cpp")
 
   add_executable(run_yaml "${CMAKE_SOURCE_DIR}/src/test/run_yaml.cpp")
