@@ -138,9 +138,6 @@ target_compile_options(prevail PRIVATE
 )
 
 add_subdirectory("${CMAKE_SOURCE_DIR}/external/bpf_conformance/external/elfio")
-if (prevail_ENABLE_TESTS)
-  add_subdirectory("${CMAKE_SOURCE_DIR}/external/bpf_conformance/src")
-endif ()
 add_subdirectory("${CMAKE_SOURCE_DIR}/external/libbtf")
 
 # CMake derives a Visual Studio project GUID from the file path but can be overridden via a property
@@ -188,8 +185,35 @@ if (prevail_ENABLE_TESTS)
   set(THREADS_PREFER_PTHREAD_FLAG ON)
   find_package(Threads REQUIRED)
 
-  add_executable(run_yaml "${CMAKE_SOURCE_DIR}/src/test/run_yaml.cpp")
+  # ------------------------------------------------------------------
+  # Boost setup for bpf_conformance
+  # ------------------------------------------------------------------
+  if (MSVC)
+    # Set version and platform consistent with bpf_conformance expectations
+    set(BOOST_VERSION "1.87.0" CACHE STRING "Boost version for NuGet" FORCE)
+    if ("${CMAKE_GENERATOR}" MATCHES "Visual Studio 17 2022")
+      set(MSVC_PLATFORM "143")
+    elseif ("${CMAKE_GENERATOR}" MATCHES "Visual Studio 16 2019")
+      set(MSVC_PLATFORM "142")
+    else ()
+      message(FATAL_ERROR "Unsupported Visual Studio version")
+    endif ()
+
+    # Define the expected include and lib paths once
+    set(_boost_pkg_root "${CMAKE_BINARY_DIR}/packages")
+    set(Boost_INCLUDE_DIRS "${_boost_pkg_root}/boost/lib/native/include" CACHE PATH "" FORCE)
+    set(Boost_LIBRARY_DIRS
+      "${_boost_pkg_root}/boost_filesystem-vc${MSVC_PLATFORM}/lib/native"
+      "${_boost_pkg_root}/boost_program_options-vc${MSVC_PLATFORM}/lib/native"
+      CACHE PATH "" FORCE)
+
+    # Pre-create these directories so bpf_conformance’s NuGet calls succeed
+    file(MAKE_DIRECTORY "${_boost_pkg_root}")
+  endif ()
+  add_subdirectory("${CMAKE_SOURCE_DIR}/external/bpf_conformance/src")
   add_executable(conformance_check "${CMAKE_SOURCE_DIR}/src/test/conformance_check.cpp")
+
+  add_executable(run_yaml "${CMAKE_SOURCE_DIR}/src/test/run_yaml.cpp")
 
   file(GLOB prevail_TEST_SRC CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/test/test_*.cpp")
   add_executable(tests ${prevail_TEST_SRC})
@@ -199,24 +223,8 @@ if (prevail_ENABLE_TESTS)
 
   target_link_libraries(run_yaml PRIVATE prevail ebpf_yaml_lib)
 
-  # bpf_conformance requires Boost.Process, Boost.Filesystem, and Boost.program_options
-  # To avoid installing multiple times, run from powershell:
-  #    $pkgroot = Join-Path (Get-Location).Path "build\packages"
-  #    New-Item -ItemType Directory -Force -Path $pkgroot | Out-Null
-  #
-  #    nuget install boost -Version $env:BOOST_VERSION -ExcludeVersion -DirectDownload -OutputDirectory $pkgroot
-  #    nuget install boost_filesystem-${{ env.MSVC_PLATFORM }} -Version $env:BOOST_VERSION -ExcludeVersion -OutputDirectory $pkgroot
-  #    nuget install boost_program_options-${{ env.MSVC_PLATFORM }} -Version $env:BOOST_VERSION -ExcludeVersion -OutputDirectory $pkgroot
   target_compile_definitions(conformance_check PRIVATE BOOST_PROCESS_USE_STD_FS)
-  if (NOT TARGET Boost::process)
-    add_library(Boost::process INTERFACE IMPORTED)
-    if (MSVC)
-      target_link_libraries(Boost::process INTERFACE Boost::headers)
-    else ()
-      target_include_directories(Boost::process INTERFACE ${Boost_INCLUDE_DIRS})
-    endif ()
-  endif ()
-  target_link_libraries(conformance_check PRIVATE prevail ebpf_yaml_lib Boost::process)
+  target_link_libraries(conformance_check PRIVATE prevail ebpf_yaml_lib)
 
   target_link_libraries(tests PRIVATE prevail ebpf_yaml_lib Catch2::Catch2WithMain Threads::Threads yaml-cpp::yaml-cpp)
 
