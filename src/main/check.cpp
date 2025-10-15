@@ -35,7 +35,7 @@ static uint64_t hash(const RawProgram& raw_prog) {
     return fnv1a64(std::string_view{start, len});
 }
 
-static const std::map<std::string, bpf_conformance_groups_t> _conformance_groups = {
+static const std::map<std::string, bpf_conformance_groups_t> conformance_groups = {
     {"atomic32", bpf_conformance_groups_t::atomic32}, {"atomic64", bpf_conformance_groups_t::atomic64},
     {"base32", bpf_conformance_groups_t::base32},     {"base64", bpf_conformance_groups_t::base64},
     {"callx", bpf_conformance_groups_t::callx},       {"divmul32", bpf_conformance_groups_t::divmul32},
