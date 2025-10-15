@@ -84,14 +84,18 @@ if (MSVC)
   add_library(Boost::headers INTERFACE IMPORTED)
   target_include_directories(Boost::headers INTERFACE "${BOOST_HEADERS_ROOT}/include")
 
-  add_library(Boost::process INTERFACE IMPORTED)
-  target_link_libraries(Boost::process INTERFACE Boost::headers)
+  if (prevail_ENABLE_TESTS)
+    add_library(Boost::process INTERFACE IMPORTED)
+    target_link_libraries(Boost::process INTERFACE Boost::headers)
+  endif ()
 
   # Silence Windows version warnings
   add_compile_definitions(_WIN32_WINNT=0x0A00)
 else ()
-  add_library(Boost::process INTERFACE IMPORTED)
-  target_include_directories(Boost::process INTERFACE ${Boost_INCLUDE_DIRS})
+  if (prevail_ENABLE_TESTS)
+    add_library(Boost::process INTERFACE IMPORTED)
+    target_include_directories(Boost::process INTERFACE ${Boost_INCLUDE_DIRS})
+  endif ()
 endif ()
 
 if (MSVC)
@@ -158,7 +162,10 @@ set(yaml-cpp_GUID_CMAKE "98d56b8a-d8eb-3d98-b8ee-c83696b4d58a" CACHE INTERNAL "P
 
 # Core libraries
 target_link_libraries(prevail PRIVATE libbtf)
-target_link_libraries(prevail PUBLIC Boost::process Microsoft.GSL::GSL)
+target_link_libraries(prevail PUBLIC Microsoft.GSL::GSL)
+if (TARGET Boost::headers)
+  target_link_libraries(prevail PUBLIC Boost::headers)
+endif ()
 set_target_properties(prevail PROPERTIES
   CXX_VISIBILITY_PRESET hidden
   VISIBILITY_INLINES_HIDDEN YES)
@@ -201,7 +208,7 @@ if (prevail_ENABLE_TESTS)
   target_link_libraries(ebpf_yaml_lib PRIVATE prevail bpf_conformance yaml-cpp::yaml-cpp)
 
   target_link_libraries(run_yaml PRIVATE prevail ebpf_yaml_lib)
-  target_link_libraries(conformance_check PRIVATE prevail ebpf_yaml_lib Threads::Threads)
+  target_link_libraries(conformance_check PRIVATE prevail ebpf_yaml_lib Boost::process Threads::Threads)
   target_link_libraries(tests PRIVATE prevail ebpf_yaml_lib Catch2::Catch2WithMain Threads::Threads yaml-cpp::yaml-cpp)
 
   if (CMAKE_CONFIGURATION_TYPES)

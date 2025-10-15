@@ -27,7 +27,7 @@ FAIL_LOAD_ELF("invalid", "badsymsize.o", "xdp_redirect_map")
     TEST_CASE("Try unmarshalling bad program: " dirname "/" filename " " sectionname, "[unmarshal]") {            \
         auto raw_progs = read_elf("ebpf-samples/" dirname "/" filename, sectionname, {}, &g_ebpf_platform_linux); \
         REQUIRE(raw_progs.size() == 1);                                                                           \
-        RawProgram raw_prog = raw_progs.back();                                                                   \
+        const RawProgram& raw_prog = raw_progs.back();                                                            \
         std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog);                            \
         REQUIRE(std::holds_alternative<std::string>(prog_or_error));                                              \
     }
@@ -40,7 +40,7 @@ FAIL_UNMARSHAL("invalid", "invalid-lddw.o", ".text")
     TEST_CASE("Try analyze bad program: " dirname "/" filename " " sectionname, "[cfg]") {                        \
         auto raw_progs = read_elf("ebpf-samples/" dirname "/" filename, sectionname, {}, &g_ebpf_platform_linux); \
         REQUIRE(raw_progs.size() == 1);                                                                           \
-        RawProgram raw_prog = raw_progs.back();                                                                   \
+        const RawProgram& raw_prog = raw_progs.back();                                                            \
         std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog);                            \
         const auto inst_seq = std::get_if<InstructionSeq>(&prog_or_error);                                        \
         REQUIRE(inst_seq);                                                                                        \
