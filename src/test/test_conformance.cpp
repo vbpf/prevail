@@ -12,9 +12,12 @@
 #endif
 #endif
 
+static void collect_test(std::string name);
+
 static void test_conformance(const std::string& filename, const bpf_conformance_test_result_t& expected_result,
                              const std::string& expected_reason) {
     static const std::filesystem::path conformance_test_path = "external/bpf_conformance/tests/";
+    collect_test(filename);
     const std::vector test_files = {conformance_test_path / filename};
     auto result =
         bpf_conformance(test_files, CONFORMANCE_CHECK_PATH, {}, {}, {}, bpf_conformance_test_CPU_version_t::v4,
@@ -152,7 +155,9 @@ TEST_CONFORMANCE("ldxh.data")
 TEST_CONFORMANCE("ldxw-all.data")
 TEST_CONFORMANCE("ldxw.data")
 TEST_CONFORMANCE("le16.data")
+TEST_CONFORMANCE("le16-high.data")
 TEST_CONFORMANCE("le32.data")
+TEST_CONFORMANCE("le32-high.data")
 TEST_CONFORMANCE("le64.data")
 TEST_CONFORMANCE("lock_add.data")
 TEST_CONFORMANCE("lock_add32.data")
@@ -193,6 +198,7 @@ TEST_CONFORMANCE("mod32.data")
 TEST_CONFORMANCE("mod64-by-zero-reg.data")
 TEST_CONFORMANCE("mod64.data")
 TEST_CONFORMANCE("mov.data")
+TEST_CONFORMANCE("mov64.data")
 TEST_CONFORMANCE("mov64-sign-extend.data")
 TEST_CONFORMANCE("movsx1632-reg.data")
 TEST_CONFORMANCE("movsx1664-reg.data")
@@ -275,3 +281,39 @@ TEST_CONFORMANCE("swap16.data")
 TEST_CONFORMANCE("swap32.data")
 TEST_CONFORMANCE("swap64.data")
 TEST_CONFORMANCE("subnet.data")
+
+static std::set<std::string> tested_files;
+
+void collect_test(std::string name) {
+    tested_files.insert(name);
+}
+
+// Test to verify all available test files have corresponding test cases
+TEST_CASE("verify all test files are tested", "[conformance][coverage]") {
+    static const std::filesystem::path conformance_test_path = "external/bpf_conformance/tests/";
+
+    // Get all .data files in the test directory
+    std::set<std::string> available_files;
+    if (std::filesystem::exists(conformance_test_path)) {
+        for (const auto& entry : std::filesystem::directory_iterator(conformance_test_path)) {
+            if (entry.path().extension() == ".data") {
+                available_files.insert(entry.path().filename().string());
+            }
+        }
+    }
+
+    // Find untested files
+    std::vector<std::string> untested_files;
+    std::set_difference(available_files.begin(), available_files.end(), tested_files.begin(), tested_files.end(),
+                        std::back_inserter(untested_files));
+
+    // Report any untested files
+    if (!untested_files.empty()) {
+        std::stringstream ss;
+        ss << "The following test files are not covered by test cases:\n";
+        for (const auto& file : untested_files) {
+            ss << "TEST_CONFORMANCE(\"" << file << "\")\n";
+        }
+        FAIL(ss.str());
+    }
+}
