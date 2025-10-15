@@ -1,36 +1,25 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
-#include "bpf_conformance/include/bpf_conformance.h"
 #include <catch2/catch_all.hpp>
 
+#include "bpf_conformance/include/bpf_conformance.h"
+
+#ifndef CONFORMANCE_CHECK_PATH
 #ifdef _WIN32
-#include <windows.h>
-static std::filesystem::path get_plugin_path() {
-    wchar_t path[MAX_PATH];
-    GetModuleFileNameW(NULL, path, MAX_PATH);
-    return std::filesystem::path(path).parent_path() / "conformance_check.exe";
-}
+#define CONFORMANCE_CHECK_PATH "conformance_check.exe"
 #else
-#include <unistd.h>
-static std::filesystem::path get_plugin_path() {
-    char path[PATH_MAX];
-    const ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
-    if (len != -1) {
-        path[len] = '\0';
-        return std::filesystem::path(path).parent_path() / "conformance_check";
-    }
-    return "conformance_check";
-}
+#define CONFORMANCE_CHECK_PATH "./conformance_check"
+#endif
 #endif
 
 static void test_conformance(const std::string& filename, const bpf_conformance_test_result_t& expected_result,
                              const std::string& expected_reason) {
     static const std::filesystem::path conformance_test_path = "external/bpf_conformance/tests/";
-    static const std::filesystem::path plugin_path = get_plugin_path();
     const std::vector test_files = {conformance_test_path / filename};
-    auto result = bpf_conformance(test_files, plugin_path, {}, {}, {}, bpf_conformance_test_CPU_version_t::v4,
-                                  bpf_conformance_groups_t::default_groups | bpf_conformance_groups_t::callx,
-                                  bpf_conformance_list_instructions_t::LIST_INSTRUCTIONS_NONE, false);
+    auto result =
+        bpf_conformance(test_files, CONFORMANCE_CHECK_PATH, {}, {}, {}, bpf_conformance_test_CPU_version_t::v4,
+                        bpf_conformance_groups_t::default_groups | bpf_conformance_groups_t::callx,
+                        bpf_conformance_list_instructions_t::LIST_INSTRUCTIONS_NONE, false);
     for (const auto& file : test_files) {
         auto& [file_result, reason] = result[file];
         REQUIRE(file_result == expected_result);

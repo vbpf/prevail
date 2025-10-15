@@ -39,12 +39,12 @@ jobs:
           cmake -S . -B build \
             -G "${{ env.CMAKE_GENERATOR }}" \
             -D CMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} \
-            -D VERIFIER_ENABLE_TESTS=$([ "${{ matrix.target }}" = "tests" ] && echo ON || echo OFF)
+            -D prevail_ENABLE_TESTS=$([ "${{ matrix.target }}" = "tests" ] && echo ON || echo OFF)
           cmake --build build -- -j $(nproc)
 
       - name: Run unit tests
         if: ${{ matrix.target == 'tests' }}
-        run: ./tests -d yes
+        run: ./tests -d yes --order lex
 
       - name: Memory leak test (Debug only)
         if: ${{ matrix.target == 'tests' && matrix.configurations == 'Debug' }}
@@ -65,6 +65,7 @@ jobs:
       BUILD_CONFIGURATION: ${{ matrix.configurations }}
       CMAKE_GENERATOR: "Visual Studio 17 2022"
       BOOST_VERSION: "1.87.0"
+      MSVC_PLATFORM: "143"
     steps:
       - uses: actions/checkout@v5
         with:
@@ -75,7 +76,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}\build\packages
-          key: boost-${{ runner.os }}-1.87.0
+          key: boost-${{ runner.os }}-${{ env.BOOST_VERSION }}
 
       - name: Install Boost (NuGet prebuilt)
         if: ${{ steps.cache-boost.outputs.cache-hit != 'true' }}
@@ -86,13 +87,13 @@ jobs:
 
           nuget install boost -Version $env:BOOST_VERSION -ExcludeVersion -DirectDownload -OutputDirectory $root
           # Prevent bpf_conformance from reinstalling boost packages
-          nuget install boost_filesystem-vc143 -Version $env:BOOST_VERSION -ExcludeVersion -OutputDirectory $root
-          nuget install boost_program_options-vc143 -Version $env:BOOST_VERSION -ExcludeVersion -OutputDirectory $root
+          nuget install boost_filesystem-${{ env.MSVC_PLATFORM }} -Version $env:BOOST_VERSION -ExcludeVersion -OutputDirectory $root
+          nuget install boost_program_options-${{ env.MSVC_PLATFORM }} -Version $env:BOOST_VERSION -ExcludeVersion -OutputDirectory $root
 
       - name: Configure CMake
         shell: pwsh
         run: |
-          $boostDir = Join-Path $env:GITHUB_WORKSPACE "\build\packages\boost-vc143\lib\native\lib\cmake\Boost"
+          $boostDir = Join-Path $env:GITHUB_WORKSPACE "\build\packages\boost-${{ env.MSVC_PLATFORM }}\lib\native\lib\cmake\Boost"
           $enableTests = if ($env:MATRIX_TARGET -eq "tests") { "ON" } else { "OFF" }
 
           cmake -S . -B build `
@@ -100,7 +101,7 @@ jobs:
             -D CMAKE_BUILD_TYPE="$env:BUILD_CONFIGURATION" `
             -D CMAKE_PREFIX_PATH="$boostDir" `
             -D Boost_DIR="$boostDir" `
-            -D VERIFIER_ENABLE_TESTS=$enableTests
+            -D prevail_ENABLE_TESTS=$enableTests
 
       - name: Build
         shell: pwsh
@@ -108,5 +109,5 @@ jobs:
 
       - name: Run unit tests
         if: ${{ matrix.target == 'tests' }}
-        run: ./${{ env.BUILD_CONFIGURATION }}/tests.exe -d yes
         shell: pwsh
+        run: ./${{ env.BUILD_CONFIGURATION }}/tests.exe -d yes --order lex
