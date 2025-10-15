@@ -61,6 +61,6 @@ struct TypeValueConstraints {
     std::vector<LinearConstraint> value_csts;
 };
 
-TypeValueConstraints
-parse_linear_constraints(const std::set<std::string>& constraints, std::vector<Interval>& numeric_ranges);
+TypeValueConstraints parse_linear_constraints(const std::set<std::string>& constraints,
+                                              std::vector<Interval>& numeric_ranges);
 } // namespace prevail

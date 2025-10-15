@@ -6,8 +6,8 @@
 
 #include <optional>
 
-#include "arith/variable.hpp"
 #include "arith/dsl_syntax.hpp"
+#include "arith/variable.hpp"
 #include "asm_syntax.hpp" // for Reg
 #include "crab/split_dbm.hpp"
 #include "crab/type_encoding.hpp"
