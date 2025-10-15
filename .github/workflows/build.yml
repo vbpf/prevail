@@ -26,6 +26,10 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Verify conformance tests cover all .data files
+        if: ${{ matrix.target == 'tests' && matrix.configurations == 'Release' }}
+        run: python3 scripts/check_conformance_list.py
+
       - name: Install dependencies (Ubuntu)
         run: |
           sudo apt-get update
