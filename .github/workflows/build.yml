@@ -38,7 +38,7 @@ jobs:
         run: |
           cmake -S . -B build \
             -G "${{ env.CMAKE_GENERATOR }}" \
-            -D CMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} \
+            -D CMAKE_BUILD_TYPE=${{ matrix.configurations }} \
             -D prevail_ENABLE_TESTS=$([ "${{ matrix.target }}" = "tests" ] && echo ON || echo OFF)
           cmake --build build -- -j $(nproc)
 
