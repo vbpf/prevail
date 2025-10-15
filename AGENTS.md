@@ -18,7 +18,7 @@
 ## Repository map
 - `src/`
   - `asm_*`, `cfg/`, `arith/`, `crab/`, `linux/`: verifier implementation broken down by domain.
-  - `main/`: entry points for command-line tools (`check`, `run_yaml`).
+  - `main/`: entry points for command-line tools: `check`.
   - `test/`: Catch2 unit and integration tests.
 - `ebpf-samples/`: sample ELF objects used for manual experimentation.
 - `scripts/`: developer utilities (formatting, license checks, git hooks).

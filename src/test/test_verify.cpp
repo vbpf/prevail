@@ -27,7 +27,7 @@ FAIL_LOAD_ELF("invalid", "badsymsize.o", "xdp_redirect_map")
     TEST_CASE("Try unmarshalling bad program: " dirname "/" filename " " sectionname, "[unmarshal]") {            \
         auto raw_progs = read_elf("ebpf-samples/" dirname "/" filename, sectionname, {}, &g_ebpf_platform_linux); \
         REQUIRE(raw_progs.size() == 1);                                                                           \
-        RawProgram raw_prog = raw_progs.back();                                                                   \
+        const RawProgram& raw_prog = raw_progs.back();                                                            \
         std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog);                            \
         REQUIRE(std::holds_alternative<std::string>(prog_or_error));                                              \
     }
@@ -40,7 +40,7 @@ FAIL_UNMARSHAL("invalid", "invalid-lddw.o", ".text")
     TEST_CASE("Try analyze bad program: " dirname "/" filename " " sectionname, "[cfg]") {                        \
         auto raw_progs = read_elf("ebpf-samples/" dirname "/" filename, sectionname, {}, &g_ebpf_platform_linux); \
         REQUIRE(raw_progs.size() == 1);                                                                           \
-        RawProgram raw_prog = raw_progs.back();                                                                   \
+        const RawProgram& raw_prog = raw_progs.back();                                                            \
         std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog);                            \
         const auto inst_seq = std::get_if<InstructionSeq>(&prog_or_error);                                        \
         REQUIRE(inst_seq);                                                                                        \
@@ -76,6 +76,11 @@ FAIL_ANALYZE("build", "badmapptr.o", "test")
         VERIFY_SECTION(project, filename, section, {}, &g_ebpf_platform_linux, true); \
     }
 
+#define TEST_SECTION_SLOW(project, filename, section)                                     \
+    TEST_CASE(project "/" filename " " section, "[verify][samples][slow][" project "]") { \
+        VERIFY_SECTION(project, filename, section, {}, &g_ebpf_platform_linux, true);     \
+    }
+
 #define TEST_PROGRAM(project, filename, section_name, program_name, count)                                      \
     TEST_CASE(project "/" filename " " program_name, "[verify][samples][" project "]") {                        \
         VERIFY_PROGRAM(project, filename, section_name, program_name, {}, &g_ebpf_platform_linux, true, count); \
@@ -109,6 +114,12 @@ FAIL_ANALYZE("build", "badmapptr.o", "test")
         VERIFY_SECTION(project, filename, section, {}, &g_ebpf_platform_linux, true);                              \
     }
 
+#define TEST_SECTION_FAIL_SLOW(project, filename, section)                            \
+    TEST_CASE("expect failure " project "/" filename " " section,                     \
+              "[!shouldfail][verify][samples][slow][" project "]") {                  \
+        VERIFY_SECTION(project, filename, section, {}, &g_ebpf_platform_linux, true); \
+    }
+
 #define TEST_SECTION_REJECT_FAIL(project, filename, section)                                                       \
     TEST_CASE("expect failure " project "/" filename " " section, "[!shouldfail][verify][samples][" project "]") { \
         VERIFY_SECTION(project, filename, section, {}, &g_ebpf_platform_linux, false);                             \
@@ -129,18 +140,22 @@ FAIL_ANALYZE("build", "badmapptr.o", "test")
     TEST_SECTION(dirname, filename, sectionname)            \
     TEST_LEGACY(dirname, filename, sectionname)
 
+#define TEST_SECTION_LEGACY_SLOW(dirname, filename, sectionname) \
+    TEST_SECTION_SLOW(dirname, filename, sectionname)            \
+    TEST_LEGACY(dirname, filename, sectionname)
+
 #define TEST_SECTION_LEGACY_FAIL(dirname, filename, sectionname) \
     TEST_SECTION_FAIL(dirname, filename, sectionname)            \
     TEST_LEGACY(dirname, filename, sectionname)
 
-TEST_SECTION("bpf_cilium_test", "bpf_lxc_jit.o", "1/0xdc06")
+TEST_SECTION_SLOW("bpf_cilium_test", "bpf_lxc_jit.o", "1/0xdc06")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc_jit.o", "2/1")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc_jit.o", "2/3")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc_jit.o", "2/4")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc_jit.o", "2/5")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc_jit.o", "2/6")
-TEST_SECTION("bpf_cilium_test", "bpf_lxc_jit.o", "2/7")
-TEST_SECTION_LEGACY("bpf_cilium_test", "bpf_lxc_jit.o", "2/10")
+TEST_SECTION_SLOW("bpf_cilium_test", "bpf_lxc_jit.o", "2/7")
+TEST_SECTION_LEGACY_SLOW("bpf_cilium_test", "bpf_lxc_jit.o", "2/10")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc_jit.o", "from-container")
 
 TEST_SECTION("bpf_cilium_test", "bpf_lxc-DUNKNOWN.o", "1/0x1010")
@@ -153,14 +168,14 @@ TEST_SECTION("bpf_cilium_test", "bpf_lxc-DUNKNOWN.o", "2/6")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc-DUNKNOWN.o", "2/7")
 TEST_SECTION_LEGACY("bpf_cilium_test", "bpf_lxc-DUNKNOWN.o", "from-container")
 
-TEST_SECTION("bpf_cilium_test", "bpf_lxc-DDROP_ALL.o", "1/0x1010")
+TEST_SECTION_SLOW("bpf_cilium_test", "bpf_lxc-DDROP_ALL.o", "1/0x1010")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc-DDROP_ALL.o", "2/1")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc-DDROP_ALL.o", "2/2")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc-DDROP_ALL.o", "2/3")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc-DDROP_ALL.o", "2/4")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc-DDROP_ALL.o", "2/5")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc-DDROP_ALL.o", "2/6")
-TEST_SECTION("bpf_cilium_test", "bpf_lxc-DDROP_ALL.o", "2/7")
+TEST_SECTION_SLOW("bpf_cilium_test", "bpf_lxc-DDROP_ALL.o", "2/7")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc-DDROP_ALL.o", "from-container")
 
 TEST_SECTION("bpf_cilium_test", "bpf_netdev.o", "2/1")
@@ -177,7 +192,7 @@ TEST_SECTION("bpf_cilium_test", "bpf_overlay.o", "2/4")
 TEST_SECTION("bpf_cilium_test", "bpf_overlay.o", "2/5")
 TEST_SECTION("bpf_cilium_test", "bpf_overlay.o", "2/7")
 TEST_SECTION("bpf_cilium_test", "bpf_overlay.o", "3/2")
-TEST_SECTION_LEGACY("bpf_cilium_test", "bpf_overlay.o", "from-overlay")
+TEST_SECTION_LEGACY_SLOW("bpf_cilium_test", "bpf_overlay.o", "from-overlay")
 
 TEST_SECTION("bpf_cilium_test", "bpf_lb-DLB_L3.o", "2/1")
 TEST_SECTION("bpf_cilium_test", "bpf_lb-DLB_L3.o", "2/2")
@@ -569,9 +584,9 @@ TEST_SECTION_FAIL("cilium", "bpf_xdp_dsr_linux.o", "2/7")
 // [-22, -1] which is not sufficient (at most -2 is needed)
 TEST_SECTION_FAIL("cilium", "bpf_xdp_dsr_linux.o", "2/10")
 TEST_SECTION_FAIL("cilium", "bpf_xdp_dsr_linux.o", "2/21")
-TEST_SECTION_FAIL("cilium", "bpf_xdp_dsr_linux.o", "2/24")
+TEST_SECTION_FAIL_SLOW("cilium", "bpf_xdp_dsr_linux.o", "2/24")
 
-TEST_SECTION_FAIL("cilium", "bpf_xdp_dsr_linux.o", "2/15")
+TEST_SECTION_FAIL_SLOW("cilium", "bpf_xdp_dsr_linux.o", "2/15")
 
 TEST_SECTION_FAIL("cilium", "bpf_xdp_dsr_linux.o", "2/17")
 
@@ -581,7 +596,7 @@ TEST_SECTION_FAIL("cilium", "bpf_xdp_dsr_linux.o", "2/18")
 TEST_SECTION_FAIL("cilium", "bpf_xdp_snat_linux.o", "2/10")
 TEST_SECTION_FAIL("cilium", "bpf_xdp_snat_linux.o", "2/18")
 
-TEST_SECTION_FAIL("cilium", "bpf_xdp_dsr_linux.o", "2/19")
+TEST_SECTION_FAIL_SLOW("cilium", "bpf_xdp_dsr_linux.o", "2/19")
 
 // Failure: 230: Upper bound must be at most packet_size (valid_access(r3.offset+32, width=8) for write)
 // r3.packet_offset=[0, 82] and packet_size=[34, 65534]
@@ -590,27 +605,27 @@ TEST_SECTION_FAIL("cilium", "bpf_xdp_dsr_linux.o", "2/19")
 TEST_SECTION_FAIL("cilium", "bpf_xdp_dsr_linux.o", "2/20")
 
 TEST_SECTION_FAIL("cilium", "bpf_xdp_snat_linux.o", "2/7")
-TEST_SECTION_FAIL("cilium", "bpf_xdp_snat_linux.o", "2/15")
+TEST_SECTION_FAIL_SLOW("cilium", "bpf_xdp_snat_linux.o", "2/15")
 TEST_SECTION_FAIL("cilium", "bpf_xdp_snat_linux.o", "2/17")
-TEST_SECTION_FAIL("cilium", "bpf_xdp_snat_linux.o", "2/19")
+TEST_SECTION_FAIL_SLOW("cilium", "bpf_xdp_snat_linux.o", "2/19")
 
 // Failure (&255): assert r5.type == number; w5 &= 255;
 // fails since in one branch (77) r5 is a number but in another (92:93) it is a packet
-TEST_SECTION_FAIL("cilium", "bpf_xdp_snat_linux.o", "2/24")
+TEST_SECTION_FAIL_SLOW("cilium", "bpf_xdp_snat_linux.o", "2/24")
 // Failure (&255): assert r3.type == number; w3 &= 255;
-TEST_SECTION_FAIL("cilium", "bpf_xdp_dsr_linux.o", "2/16")
-TEST_SECTION_FAIL("cilium", "bpf_xdp_snat_linux.o", "2/16")
+TEST_SECTION_FAIL_SLOW("cilium", "bpf_xdp_dsr_linux.o", "2/16")
+TEST_SECTION_FAIL_SLOW("cilium", "bpf_xdp_snat_linux.o", "2/16")
 
 // False positive, unknown cause
 TEST_SECTION_FAIL("linux", "test_map_in_map_kern.o", "kprobe/sys_connect")
 
 // Used to fail due to #679: sign extension (r1 s32= r1) leading to bottom
 TEST_SECTION_LEGACY("cilium", "bpf_netdev.o", "from-netdev")
-TEST_SECTION_LEGACY("bpf_cilium_test", "bpf_netdev.o", "from-netdev")
-TEST_SECTION("cilium", "bpf_lxc.o", "2/7")
-TEST_SECTION_LEGACY("cilium", "bpf_lxc.o", "2/10")
-TEST_SECTION("cilium", "bpf_lxc.o", "2/11")
-TEST_SECTION("cilium", "bpf_lxc.o", "2/12")
+TEST_SECTION_LEGACY_SLOW("bpf_cilium_test", "bpf_netdev.o", "from-netdev")
+TEST_SECTION_SLOW("cilium", "bpf_lxc.o", "2/7")
+TEST_SECTION_LEGACY_SLOW("cilium", "bpf_lxc.o", "2/10")
+TEST_SECTION_SLOW("cilium", "bpf_lxc.o", "2/11")
+TEST_SECTION_SLOW("cilium", "bpf_lxc.o", "2/12")
 
 static void test_analyze_thread(const Program* prog, const ProgramInfo* info, bool* res) {
     thread_local_program_info.set(*info);
