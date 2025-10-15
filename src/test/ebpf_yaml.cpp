@@ -11,6 +11,7 @@
 
 #include "asm_parse.hpp"
 #include "asm_syntax.hpp"
+#include "crab_verifier.hpp"
 #include "ebpf_verifier.hpp"
 #include "ebpf_yaml.hpp"
 #include "string_constraints.hpp"
@@ -233,6 +234,8 @@ static Diff<T> make_diff(const T& actual, const T& expected) {
 }
 
 std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
+    thread_local_options = {};
+    ThreadLocalGuard clear_thread_local_state;
     test_case.options.verbosity_opts.print_failures = true;
     if (debug) {
         test_case.options.verbosity_opts.print_invariants = true;

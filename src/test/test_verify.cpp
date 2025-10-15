@@ -11,6 +11,7 @@ using namespace prevail;
 #define FAIL_LOAD_ELF(dirname, filename, sectionname)                                                \
     TEST_CASE("Try loading nonexisting program: " dirname "/" filename, "[elf]") {                   \
         try {                                                                                        \
+            thread_local_options = {};                                                               \
             read_elf("ebpf-samples/" dirname "/" filename, sectionname, {}, &g_ebpf_platform_linux); \
             REQUIRE(false);                                                                          \
         } catch (const std::runtime_error&) {                                                        \
@@ -25,6 +26,7 @@ FAIL_LOAD_ELF("invalid", "badsymsize.o", "xdp_redirect_map")
 
 #define FAIL_UNMARSHAL(dirname, filename, sectionname)                                                            \
     TEST_CASE("Try unmarshalling bad program: " dirname "/" filename " " sectionname, "[unmarshal]") {            \
+        thread_local_options = {};                                                                                \
         auto raw_progs = read_elf("ebpf-samples/" dirname "/" filename, sectionname, {}, &g_ebpf_platform_linux); \
         REQUIRE(raw_progs.size() == 1);                                                                           \
         const RawProgram& raw_prog = raw_progs.back();                                                            \
@@ -38,6 +40,7 @@ FAIL_UNMARSHAL("invalid", "invalid-lddw.o", ".text")
 
 #define FAIL_ANALYZE(dirname, filename, sectionname)                                                              \
     TEST_CASE("Try analyze bad program: " dirname "/" filename " " sectionname, "[cfg]") {                        \
+        thread_local_options = {};                                                                                \
         auto raw_progs = read_elf("ebpf-samples/" dirname "/" filename, sectionname, {}, &g_ebpf_platform_linux); \
         REQUIRE(raw_progs.size() == 1);                                                                           \
         const RawProgram& raw_prog = raw_progs.back();                                                            \

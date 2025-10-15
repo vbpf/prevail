@@ -35,12 +35,6 @@ static uint64_t hash(const RawProgram& raw_prog) {
     return fnv1a64(std::string_view{start, len});
 }
 
-template <void(on_exit)()>
-struct AtScopeExit {
-    AtScopeExit() = default;
-    ~AtScopeExit() { on_exit(); }
-};
-
 static const std::map<std::string, bpf_conformance_groups_t> conformance_groups = {
     {"atomic32", bpf_conformance_groups_t::atomic32}, {"atomic64", bpf_conformance_groups_t::atomic64},
     {"base32", bpf_conformance_groups_t::base32},     {"base64", bpf_conformance_groups_t::base64},
@@ -77,7 +71,7 @@ static std::optional<RawProgram> find_program(vector<RawProgram>& raw_progs, con
 
 int main(int argc, char** argv) {
     // Always call ebpf_verifier_clear_thread_local_state on scope exit.
-    AtScopeExit<ebpf_verifier_clear_thread_local_state> clear_thread_local_state;
+    ThreadLocalGuard clear_thread_local_state;
 
     ebpf_verifier_options_t ebpf_verifier_options;
 
