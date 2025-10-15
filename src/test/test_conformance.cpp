@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: MIT
 #include <catch2/catch_all.hpp>
 
+#include <string>
+#include <filesystem>
+
 #include "bpf_conformance/include/bpf_conformance.h"
 
 #ifndef CONFORMANCE_CHECK_PATH
@@ -152,7 +155,9 @@ TEST_CONFORMANCE("ldxh.data")
 TEST_CONFORMANCE("ldxw-all.data")
 TEST_CONFORMANCE("ldxw.data")
 TEST_CONFORMANCE("le16.data")
+TEST_CONFORMANCE("le16-high.data")
 TEST_CONFORMANCE("le32.data")
+TEST_CONFORMANCE("le32-high.data")
 TEST_CONFORMANCE("le64.data")
 TEST_CONFORMANCE("lock_add.data")
 TEST_CONFORMANCE("lock_add32.data")
@@ -193,6 +198,7 @@ TEST_CONFORMANCE("mod32.data")
 TEST_CONFORMANCE("mod64-by-zero-reg.data")
 TEST_CONFORMANCE("mod64.data")
 TEST_CONFORMANCE("mov.data")
+TEST_CONFORMANCE("mov64.data")
 TEST_CONFORMANCE("mov64-sign-extend.data")
 TEST_CONFORMANCE("movsx1632-reg.data")
 TEST_CONFORMANCE("movsx1664-reg.data")
