@@ -2,7 +2,61 @@
 // SPDX-License-Identifier: MIT
 #include <catch2/catch_all.hpp>
 
+#include <mutex>
+#include <set>
+#include <string>
+
 #include "bpf_conformance/include/bpf_conformance.h"
+
+#if defined(__GNUC__) || defined(__clang__)
+#  define USED_ATTR __attribute__((used))
+#else
+#  define USED_ATTR
+#endif
+
+// two-step concat so __LINE__/__COUNTER__ expand before token pasting
+#define CAT_(a,b) a##b
+#define CAT(a,b)  CAT_(a,b)
+
+// prefer __COUNTER__ if available; falls back to __LINE__
+#if defined(__COUNTER__)
+#  define UNIQUE_SYM(base) CAT(base, __COUNTER__)
+#else
+#  define UNIQUE_SYM(base) CAT(base, __LINE__)
+#endif
+
+struct ConformanceRegistry {
+    static ConformanceRegistry& inst() {
+        static ConformanceRegistry x;
+        return x;
+    }
+    void add(std::string s) {
+        std::lock_guard<std::mutex> g(mu_);
+        names_.insert(std::move(s));
+    }
+    std::set<std::string> snapshot() const {
+        std::lock_guard<std::mutex> g(mu_);
+        return names_; // copy under lock
+    }
+private:
+    mutable std::mutex mu_;
+    std::set<std::string> names_;
+};
+struct ConformanceAutoReg {
+    explicit ConformanceAutoReg(const char* name) { ConformanceRegistry::inst().add(name); }
+};
+
+// Force unique, valid symbol; don’t paste the filename into the identifier.
+// __LINE__ is portable & unique per use-site.
+#if defined(__GNUC__) || defined(__clang__)
+#  define USED_ATTR __attribute__((used))
+#else
+#  define USED_ATTR
+#endif
+
+#define REGISTER_TEST(NAME) namespace { USED_ATTR const ConformanceAutoReg UNIQUE_SYM(reg_autoreg_) { NAME }; }
+
+static const std::filesystem::path conformance_test_path = "external/bpf_conformance/tests/";
 
 #ifndef CONFORMANCE_CHECK_PATH
 #ifdef _WIN32
@@ -12,12 +66,8 @@
 #endif
 #endif
 
-static void collect_test(std::string name);
-
 static void test_conformance(const std::string& filename, const bpf_conformance_test_result_t& expected_result,
                              const std::string& expected_reason) {
-    static const std::filesystem::path conformance_test_path = "external/bpf_conformance/tests/";
-    collect_test(filename);
     const std::vector test_files = {conformance_test_path / filename};
     auto result =
         bpf_conformance(test_files, CONFORMANCE_CHECK_PATH, {}, {}, {}, bpf_conformance_test_CPU_version_t::v4,
@@ -34,6 +84,7 @@ static void test_conformance(const std::string& filename, const bpf_conformance_
 }
 
 #define TEST_CONFORMANCE(filename)                                                       \
+    REGISTER_TEST(filename)                                                              \
     TEST_CASE("conformance_check " filename, "[conformance]") {                          \
         test_conformance(filename, bpf_conformance_test_result_t::TEST_RESULT_PASS, {}); \
     }
@@ -41,6 +92,7 @@ static void test_conformance(const std::string& filename, const bpf_conformance_
 // Any tests that fail verification are safe, but might prevent
 // legitimate programs from being usable.
 #define TEST_CONFORMANCE_VERIFICATION_FAILED(filename)                                                       \
+    REGISTER_TEST(filename)                                                                                  \
     TEST_CASE("conformance_check " filename, "[conformance]") {                                              \
         test_conformance(filename, bpf_conformance_test_result_t::TEST_RESULT_ERROR, "Verification failed"); \
     }
@@ -48,6 +100,7 @@ static void test_conformance(const std::string& filename, const bpf_conformance_
 // Any tests that return top are safe, but are not as precise as they
 // could be and so may prevent legitimate programs from being usable.
 #define TEST_CONFORMANCE_TOP(filename)                                                                               \
+    REGISTER_TEST(filename)                                                                                          \
     TEST_CASE("conformance_check " filename, "[conformance]") {                                                      \
         test_conformance(filename, bpf_conformance_test_result_t::TEST_RESULT_ERROR, "Couldn't determine r0 value"); \
     }
@@ -55,6 +108,7 @@ static void test_conformance(const std::string& filename, const bpf_conformance_
 // Any tests that return a range are safe, but are not as precise as they
 // could be and so may prevent legitimate programs from being usable.
 #define TEST_CONFORMANCE_RANGE(filename, range)                                                                   \
+    REGISTER_TEST(filename)                                                                                       \
     TEST_CASE("conformance_check " filename, "[conformance]") {                                                   \
         test_conformance(filename, bpf_conformance_test_result_t::TEST_RESULT_ERROR, "r0 value is range " range); \
     }
@@ -282,38 +336,13 @@ TEST_CONFORMANCE("swap32.data")
 TEST_CONFORMANCE("swap64.data")
 TEST_CONFORMANCE("subnet.data")
 
-static std::set<std::string> tested_files;
-
-void collect_test(std::string name) {
-    tested_files.insert(name);
-}
-
-// Test to verify all available test files have corresponding test cases
-TEST_CASE("verify all test files are tested", "[conformance][coverage]") {
-    static const std::filesystem::path conformance_test_path = "external/bpf_conformance/tests/";
-
-    // Get all .data files in the test directory
-    std::set<std::string> available_files;
-    if (std::filesystem::exists(conformance_test_path)) {
-        for (const auto& entry : std::filesystem::directory_iterator(conformance_test_path)) {
-            if (entry.path().extension() == ".data") {
-                available_files.insert(entry.path().filename().string());
-            }
-        }
+TEST_CASE("all data files have tests", "[coverage]") {
+    std::set<std::string> in_dir;
+    for (const auto& e : std::filesystem::directory_iterator(conformance_test_path)) {
+        if (!e.is_regular_file()) continue;
+        if (e.path().extension() != ".data") continue;
+        in_dir.insert(e.path().filename().string());
     }
-
-    // Find untested files
-    std::vector<std::string> untested_files;
-    std::set_difference(available_files.begin(), available_files.end(), tested_files.begin(), tested_files.end(),
-                        std::back_inserter(untested_files));
-
-    // Report any untested files
-    if (!untested_files.empty()) {
-        std::stringstream ss;
-        ss << "The following test files are not covered by test cases:\n";
-        for (const auto& file : untested_files) {
-            ss << "TEST_CONFORMANCE(\"" << file << "\")\n";
-        }
-        FAIL(ss.str());
-    }
+    const auto in_tests = ConformanceRegistry::inst().snapshot();
+    REQUIRE(in_tests == in_dir);
 }
