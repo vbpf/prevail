@@ -108,12 +108,14 @@ target_include_directories(prevail SYSTEM PUBLIC
   "${Boost_INCLUDE_DIR}"
 )
 
+option(ENABLE_ASAN "Enable AddressSanitizer if supported" OFF)
+
 target_compile_options(prevail PRIVATE
   ${COMMON_FLAGS}
-  "$<$<CONFIG:DEBUG>:${DEBUG_FLAGS}>"
-  "$<$<CONFIG:RELEASE>:${RELEASE_FLAGS}>"
-  "$<$<CONFIG:RELWITHDEBINFO>:${RELWITHDEBINFO_FLAGS}>"
-  "$<$<CONFIG:SANITIZE>:${SANITIZE_FLAGS}>"
+  "$<$<CONFIG:Debug>:${DEBUG_FLAGS}>"
+  "$<$<CONFIG:Release>:${RELEASE_FLAGS}>"
+  "$<$<CONFIG:RelWithDebInfo>:${RELWITHDEBINFO_FLAGS}>"
+  "$<$<BOOL:${ENABLE_ASAN}>:${SANITIZE_FLAGS}>"
 )
 
 add_subdirectory("${CMAKE_SOURCE_DIR}/external/bpf_conformance/external/elfio")
