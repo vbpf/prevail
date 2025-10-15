@@ -75,18 +75,18 @@ cmake --build build
   
 #### Build and run
 ```bash
-docker build -t verifier .
-docker run -it verifier ebpf-samples/cilium/bpf_lxc.o 2/1
+docker build -t prevail .
+docker run -it prevail ebpf-samples/cilium/bpf_lxc.o 2/1
 1,0.009812,4132
 # To run the Linux verifier you'll need a privileged container:
-docker run --privileged -it verifier ebpf-samples/linux/cpustat_kern.o --domain=linux
+docker run --privileged -it prevail ebpf-samples/linux/cpustat_kern.o --domain=linux
 ```
 </details>
 
 ### Example:
 ```
 $ bin/check ebpf-samples/cilium/bpf_lxc.o 2/1
-1,0.008288,4064
+1,0.014153,6080
 ```
 The output is three comma-separated values:
 * 1 or 0, for "pass" and "fail" respectively
