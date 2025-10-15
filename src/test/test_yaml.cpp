@@ -5,20 +5,18 @@
 #include "ebpf_verifier.hpp"
 #include "ebpf_yaml.hpp"
 
-// TODO: move out of this framework
-
-using namespace prevail;
-
-#define YAML_CASE(path)                                                     \
-    TEST_CASE("YAML suite: " path, "[yaml]") {                              \
-        foreach_suite(path, [&](const TestCase& test_case) {                \
-            std::optional<Failure> failure = run_yaml_test_case(test_case); \
-            if (failure) {                                                  \
-                std::cout << "test case: " << test_case.name << "\n";       \
-                print_failure(*failure);                                    \
-            }                                                               \
-            REQUIRE(!failure);                                              \
-        });                                                                 \
+#define YAML_CASE(path)                                                                           \
+    TEST_CASE("YAML suite: " path, "[yaml]") {                                                    \
+        prevail::foreach_suite(path, [&](const prevail::TestCase& test_case) {                    \
+            DYNAMIC_SECTION(test_case.name) {                                                     \
+                std::optional<prevail::Failure> failure = prevail::run_yaml_test_case(test_case); \
+                if (failure) {                                                                    \
+                    std::cout << "test case: " << test_case.name << "\n";                         \
+                    prevail::print_failure(*failure);                                             \
+                }                                                                                 \
+                REQUIRE(!failure);                                                                \
+            }                                                                                     \
+        });                                                                                       \
     }
 
 YAML_CASE("test-data/add.yaml")
