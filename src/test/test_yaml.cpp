@@ -9,7 +9,6 @@
     TEST_CASE("YAML suite: " path, "[yaml]") {                                                    \
         prevail::foreach_suite(path, [&](const prevail::TestCase& test_case) {                    \
             DYNAMIC_SECTION(test_case.name) {                                                     \
-                thread_local_options = _options;                                                  \
                 std::optional<prevail::Failure> failure = prevail::run_yaml_test_case(test_case); \
                 if (failure) {                                                                    \
                     std::cout << "test case: " << test_case.name << "\n";                         \
