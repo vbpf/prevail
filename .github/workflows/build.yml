@@ -64,43 +64,24 @@ jobs:
       MATRIX_TARGET: ${{ matrix.target }}
       BUILD_CONFIGURATION: ${{ matrix.configurations }}
       CMAKE_GENERATOR: "Visual Studio 17 2022"
-      BOOST_VERSION: "1.87.0"
-      MSVC_PLATFORM: "143"
     steps:
       - uses: actions/checkout@v5
         with:
           submodules: recursive
 
       - name: Cache Boost packages
-        id: cache-boost
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}\build\packages
-          key: boost-${{ runner.os }}-${{ env.BOOST_VERSION }}
-
-      - name: Install Boost (NuGet prebuilt)
-        if: ${{ steps.cache-boost.outputs.cache-hit != 'true' }}
-        shell: pwsh
-        run: |
-          $root = Join-Path $env:GITHUB_WORKSPACE "build\packages"
-          New-Item -ItemType Directory -Force -Path $root | Out-Null
-
-          nuget install boost -Version $env:BOOST_VERSION -ExcludeVersion -DirectDownload -OutputDirectory $root
-          # Prevent bpf_conformance from reinstalling boost packages
-          nuget install boost_filesystem-${{ env.MSVC_PLATFORM }} -Version $env:BOOST_VERSION -ExcludeVersion -OutputDirectory $root
-          nuget install boost_program_options-${{ env.MSVC_PLATFORM }} -Version $env:BOOST_VERSION -ExcludeVersion -OutputDirectory $root
+          key: boost-${{ runner.os }}
 
       - name: Configure CMake
         shell: pwsh
         run: |
-          $boostDir = Join-Path $env:GITHUB_WORKSPACE "\build\packages\boost-${{ env.MSVC_PLATFORM }}\lib\native\lib\cmake\Boost"
           $enableTests = if ($env:MATRIX_TARGET -eq "tests") { "ON" } else { "OFF" }
-
           cmake -S . -B build `
-            -G "$env:CMAKE_GENERATOR" `
-            -D CMAKE_PREFIX_PATH="$boostDir" `
-            -D Boost_DIR="$boostDir" `
-            -D prevail_ENABLE_TESTS=$enableTests
+          -G "$env:CMAKE_GENERATOR" `
+          -D prevail_ENABLE_TESTS=$enableTests
 
       - name: Build
         shell: pwsh

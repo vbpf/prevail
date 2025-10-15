@@ -80,28 +80,7 @@ FetchContent_Declare(GSL
 FetchContent_MakeAvailable(GSL)
 
 if (prevail_ENABLE_TESTS)
-  find_package(yaml-cpp CONFIG QUIET)
-
-  if (NOT yaml-cpp_FOUND)
-    include(FetchContent)
-
-    set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
-    set(YAML_CPP_INSTALL OFF CACHE BOOL "" FORCE)
-
-    FetchContent_Declare(yaml-cpp
-      GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
-      GIT_TAG 0.8.0
-      GIT_SHALLOW TRUE
-      FIND_PACKAGE_ARGS NAMES yaml-cpp # enables find_package fallback within FC
-    )
-    FetchContent_MakeAvailable(yaml-cpp)
-
-    # yaml-cpp defines target 'yaml-cpp'; provide the standard alias if missing
-    if (NOT TARGET yaml-cpp::yaml-cpp AND TARGET yaml-cpp)
-      add_library(yaml-cpp::yaml-cpp ALIAS yaml-cpp)
-    endif ()
-  endif ()
+  include(cmake/SetupYAMLCPP.cmake)
 endif ()
 
 add_compile_definitions(BOOST_PROCESS_USE_STD_FS)
@@ -111,59 +90,7 @@ if (prevail_ENABLE_TESTS)
   add_subdirectory("${CMAKE_SOURCE_DIR}/external/bpf_conformance/src")
 endif ()
 
-# --- Provide Boost::headers iff we don't already have it (MSVC only) ---
-if (MSVC AND NOT TARGET Boost::headers)
-  # find_boost_headers_dir(<out-var> <pkgroot>)
-  # Sets <out-var> to a directory that contains boost/version.hpp, or empty if not found.
-  function(find_boost_headers_dir OUTVAR PKGROOT)
-    # Probe typical NuGet layouts (versioned and unversioned)
-    file(GLOB _candidates
-      "${PKGROOT}/boost/lib/native/include"
-      "${PKGROOT}/boost.*/lib/native/include"
-      "${PKGROOT}/boost/include"
-      "${PKGROOT}/boost.*/include"
-    )
-    set(_found "")
-    foreach (d IN LISTS _candidates)
-      if (EXISTS "${d}/boost/version.hpp")
-        set(_found "${d}")
-        break()
-      endif ()
-    endforeach ()
-    set(${OUTVAR} "${_found}" PARENT_SCOPE)
-  endfunction()
-
-  set(_pkgroot "${CMAKE_BINARY_DIR}/packages")
-
-  find_boost_headers_dir(_boost_inc "${_pkgroot}")
-
-  if (_boost_inc STREQUAL "")
-    # headers not present yet: fetch once (headers only)
-    find_program(NUGET nuget REQUIRED)
-    set(BOOST_VERSION "1.87.0")
-    file(MAKE_DIRECTORY "${_pkgroot}")
-    execute_process(
-      COMMAND "${NUGET}" install boost -Version ${BOOST_VERSION} -ExcludeVersion -OutputDirectory "${_pkgroot}"
-      RESULT_VARIABLE _res
-    )
-    if (NOT _res EQUAL 0)
-      message(FATAL_ERROR "NuGet Boost headers install failed (exit ${_res}).")
-    endif ()
-
-    # re-probe after install
-    find_boost_headers_dir(_boost_inc "${_pkgroot}")
-    if (_boost_inc STREQUAL "")
-      message(FATAL_ERROR "Could not locate Boost headers under ${_pkgroot}")
-    endif ()
-  endif ()
-
-  add_library(Boost::headers INTERFACE IMPORTED)
-  target_include_directories(Boost::headers INTERFACE "${_boost_inc}")
-
-  file(STRINGS "${_boost_inc}/boost/version.hpp" _ver_line REGEX "#define BOOST_LIB_VERSION")
-  string(REGEX REPLACE ".*\"([0-9_]+)\".*" "\\1" _boost_ver "${_ver_line}")
-  message(STATUS "Boost headers: ${_boost_ver} at ${_boost_inc}")
-endif ()
+include(cmake/SetupBoostHeaders.cmake)
 
 file(GLOB_RECURSE prevail_LIB_SRC CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/*.cpp")
 list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${CMAKE_SOURCE_DIR}/src/main/.*")
