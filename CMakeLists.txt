@@ -84,18 +84,8 @@ if (MSVC)
   add_library(Boost::headers INTERFACE IMPORTED)
   target_include_directories(Boost::headers INTERFACE "${BOOST_HEADERS_ROOT}/include")
 
-  if (prevail_ENABLE_TESTS)
-    add_library(Boost::process INTERFACE IMPORTED)
-    target_link_libraries(Boost::process INTERFACE Boost::headers)
-  endif ()
-
   # Silence Windows version warnings
   add_compile_definitions(_WIN32_WINNT=0x0A00)
-else ()
-  if (prevail_ENABLE_TESTS)
-    add_library(Boost::process INTERFACE IMPORTED)
-    target_include_directories(Boost::process INTERFACE ${Boost_INCLUDE_DIRS})
-  endif ()
 endif ()
 
 if (MSVC)
@@ -208,7 +198,26 @@ if (prevail_ENABLE_TESTS)
   target_link_libraries(ebpf_yaml_lib PRIVATE prevail bpf_conformance yaml-cpp::yaml-cpp)
 
   target_link_libraries(run_yaml PRIVATE prevail ebpf_yaml_lib)
-  target_link_libraries(conformance_check PRIVATE prevail ebpf_yaml_lib Boost::process Threads::Threads)
+
+  # bpf_conformance requires Boost.Process, Boost.Filesystem, and Boost.program_options
+  # To avoid installing multiple times, run from powershell:
+  #    $pkgroot = Join-Path (Get-Location).Path "build\packages"
+  #    New-Item -ItemType Directory -Force -Path $pkgroot | Out-Null
+  #
+  #    nuget install boost -Version $env:BOOST_VERSION -ExcludeVersion -DirectDownload -OutputDirectory $pkgroot
+  #    nuget install boost_filesystem-${{ env.MSVC_PLATFORM }} -Version $env:BOOST_VERSION -ExcludeVersion -OutputDirectory $pkgroot
+  #    nuget install boost_program_options-${{ env.MSVC_PLATFORM }} -Version $env:BOOST_VERSION -ExcludeVersion -OutputDirectory $pkgroot
+  target_compile_definitions(conformance_check PRIVATE BOOST_PROCESS_USE_STD_FS)
+  if (NOT TARGET Boost::process)
+    add_library(Boost::process INTERFACE IMPORTED)
+    if (MSVC)
+      target_link_libraries(Boost::process INTERFACE Boost::headers)
+    else ()
+      target_include_directories(Boost::process INTERFACE ${Boost_INCLUDE_DIRS})
+    endif ()
+  endif ()
+  target_link_libraries(conformance_check PRIVATE prevail ebpf_yaml_lib Boost::process)
+
   target_link_libraries(tests PRIVATE prevail ebpf_yaml_lib Catch2::Catch2WithMain Threads::Threads yaml-cpp::yaml-cpp)
 
   if (CMAKE_CONFIGURATION_TYPES)
