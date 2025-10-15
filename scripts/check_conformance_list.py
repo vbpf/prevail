@@ -18,7 +18,7 @@ txt = pathlib.Path(CONFORMANCE_TEST_FILE).read_text(encoding="utf-8", errors="ig
 listed = {m.group(2) for m in MACRO_RE.finditer(txt)}
 on_disk = {p.name for p in pathlib.Path(DATA_DIR).glob("*.data") if p.is_file()}
 
-missing = sorted(on_disk - listed)  # on disk, not listed in tests
+missing = sorted(on_disk - listed)
 if missing:
     print("Missing (present but not tested):")
     for n in missing:
