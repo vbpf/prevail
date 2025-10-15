@@ -1,12 +1,10 @@
 .DS_Store
 *.o
 *.d
+*build*
 counter/samples/*
 **/#*
-check
-conformance_check
-tests
-run_yaml
+bin
 ./unit-test
 .vscode/*
 logs/*

@@ -12,13 +12,13 @@ project(prevail)
 include(FetchContent)
 
 if (EXISTS "${PROJECT_SOURCE_DIR}/.git" AND NOT CMAKE_CROSSCOMPILING)
-  file(COPY scripts/pre-commit scripts/commit-msg DESTINATION "${PROJECT_SOURCE_DIR}/.git/hooks")
-  option(${PROJECT_NAME}_ENABLE_TESTS "Build tests" ON)
+  file(COPY "${CMAKE_SOURCE_DIR}/scripts/pre-commit" "${CMAKE_SOURCE_DIR}/scripts/commit-msg" DESTINATION "${PROJECT_SOURCE_DIR}/.git/hooks")
+  option(prevail_ENABLE_TESTS "Build tests" ON)
 else ()
-  option(${PROJECT_NAME}_ENABLE_TESTS "Build tests" OFF)
+  option(prevail_ENABLE_TESTS "Build tests" OFF)
 endif ()
 
-message("Building tests: ${${PROJECT_NAME}_ENABLE_TESTS}")
+message("Building tests: ${prevail_ENABLE_TESTS}")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -52,19 +52,15 @@ FetchContent_Declare(GSL
 )
 FetchContent_MakeAvailable(GSL)
 
-if (${PROJECT_NAME}_ENABLE_TESTS)
-  # First, try a proper package (Linux distros, vcpkg, user-provided install)
+if (prevail_ENABLE_TESTS)
   find_package(yaml-cpp CONFIG QUIET)
 
   if (NOT yaml-cpp_FOUND)
     include(FetchContent)
 
-    # Keep it lean/CI-friendly
     set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
     set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
     set(YAML_CPP_INSTALL OFF CACHE BOOL "" FORCE)
-    # Use static or shared as you prefer:
-    # set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
     FetchContent_Declare(yaml-cpp
       GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
@@ -123,26 +119,20 @@ if (MSVC)
   set(CMAKE_SHARED_LINKER_FLAGS_FUZZERDEBUG "${CMAKE_SHARED_LINKER_FLAGS_DEBUG}")
 endif ()
 
-file(GLOB LIB_SRC CONFIGURE_DEPENDS
-  "./src/*.cpp"
-  "./src/arith/*.cpp"
-  "./src/cfg/*.cpp"
-  "./src/crab/*.cpp"
-  "./src/crab_utils/*.cpp"
-  "./src/linux/gpl/spec_prototypes.cpp"
-  "./src/linux/linux_platform.cpp"
-)
+file(GLOB_RECURSE prevail_LIB_SRC CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/*.cpp")
+list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${CMAKE_SOURCE_DIR}/src/main/.*")
+list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${CMAKE_SOURCE_DIR}/src/test/.*")
 
-add_library(prevail ${LIB_SRC})
+add_library(prevail ${prevail_LIB_SRC})
 
 target_include_directories(prevail PUBLIC
   ${CMAKE_SOURCE_DIR}/src
 )
 target_include_directories(prevail SYSTEM PUBLIC
-  ${CMAKE_SOURCE_DIR}/external
-  ${CMAKE_SOURCE_DIR}/external/bpf_conformance/external/elfio
-  ${CMAKE_SOURCE_DIR}/external/libbtf
-  ${Boost_INCLUDE_DIR}
+  "${CMAKE_SOURCE_DIR}/external"
+  "${CMAKE_SOURCE_DIR}/external/bpf_conformance/external/elfio"
+  "${CMAKE_SOURCE_DIR}/external/libbtf"
+  "${Boost_INCLUDE_DIR}"
 )
 
 target_compile_options(prevail PRIVATE
@@ -153,11 +143,11 @@ target_compile_options(prevail PRIVATE
   "$<$<CONFIG:SANITIZE>:${SANITIZE_FLAGS}>"
 )
 
-add_subdirectory("external/bpf_conformance/external/elfio")
-if (${PROJECT_NAME}_ENABLE_TESTS)
-  add_subdirectory("external/bpf_conformance/src")
+add_subdirectory("${CMAKE_SOURCE_DIR}/external/bpf_conformance/external/elfio")
+if (prevail_ENABLE_TESTS)
+  add_subdirectory("${CMAKE_SOURCE_DIR}/external/bpf_conformance/src")
 endif ()
-add_subdirectory("external/libbtf")
+add_subdirectory("${CMAKE_SOURCE_DIR}/external/libbtf")
 
 # CMake derives a Visual Studio project GUID from the file path but can be overridden via a property
 # (see https://gitlab.kitware.com/cmake/cmake/-/commit/c85367f4).  Using a non-constant GUID
@@ -173,13 +163,24 @@ set_target_properties(prevail PROPERTIES
   CXX_VISIBILITY_PRESET hidden
   VISIBILITY_INLINES_HIDDEN YES)
 
+set(prevail_binary_dir "${CMAKE_SOURCE_DIR}/bin" CACHE INTERNAL "")
+
 # Main executables
-add_executable(check src/main/check.cpp src/main/linux_verifier.cpp)
-set_target_properties(check PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/..")
+add_executable(check "${CMAKE_SOURCE_DIR}/src/main/check.cpp" "${CMAKE_SOURCE_DIR}/src/main/linux_verifier.cpp")
 target_link_libraries(check PRIVATE prevail ${CMAKE_DL_LIBS})
+if (CMAKE_CONFIGURATION_TYPES)
+  set_target_properties(check PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${prevail_binary_dir}"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${prevail_binary_dir}"
+    RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${prevail_binary_dir}"
+  )
+else ()
+  set_target_properties(check PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${prevail_binary_dir}")
+endif ()
 
 # Tests
-if (${PROJECT_NAME}_ENABLE_TESTS)
+if (prevail_ENABLE_TESTS)
   FetchContent_Declare(Catch2
     GIT_REPOSITORY "https://github.com/catchorg/Catch2.git"
     GIT_TAG "v3.11.0"
@@ -190,21 +191,29 @@ if (${PROJECT_NAME}_ENABLE_TESTS)
   set(THREADS_PREFER_PTHREAD_FLAG ON)
   find_package(Threads REQUIRED)
 
-  add_compile_definitions(YAML_CPP_STATIC_DEFINE)
+  add_executable(run_yaml "${CMAKE_SOURCE_DIR}/src/test/run_yaml.cpp")
+  add_executable(conformance_check "${CMAKE_SOURCE_DIR}/src/test/conformance_check.cpp")
 
-  add_executable(run_yaml src/test/run_yaml.cpp)
-  add_executable(conformance_check src/test/conformance_check.cpp)
-  add_executable(tests
-    ${CMAKE_SOURCE_DIR}/src/test/test_conformance.cpp
-    ${CMAKE_SOURCE_DIR}/src/test/test_join.cpp
-    ${CMAKE_SOURCE_DIR}/src/test/test_marshal.cpp
-    ${CMAKE_SOURCE_DIR}/src/test/test_print.cpp
-    ${CMAKE_SOURCE_DIR}/src/test/test_sign_extension.cpp
-    ${CMAKE_SOURCE_DIR}/src/test/test_subsumption.cpp
-    ${CMAKE_SOURCE_DIR}/src/test/test_verify.cpp
-    ${CMAKE_SOURCE_DIR}/src/test/test_wto.cpp
-    ${CMAKE_SOURCE_DIR}/src/test/test_yaml.cpp
-  )
+  file(GLOB prevail_TEST_SRC CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/test/test_*.cpp")
+  add_executable(tests ${prevail_TEST_SRC})
+
+  add_library(ebpf_yaml_lib STATIC "${CMAKE_SOURCE_DIR}/src/test/ebpf_yaml.cpp")
+  target_link_libraries(ebpf_yaml_lib PRIVATE prevail bpf_conformance yaml-cpp::yaml-cpp)
+
+  target_link_libraries(run_yaml PRIVATE prevail ebpf_yaml_lib)
+  target_link_libraries(conformance_check PRIVATE prevail ebpf_yaml_lib Threads::Threads)
+  target_link_libraries(tests PRIVATE prevail ebpf_yaml_lib Catch2::Catch2WithMain Threads::Threads yaml-cpp::yaml-cpp)
+
+  if (CMAKE_CONFIGURATION_TYPES)
+    set_target_properties(tests run_yaml conformance_check PROPERTIES
+      RUNTIME_OUTPUT_DIRECTORY_DEBUG "${prevail_binary_dir}"
+      RUNTIME_OUTPUT_DIRECTORY_RELEASE "${prevail_binary_dir}"
+      RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${prevail_binary_dir}"
+    )
+  else ()
+    set_target_properties(tests run_yaml conformance_check PROPERTIES
+      RUNTIME_OUTPUT_DIRECTORY ${prevail_binary_dir})
+  endif ()
 
   # conformance tests use the conformance_check binary; ensure it's built first,
   # and pass its path via a define
@@ -212,14 +221,4 @@ if (${PROJECT_NAME}_ENABLE_TESTS)
   target_compile_definitions(tests PRIVATE
     CONFORMANCE_CHECK_PATH="$<TARGET_FILE:conformance_check>"
   )
-
-  add_library(ebpf_yaml_lib STATIC src/test/ebpf_yaml.cpp)
-  target_link_libraries(ebpf_yaml_lib PRIVATE prevail bpf_conformance yaml-cpp::yaml-cpp)
-
-  foreach (tgt tests run_yaml conformance_check)
-    set_target_properties(${tgt} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/..")
-  endforeach ()
-  target_link_libraries(run_yaml PRIVATE prevail ebpf_yaml_lib)
-  target_link_libraries(conformance_check PRIVATE prevail ebpf_yaml_lib Threads::Threads)
-  target_link_libraries(tests PRIVATE prevail ebpf_yaml_lib Catch2::Catch2WithMain Threads::Threads yaml-cpp::yaml-cpp)
 endif ()

@@ -44,14 +44,14 @@ jobs:
 
       - name: Run unit tests
         if: ${{ matrix.target == 'tests' }}
-        run: ./tests -d yes --order lex
+        run: bin/tests -d yes --order lex
 
       - name: Memory leak test (Debug only)
         if: ${{ matrix.target == 'tests' && matrix.configurations == 'Debug' }}
         run: >
           valgrind --leak-check=full --errors-for-leak-kinds=all
           --show-leak-kinds=all --error-exitcode=1
-          ./check ebpf-samples/cilium/bpf_xdp_snat_linux_v1.o 2/1
+          bin/check ebpf-samples/cilium/bpf_xdp_snat_linux_v1.o 2/1
 
   build_windows:
     strategy:
@@ -110,4 +110,4 @@ jobs:
       - name: Run unit tests
         if: ${{ matrix.target == 'tests' }}
         shell: pwsh
-        run: ./${{ env.BUILD_CONFIGURATION }}/tests.exe -d yes --order lex
+        run: bin/tests.exe -d yes --order lex

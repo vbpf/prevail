@@ -85,7 +85,7 @@ docker run --privileged -it verifier ebpf-samples/linux/cpustat_kern.o --domain=
 
 ### Example:
 ```
-$ ./check ebpf-samples/cilium/bpf_lxc.o 2/1
+$ bin/check ebpf-samples/cilium/bpf_lxc.o 2/1
 1,0.008288,4064
 ```
 The output is three comma-separated values:
@@ -97,7 +97,7 @@ The output is three comma-separated values:
 
 ```
 PREVAIL is a new eBPF verifier based on abstract interpretation.
-Usage: ./check [OPTIONS] path [section] [function]
+Usage: D:\workspace\prevail\bin\check.exe [OPTIONS] path [section] [function]
 
 Positionals:
   path TEXT:FILE REQUIRED     Elf file to analyze
@@ -147,7 +147,7 @@ A standard alternative to the --asm flag is `llvm-objdump -S FILE`.
 The cfg can be viewed using `dot` and the standard PDF viewer:
 ```
 sudo apt install graphviz
-./check ebpf-samples/cilium/bpf_lxc.o 2/1 --dot cfg.dot --domain=stats
+bin/check ebpf-samples/cilium/bpf_lxc.o 2/1 --dot cfg.dot --domain=stats
 dot -Tpdf cfg.dot > cfg.pdf
 ```
 
@@ -157,5 +157,5 @@ dot -Tpdf cfg.dot > cfg.pdf
 
 To run the Linux verifier, you must use `sudo`:
 ```
-sudo ./check ebpf-samples/linux/cpustat_kern.o tracepoint/power/cpu_idle --domain=linux
+sudo bin/check ebpf-samples/linux/cpustat_kern.o tracepoint/power/cpu_idle --domain=linux
 ```

@@ -5,11 +5,11 @@ RUN apt update
 RUN apt -yq --no-install-suggests --no-install-recommends install build-essential cmake \
     libboost-dev libboost-filesystem-dev libboost-program-options-dev libyaml-cpp-dev git \
     ca-certificates
-WORKDIR /verifier
-COPY . /verifier/
+WORKDIR /prevail
+COPY . /prevail/
 RUN mkdir build
-WORKDIR /verifier/build
+WORKDIR /prevail/build
 RUN cmake .. -DCMAKE_BUILD_TYPE=Release
 RUN make -j $(nproc)
-WORKDIR /verifier
-ENTRYPOINT ["./check"]
+WORKDIR /prevail
+ENTRYPOINT ["bin/check"]
