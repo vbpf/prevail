@@ -3,8 +3,6 @@
 #include <iostream>
 #include <vector>
 
-#include <boost/functional/hash.hpp>
-
 #include "ebpf_verifier.hpp"
 #ifdef _WIN32
 #include "memsize_windows.hpp"
@@ -21,10 +19,20 @@ using std::vector;
 
 using namespace prevail;
 
-static size_t hash(const RawProgram& raw_prog) {
-    const char* start = reinterpret_cast<const char*>(raw_prog.prog.data());
-    const char* end = start + raw_prog.prog.size() * sizeof(EbpfInst);
-    return boost::hash_range(start, end);
+// FNV-1a 64-bit over arbitrary bytes
+static uint64_t fnv1a64(const std::string_view bytes) {
+    uint64_t h = 1469598103934665603ull; // offset basis
+    for (const unsigned char c : bytes) {
+        h ^= c;
+        h *= 1099511628211ull; // FNV prime
+    }
+    return h;
+}
+
+static uint64_t hash(const RawProgram& raw_prog) {
+    const auto start = reinterpret_cast<const char*>(raw_prog.prog.data());
+    const size_t len = raw_prog.prog.size() * sizeof(EbpfInst);
+    return fnv1a64(std::string_view{start, len});
 }
 
 static const std::map<std::string, bpf_conformance_groups_t> _conformance_groups = {
@@ -33,16 +41,16 @@ static const std::map<std::string, bpf_conformance_groups_t> _conformance_groups
     {"callx", bpf_conformance_groups_t::callx},       {"divmul32", bpf_conformance_groups_t::divmul32},
     {"divmul64", bpf_conformance_groups_t::divmul64}, {"packet", bpf_conformance_groups_t::packet}};
 
-static std::optional<bpf_conformance_groups_t> _get_conformance_group_by_name(const std::string& group) {
-    if (!_conformance_groups.contains(group)) {
+static std::optional<bpf_conformance_groups_t> et_conformance_group_by_name(const std::string& group) {
+    if (!conformance_groups.contains(group)) {
         return {};
     }
-    return _conformance_groups.find(group)->second;
+    return conformance_groups.find(group)->second;
 }
 
-static std::set<std::string> _get_conformance_group_names() {
+static std::set<std::string> get_conformance_group_names() {
     std::set<std::string> result;
-    for (const auto& name : _conformance_groups | std::views::keys) {
+    for (const auto& name : conformance_groups | std::views::keys) {
         result.insert(name);
     }
     return result;
@@ -104,20 +112,20 @@ int main(int argc, char** argv) {
                  "Apply additional checks that would cause runtime failures")
         ->group("Features");
 
-    std::set<std::string> include_groups = _get_conformance_group_names();
+    std::set<std::string> include_groups = get_conformance_group_names();
     app.add_option("--include_groups", include_groups, "Include conformance groups")
         ->group("Features")
         ->type_name("GROUPS")
-        ->expected(0, _conformance_groups.size())
-        ->check(CLI::IsMember(_get_conformance_group_names()));
+        ->expected(0, gsl::narrow<int>(conformance_groups.size()))
+        ->check(CLI::IsMember(get_conformance_group_names()));
 
     std::set<std::string> exclude_groups;
     app.add_option("--exclude_groups", exclude_groups, "Exclude conformance groups")
         ->group("Features")
         ->type_name("GROUPS")
         ->option_text("")
-        ->expected(0, _conformance_groups.size())
-        ->check(CLI::IsMember(_get_conformance_group_names()));
+        ->expected(0, gsl::narrow<int>(conformance_groups.size()))
+        ->check(CLI::IsMember(get_conformance_group_names()));
 
     app.add_flag("--simplify,!--no-simplify", ebpf_verifier_options.verbosity_opts.simplify,
                  "Simplify the CFG before analysis by merging chains of instructions into a single basic block. "
@@ -154,10 +162,10 @@ int main(int argc, char** argv) {
     ebpf_platform_t platform = g_ebpf_platform_linux;
     platform.supported_conformance_groups = bpf_conformance_groups_t::default_groups;
     for (const auto& group_name : include_groups) {
-        platform.supported_conformance_groups |= _get_conformance_group_by_name(group_name).value();
+        platform.supported_conformance_groups |= et_conformance_group_by_name(group_name).value();
     }
     for (const auto& group_name : exclude_groups) {
-        platform.supported_conformance_groups &= _get_conformance_group_by_name(group_name).value();
+        platform.supported_conformance_groups &= et_conformance_group_by_name(group_name).value();
     }
 
     // Main program
@@ -215,7 +223,7 @@ int main(int argc, char** argv) {
         std::cout << "\n";
         return list ? 0 : 64;
     }
-    RawProgram raw_prog = *found_prog;
+    const RawProgram& raw_prog = *found_prog;
 
     // Convert the raw program section to a set of instructions.
     std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog);

@@ -5,8 +5,6 @@
 #include <sstream>
 #include <string>
 
-#include <boost/lexical_cast.hpp>
-
 #include "arith/dsl_syntax.hpp"
 #include "arith/linear_constraint.hpp"
 #include "asm_parse.hpp"
@@ -98,34 +96,35 @@ static const std::map<std::string, int> str_to_width = {
 
 static bool is64_reg(const std::string& s) { return s.at(0) == 'r'; }
 
+static int to_int(const std::string& s) { return std::stoi(s, nullptr, 0); }
+
+static Number signed_number(const std::string& s) { return std::stoll(s, nullptr, 0); }
+
+static Number unsigned_number(const std::string& s) { return std::stoull(s, nullptr, 0); }
+
 static Reg reg(const std::string& s) {
     assert(s.at(0) == 'r' || s.at(0) == 'w');
-    const uint8_t res = static_cast<uint8_t>(boost::lexical_cast<uint16_t>(s.substr(1)));
+    const uint8_t res = static_cast<uint8_t>(to_int(s.substr(1)));
     return Reg{res};
 }
 
-static Imm imm(const std::string& s, const bool lddw) {
-    const int base = s.find("0x") != std::string::npos ? 16 : 10;
+static uint8_t regnum(const std::string& s) { return static_cast<uint8_t>(to_int(s.substr(1))); }
 
+static Imm imm(const std::string& s, const bool lddw) {
     if (lddw) {
         if (s.at(0) == '-') {
-            return Imm{static_cast<uint64_t>(std::stoll(s, nullptr, base))};
+            return Imm{static_cast<uint64_t>(std::stoll(s, nullptr, 0))};
         } else {
-            return Imm{std::stoull(s, nullptr, base)};
+            return Imm{std::stoull(s, nullptr, 0)};
         }
     } else {
         if (s.at(0) == '-') {
-            return Imm{static_cast<uint64_t>(std::stol(s, nullptr, base))};
+            return Imm{static_cast<uint64_t>(std::stol(s, nullptr, 0))};
         } else {
-            return Imm{static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(std::stoul(s, nullptr, base))))};
+            return Imm{static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(std::stoul(s, nullptr, 0))))};
         }
     }
 }
-
-static Number signed_number(const std::string& s) { return std::stoll(s); }
-
-static Number unsigned_number(const std::string& s) { return std::stoull(s); }
-
 static Value reg_or_imm(const std::string& s) {
     if (s.at(0) == 'w' || s.at(0) == 'r') {
         return reg(s);
@@ -136,7 +135,7 @@ static Value reg_or_imm(const std::string& s) {
 
 static Deref deref(const std::string& width, const std::string& basereg, const std::string& sign,
                    const std::string& _offset) {
-    const int offset = boost::lexical_cast<int>(_offset);
+    const int offset = to_int(_offset);
     return Deref{
         .width = str_to_width.at(width),
         .basereg = reg(basereg),
@@ -156,7 +155,7 @@ Instruction parse_instruction(const std::string& line, const std::map<std::strin
         return Exit{};
     }
     if (regex_match(text, m, regex("call " FUNC))) {
-        const int func = boost::lexical_cast<int>(m[1]);
+        const int func = to_int(m[1]);
         return make_call(func, g_ebpf_platform_linux);
     }
     if (regex_match(text, m, regex("call " WRAPPED_LABEL))) {
@@ -176,14 +175,13 @@ Instruction parse_instruction(const std::string& line, const std::map<std::strin
         return Un{.op = str_to_unop.at(m[2]), .dst = reg(m[1]), .is64 = is64_reg(m[1])};
     }
     if (regex_match(text, m, regex(WREG ASSIGN MAP_VAL))) {
-        return LoadMapAddress{
-            .dst = reg(m[1]), .mapfd = boost::lexical_cast<int>(m[2]), .offset = boost::lexical_cast<int>(m[3])};
+        return LoadMapAddress{.dst = reg(m[1]), .mapfd = to_int(m[2]), .offset = to_int(m[3])};
     }
     if (regex_match(text, m, regex(WREG ASSIGN MAP_FD_PROGRAMS))) {
-        return LoadMapFd{.dst = reg(m[1]), .mapfd = boost::lexical_cast<int>(m[2])};
+        return LoadMapFd{.dst = reg(m[1]), .mapfd = to_int(m[2])};
     }
     if (regex_match(text, m, regex(WREG ASSIGN MAP_FD))) {
-        return LoadMapFd{.dst = reg(m[1]), .mapfd = boost::lexical_cast<int>(m[2])};
+        return LoadMapFd{.dst = reg(m[1]), .mapfd = to_int(m[2])};
     }
     if (regex_match(text, m, regex(WREG OPASSIGN IMM LONGLONG))) {
         const std::string r = m[1];
@@ -259,7 +257,7 @@ static InstructionSeq parse_program(std::istream& is) {
     while (std::getline(is, line)) {
         std::smatch m;
         if (regex_search(line, m, regex(LABEL ":"))) {
-            next_label = Label(boost::lexical_cast<int>(m[1]));
+            next_label = Label{to_int(m[1])};
             if (seen_labels.contains(*next_label)) {
                 throw std::invalid_argument("duplicate labels");
             }
@@ -284,8 +282,6 @@ static InstructionSeq parse_program(std::istream& is) {
     }
     return labeled_insts;
 }
-
-static uint8_t regnum(const std::string& s) { return static_cast<uint8_t>(boost::lexical_cast<uint16_t>(s.substr(1))); }
 
 static Variable special_var(const std::string& s) {
     if (s == "packet_size") {

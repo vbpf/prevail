@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MIT
 #include <catch2/catch_all.hpp>
 
+#include <algorithm>
+#include <cctype>
 #include <string>
 #include <variant>
-
-#include <boost/algorithm/string/trim.hpp>
 
 #if !defined(MAX_PATH)
 #define MAX_PATH (256)
@@ -20,6 +20,14 @@
     TEST_CASE("Print suite: " file, "[print]") { verify_printed_string(file); }
 
 using namespace prevail;
+
+static void trim_right(std::string& s) {
+    if (!s.empty() && s.back() == '\r') {
+        s.pop_back();
+    }
+    s.erase(std::find_if(s.rbegin(), s.rend(), [](const unsigned char ch) { return !std::isspace(ch); }).base(),
+            s.end());
+}
 
 void verify_printed_string(const std::string& file) {
     std::stringstream generated_output;
@@ -37,8 +45,8 @@ void verify_printed_string(const std::string& file) {
     while (std::getline(expected_stream, expected_line)) {
         bool has_more = static_cast<bool>(std::getline(generated_output, actual_line));
         REQUIRE(has_more);
-        boost::algorithm::trim_right(expected_line);
-        boost::algorithm::trim_right(actual_line);
+        trim_right(expected_line);
+        trim_right(actual_line);
         REQUIRE(expected_line == actual_line);
     }
     bool has_more = static_cast<bool>(std::getline(expected_stream, actual_line));

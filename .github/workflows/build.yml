@@ -8,8 +8,6 @@ name: CPP CI
       - 'Dockerfile'
 
 concurrency:
-  # Cancel any CI/CD workflow currently in progress for the same PR.
-  # Allow running concurrently with any other commits.
   group: build-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
@@ -19,73 +17,77 @@ jobs:
       matrix:
         configurations: [Debug, Release]
         target: [tests, library]
+      fail-fast: false
     runs-on: ubuntu-latest
     env:
-      # Configuration type to build.  For documentation on how build matrices work, see
-      # https://docs.github.com/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
-      BUILD_CONFIGURATION: ${{matrix.configurations}}
-
+      CMAKE_GENERATOR: Ninja
     steps:
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt install libboost-dev libboost-filesystem-dev libboost-program-options-dev
-
-      - name: Install test dependencies
-        if: ${{matrix.target == 'tests'}}
-        run: |
-          sudo apt install libyaml-cpp-dev valgrind
-
       - uses: actions/checkout@v5
         with:
-          submodules: 'recursive'
+          submodules: recursive
+
+      - name: Install dependencies (Ubuntu)
+        run: |
+          sudo apt-get update
+          sudo apt install -y cmake ninja-build g++ libboost-dev libboost-filesystem-dev libboost-program-options-dev
+          if [ "${{ matrix.target }}" = "tests" ]; then
+            sudo apt install -y libyaml-cpp-dev valgrind
+          fi
 
       - name: Build
         run: |
-          mkdir build
-          if [ "${{matrix.target}}" = "library" ]; then
-            cmake -B build -DCMAKE_BUILD_TYPE=${{env.BUILD_CONFIGURATION}} -DVERIFIER_ENABLE_TESTS=OFF
-          else
-            cmake -B build -DCMAKE_BUILD_TYPE=${{env.BUILD_CONFIGURATION}} -DVERIFIER_ENABLE_TESTS=ON
-          fi
-          cmake --build build -j $(nproc)
+          cmake -S . -B build \
+            -G "${{ env.CMAKE_GENERATOR }}" \
+            -D CMAKE_BUILD_TYPE=${{ matrix.configurations }} \
+            -D prevail_ENABLE_TESTS=$([ "${{ matrix.target }}" = "tests" ] && echo ON || echo OFF)
+          cmake --build build -- -j $(nproc)
 
       - name: Run unit tests
-        if: ${{matrix.target == 'tests'}}
-        run: ./tests -d yes
+        if: ${{ matrix.target == 'tests' }}
+        run: bin/tests -d yes --order lex
 
-      - name: Test for memory leaks
-        if: ${{matrix.target == 'tests'}}
-        # Any memory leaks will cause the test to fail
-        # This BPF program was chosen because it is the largest one in the repo
-        run: valgrind --leak-check=full --errors-for-leak-kinds=all  --show-leak-kinds=all --error-exitcode=1 ./check ebpf-samples/cilium/bpf_xdp_snat_linux_v1.o 2/1
+      - name: Memory leak test (Debug only)
+        if: ${{ matrix.target == 'tests' && matrix.configurations == 'Debug' }}
+        run: >
+          valgrind --leak-check=full --errors-for-leak-kinds=all
+          --show-leak-kinds=all --error-exitcode=1
+          bin/check ebpf-samples/cilium/bpf_xdp_snat_linux_v1.o 2/1
 
   build_windows:
     strategy:
       matrix:
         configurations: [Debug, Release]
         target: [tests, library]
-    runs-on: windows-2022
+      fail-fast: false
+    runs-on: windows-2025
     env:
-      # Configuration type to build.  For documentation on how build matrices work, see
-      # https://docs.github.com/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
-      BUILD_CONFIGURATION: ${{matrix.configurations}}
-
+      MATRIX_TARGET: ${{ matrix.target }}
+      BUILD_CONFIGURATION: ${{ matrix.configurations }}
+      CMAKE_GENERATOR: "Visual Studio 17 2022"
     steps:
       - uses: actions/checkout@v5
         with:
-          submodules: 'recursive'
+          submodules: recursive
+
+      - name: Cache Boost packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}\build\packages
+          key: boost-${{ runner.os }}
+
+      - name: Configure CMake
+        shell: pwsh
+        run: |
+          $enableTests = if ($env:MATRIX_TARGET -eq "tests") { "ON" } else { "OFF" }
+          cmake -S . -B build `
+          -G "$env:CMAKE_GENERATOR" `
+          -D prevail_ENABLE_TESTS=$enableTests
 
       - name: Build
-        run: |
-          mkdir build
-          if ("${{matrix.target}}" -eq "library") {
-            cmake -B build -DVERIFIER_ENABLE_TESTS=OFF
-          } else {
-            cmake -B build -DVERIFIER_ENABLE_TESTS=ON
-          }
-          cmake --build build -j $(nproc) --config ${{env.BUILD_CONFIGURATION}}
+        shell: pwsh
+        run: cmake --build build --config "$env:BUILD_CONFIGURATION" --parallel
 
       - name: Run unit tests
-        if: ${{matrix.target == 'tests'}}
-        run: ./${{env.BUILD_CONFIGURATION}}/tests -d yes
+        if: ${{ matrix.target == 'tests' }}
+        shell: pwsh
+        run: bin\tests.exe -d yes --order lex
