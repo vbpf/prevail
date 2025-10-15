@@ -1,5 +1,5 @@
 ---
-name: C++ CI
+name: CPP CI
 
 "on":
   pull_request:
@@ -98,7 +98,6 @@ jobs:
 
           cmake -S . -B build `
             -G "$env:CMAKE_GENERATOR" `
-            -D CMAKE_BUILD_TYPE="$env:BUILD_CONFIGURATION" `
             -D CMAKE_PREFIX_PATH="$boostDir" `
             -D Boost_DIR="$boostDir" `
             -D prevail_ENABLE_TESTS=$enableTests
@@ -110,4 +109,4 @@ jobs:
       - name: Run unit tests
         if: ${{ matrix.target == 'tests' }}
         shell: pwsh
-        run: bin/tests.exe -d yes --order lex
+        run: bin\tests.exe -d yes --order lex

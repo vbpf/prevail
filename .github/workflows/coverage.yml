@@ -40,7 +40,7 @@ jobs:
           cmake --build build -j $(nproc) --config ${{env.BUILD_CONFIGURATION}}
 
       - name: Run unit tests
-        run: ./tests --abort --reporter compact
+        run: bin/tests --abort --reporter compact
 
       # Comment only change to test coverage report to coveralls
       - name: Generate code coverage report
