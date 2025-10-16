@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 #include <catch2/catch_all.hpp>
 
-#include <string>
 #include <filesystem>
+#include <string>
 
 #include "bpf_conformance/include/bpf_conformance.h"
 
