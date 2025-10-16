@@ -94,24 +94,13 @@ class AssertExtractor {
             }
         }
         for (ArgPair arg : call.pairs) {
+            const auto group = arg.or_null ? TypeGroup::mem_or_num : TypeGroup::mem;
+            const auto access_type =
+                arg.kind == ArgPair::Kind::PTR_TO_READABLE_MEM ? AccessType::read : AccessType::write;
             res.emplace_back(TypeConstraint{arg.size, TypeGroup::number});
             res.emplace_back(ValidSize{arg.size, arg.can_be_zero});
-            switch (arg.kind) {
-            case ArgPair::Kind::PTR_TO_READABLE_MEM_OR_NULL:
-                res.emplace_back(TypeConstraint{arg.mem, TypeGroup::mem_or_num});
-                res.emplace_back(make_valid_access(arg.mem, 0, arg.size, true, AccessType::read));
-                break;
-            case ArgPair::Kind::PTR_TO_READABLE_MEM:
-                /* pointer to valid memory (stack, packet, map value) */
-                res.emplace_back(TypeConstraint{arg.mem, TypeGroup::mem});
-                res.emplace_back(make_valid_access(arg.mem, 0, arg.size, false, AccessType::read));
-                break;
-            case ArgPair::Kind::PTR_TO_WRITABLE_MEM:
-                // memory may be uninitialized, i.e. write only
-                res.emplace_back(TypeConstraint{arg.mem, TypeGroup::mem});
-                res.emplace_back(make_valid_access(arg.mem, 0, arg.size, false, AccessType::write));
-                break;
-            }
+            res.emplace_back(TypeConstraint{arg.mem, group});
+            res.emplace_back(make_valid_access(arg.mem, 0, arg.size, arg.or_null, access_type));
             // TODO: reg is constant (or maybe it's not important)
         }
         return res;

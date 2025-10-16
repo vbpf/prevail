@@ -473,8 +473,9 @@ struct Unmarshaller {
 
     static ArgPair::Kind toArgPairKind(const ebpf_argument_type_t t) {
         switch (t) {
-        case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL: return ArgPair::Kind::PTR_TO_READABLE_MEM_OR_NULL;
+        case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL:
         case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM: return ArgPair::Kind::PTR_TO_READABLE_MEM;
+        case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL:
         case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM: return ArgPair::Kind::PTR_TO_WRITABLE_MEM;
         default: break;
         }
@@ -523,6 +524,7 @@ struct Unmarshaller {
             }
             case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL:
             case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM:
+            case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL:
             case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM:
                 // Sanity check: This argument must be followed by EBPF_ARGUMENT_TYPE_CONST_SIZE or
                 // EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO.
@@ -540,7 +542,9 @@ struct Unmarshaller {
                         proto.name);
                 }
                 const bool can_be_zero = (args[i + 1] == EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO);
-                res.pairs.push_back({toArgPairKind(args[i]), Reg{gsl::narrow<uint8_t>(i)},
+                const bool or_null = args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL ||
+                                     args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL;
+                res.pairs.push_back({toArgPairKind(args[i]), or_null, Reg{gsl::narrow<uint8_t>(i)},
                                      Reg{gsl::narrow<uint8_t>(i + 1)}, can_be_zero});
                 i++;
                 break;

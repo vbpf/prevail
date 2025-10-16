@@ -26,6 +26,7 @@ typedef enum _ebpf_argument_type {
     EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // Memory must have been initialized.
     EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL,
     EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM,
+    EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL,
     EBPF_ARGUMENT_TYPE_UNSUPPORTED,
 } ebpf_argument_type_t;
 

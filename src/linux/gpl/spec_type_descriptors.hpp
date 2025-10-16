@@ -1,4 +1,5 @@
 #pragma once
+#include "ebpf_base.h"
 
 namespace prevail {
 constexpr int NMAPS = 64;

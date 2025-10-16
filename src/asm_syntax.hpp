@@ -147,11 +147,11 @@ struct ArgSingle {
 struct ArgPair {
     enum class Kind {
         PTR_TO_READABLE_MEM,
-        PTR_TO_READABLE_MEM_OR_NULL,
         PTR_TO_WRITABLE_MEM,
     } kind{};
-    Reg mem;  ///< Pointer.
-    Reg size; ///< Size of space pointed to.
+    bool or_null{}; ///< true for PTR_TO_READABLE_MEM_OR_NULL and for PTR_TO_WRITABLE_MEM_OR_NULL
+    Reg mem;        ///< Pointer.
+    Reg size;       ///< Size of space pointed to.
     bool can_be_zero{};
     constexpr bool operator==(const ArgPair&) const = default;
 };

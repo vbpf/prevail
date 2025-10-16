@@ -209,7 +209,6 @@ std::ostream& operator<<(std::ostream& os, const ArgSingle::Kind kind) {
 std::ostream& operator<<(std::ostream& os, const ArgPair::Kind kind) {
     switch (kind) {
     case ArgPair::Kind::PTR_TO_READABLE_MEM: return os << "mem";
-    case ArgPair::Kind::PTR_TO_READABLE_MEM_OR_NULL: return os << "mem?";
     case ArgPair::Kind::PTR_TO_WRITABLE_MEM: return os << "out";
     }
     assert(false);
@@ -222,7 +221,11 @@ std::ostream& operator<<(std::ostream& os, const ArgSingle arg) {
 }
 
 std::ostream& operator<<(std::ostream& os, const ArgPair arg) {
-    os << arg.kind << " " << arg.mem << "[" << arg.size;
+    os << arg.kind;
+    if (arg.or_null) {
+        os << "?";
+    }
+    os << " " << arg.mem << "[" << arg.size;
     if (arg.can_be_zero) {
         os << "?";
     }

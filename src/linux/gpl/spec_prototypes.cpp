@@ -2,31 +2,166 @@
 #include "spec_type_descriptors.hpp"
 
 namespace prevail {
+// Unsupported or partially supported return types
+
+// Returns pointer to struct sock_common or NULL on lookup failure.
+// Used by: bpf_sk_lookup_tcp(), bpf_skc_lookup_tcp()
+// Requires: BTF type information for socket structures
 #define EBPF_RETURN_TYPE_PTR_TO_SOCK_COMMON_OR_NULL EBPF_RETURN_TYPE_UNSUPPORTED
+
+// Returns pointer to struct socket (full socket) or NULL.
+// Used by: bpf_sk_lookup_udp(), bpf_sk_fullsock()
+// Requires: BTF type information, socket state validation
 #define EBPF_RETURN_TYPE_PTR_TO_SOCKET_OR_NULL EBPF_RETURN_TYPE_UNSUPPORTED
+
+// Returns pointer to struct tcp_sock (TCP-specific socket) or NULL.
+// Used by: bpf_tcp_sock(), bpf_get_listener_sock()
+// Requires: BTF type information, TCP socket casting validation
 #define EBPF_RETURN_TYPE_PTR_TO_TCP_SOCKET_OR_NULL EBPF_RETURN_TYPE_UNSUPPORTED
+
+// Returns pointer to dynamically allocated memory or NULL.
+// Used by: bpf_ringbuf_reserve()
+// Requires: Memory allocation tracking, release validation
+// Note: Returned memory must be submitted or discarded, enforced by verifier
 #define EBPF_RETURN_TYPE_PTR_TO_ALLOC_MEM_OR_NULL EBPF_RETURN_TYPE_UNSUPPORTED
+
+// Returns pointer to kernel object identified by BTF type ID, or NULL.
+// Used by: bpf_skc_to_tcp_sock(), bpf_skc_to_tcp6_sock(), bpf_sock_from_file()
+// Requires: BTF type information, dynamic type casting validation
+// Note: Type ID determines what kernel structure is pointed to
 #define EBPF_RETURN_TYPE_PTR_TO_BTF_ID_OR_NULL EBPF_RETURN_TYPE_UNSUPPORTED
+
+// Returns pointer to either generic memory or BTF-identified object, or NULL.
+// Used by: bpf_dynptr_data(), bpf_per_cpu_ptr()
+// Requires: BTF for type identification, memory bounds tracking
+// Note: Dual nature allows flexibility in return type
 #define EBPF_RETURN_TYPE_PTR_TO_MEM_OR_BTF_ID_OR_NULL EBPF_RETURN_TYPE_UNSUPPORTED
+
+// Returns non-NULL pointer to kernel object identified by BTF type ID.
+// Used by: bpf_get_current_task_btf(), bpf_task_pt_regs()
+// Requires: BTF type information
+// Note: Unlike _OR_NULL variant, verifier can assume non-null
 #define EBPF_RETURN_TYPE_PTR_TO_BTF_ID EBPF_RETURN_TYPE_UNSUPPORTED
+
+// Returns non-NULL pointer to either generic memory or BTF-identified object.
+// Used by: bpf_this_cpu_ptr()
+// Requires: BTF for type identification when returning BTF object
+// Note: Always succeeds, never returns NULL
 #define EBPF_RETURN_TYPE_PTR_TO_MEM_OR_BTF_ID EBPF_RETURN_TYPE_UNSUPPORTED
 
+// Alias: Treat non-nullable map value return as nullable for compatibility.
+// Used by: bpf_get_local_storage()
+// Reason: Simplifies implementation - both map value return types use same code path
+// Note: Helper actually never returns NULL, but type system treats as nullable
+#define EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL
+
+// Unsupported or partially supported argument types
+
+// Pointer to struct sock_common identified by BTF.
+// Used by: bpf_sk_release(), bpf_sk_cgroup_id(), bpf_tcp_check_syncookie()
+// Requires: BTF type information, socket pointer validation
+// Note: Base socket type that other socket types derive from
 #define EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID_SOCK_COMMON EBPF_ARGUMENT_TYPE_UNSUPPORTED
+
+// Pointer to struct bpf_spin_lock within a map value.
+// Used by: bpf_spin_lock(), bpf_spin_unlock()
+// Requires: BTF to locate lock field, 4-byte alignment validation
+// Note: Lock must be at top level of map value struct, cannot be nested
 #define EBPF_ARGUMENT_TYPE_PTR_TO_SPIN_LOCK EBPF_ARGUMENT_TYPE_UNSUPPORTED
+
+// Pointer to struct sock_common (non-BTF variant).
+// Used by: bpf_sk_fullsock(), bpf_tcp_sock(), bpf_get_listener_sock()
+// Requires: Socket type validation, state checking
+// Note: Less type-safe than PTR_TO_BTF_ID_SOCK_COMMON
 #define EBPF_ARGUMENT_TYPE_PTR_TO_SOCK_COMMON EBPF_ARGUMENT_TYPE_UNSUPPORTED
+
+// Pointer to kernel object identified by BTF type ID.
+// Used by: bpf_task_storage_get(), bpf_inode_storage_get(), bpf_tcp_send_ack()
+// Requires: BTF type information, type-specific validation
+// Note: Generic BTF pointer - actual type determined by helper's BTF ID specification
 #define EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID EBPF_ARGUMENT_TYPE_UNSUPPORTED
-#define EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID_SOCK_COMMON EBPF_ARGUMENT_TYPE_UNSUPPORTED
+
+// Pointer to long integer for output.
+// Used by: bpf_strtol(), bpf_strtoul(), bpf_get_func_arg(), bpf_get_func_ret()
+// Requires: Writable memory validation, proper alignment (8 bytes)
+// Note: Output parameter for functions that return long values
 #define EBPF_ARGUMENT_TYPE_PTR_TO_LONG EBPF_ARGUMENT_TYPE_UNSUPPORTED
+
+// Pointer to int for output.
+// Used by: bpf_check_mtu() (for mtu_len parameter)
+// Requires: Writable memory validation, proper alignment (4 bytes)
+// Note: Output parameter for functions that return int values
 #define EBPF_ARGUMENT_TYPE_PTR_TO_INT EBPF_ARGUMENT_TYPE_UNSUPPORTED
+
+// Pointer to constant null-terminated string in read-only memory.
+// Used by: bpf_strncmp(), bpf_snprintf() (format string)
+// Requires: Read-only memory validation, null termination verification
+// Note: String must be compile-time constant or from read-only map
 #define EBPF_ARGUMENT_TYPE_PTR_TO_CONST_STR EBPF_ARGUMENT_TYPE_UNSUPPORTED
+
+// Pointer to a static BPF function for callbacks.
+// Used by: bpf_for_each_map_elem(), bpf_loop(), bpf_timer_set_callback(), bpf_find_vma()
+// Requires: Function signature validation, static function verification
+// Note: Function must be in same BPF program, cannot be helper or external function
 #define EBPF_ARGUMENT_TYPE_PTR_TO_FUNC EBPF_ARGUMENT_TYPE_UNSUPPORTED
+
+// Pointer to stack memory, NULL allowed (optional context for callbacks).
+// Used by: bpf_for_each_map_elem(), bpf_loop(), bpf_find_vma() (callback_ctx)
+// Requires: Stack bounds validation when non-NULL
+// Note: Typically used to pass optional context to callback functions
 #define EBPF_ARGUMENT_TYPE_PTR_TO_STACK_OR_NULL EBPF_ARGUMENT_TYPE_UNSUPPORTED
+
+// Constant allocation size, zero allowed (for dynamic memory allocation).
+// Used by: bpf_ringbuf_reserve() (size parameter)
+// Requires: Compile-time constant or bounded value, zero is valid (allocation fails gracefully)
+// Note: Used to reserve variable-sized memory chunks
 #define EBPF_ARGUMENT_TYPE_CONST_ALLOC_SIZE_OR_ZERO EBPF_ARGUMENT_TYPE_UNSUPPORTED
+
+// Pointer to previously allocated memory (for release operations).
+// Used by: bpf_ringbuf_submit(), bpf_ringbuf_discard()
+// Requires: Verification that pointer was from bpf_ringbuf_reserve()
+// Note: Verifier tracks allocation/release pairing
 #define EBPF_ARGUMENT_TYPE_PTR_TO_ALLOC_MEM EBPF_ARGUMENT_TYPE_UNSUPPORTED
-#define EBPF_ARGUMENT_TYPE_PTR_TO_ALLOC_MEM EBPF_ARGUMENT_TYPE_UNSUPPORTED
-#define EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE_OR_NULL EBPF_ARGUMENT_TYPE_UNSUPPORTED
+
+// Alias: Allow NULL map value pointers (for optional map value arguments).
+// Used by: bpf_sk_storage_get() (value parameter when creating new entry)
+// Reason: Simplifies handling - same validation as non-nullable, plus NULL check
+// Note: NULL means "use zero-initialized value" for storage creation
+#define EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE_OR_NULL EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE
+
+// Pointer to struct bpf_timer within a map value.
+// Used by: bpf_timer_init(), bpf_timer_set_callback(), bpf_timer_start(), bpf_timer_cancel()
+// Requires: BTF to locate timer field, proper initialization tracking
+// Note: Timer must be in map value, similar constraints to spin locks
 #define EBPF_ARGUMENT_TYPE_PTR_TO_TIMER EBPF_ARGUMENT_TYPE_UNSUPPORTED
+
+// Pointer to per-CPU BTF-identified object.
+// Used by: bpf_per_cpu_ptr() returns this, bpf_this_cpu_ptr()
+// Requires: BTF type information, per-CPU variable handling
+// Note: Points to per-CPU copy of kernel variable
 #define EBPF_ARGUMENT_TYPE_PTR_TO_PERCPU_BTF_ID EBPF_ARGUMENT_TYPE_UNSUPPORTED
+
+// Alias: Modern name for read-only memory pointer.
+// Reason: Naming consistency with kernel terminology (readonly vs readable)
+// Note: Functionally identical to PTR_TO_READABLE_MEM
+#define EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM
+
+// Alias: Modern name for optional read-only memory pointer.
+// Reason: Naming consistency with kernel terminology
+// Note: Functionally identical to PTR_TO_READABLE_MEM_OR_NULL
+#define EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM_OR_NULL EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL
+
+// Alias: Uninitialized map value (output parameter for map operations).
+// Used by: bpf_map_pop_elem(), bpf_map_peek_elem()
+// Reason: Semantically identical to PTR_TO_MAP_VALUE - memory will be written
+// Note: Indicates helper will initialize the memory (pop/peek operations)
+#define EBPF_ARGUMENT_TYPE_PTR_TO_UNINIT_MAP_VALUE EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE
+
+// Alias: Const-qualified map pointer (helper won't modify map structure).
+// Used by: bpf_map_peek_elem(), bpf_ringbuf_query() (read-only map operations)
+// Reason: Same validation as PTR_TO_MAP - const is semantic documentation
+// Note: Indicates helper only reads map metadata, doesn't modify map
+#define EBPF_ARGUMENT_TYPE_CONST_PTR_TO_MAP EBPF_ARGUMENT_TYPE_PTR_TO_MAP
 
 const ebpf_context_descriptor_t g_sk_buff = sk_buff;
 const ebpf_context_descriptor_t g_xdp_md = xdp_md;
@@ -162,15 +297,17 @@ static constexpr EbpfHelperPrototype bpf_current_task_under_cgroup_proto = {
         },
 };
 
-static constexpr EbpfHelperPrototype bpf_perf_prog_read_value_proto = {.name = "perf_prog_read_value",
-                                                                       .return_type = EBPF_RETURN_TYPE_INTEGER,
-                                                                       .argument_type =
-                                                                           {
-                                                                               EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
-                                                                               EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM,
-                                                                               EBPF_ARGUMENT_TYPE_CONST_SIZE,
-                                                                           },
-                                                                       .context_descriptor = &g_perf_event_descr};
+static constexpr EbpfHelperPrototype bpf_perf_prog_read_value_proto = {
+    .name = "perf_prog_read_value",
+    .return_type = EBPF_RETURN_TYPE_INTEGER,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
+            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM,
+            EBPF_ARGUMENT_TYPE_CONST_SIZE,
+        },
+    .context_descriptor = &g_perf_event_descr,
+};
 
 static constexpr EbpfHelperPrototype bpf_map_lookup_elem_proto = {
     .name = "map_lookup_elem",
@@ -939,7 +1076,7 @@ static constexpr EbpfHelperPrototype bpf_rc_keydown_proto = {
 
 static constexpr EbpfHelperPrototype bpf_get_local_storage_proto = {
     .name = "get_local_storage",
-    .return_type = EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL, // BUT never NULL. TODO: add type
+    .return_type = EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE,
     .argument_type =
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_MAP,
@@ -983,7 +1120,7 @@ static constexpr EbpfHelperPrototype bpf_sk_lookup_tcp_proto = {
     .argument_type =
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // TODO: readonly
+            EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_ANYTHING,
@@ -994,7 +1131,7 @@ static constexpr EbpfHelperPrototype bpf_sk_lookup_udp_proto = {
     .return_type = EBPF_RETURN_TYPE_PTR_TO_SOCKET_OR_NULL,
     .argument_type{
         EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
-        EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // TODO: readonly
+        EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM,
         EBPF_ARGUMENT_TYPE_CONST_SIZE,
         EBPF_ARGUMENT_TYPE_ANYTHING,
         EBPF_ARGUMENT_TYPE_ANYTHING,
@@ -1025,7 +1162,7 @@ static constexpr EbpfHelperPrototype bpf_map_pop_elem_proto = {
     .return_type = EBPF_RETURN_TYPE_INTEGER,
     .argument_type{
         EBPF_ARGUMENT_TYPE_PTR_TO_MAP,
-        EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE, // TODO: uninit
+        EBPF_ARGUMENT_TYPE_PTR_TO_UNINIT_MAP_VALUE,
     },
 };
 
@@ -1033,8 +1170,8 @@ static constexpr EbpfHelperPrototype bpf_map_peek_elem_proto = {
     .name = "map_peek_elem",
     .return_type = EBPF_RETURN_TYPE_INTEGER,
     .argument_type{
-        EBPF_ARGUMENT_TYPE_PTR_TO_MAP,       // TODO: const
-        EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE, // TODO: uninit
+        EBPF_ARGUMENT_TYPE_CONST_PTR_TO_MAP,
+        EBPF_ARGUMENT_TYPE_PTR_TO_UNINIT_MAP_VALUE,
     },
 };
 
@@ -1128,15 +1265,15 @@ static constexpr EbpfHelperPrototype bpf_tcp_check_syncookie_proto = {
     .argument_type =
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID_SOCK_COMMON,
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // TODO: readonly
+            EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // TODO: readonly
+            EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
         },
 };
 
 static constexpr EbpfHelperPrototype bpf_get_listener_sock_proto = {
-    .name = "EbpfHelperPrototype",
+    .name = "get_listener_sock",
     .return_type = EBPF_RETURN_TYPE_PTR_TO_TCP_SOCKET_OR_NULL,
     .argument_type =
         {
@@ -1150,7 +1287,7 @@ static constexpr EbpfHelperPrototype bpf_skc_lookup_tcp_proto = {
     .argument_type =
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // TODO: readonly
+            EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_ANYTHING,
@@ -1197,7 +1334,7 @@ static constexpr EbpfHelperPrototype bpf_sysctl_set_new_value_proto = {
     .argument_type =
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // TODO: readonly
+            EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
         },
 };
@@ -1207,7 +1344,7 @@ static constexpr EbpfHelperPrototype bpf_strtol_proto = {
     .return_type = EBPF_RETURN_TYPE_INTEGER,
     .argument_type =
         {
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // TODO: readonly
+            EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_PTR_TO_LONG,
@@ -1219,7 +1356,7 @@ static constexpr EbpfHelperPrototype bpf_strtoul_proto = {
     .return_type = EBPF_RETURN_TYPE_INTEGER,
     .argument_type =
         {
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // TODO: readonly
+            EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_PTR_TO_LONG,
@@ -1244,19 +1381,7 @@ static constexpr EbpfHelperPrototype bpf_sk_storage_get_proto = {
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_MAP,
             EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID_SOCK_COMMON,
-            EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE, // TODO: OR_NULL,
-            EBPF_ARGUMENT_TYPE_ANYTHING,
-        },
-};
-
-static constexpr EbpfHelperPrototype bpf_sk_storage_get_cg_sock_proto = {
-    .name = "sk_storage_get",
-    .return_type = EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL,
-    .argument_type =
-        {
-            EBPF_ARGUMENT_TYPE_PTR_TO_MAP,
-            EBPF_ARGUMENT_TYPE_PTR_TO_CTX,       /* context is 'struct sock' */
-            EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE, // TODO: OR_NULL,
+            EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE_OR_NULL,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
 };
@@ -1295,9 +1420,9 @@ static constexpr EbpfHelperPrototype bpf_tcp_gen_syncookie_proto = {
     .argument_type =
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID_SOCK_COMMON,
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // TODO: readonly
+            EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // TODO: readonly
+            EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
         },
 };
@@ -1310,7 +1435,7 @@ static constexpr EbpfHelperPrototype bpf_skb_output_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID,
             EBPF_ARGUMENT_TYPE_PTR_TO_MAP, // originally const
             EBPF_ARGUMENT_TYPE_ANYTHING,
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // TODO readonly
+            EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO,
         },
     //.arg1_btf_id = &bpf_skb_output_btf_ids[0],
@@ -1390,7 +1515,7 @@ static constexpr EbpfHelperPrototype bpf_get_ns_current_pid_tgid_proto = {
         {
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_ANYTHING,
-            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM, // TODO: or null
+            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL, // TODO: or null
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
         },
 };
@@ -1403,32 +1528,14 @@ static constexpr EbpfHelperPrototype bpf_xdp_output_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID,
             EBPF_ARGUMENT_TYPE_PTR_TO_MAP,
             EBPF_ARGUMENT_TYPE_ANYTHING,
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // TODO : readonly
+            EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO,
         },
     // .arg1_btf_id = &bpf_xdp_output_btf_ids[0],
 };
 
-static constexpr EbpfHelperPrototype bpf_get_netns_cookie_sock_proto = {
-    .name = "get_netns_cookie_sock",
-    .return_type = EBPF_RETURN_TYPE_INTEGER,
-    .argument_type =
-        {
-            EBPF_ARGUMENT_TYPE_PTR_TO_CTX, // TODO: or null
-        },
-};
-
-static constexpr EbpfHelperPrototype bpf_get_netns_cookie_sock_addr_proto = {
-    .name = "get_netns_cookie_sock_addr",
-    .return_type = EBPF_RETURN_TYPE_INTEGER,
-    .argument_type =
-        {
-            EBPF_ARGUMENT_TYPE_PTR_TO_CTX, // TODO: or null
-        },
-};
-
 static constexpr EbpfHelperPrototype bpf_sk_assign_proto = {
-    .name = "get_netns_cookie_sock",
+    .name = "sk_assign",
     .return_type = EBPF_RETURN_TYPE_INTEGER,
     .argument_type =
         {
@@ -1535,7 +1642,7 @@ constexpr EbpfHelperPrototype bpf_ringbuf_query_proto = {
     .return_type = EBPF_RETURN_TYPE_INTEGER,
     .argument_type =
         {
-            EBPF_ARGUMENT_TYPE_PTR_TO_MAP, // TODO: const
+            EBPF_ARGUMENT_TYPE_CONST_PTR_TO_MAP,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
 };
@@ -1624,41 +1731,6 @@ static constexpr EbpfHelperPrototype bpf_get_task_stack_proto = {
     // .arg1_btf_id = &bpf_get_task_stack_btf_ids[0],
 };
 
-static constexpr EbpfHelperPrototype bpf_sock_ops_load_hdr_opt_proto = {
-    .name = "sock_ops_load_hdr_opt",
-    .return_type = EBPF_RETURN_TYPE_INTEGER,
-    .argument_type =
-        {
-            EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM,
-            EBPF_ARGUMENT_TYPE_CONST_SIZE,
-            EBPF_ARGUMENT_TYPE_ANYTHING,
-        },
-};
-
-static constexpr EbpfHelperPrototype bpf_sock_ops_store_hdr_opt_proto = {
-    .name = "sock_ops_store_hdr_opt",
-    .return_type = EBPF_RETURN_TYPE_INTEGER,
-    .argument_type =
-        {
-            EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM,
-            EBPF_ARGUMENT_TYPE_CONST_SIZE,
-            EBPF_ARGUMENT_TYPE_ANYTHING,
-        },
-};
-
-static constexpr EbpfHelperPrototype bpf_sock_ops_reserve_hdr_opt_proto = {
-    .name = "sock_ops_reserve_hdr_opt",
-    .return_type = EBPF_RETURN_TYPE_INTEGER,
-    .argument_type =
-        {
-            EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
-            EBPF_ARGUMENT_TYPE_ANYTHING,
-            EBPF_ARGUMENT_TYPE_ANYTHING,
-        },
-};
-
 static constexpr EbpfHelperPrototype bpf_inode_storage_get_proto = {
     .name = "inode_storage_get",
     .return_type = EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL,
@@ -1666,7 +1738,7 @@ static constexpr EbpfHelperPrototype bpf_inode_storage_get_proto = {
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_MAP,
             EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID,
-            EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE_OR_NULL, // TODO: as argument too
+            EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE_OR_NULL,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
     //.arg2_btf_id = &bpf_inode_storage_btf_ids[0],
@@ -1790,7 +1862,7 @@ static constexpr EbpfHelperPrototype bpf_task_storage_get_proto = {
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_MAP,
             EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID,
-            EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE, // TODO: or null
+            EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE_OR_NULL,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
     // .arg2_btf_id = &bpf_task_storage_btf_ids[0],
@@ -1875,7 +1947,7 @@ static constexpr EbpfHelperPrototype bpf_snprintf_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL,
             EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO,
             EBPF_ARGUMENT_TYPE_PTR_TO_CONST_STR,
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL, //  TODO: readonly
+            EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM_OR_NULL,
             EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO,
         },
 };
@@ -1886,7 +1958,7 @@ static constexpr EbpfHelperPrototype bpf_sys_bpf_proto = {
     .argument_type =
         {
             EBPF_ARGUMENT_TYPE_ANYTHING,
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, //  TODO: readonly
+            EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
         },
 };
@@ -1896,7 +1968,7 @@ static constexpr EbpfHelperPrototype bpf_btf_find_by_name_kind_proto = {
     .return_type = EBPF_RETURN_TYPE_INTEGER,
     .argument_type =
         {
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, //  TODO: readonly
+            EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_ANYTHING,
@@ -1930,7 +2002,7 @@ static constexpr EbpfHelperPrototype bpf_timer_init_proto = {
     .argument_type =
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_TIMER,
-            EBPF_ARGUMENT_TYPE_PTR_TO_MAP, // TODO: const
+            EBPF_ARGUMENT_TYPE_CONST_PTR_TO_MAP,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
 };
@@ -2040,9 +2112,9 @@ static constexpr EbpfHelperPrototype bpf_trace_vprintk_proto = {
     .return_type = EBPF_RETURN_TYPE_INTEGER,
     .argument_type =
         {
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // TODO: readonly
+            EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL, // TODO: readonly
+            EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM_OR_NULL,
             EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO,
         },
 };
@@ -2082,197 +2154,593 @@ constexpr EbpfHelperPrototype bpf_loop_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
 };
+// Map operations
+static constexpr EbpfHelperPrototype bpf_map_lookup_percpu_elem_proto = {
+    .name = "map_lookup_percpu_elem",
+    .return_type = EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_MAP,
+            EBPF_ARGUMENT_TYPE_PTR_TO_MAP_KEY,
+            EBPF_ARGUMENT_TYPE_ANYTHING,
+            EBPF_ARGUMENT_TYPE_DONTCARE,
+            EBPF_ARGUMENT_TYPE_DONTCARE,
+        },
+};
 
-#define FN(x) bpf_##x##_proto
-// keep this on a round line
-constexpr EbpfHelperPrototype prototypes[] = {
-    FN(unspec),
-    FN(map_lookup_elem),
-    FN(map_update_elem),
-    FN(map_delete_elem),
-    FN(probe_read),
-    FN(ktime_get_ns),
-    FN(trace_printk),
-    FN(get_prandom_u32),
-    FN(get_smp_processor_id),
-    FN(skb_store_bytes),
-    FN(l3_csum_replace),
-    FN(l4_csum_replace),
-    FN(tail_call),
-    FN(clone_redirect),
-    FN(get_current_pid_tgid),
-    FN(get_current_uid_gid),
-    FN(get_current_comm),
-    FN(get_cgroup_classid),
-    FN(skb_vlan_push),
-    FN(skb_vlan_pop),
-    FN(skb_get_tunnel_key),
-    FN(skb_set_tunnel_key),
-    FN(perf_event_read),
-    FN(redirect),
-    FN(get_route_realm),
-    FN(perf_event_output),
-    FN(skb_load_bytes),
-    FN(get_stackid),
-    FN(csum_diff),
-    FN(skb_get_tunnel_opt),
-    FN(skb_set_tunnel_opt),
-    FN(skb_change_proto),
-    FN(skb_change_type),
-    FN(skb_under_cgroup),
-    FN(get_hash_recalc),
-    FN(get_current_task),
-    FN(probe_write_user),
-    FN(current_task_under_cgroup),
-    FN(skb_change_tail),
-    FN(skb_pull_data),
-    FN(csum_update),
-    FN(set_hash_invalid),
-    FN(get_numa_node_id),
-    FN(skb_change_head),
-    FN(xdp_adjust_head),
-    FN(probe_read_str),
-    FN(get_socket_cookie),
-    FN(get_socket_uid),
-    FN(set_hash),
-    FN(setsockopt),
-    FN(skb_adjust_room),
-    FN(redirect_map),
-    FN(sk_redirect_map),
-    FN(sock_map_update),
-    FN(xdp_adjust_meta),
-    FN(perf_event_read_value),
-    FN(perf_prog_read_value),
-    FN(getsockopt),
-    FN(override_return),
-    FN(sock_ops_cb_flags_set),
-    FN(msg_redirect_map),
-    FN(msg_apply_bytes),
-    FN(msg_cork_bytes),
-    FN(msg_pull_data),
-    FN(bind),
-    FN(xdp_adjust_tail),
-    FN(skb_get_xfrm_state),
-    FN(get_stack),
-    FN(skb_load_bytes_relative),
-    FN(fib_lookup),
-    FN(sock_hash_update),
-    FN(msg_redirect_hash),
-    FN(sk_redirect_hash),
-    FN(lwt_push_encap),
-    FN(lwt_seg6_store_bytes),
-    FN(lwt_seg6_adjust_srh),
-    FN(lwt_seg6_action),
-    FN(rc_repeat),
-    FN(rc_keydown),
-    FN(skb_cgroup_id),
-    FN(get_current_cgroup_id),
-    FN(get_local_storage),
-    FN(sk_select_reuseport),
-    FN(get_current_cgroup_id),
-    FN(sk_lookup_tcp),
-    FN(sk_lookup_udp),
-    FN(sk_release),
-    FN(map_push_elem),
-    FN(map_pop_elem),
-    FN(map_peek_elem),
-    FN(msg_push_data),
-    FN(msg_pop_data),
-    FN(rc_pointer_rel),
-    FN(spin_lock),
-    FN(spin_unlock),
-    FN(sk_fullsock),
-    FN(tcp_sock),
-    FN(skb_ecn_set_ce),
-    FN(get_listener_sock),
-    FN(skc_lookup_tcp),
-    FN(tcp_check_syncookie),
-    FN(sysctl_get_name),
-    FN(sysctl_get_current_value),
-    FN(sysctl_get_new_value),
-    FN(sysctl_set_new_value),
-    FN(strtol),
-    FN(strtoul),
-    FN(sk_storage_get),
-    FN(sk_storage_delete),
-    FN(send_signal),
-    FN(tcp_gen_syncookie),
-    FN(skb_output),
-    FN(probe_read_user),
-    FN(probe_read_kernel),
-    FN(probe_read_user_str),
-    FN(probe_read_kernel_str),
-    FN(tcp_send_ack),
-    FN(send_signal_thread),
-    FN(jiffies64),
-    FN(read_branch_records),
-    FN(get_ns_current_pid_tgid),
-    FN(xdp_output),
-    FN(get_netns_cookie_sock), // XXX: same signature for bpf_get_netns_cookie_sock_addr_proto  or
-                               // bpf_get_netns_cookie_sock_addr_proto
-    FN(get_current_ancestor_cgroup_id),
-    FN(sk_assign),
-    FN(ktime_get_boot_ns),
-    FN(seq_printf),
-    FN(seq_write),
-    FN(sk_cgroup_id),
-    FN(sk_ancestor_cgroup_id),
-    FN(ringbuf_output),
-    FN(ringbuf_reserve),
-    FN(ringbuf_submit),
-    FN(ringbuf_discard),
-    FN(ringbuf_query),
-    FN(csum_level),
-    FN(skc_to_tcp6_sock),
-    FN(skc_to_tcp_sock),
-    FN(skc_to_tcp_timewait_sock),
-    FN(skc_to_tcp_request_sock),
-    FN(skc_to_udp6_sock),
-    FN(get_task_stack),
-    FN(sock_ops_load_hdr_opt),
-    FN(sock_ops_store_hdr_opt),
-    FN(sock_ops_reserve_hdr_opt),
-    FN(inode_storage_get),
-    FN(inode_storage_delete),
-    FN(d_path),
-    FN(copy_from_user),
-    FN(snprintf_btf),
-    FN(seq_printf_btf),
-    FN(skb_cgroup_classid),
-    FN(redirect_neigh),
-    FN(per_cpu_ptr),
-    FN(this_cpu_ptr),
-    FN(redirect_peer),
-    FN(task_storage_get),
-    FN(task_storage_delete),
-    FN(get_current_task_btf),
-    FN(bprm_opts_set),
-    FN(ktime_get_coarse_ns),
-    FN(ima_inode_hash),
-    FN(sock_from_file),
-    FN(check_mtu),
-    FN(for_each_map_elem),
-    FN(snprintf),
-    FN(sys_bpf),
-    FN(btf_find_by_name_kind),
-    FN(sys_close),
-    FN(timer_init),
-    FN(timer_set_callback),
-    FN(timer_start),
-    FN(timer_cancel),
-    FN(get_func_ip),
-    FN(get_attach_cookie),
-    FN(task_pt_regs),
-    FN(get_branch_snapshot),
-    FN(trace_vprintk),
-    FN(skc_to_unix_sock),
-    FN(kallsyms_lookup_name),
-    FN(find_vma),
-    FN(loop),
-    FN(strncmp),
-    FN(get_func_arg),
-    FN(get_func_ret),
-    FN(get_func_arg_cnt),
+// Time operations
+static constexpr EbpfHelperPrototype bpf_ktime_get_tai_ns_proto = {
+    .name = "ktime_get_tai_ns",
+    .return_type = EBPF_RETURN_TYPE_INTEGER,
+};
+
+// Dynptr ringbuf operations (UNSUPPORTED - dynptr not implemented)
+static constexpr EbpfHelperPrototype bpf_ringbuf_reserve_dynptr_proto = {
+    .name = "ringbuf_reserve_dynptr",
+    .return_type = EBPF_RETURN_TYPE_PTR_TO_ALLOC_MEM_OR_NULL,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_MAP,
+            EBPF_ARGUMENT_TYPE_ANYTHING,
+            EBPF_ARGUMENT_TYPE_ANYTHING,
+            EBPF_ARGUMENT_TYPE_ANYTHING,
+        },
+    .unsupported = true,
+};
+
+static constexpr EbpfHelperPrototype bpf_ringbuf_submit_dynptr_proto = {
+    .name = "ringbuf_submit_dynptr",
+    .return_type = EBPF_RETURN_TYPE_INTEGER,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_ANYTHING,
+            EBPF_ARGUMENT_TYPE_ANYTHING,
+        },
+    .unsupported = true,
+};
+
+// Helper 199 - ringbuf_discard_dynptr
+static constexpr EbpfHelperPrototype bpf_ringbuf_discard_dynptr_proto = {
+    .name = "ringbuf_discard_dynptr",
+    .return_type = EBPF_RETURN_TYPE_INTEGER, // Returns void (always succeeds) = 0
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_ANYTHING, // ptr (dynptr)
+            EBPF_ARGUMENT_TYPE_ANYTHING, // flags
+        },
+    .unsupported = true,
+};
+
+// Socket type conversions
+static constexpr EbpfHelperPrototype bpf_skc_to_mptcp_sock_proto = {
+    .name = "skc_to_mptcp_sock",
+    .return_type = EBPF_RETURN_TYPE_PTR_TO_BTF_ID_OR_NULL,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID_SOCK_COMMON,
+        },
+};
+
+// Copy from user task
+static constexpr EbpfHelperPrototype bpf_copy_from_user_task_proto = {
+    .name = "copy_from_user_task",
+    .return_type = EBPF_RETURN_TYPE_INTEGER,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM,
+            EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO,
+            EBPF_ARGUMENT_TYPE_ANYTHING,
+            EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID,
+            EBPF_ARGUMENT_TYPE_ANYTHING,
+        },
+};
+
+// Return value operations
+static constexpr EbpfHelperPrototype bpf_set_retval_proto = {
+    .name = "set_retval",
+    .return_type = EBPF_RETURN_TYPE_INTEGER,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_ANYTHING,
+        },
+};
+
+static constexpr EbpfHelperPrototype bpf_get_retval_proto = {
+    .name = "get_retval",
+    .return_type = EBPF_RETURN_TYPE_INTEGER,
+};
+
+// User ringbuf (UNSUPPORTED - user ringbuf not implemented)
+static constexpr EbpfHelperPrototype bpf_user_ringbuf_drain_proto = {
+    .name = "user_ringbuf_drain",
+    .return_type = EBPF_RETURN_TYPE_INTEGER,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_MAP,
+            EBPF_ARGUMENT_TYPE_PTR_TO_FUNC,
+            EBPF_ARGUMENT_TYPE_PTR_TO_STACK_OR_NULL,
+            EBPF_ARGUMENT_TYPE_ANYTHING,
+        },
+    .unsupported = true,
+};
+
+// Cgroup storage
+static constexpr EbpfHelperPrototype bpf_cgrp_storage_get_proto = {
+    .name = "cgrp_storage_get",
+    .return_type = EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_MAP,
+            EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID,
+            EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE,
+            EBPF_ARGUMENT_TYPE_ANYTHING,
+        },
+};
+
+static constexpr EbpfHelperPrototype bpf_cgrp_storage_delete_proto = {
+    .name = "cgrp_storage_delete",
+    .return_type = EBPF_RETURN_TYPE_INTEGER,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_MAP,
+            EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID,
+        },
+};
+// Helper 83 - skb_ancestor_cgroup_id
+static constexpr EbpfHelperPrototype bpf_skb_ancestor_cgroup_id_proto = {
+    .name = "skb_ancestor_cgroup_id",
+    .return_type = EBPF_RETURN_TYPE_INTEGER,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
+            EBPF_ARGUMENT_TYPE_ANYTHING, // ancestor_level
+        },
+    .context_descriptor = &g_sk_buff,
+};
+
+// Helper 122 - get_netns_cookie
+static constexpr EbpfHelperPrototype bpf_get_netns_cookie_proto = {
+    .name = "get_netns_cookie",
+    .return_type = EBPF_RETURN_TYPE_INTEGER,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_CTX, // Can be NULL or various context types
+        },
+};
+
+// Helper 142 - load_hdr_opt (sock_ops_load_hdr_opt)
+static constexpr EbpfHelperPrototype bpf_load_hdr_opt_proto = {
+    .name = "load_hdr_opt",
+    .return_type = EBPF_RETURN_TYPE_INTEGER,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
+            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM, // searchby_res
+            EBPF_ARGUMENT_TYPE_CONST_SIZE,          // len
+            EBPF_ARGUMENT_TYPE_ANYTHING,            // flags
+        },
+    .context_descriptor = &g_sock_ops_descr,
+};
+
+// Helper 143 - store_hdr_opt (sock_ops_store_hdr_opt)
+static constexpr EbpfHelperPrototype bpf_store_hdr_opt_proto = {
+    .name = "store_hdr_opt",
+    .return_type = EBPF_RETURN_TYPE_INTEGER,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
+            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // from
+            EBPF_ARGUMENT_TYPE_CONST_SIZE,          // len
+            EBPF_ARGUMENT_TYPE_ANYTHING,            // flags
+        },
+    .context_descriptor = &g_sock_ops_descr,
+};
+
+// Helper 144 - reserve_hdr_opt (sock_ops_reserve_hdr_opt)
+static constexpr EbpfHelperPrototype bpf_reserve_hdr_opt_proto = {
+    .name = "reserve_hdr_opt",
+    .return_type = EBPF_RETURN_TYPE_INTEGER,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
+            EBPF_ARGUMENT_TYPE_ANYTHING, // len
+            EBPF_ARGUMENT_TYPE_ANYTHING, // flags
+        },
+    .context_descriptor = &g_sock_ops_descr,
+};
+
+// Helper 188 - xdp_get_buff_len
+static constexpr EbpfHelperPrototype bpf_xdp_get_buff_len_proto = {
+    .name = "xdp_get_buff_len",
+    .return_type = EBPF_RETURN_TYPE_INTEGER,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
+        },
+    .context_descriptor = &g_xdp_md,
+};
+
+// Helper 189 - xdp_load_bytes
+static constexpr EbpfHelperPrototype bpf_xdp_load_bytes_proto = {
+    .name = "xdp_load_bytes",
+    .return_type = EBPF_RETURN_TYPE_INTEGER,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
+            EBPF_ARGUMENT_TYPE_ANYTHING,            // offset
+            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM, // buf
+            EBPF_ARGUMENT_TYPE_CONST_SIZE,          // len
+        },
+    .context_descriptor = &g_xdp_md,
+};
+
+// Helper 190 - xdp_store_bytes
+static constexpr EbpfHelperPrototype bpf_xdp_store_bytes_proto = {
+    .name = "xdp_store_bytes",
+    .return_type = EBPF_RETURN_TYPE_INTEGER,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
+            EBPF_ARGUMENT_TYPE_ANYTHING,            // offset
+            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // buf
+            EBPF_ARGUMENT_TYPE_CONST_SIZE,          // len
+        },
+    .context_descriptor = &g_xdp_md,
+};
+
+// Helper 192 - skb_set_tstamp
+static constexpr EbpfHelperPrototype bpf_skb_set_tstamp_proto = {
+    .name = "skb_set_tstamp",
+    .return_type = EBPF_RETURN_TYPE_INTEGER,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
+            EBPF_ARGUMENT_TYPE_ANYTHING, // tstamp (u64)
+            EBPF_ARGUMENT_TYPE_ANYTHING, // tstamp_type (u32)
+        },
+    .context_descriptor = &g_sk_buff,
+};
+
+// Helper 193 - ima_file_hash
+static constexpr EbpfHelperPrototype bpf_ima_file_hash_proto = {
+    .name = "ima_file_hash",
+    .return_type = EBPF_RETURN_TYPE_INTEGER,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID,       // file
+            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM, // dst
+            EBPF_ARGUMENT_TYPE_CONST_SIZE,          // size
+        },
+};
+
+// Helper 194 - kptr_xchg
+static constexpr EbpfHelperPrototype bpf_kptr_xchg_proto = {
+    .name = "kptr_xchg",
+    .return_type = EBPF_RETURN_TYPE_PTR_TO_BTF_ID_OR_NULL,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE, // dst (kptr location)
+            EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID,    // ptr (can be NULL)
+        },
+};
+
+// Helper 197 - dynptr_from_mem (UNSUPPORTED - dynptr not implemented)
+static constexpr EbpfHelperPrototype bpf_dynptr_from_mem_proto = {
+    .name = "dynptr_from_mem",
+    .return_type = EBPF_RETURN_TYPE_INTEGER,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE,    // data
+            EBPF_ARGUMENT_TYPE_ANYTHING,            // size
+            EBPF_ARGUMENT_TYPE_ANYTHING,            // flags
+            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM, // ptr (dynptr out)
+        },
+    .unsupported = true,
+};
+
+// Helper 201 - dynptr_read
+static constexpr EbpfHelperPrototype bpf_dynptr_read_proto = {
+    .name = "dynptr_read",
+    .return_type = EBPF_RETURN_TYPE_INTEGER, // Returns 0 on success, negative error on failure
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM, // dst
+            EBPF_ARGUMENT_TYPE_CONST_SIZE,          // len
+            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // src (dynptr)
+            EBPF_ARGUMENT_TYPE_ANYTHING,            // offset
+            EBPF_ARGUMENT_TYPE_ANYTHING,            // flags
+        },
+    .unsupported = true,
+};
+
+// Helper 202 - dynptr_write
+static constexpr EbpfHelperPrototype bpf_dynptr_write_proto = {
+    .name = "dynptr_write",
+    .return_type = EBPF_RETURN_TYPE_INTEGER, // Returns 0 on success, negative error on failure
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM, // dst (dynptr)
+            EBPF_ARGUMENT_TYPE_ANYTHING,            // offset
+            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // src
+            EBPF_ARGUMENT_TYPE_CONST_SIZE,          // len
+            EBPF_ARGUMENT_TYPE_ANYTHING,            // flags
+        },
+    .unsupported = true,
+};
+
+// Helper 203 - dynptr_data
+static constexpr EbpfHelperPrototype bpf_dynptr_data_proto = {
+    .name = "dynptr_data",
+    .return_type = EBPF_RETURN_TYPE_PTR_TO_MEM_OR_BTF_ID_OR_NULL, // Pointer or NULL
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // ptr (dynptr)
+            EBPF_ARGUMENT_TYPE_ANYTHING,            // offset
+            EBPF_ARGUMENT_TYPE_ANYTHING,            // len
+        },
+    .unsupported = true,
+};
+
+// Helper 204 - tcp_raw_gen_syncookie_ipv4
+static constexpr EbpfHelperPrototype bpf_tcp_raw_gen_syncookie_ipv4_proto = {
+    .name = "tcp_raw_gen_syncookie_ipv4",
+    .return_type = EBPF_RETURN_TYPE_INTEGER,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // iph
+            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // th
+            EBPF_ARGUMENT_TYPE_ANYTHING,            // th_len
+        },
+};
+
+// Helper 205 - tcp_raw_gen_syncookie_ipv6
+static constexpr EbpfHelperPrototype bpf_tcp_raw_gen_syncookie_ipv6_proto = {
+    .name = "tcp_raw_gen_syncookie_ipv6",
+    .return_type = EBPF_RETURN_TYPE_INTEGER,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // iph
+            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // th
+            EBPF_ARGUMENT_TYPE_ANYTHING,            // th_len
+        },
+};
+
+// Helper 206 - tcp_raw_check_syncookie_ipv4
+static constexpr EbpfHelperPrototype bpf_tcp_raw_check_syncookie_ipv4_proto = {
+    .name = "tcp_raw_check_syncookie_ipv4",
+    .return_type = EBPF_RETURN_TYPE_INTEGER,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // iph
+            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // th
+        },
+};
+
+// Helper 207 - tcp_raw_check_syncookie_ipv6
+static constexpr EbpfHelperPrototype bpf_tcp_raw_check_syncookie_ipv6_proto = {
+    .name = "tcp_raw_check_syncookie_ipv6",
+    .return_type = EBPF_RETURN_TYPE_INTEGER,
+    .argument_type =
+        {
+            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // iph
+            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // th
+        },
+};
+
+#define FN(N, x) bpf_##x##_proto
+static constexpr EbpfHelperPrototype prototypes[] = {
+    FN(0, unspec),
+    FN(1, map_lookup_elem),
+    FN(2, map_update_elem),
+    FN(3, map_delete_elem),
+    FN(4, probe_read),
+    FN(5, ktime_get_ns),
+    FN(6, trace_printk),
+    FN(7, get_prandom_u32),
+    FN(8, get_smp_processor_id),
+    FN(9, skb_store_bytes),
+    FN(10, l3_csum_replace),
+    FN(11, l4_csum_replace),
+    FN(12, tail_call),
+    FN(13, clone_redirect),
+    FN(14, get_current_pid_tgid),
+    FN(15, get_current_uid_gid),
+    FN(16, get_current_comm),
+    FN(17, get_cgroup_classid),
+    FN(18, skb_vlan_push),
+    FN(19, skb_vlan_pop),
+    FN(20, skb_get_tunnel_key),
+    FN(21, skb_set_tunnel_key),
+    FN(22, perf_event_read),
+    FN(23, redirect),
+    FN(24, get_route_realm),
+    FN(25, perf_event_output),
+    FN(26, skb_load_bytes),
+    FN(27, get_stackid),
+    FN(28, csum_diff),
+    FN(29, skb_get_tunnel_opt),
+    FN(30, skb_set_tunnel_opt),
+    FN(31, skb_change_proto),
+    FN(32, skb_change_type),
+    FN(33, skb_under_cgroup),
+    FN(34, get_hash_recalc),
+    FN(35, get_current_task),
+    FN(36, probe_write_user),
+    FN(37, current_task_under_cgroup),
+    FN(38, skb_change_tail),
+    FN(39, skb_pull_data),
+    FN(40, csum_update),
+    FN(41, set_hash_invalid),
+    FN(42, get_numa_node_id),
+    FN(43, skb_change_head),
+    FN(44, xdp_adjust_head),
+    FN(45, probe_read_str),
+    FN(46, get_socket_cookie),
+    FN(47, get_socket_uid),
+    FN(48, set_hash),
+    FN(49, setsockopt),
+    FN(50, skb_adjust_room),
+    FN(51, redirect_map),
+    FN(52, sk_redirect_map),
+    FN(53, sock_map_update),
+    FN(54, xdp_adjust_meta),
+    FN(55, perf_event_read_value),
+    FN(56, perf_prog_read_value),
+    FN(57, getsockopt),
+    FN(58, override_return),
+    FN(59, sock_ops_cb_flags_set),
+    FN(60, msg_redirect_map),
+    FN(61, msg_apply_bytes),
+    FN(62, msg_cork_bytes),
+    FN(63, msg_pull_data),
+    FN(64, bind),
+    FN(65, xdp_adjust_tail),
+    FN(66, skb_get_xfrm_state),
+    FN(67, get_stack),
+    FN(68, skb_load_bytes_relative),
+    FN(69, fib_lookup),
+    FN(70, sock_hash_update),
+    FN(71, msg_redirect_hash),
+    FN(72, sk_redirect_hash),
+    FN(73, lwt_push_encap),
+    FN(74, lwt_seg6_store_bytes),
+    FN(75, lwt_seg6_adjust_srh),
+    FN(76, lwt_seg6_action),
+    FN(77, rc_repeat),
+    FN(78, rc_keydown),
+    FN(79, skb_cgroup_id),
+    FN(80, get_current_cgroup_id),
+    FN(81, get_local_storage),
+    FN(82, sk_select_reuseport),
+    FN(83, skb_ancestor_cgroup_id),
+    FN(84, sk_lookup_tcp),
+    FN(85, sk_lookup_udp),
+    FN(86, sk_release),
+    FN(87, map_push_elem),
+    FN(88, map_pop_elem),
+    FN(89, map_peek_elem),
+    FN(90, msg_push_data),
+    FN(91, msg_pop_data),
+    FN(92, rc_pointer_rel),
+    FN(93, spin_lock),
+    FN(94, spin_unlock),
+    FN(95, sk_fullsock),
+    FN(96, tcp_sock),
+    FN(97, skb_ecn_set_ce),
+    FN(98, get_listener_sock),
+    FN(99, skc_lookup_tcp),
+    FN(100, tcp_check_syncookie),
+    FN(101, sysctl_get_name),
+    FN(102, sysctl_get_current_value),
+    FN(103, sysctl_get_new_value),
+    FN(104, sysctl_set_new_value),
+    FN(105, strtol),
+    FN(106, strtoul),
+    FN(107, sk_storage_get),
+    FN(108, sk_storage_delete),
+    FN(109, send_signal),
+    FN(110, tcp_gen_syncookie),
+    FN(111, skb_output),
+    FN(112, probe_read_user),
+    FN(113, probe_read_kernel),
+    FN(114, probe_read_user_str),
+    FN(115, probe_read_kernel_str),
+    FN(116, tcp_send_ack),
+    FN(117, send_signal_thread),
+    FN(118, jiffies64),
+    FN(119, read_branch_records),
+    FN(120, get_ns_current_pid_tgid),
+    FN(121, xdp_output),
+    FN(122, get_netns_cookie),
+    FN(123, get_current_ancestor_cgroup_id),
+    FN(124, sk_assign),
+    FN(125, ktime_get_boot_ns),
+    FN(126, seq_printf),
+    FN(127, seq_write),
+    FN(128, sk_cgroup_id),
+    FN(129, sk_ancestor_cgroup_id),
+    FN(130, ringbuf_output),
+    FN(131, ringbuf_reserve),
+    FN(132, ringbuf_submit),
+    FN(133, ringbuf_discard),
+    FN(134, ringbuf_query),
+    FN(135, csum_level),
+    FN(136, skc_to_tcp6_sock),
+    FN(137, skc_to_tcp_sock),
+    FN(138, skc_to_tcp_timewait_sock),
+    FN(139, skc_to_tcp_request_sock),
+    FN(140, skc_to_udp6_sock),
+    FN(141, get_task_stack),
+    FN(142, load_hdr_opt),
+    FN(143, store_hdr_opt),
+    FN(144, reserve_hdr_opt),
+    FN(145, inode_storage_get),
+    FN(146, inode_storage_delete),
+    FN(147, d_path),
+    FN(148, copy_from_user),
+    FN(149, snprintf_btf),
+    FN(150, seq_printf_btf),
+    FN(151, skb_cgroup_classid),
+    FN(152, redirect_neigh),
+    FN(153, per_cpu_ptr),
+    FN(154, this_cpu_ptr),
+    FN(155, redirect_peer),
+    FN(156, task_storage_get),
+    FN(157, task_storage_delete),
+    FN(158, get_current_task_btf),
+    FN(159, bprm_opts_set),
+    FN(160, ktime_get_coarse_ns),
+    FN(161, ima_inode_hash),
+    FN(162, sock_from_file),
+    FN(163, check_mtu),
+    FN(164, for_each_map_elem),
+    FN(165, snprintf),
+    FN(166, sys_bpf),
+    FN(167, btf_find_by_name_kind),
+    FN(168, sys_close),
+    FN(169, timer_init),
+    FN(170, timer_set_callback),
+    FN(171, timer_start),
+    FN(172, timer_cancel),
+    FN(173, get_func_ip),
+    FN(174, get_attach_cookie),
+    FN(175, task_pt_regs),
+    FN(176, get_branch_snapshot),
+    FN(177, trace_vprintk),
+    FN(178, skc_to_unix_sock),
+    FN(179, kallsyms_lookup_name),
+    FN(180, find_vma),
+    FN(181, loop),
+    FN(182, strncmp),
+    FN(183, get_func_arg),
+    FN(184, get_func_ret),
+    FN(185, get_func_arg_cnt),
+    FN(186, get_retval),
+    FN(187, set_retval),
+    FN(188, xdp_get_buff_len),
+    FN(189, xdp_load_bytes),
+    FN(190, xdp_store_bytes),
+    FN(191, copy_from_user_task),
+    FN(192, skb_set_tstamp),
+    FN(193, ima_file_hash),
+    FN(194, kptr_xchg),
+    FN(195, map_lookup_percpu_elem),
+    FN(196, skc_to_mptcp_sock),
+    FN(197, dynptr_from_mem),
+    FN(198, ringbuf_reserve_dynptr),
+    FN(199, ringbuf_submit_dynptr),
+    FN(200, ringbuf_discard_dynptr),
+    FN(201, dynptr_read),
+    FN(202, dynptr_write),
+    FN(203, dynptr_data),
+    FN(204, tcp_raw_gen_syncookie_ipv4),
+    FN(205, tcp_raw_gen_syncookie_ipv6),
+    FN(206, tcp_raw_check_syncookie_ipv4),
+    FN(207, tcp_raw_check_syncookie_ipv6),
+    FN(208, ktime_get_tai_ns),
+    FN(209, user_ringbuf_drain),
+    FN(210, cgrp_storage_get),
+    FN(211, cgrp_storage_delete),
 };
 
 bool is_helper_usable_linux(const int32_t n) {
@@ -2280,9 +2748,14 @@ bool is_helper_usable_linux(const int32_t n) {
         return false;
     }
 
+    // Check if explicitly marked as unsupported
+    if (prototypes[n].unsupported) {
+        return false;
+    }
+
     // If the helper has a context_descriptor, it must match the hook's context_descriptor.
-    if ((prototypes[n].context_descriptor != nullptr) &&
-        (prototypes[n].context_descriptor != thread_local_program_info->type.context_descriptor)) {
+    if (prototypes[n].context_descriptor &&
+        prototypes[n].context_descriptor != thread_local_program_info->type.context_descriptor) {
         return false;
     }
 

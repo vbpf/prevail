@@ -63,9 +63,9 @@ using OnRequire = std::function<void(TypeToNumDomain&, const LinearConstraint&, 
 
 class EbpfChecker final {
   public:
-    explicit EbpfChecker(EbpfDomain& dom, const Assertion& assertion, const OnRequire& on_require_type,
-                         const OnRequire& on_require_value)
-        : assertion{assertion}, on_require_type{on_require_type}, on_require_value{on_require_value}, dom(dom) {}
+    explicit EbpfChecker(EbpfDomain& dom, Assertion assertion, OnRequire on_require_type, OnRequire on_require_value)
+        : assertion{std::move(assertion)}, on_require_type{std::move(on_require_type)},
+          on_require_value{std::move(on_require_value)}, dom(dom) {}
 
     void visit(const Assertion& assertion) { std::visit(*this, assertion); }
 
