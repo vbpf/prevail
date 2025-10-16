@@ -83,7 +83,10 @@ class EbpfChecker final {
     void operator()(const ZeroCtxOffset&) const;
 
   private:
-    std::string create_warning(const std::string& s) const { return s + " (" + to_string(assertion) + ")"; }
+    [[nodiscard]]
+    std::string create_warning(const std::string& s) const {
+        return s + " (" + to_string(assertion) + ")";
+    }
 
     void require_value(TypeToNumDomain& inv, const LinearConstraint& cst, const std::string& msg) const {
         on_require_value(inv, cst, create_warning(msg));
@@ -252,7 +255,7 @@ void EbpfChecker::operator()(const BoundedLoopCount& s) const {
     // does not exceed the specified limit
     using namespace dsl_syntax;
     const auto counter = variable_registry->loop_counter(to_string(s.name));
-    require_value(dom.rcp, counter <= s.limit, "Loop counter is too large");
+    require_value(dom.rcp, counter <= BoundedLoopCount::limit, "Loop counter is too large");
 }
 
 void EbpfChecker::operator()(const FuncConstraint& s) const {

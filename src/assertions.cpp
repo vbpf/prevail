@@ -27,6 +27,7 @@ class AssertExtractor {
         return res;
     }
 
+    [[nodiscard]]
     ValidAccess make_valid_access(const Reg reg, const int32_t offset = {}, const Value& width = Imm{0},
                                   const bool or_null = {}, const AccessType access_type = {}) const {
         const int depth = current_label.has_value() ? current_label.value().call_stack_depth() : 1;
@@ -35,7 +36,7 @@ class AssertExtractor {
 
   public:
     explicit AssertExtractor(ProgramInfo info, std::optional<Label> label)
-        : info{std::move(info)}, current_label(label) {}
+        : info{std::move(info)}, current_label(std::move(label)) {}
 
     vector<Assertion> operator()(const Undefined&) const {
         // assert(false);
