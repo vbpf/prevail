@@ -757,7 +757,6 @@ void EbpfTransformer::operator()(const Call& call) {
     }
     for (ArgPair param : call.pairs) {
         switch (param.kind) {
-        case ArgPair::Kind::PTR_TO_READABLE_MEM_OR_NULL:
         case ArgPair::Kind::PTR_TO_READABLE_MEM:
             // Do nothing. No side effect allowed.
             break;
