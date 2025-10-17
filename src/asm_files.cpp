@@ -321,7 +321,7 @@ static elf_global_data parse_btf_section(const parse_params_t& parse_params, con
 
 /// @brief Create implicit map descriptors for global variable sections.
 ///
-/// In BPF, global variables are implemented as single-entry array maps:
+/// In eBPF, global variables are implemented as single-entry array maps:
 /// - .data section → read-write array map (initialized globals)
 /// - .rodata section → read-only array map (constants)
 /// - .bss section → zero-initialized array map (uninitialized globals)
@@ -713,7 +713,13 @@ int ProgramReader::relocate_map(const std::string& name, const ELFIO::Elf_Word i
     if (const auto* record_size = std::get_if<size_t>(&global.map_record_size_or_map_offsets)) {
         // Legacy path: map symbol value is byte offset into maps section
         // Divide by struct size to get descriptor index
-        val = get_symbol_details(symbols, index).value / *record_size;
+        const auto symbol_value = get_symbol_details(symbols, index).value;
+        if (symbol_value % *record_size != 0) {
+            throw UnmarshalError("Map symbol offset " + std::to_string(symbol_value) +
+                                 " is not aligned to record size " + std::to_string(*record_size));
+        }
+
+        val = symbol_value / *record_size;
     } else {
         // BTF path: use map name to look up descriptor index
         const auto& offsets = std::get<MapOffsets>(global.map_record_size_or_map_offsets);
@@ -816,7 +822,7 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
 
     return false;
 }
-// In class ProgramReader, replace the existing process_relocations function:
+
 void ProgramReader::process_relocations(std::vector<EbpfInst>& instructions,
                                         const ELFIO::const_relocation_section_accessor& reloc,
                                         const std::string& section_name, const ELFIO::Elf_Xword program_offset,
