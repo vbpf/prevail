@@ -33,21 +33,6 @@
 
 namespace prevail {
 
-/// Interface:
-
-/// Read an ELF file and return the programs in the desired section.
-/// @param input_stream The input stream to read the ELF file from.
-/// @param path The path to the ELF file (for error messages).
-/// @param desired_section The section to read programs from.
-/// @param options Verifier options (control verbosity, platform behavior, etc.).
-/// @param platform pointer handling platform-specific behavior.
-/// @return a vector of parsed and relocated RawProgram structs.
-std::vector<RawProgram> read_elf(std::istream& input_stream, const std::string& path,
-                                 const std::string& desired_section, const ebpf_verifier_options_t& options,
-                                 const ebpf_platform_t* platform);
-// =====
-// The rest of this file is internal implementation details.
-
 template <typename T>
     requires std::is_trivially_copyable_v<T>
 static std::vector<T> vector_of(const char* data, ELFIO::Elf_Xword size) {
@@ -119,18 +104,6 @@ struct parse_params_t {
     const ebpf_platform_t* platform;
     const std::string desired_section;
 };
-
-std::vector<RawProgram> read_elf(const std::string& path, const std::string& desired_section,
-                                 const ebpf_verifier_options_t& options, const ebpf_platform_t* platform) {
-    if (std::ifstream stream{path, std::ios::in | std::ios::binary}) {
-        return read_elf(stream, path, desired_section, options, platform);
-    }
-    struct stat st; // NOLINT(*-pro-type-member-init)
-    if (stat(path.c_str(), &st)) {
-        throw UnmarshalError(std::string(strerror(errno)) + " opening " + path);
-    }
-    throw UnmarshalError("Can't process ELF file " + path);
-}
 
 static std::tuple<std::string, ELFIO::Elf_Xword>
 get_program_name_and_size(const ELFIO::section& sec, const ELFIO::Elf_Xword start,
@@ -758,7 +731,6 @@ int ProgramReader::relocate_map(const std::string& name, const ELFIO::Elf_Word i
     if (const auto* record_size = std::get_if<size_t>(&global.map_record_size_or_map_offsets)) {
         // Legacy path: map symbol value is byte offset into maps section
         // Divide by struct size to get descriptor index
-        std::cerr << "DEBUG: Using LEGACY path for '" << name << "'" << std::endl;
         const auto symbol_value = get_symbol_details(symbols, index).value;
         if (symbol_value % *record_size != 0) {
             throw UnmarshalError("Map symbol offset " + std::to_string(symbol_value) +
@@ -768,7 +740,6 @@ int ProgramReader::relocate_map(const std::string& name, const ELFIO::Elf_Word i
         val = symbol_value / *record_size;
     } else {
         // BTF path: use map name to look up descriptor index
-        std::cerr << "DEBUG: Using BTF path for '" << name << "'" << std::endl;
         const auto& offsets = std::get<MapOffsets>(global.map_record_size_or_map_offsets);
         const auto it = offsets.find(name);
         if (it == offsets.end()) {
@@ -779,12 +750,6 @@ int ProgramReader::relocate_map(const std::string& name, const ELFIO::Elf_Word i
     if (val >= global.map_descriptors.size()) {
         throw UnmarshalError(bad_reloc_value(val));
     }
-    const int fd = global.map_descriptors.at(val).original_fd;
-    if (fd == 0) {
-        std::cerr << "WARNING: Map '" << name << "' has FD=0 (val=" << val
-                  << ", descriptor count=" << global.map_descriptors.size() << ")" << std::endl;
-    }
-
     return global.map_descriptors.at(val).original_fd;
 }
 
@@ -807,12 +772,6 @@ int ProgramReader::relocate_global_variable(const std::string& name) const {
 bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_Half symbol_section_index,
                               std::vector<EbpfInst>& instructions, const size_t location, const ELFIO::Elf_Word index,
                               ELFIO::Elf_Sxword addend) {
-    if (location <= 7) { // The problematic instruction
-        std::cerr << "DEBUG: try_reloc at location " << location << " symbol_name='" << symbol_name << "'"
-                  << " section_index=" << symbol_section_index << " opcode=0x" << std::hex
-                  << (int)instructions[location].opcode << " src=" << std::dec << (int)instructions[location].src
-                  << " imm=" << instructions[location].imm << std::endl;
-    }
     // Handle empty symbol names for global variable sections
     // These occur in legacy ELF files where relocations reference
     // section symbols rather than named variable symbols
@@ -899,6 +858,10 @@ void ProgramReader::process_relocations(std::vector<EbpfInst>& instructions,
                 continue;
             }
             o -= program_offset;
+
+            if (o % sizeof(EbpfInst) != 0) {
+                throw UnmarshalError("Unaligned relocation offset");
+            }
             const auto loc = o / sizeof(EbpfInst);
             if (loc >= instructions.size()) {
                 throw UnmarshalError("Invalid relocation");
@@ -997,4 +960,17 @@ std::vector<RawProgram> read_elf(std::istream& input_stream, const std::string& 
     program_reader.read_programs();
     return std::move(program_reader.raw_programs);
 }
+
+std::vector<RawProgram> read_elf(const std::string& path, const std::string& desired_section,
+                                 const ebpf_verifier_options_t& options, const ebpf_platform_t* platform) {
+    if (std::ifstream stream{path, std::ios::in | std::ios::binary}) {
+        return read_elf(stream, path, desired_section, options, platform);
+    }
+    struct stat st; // NOLINT(*-pro-type-member-init)
+    if (stat(path.c_str(), &st)) {
+        throw UnmarshalError(std::string(strerror(errno)) + " opening " + path);
+    }
+    throw UnmarshalError("Can't process ELF file " + path);
+}
+
 } // namespace prevail
