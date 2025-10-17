@@ -1,5 +1,9 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
+#include <algorithm>
+#include <cerrno>
+#include <cstddef>
+#include <cstring>
 #include <iostream>
 #include <map>
 #include <set>
@@ -272,12 +276,14 @@ static elf_global_data parse_btf_section(const parse_params_t& parse_params, con
     // Parse BTF-defined maps
     for (const auto& map : parse_btf_map_section(btf_data)) {
         map_offsets.emplace(map.name, global.map_descriptors.size());
-        global.map_descriptors.push_back({.original_fd = gsl::narrow<int>(map.type_id),
-                                          .type = map.map_type,
-                                          .key_size = map.key_size,
-                                          .value_size = map.value_size,
-                                          .max_entries = map.max_entries,
-                                          .inner_map_fd = map.inner_map_type_id != 0 ? map.inner_map_type_id : -1});
+        global.map_descriptors.push_back({
+            .original_fd = gsl::narrow<int>(map.type_id),
+            .type = map.map_type,
+            .key_size = map.key_size,
+            .value_size = map.value_size,
+            .max_entries = map.max_entries,
+            .inner_map_fd = map.inner_map_type_id != 0 ? map.inner_map_type_id : -1,
+        });
     }
 
     const auto type_id_to_fd_map = map_typeid_to_fd(global.map_descriptors);
@@ -356,6 +362,7 @@ static elf_global_data parse_map_sections(const parse_params_t& parse_params, co
                                           const ELFIO::const_symbol_section_accessor& symbols) {
     elf_global_data global;
     std::map<ELFIO::Elf_Half, size_t> section_record_sizes; // Per-section record sizes
+    std::map<ELFIO::Elf_Half, size_t> section_base_index;   // Starting index in global.map_descriptors for each section
 
     for (ELFIO::Elf_Half i = 0; i < reader.sections.size(); ++i) {
         const auto s = reader.sections[i];
@@ -372,11 +379,13 @@ static elf_global_data parse_map_sections(const parse_params_t& parse_params, co
         }
 
         if (map_count > 0) {
+            const size_t base_index = global.map_descriptors.size();
             const size_t map_record_size = s->get_size() / map_count;
             if (s->get_data() == nullptr || map_record_size == 0 || s->get_size() % map_record_size != 0) {
                 throw UnmarshalError("bad maps section");
             }
             section_record_sizes[i] = map_record_size; // Store per-section
+            section_base_index[i] = base_index;        // Store starting descriptor index
             parse_params.platform->parse_maps_section(global.map_descriptors, s->get_data(), map_record_size, map_count,
                                                       parse_params.platform, parse_params.options);
         }
@@ -394,10 +403,14 @@ static elf_global_data parse_map_sections(const parse_params_t& parse_params, co
         const auto sym_details = get_symbol_details(symbols, index);
         if (global.map_section_indices.contains(sym_details.section_index) && !sym_details.name.empty()) {
             const auto it = section_record_sizes.find(sym_details.section_index);
-            if (it != section_record_sizes.end()) {
-                const size_t descriptor_index = sym_details.value / it->second; // Use correct size!
+            const auto bit = section_base_index.find(sym_details.section_index);
+            if (it != section_record_sizes.end() && bit != section_base_index.end()) {
+                const size_t local_index = sym_details.value / it->second;
+                const size_t descriptor_index = bit->second + local_index;
                 if (descriptor_index < global.map_descriptors.size()) {
                     map_offsets[sym_details.name] = descriptor_index;
+                } else {
+                    throw UnmarshalError("Legacy map symbol index out of range");
                 }
             }
         }

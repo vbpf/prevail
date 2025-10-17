@@ -238,14 +238,15 @@ EbpfMapDescriptor& get_map_descriptor_linux(const int map_fd) {
     throw UnmarshalError("map_fd " + std::to_string(map_fd) + " not found");
 }
 
-const ebpf_platform_t g_ebpf_platform_linux = {get_program_type_linux,
-                                               get_helper_prototype_linux,
-                                               is_helper_usable_linux,
-                                               sizeof(BpfLoadMapDef),
-                                               parse_maps_section_linux,
-                                               get_map_descriptor_linux,
-                                               get_map_type_linux,
-                                               resolve_inner_map_references_linux,
-                                               bpf_conformance_groups_t::default_groups |
-                                                   bpf_conformance_groups_t::packet};
+const ebpf_platform_t g_ebpf_platform_linux = {
+    get_program_type_linux,
+    get_helper_prototype_linux,
+    is_helper_usable_linux,
+    sizeof(BpfLoadMapDef),
+    parse_maps_section_linux,
+    get_map_descriptor_linux,
+    get_map_type_linux,
+    resolve_inner_map_references_linux,
+    bpf_conformance_groups_t::default_groups | bpf_conformance_groups_t::packet,
+};
 } // namespace prevail
