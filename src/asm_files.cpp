@@ -611,8 +611,9 @@ void ProgramReader::process_core_relocations(const libbtf::btf_type_data& btf_da
     const char* btf_ext_data = btf_ext_sec->get_data();
     const ELFIO::const_relocation_section_accessor relocs(reader, relo_sec);
 
-    // Define the expected ELF relocation type for CO-RE.
-    // This is R_BPF_64_NODYLD32 from the ELF specification for BPF.
+    // R_BPF_64_NODYLD32 from the kernel UAPI (linux/bpf.h)
+    // This relocation type is specifically for CO-RE field access relocations.
+    // The value 19 is stable across kernel versions as part of the BPF ELF ABI.
     constexpr unsigned int R_BPF_64_NODYLD32 = 19;
 
     for (ELFIO::Elf_Xword i = 0; i < relocs.get_entries_num(); i++) {
