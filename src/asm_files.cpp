@@ -230,7 +230,7 @@ static ELFIO::elfio load_elf(std::istream& input_stream, const std::string& path
 
 static void dump_btf_types(const libbtf::btf_type_data& btf_data, const std::string& path) {
     std::stringstream output;
-    std::cout << "Dumping BTF data for" << path << std::endl;
+    std::cout << "Dumping BTF data for " << path << std::endl;
     btf_data.to_json(output);
     std::cout << libbtf::pretty_print_json(output.str()) << std::endl;
 }
