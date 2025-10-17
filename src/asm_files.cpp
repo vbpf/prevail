@@ -295,6 +295,8 @@ static elf_global_data parse_btf_section(const parse_params_t& parse_params, con
 
     elf_global_data global;
     MapOffsets map_offsets;
+
+    // Parse BTF-defined maps
     for (const auto& map : parse_btf_map_section(btf_data)) {
         map_offsets.emplace(map.name, global.map_descriptors.size());
         global.map_descriptors.push_back({.original_fd = gsl::narrow<int>(map.type_id),
@@ -304,7 +306,6 @@ static elf_global_data parse_btf_section(const parse_params_t& parse_params, con
                                           .max_entries = map.max_entries,
                                           .inner_map_fd = map.inner_map_type_id != 0 ? map.inner_map_type_id : -1});
     }
-    global.map_record_size_or_map_offsets = std::move(map_offsets);
 
     const auto type_id_to_fd_map = map_typeid_to_fd(global.map_descriptors);
     for (auto& desc : global.map_descriptors) {
@@ -317,9 +318,22 @@ static elf_global_data parse_btf_section(const parse_params_t& parse_params, con
     if (const auto maps_section = reader.sections[".maps"]) {
         global.map_section_indices.insert(maps_section->get_index());
     }
+
+    // Create implicit maps for ALL global variable sections (including .rodata.config!)
     for (const auto section : global_sections(reader)) {
+        map_offsets[section->get_name()] = global.map_descriptors.size();
+        global.map_descriptors.push_back(EbpfMapDescriptor{
+            .original_fd = gsl::narrow<int>(global.map_descriptors.size() + 1),
+            .type = 0,
+            .key_size = sizeof(uint32_t),
+            .value_size = gsl::narrow<uint32_t>(section->get_size()),
+            .max_entries = 1,
+            .inner_map_fd = 0,
+        });
         global.variable_section_indices.insert(section->get_index());
     }
+
+    global.map_record_size_or_map_offsets = std::move(map_offsets);
     return global;
 }
 
@@ -395,13 +409,38 @@ static elf_global_data parse_map_sections(const parse_params_t& parse_params, co
         global.map_section_indices.insert(s->get_index());
     }
     parse_params.platform->resolve_inner_map_references(global.map_descriptors);
-    global.map_record_size_or_map_offsets = map_record_size;
+    // DON'T set map_record_size_or_map_offsets yet - we need MapOffsets mode
 
-    // For legacy files, mark global variable sections but DON'T create implicit maps
-    // The platform's parse_maps_section should have already handled them if needed
+    // For legacy files with global variable sections, create implicit maps
+    // Switch to MapOffsets mode to allow both maps and globals
+    MapOffsets map_offsets;
+
+    // First, populate offsets for existing legacy maps by symbol name
+    for (ELFIO::Elf_Xword index = 0; index < symbols.get_symbols_num(); index++) {
+        const auto sym_details = get_symbol_details(symbols, index);
+        if (global.map_section_indices.contains(sym_details.section_index) && !sym_details.name.empty()) {
+            const size_t descriptor_index = sym_details.value / map_record_size;
+            if (descriptor_index < global.map_descriptors.size()) {
+                map_offsets[sym_details.name] = descriptor_index;
+            }
+        }
+    }
+
+    // Then create implicit maps for global variable sections
     for (const auto section : global_sections(reader)) {
+        map_offsets[section->get_name()] = global.map_descriptors.size();
+        global.map_descriptors.push_back(EbpfMapDescriptor{
+            .original_fd = gsl::narrow<int>(global.map_descriptors.size() + 1),
+            .type = 0,
+            .key_size = sizeof(uint32_t),
+            .value_size = gsl::narrow<uint32_t>(section->get_size()),
+            .max_entries = 1,
+            .inner_map_fd = 0,
+        });
         global.variable_section_indices.insert(section->get_index());
     }
+
+    global.map_record_size_or_map_offsets = std::move(map_offsets);
     return global;
 }
 
@@ -719,6 +758,7 @@ int ProgramReader::relocate_map(const std::string& name, const ELFIO::Elf_Word i
     if (const auto* record_size = std::get_if<size_t>(&global.map_record_size_or_map_offsets)) {
         // Legacy path: map symbol value is byte offset into maps section
         // Divide by struct size to get descriptor index
+        std::cerr << "DEBUG: Using LEGACY path for '" << name << "'" << std::endl;
         const auto symbol_value = get_symbol_details(symbols, index).value;
         if (symbol_value % *record_size != 0) {
             throw UnmarshalError("Map symbol offset " + std::to_string(symbol_value) +
@@ -728,6 +768,7 @@ int ProgramReader::relocate_map(const std::string& name, const ELFIO::Elf_Word i
         val = symbol_value / *record_size;
     } else {
         // BTF path: use map name to look up descriptor index
+        std::cerr << "DEBUG: Using BTF path for '" << name << "'" << std::endl;
         const auto& offsets = std::get<MapOffsets>(global.map_record_size_or_map_offsets);
         const auto it = offsets.find(name);
         if (it == offsets.end()) {
@@ -738,6 +779,12 @@ int ProgramReader::relocate_map(const std::string& name, const ELFIO::Elf_Word i
     if (val >= global.map_descriptors.size()) {
         throw UnmarshalError(bad_reloc_value(val));
     }
+    const int fd = global.map_descriptors.at(val).original_fd;
+    if (fd == 0) {
+        std::cerr << "WARNING: Map '" << name << "' has FD=0 (val=" << val
+                  << ", descriptor count=" << global.map_descriptors.size() << ")" << std::endl;
+    }
+
     return global.map_descriptors.at(val).original_fd;
 }
 
@@ -760,6 +807,12 @@ int ProgramReader::relocate_global_variable(const std::string& name) const {
 bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_Half symbol_section_index,
                               std::vector<EbpfInst>& instructions, const size_t location, const ELFIO::Elf_Word index,
                               ELFIO::Elf_Sxword addend) {
+    if (location <= 7) { // The problematic instruction
+        std::cerr << "DEBUG: try_reloc at location " << location << " symbol_name='" << symbol_name << "'"
+                  << " section_index=" << symbol_section_index << " opcode=0x" << std::hex
+                  << (int)instructions[location].opcode << " src=" << std::dec << (int)instructions[location].src
+                  << " imm=" << instructions[location].imm << std::endl;
+    }
     // Handle empty symbol names for global variable sections
     // These occur in legacy ELF files where relocations reference
     // section symbols rather than named variable symbols
@@ -804,10 +857,6 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
         return false;
     }
 
-    if (symbol_name.rfind("__config_", 0) == 0) {
-        instruction_to_relocate.imm = 0;
-        return true;
-    }
     // Handle map relocations
     if (global.map_section_indices.contains(symbol_section_index)) {
         instruction_to_relocate.src = INST_LD_MODE_MAP_FD;
@@ -815,24 +864,21 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
         return true;
     }
 
-    // Handle named global variables
+    // Handle named global variables (including __config_* symbols in .rodata.config!)
     if (global.variable_section_indices.contains(symbol_section_index)) {
         if (instructions.size() <= location + 1) {
             throw UnmarshalError("Invalid relocation data for global variable");
         }
-
-        // For named global variables, prefer addend (RELA) over pre-relocation immediate
-        // Addend of 0 might be legitimate (accessing offset 0), so we need to distinguish
-        // between "no addend" vs "addend is 0". For now, use addend if present (RELA section)
-        // or fall back to immediate (REL section or addend==0 in RELA).
-        //
-        // Since we can't easily detect RELA vs REL here, use: if addend != 0, prefer it.
-        // Otherwise, use the pre-relocation immediate as the offset.
         const int32_t offset = addend != 0 ? gsl::narrow<int32_t>(addend) : instruction_to_relocate.imm;
-
         instructions[location + 1].imm = offset;
         instruction_to_relocate.src = INST_LD_MODE_MAP_VALUE;
         instruction_to_relocate.imm = relocate_global_variable(reader.sections[symbol_section_index]->get_name());
+        return true;
+    }
+
+    // ONLY zero out __config_* if NOT in a variable section (legacy fallback)
+    if (symbol_name.rfind("__config_", 0) == 0) {
+        instruction_to_relocate.imm = 0;
         return true;
     }
 
