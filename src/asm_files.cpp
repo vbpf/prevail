@@ -355,7 +355,7 @@ static elf_global_data create_global_variable_maps(const ELFIO::elfio& reader) {
 static elf_global_data parse_map_sections(const parse_params_t& parse_params, const ELFIO::elfio& reader,
                                           const ELFIO::const_symbol_section_accessor& symbols) {
     elf_global_data global;
-    size_t map_record_size = parse_params.platform->map_record_size;
+    std::map<ELFIO::Elf_Half, size_t> section_record_sizes; // Per-section record sizes
 
     for (ELFIO::Elf_Half i = 0; i < reader.sections.size(); ++i) {
         const auto s = reader.sections[i];
@@ -372,10 +372,11 @@ static elf_global_data parse_map_sections(const parse_params_t& parse_params, co
         }
 
         if (map_count > 0) {
-            map_record_size = s->get_size() / map_count;
+            const size_t map_record_size = s->get_size() / map_count;
             if (s->get_data() == nullptr || map_record_size == 0 || s->get_size() % map_record_size != 0) {
                 throw UnmarshalError("bad maps section");
             }
+            section_record_sizes[i] = map_record_size; // Store per-section
             parse_params.platform->parse_maps_section(global.map_descriptors, s->get_data(), map_record_size, map_count,
                                                       parse_params.platform, parse_params.options);
         }
@@ -392,9 +393,12 @@ static elf_global_data parse_map_sections(const parse_params_t& parse_params, co
     for (ELFIO::Elf_Xword index = 0; index < symbols.get_symbols_num(); index++) {
         const auto sym_details = get_symbol_details(symbols, index);
         if (global.map_section_indices.contains(sym_details.section_index) && !sym_details.name.empty()) {
-            const size_t descriptor_index = sym_details.value / map_record_size;
-            if (descriptor_index < global.map_descriptors.size()) {
-                map_offsets[sym_details.name] = descriptor_index;
+            const auto it = section_record_sizes.find(sym_details.section_index);
+            if (it != section_record_sizes.end()) {
+                const size_t descriptor_index = sym_details.value / it->second; // Use correct size!
+                if (descriptor_index < global.map_descriptors.size()) {
+                    map_offsets[sym_details.name] = descriptor_index;
+                }
             }
         }
     }
@@ -478,7 +482,11 @@ static std::vector<uint32_t> parse_core_access_string(const std::string& s) {
     std::string item;
     while (std::getline(ss, item, ':')) {
         if (!item.empty()) {
-            indices.push_back(std::stoul(item));
+            try {
+                indices.push_back(std::stoul(item));
+            } catch (const std::exception&) {
+                throw UnmarshalError("Invalid CO-RE access string: " + s);
+            }
         }
     }
     return indices;
@@ -491,7 +499,10 @@ class ProgramReader {
     const elf_global_data& global;
     std::vector<FunctionRelocation> function_relocations;
     std::vector<std::string> unresolved_symbol_errors;
+
+    // loop detection for recursive subprogram resolution
     std::map<const RawProgram*, bool> resolved_subprograms;
+    std::set<const RawProgram*> currently_visiting;
 
     /// @brief Apply a single CO-RE relocation to an instruction.
     ///
@@ -571,7 +582,11 @@ void ProgramReader::apply_core_relocation(RawProgram& prog, const bpf_core_relo&
         uint32_t final_offset_bits = 0;
 
         for (const uint32_t index : indices) {
+            int depth = 0;
             while (true) {
+                if (++depth > 255) {
+                    throw UnmarshalError("CO-RE type resolution exceeded depth limit (possible corrupt BTF)");
+                }
                 const auto kind_index = btf_data.get_kind_index(current_type_id);
                 if (kind_index == libbtf::BTF_KIND_TYPEDEF) {
                     current_type_id = btf_data.get_kind_type<libbtf::btf_kind_typedef>(current_type_id).type;
@@ -647,6 +662,9 @@ void ProgramReader::process_core_relocations(const libbtf::btf_type_data& btf_da
             }
 
             const auto sym = get_symbol_details(symbols, sym_idx);
+            if (sym.value + sizeof(bpf_core_relo) > btf_ext_sec->get_size()) {
+                throw UnmarshalError("CO-RE relocation offset out of BTF.ext bounds");
+            }
             const auto* relo = reinterpret_cast<const bpf_core_relo*>(btf_ext_data + sym.value);
             bool applied = false;
 
@@ -685,7 +703,12 @@ std::string ProgramReader::append_subprograms(RawProgram& prog) {
     if (resolved_subprograms[&prog]) {
         return {};
     }
-    resolved_subprograms[&prog] = true;
+
+    if (currently_visiting.contains(&prog)) {
+        throw UnmarshalError("Mutual recursion in subprogram calls");
+    }
+    currently_visiting.insert(&prog);
+
     std::map<std::string, ELFIO::Elf_Xword> subprogram_offsets;
     for (const auto& reloc : function_relocations) {
         if (reloc.prog_index >= raw_programs.size() ||
@@ -723,6 +746,8 @@ std::string ProgramReader::append_subprograms(RawProgram& prog) {
         }
         prog.prog[reloc.source_offset].imm = gsl::narrow<int32_t>(offset_diff);
     }
+    currently_visiting.erase(&prog);
+    resolved_subprograms[&prog] = true;
     return {};
 }
 
@@ -891,6 +916,9 @@ const ELFIO::section* ProgramReader::get_relocation_section(const std::string& n
 }
 
 void ProgramReader::read_programs() {
+    // Clear cycle detection state for this batch
+    resolved_subprograms.clear();
+
     for (const auto& sec : reader.sections) {
         if (!(sec->get_flags() & ELFIO::SHF_EXECINSTR) || !sec->get_size() || !sec->get_data()) {
             continue;
