@@ -90,6 +90,11 @@ static bool is_map_section(const std::string& name) {
     return name == "maps" || (name.length() > 5 && name.compare(0, maps_prefix.length(), maps_prefix) == 0);
 }
 
+static bool is_global_section(const std::string& name) {
+    return name == ".data" || name == ".rodata" || name == ".bss" || name.starts_with(".data.") ||
+           name.starts_with(".rodata.") || name.starts_with(".bss.");
+}
+
 struct symbol_details_t {
     std::string name;
     ELFIO::Elf64_Addr value{};
@@ -270,11 +275,9 @@ static void update_line_info(std::vector<RawProgram>& raw_programs, const ELFIO:
 
 static std::vector<ELFIO::section*> global_sections(const ELFIO::elfio& reader) {
     std::vector<ELFIO::section*> res;
-    for (const auto& section_name : {".data", ".rodata", ".bss"}) {
-        if (const auto section = reader.sections[section_name]) {
-            if (section->get_size() != 0) {
-                res.push_back(section);
-            }
+    for (auto& section : reader.sections) {
+        if (section && section->get_size() != 0 && is_global_section(section->get_name())) {
+            res.push_back(section.get());
         }
     }
     return res;
@@ -310,6 +313,7 @@ static elf_global_data parse_btf_section(const parse_params_t& parse_params, con
             desc.inner_map_fd = type_id_to_fd_map.at(desc.inner_map_fd);
         }
     }
+
     if (const auto maps_section = reader.sections[".maps"]) {
         global.map_section_indices.insert(maps_section->get_index());
     }
@@ -522,9 +526,11 @@ class ProgramReader {
     /// @param instructions Instruction vector to modify
     /// @param location Instruction index to relocate
     /// @param index Symbol table index for additional lookup
+    /// @param addend Additional offset to apply
     /// @return true if relocation succeeded or should be skipped, false if unresolved
     bool try_reloc(const std::string& symbol_name, ELFIO::Elf_Half symbol_section_index,
-                   std::vector<EbpfInst>& instructions, size_t location, ELFIO::Elf_Word index);
+                   std::vector<EbpfInst>& instructions, size_t location, ELFIO::Elf_Word index,
+                   ELFIO::Elf_Sxword addend);
     void process_relocations(std::vector<EbpfInst>& instructions, const ELFIO::const_relocation_section_accessor& reloc,
                              const std::string& section_name, ELFIO::Elf_Xword program_offset, size_t program_size);
     [[nodiscard]]
@@ -752,7 +758,8 @@ int ProgramReader::relocate_global_variable(const std::string& name) const {
 }
 
 bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_Half symbol_section_index,
-                              std::vector<EbpfInst>& instructions, const size_t location, const ELFIO::Elf_Word index) {
+                              std::vector<EbpfInst>& instructions, const size_t location, const ELFIO::Elf_Word index,
+                              ELFIO::Elf_Sxword addend) {
     // Handle empty symbol names for global variable sections
     // These occur in legacy ELF files where relocations reference
     // section symbols rather than named variable symbols
@@ -797,7 +804,6 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
         return false;
     }
 
-    // Handle __config_ symbols
     if (symbol_name.rfind("__config_", 0) == 0) {
         instruction_to_relocate.imm = 0;
         return true;
@@ -814,7 +820,17 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
         if (instructions.size() <= location + 1) {
             throw UnmarshalError("Invalid relocation data for global variable");
         }
-        instructions[location + 1].imm = instruction_to_relocate.imm;
+
+        // For named global variables, prefer addend (RELA) over pre-relocation immediate
+        // Addend of 0 might be legitimate (accessing offset 0), so we need to distinguish
+        // between "no addend" vs "addend is 0". For now, use addend if present (RELA section)
+        // or fall back to immediate (REL section or addend==0 in RELA).
+        //
+        // Since we can't easily detect RELA vs REL here, use: if addend != 0, prefer it.
+        // Otherwise, use the pre-relocation immediate as the offset.
+        const int32_t offset = addend != 0 ? gsl::narrow<int32_t>(addend) : instruction_to_relocate.imm;
+
+        instructions[location + 1].imm = offset;
         instruction_to_relocate.src = INST_LD_MODE_MAP_VALUE;
         instruction_to_relocate.imm = relocate_global_variable(reader.sections[symbol_section_index]->get_name());
         return true;
@@ -843,7 +859,7 @@ void ProgramReader::process_relocations(std::vector<EbpfInst>& instructions,
             }
             auto sym = get_symbol_details(symbols, idx);
 
-            if (!try_reloc(sym.name, sym.section_index, instructions, loc, idx)) {
+            if (!try_reloc(sym.name, sym.section_index, instructions, loc, idx, addend)) {
                 unresolved_symbol_errors.push_back("Unresolved external symbol " + sym.name + " in section " +
                                                    section_name + " at location " + std::to_string(loc));
             }
