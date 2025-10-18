@@ -29,8 +29,6 @@ struct EbpfMapDescriptor {
     unsigned int inner_map_fd;
 };
 
-constexpr unsigned int DEFAULT_MAP_FD = 0xffffffff;
-
 struct EbpfProgramType {
     std::string name{}; // For ease of display, not used by the verifier.
     const ebpf_context_descriptor_t* context_descriptor{};

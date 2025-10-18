@@ -18,8 +18,8 @@
 #include "libbtf/btf_map.h"
 #include "libbtf/btf_parse.h"
 
-#include "asm_files.hpp"
 #include "crab_utils/num_safety.hpp"
+#include "elf_loader.hpp"
 #include "platform.hpp"
 
 /// @brief ELF file parser for BPF programs with support for legacy and BTF-based formats.
@@ -250,21 +250,51 @@ static void update_line_info(std::vector<RawProgram>& raw_programs, const ELFIO:
     }
 }
 
+/// @brief Collect all global variable sections from the ELF file.
+///
+/// Global variables in eBPF are stored in special sections:
+/// - .data, .data.*    → initialized read-write globals (SHT_PROGBITS)
+/// - .rodata, .rodata.* → constants (SHT_PROGBITS)
+/// - .bss, .bss.*      → uninitialized globals (SHT_NOBITS, zero-initialized at load)
+///
+/// This function identifies all such sections and returns pointers to them.
+/// Note: .bss sections have type SHT_NOBITS and contain no file data, but still
+/// have a non-zero size representing the memory allocation needed at runtime.
+///
+/// @param reader The ELF file reader
+/// @return Vector of pointers to global variable sections (maybe empty)
 static std::vector<ELFIO::section*> global_sections(const ELFIO::elfio& reader) {
-    std::vector<ELFIO::section*> res;
+    std::vector<ELFIO::section*> result;
     for (auto& section : reader.sections) {
-        if (section && section->get_size() != 0 && is_global_section(section->get_name())) {
-            res.push_back(section.get());
+        if (!section || !is_global_section(section->get_name())) {
+            continue;
         }
+
+        const auto type = section->get_type();
+        // Only accept the canonical section types for global variables
+        if (type != ELFIO::SHT_PROGBITS && type != ELFIO::SHT_NOBITS) {
+            continue;
+        }
+
+        // Skip zero-sized PROGBITS sections (truly empty), but include
+        // SHT_NOBITS (.bss) even when get_size() returns the memory size
+        if (type == ELFIO::SHT_PROGBITS && section->get_size() == 0) {
+            continue;
+        }
+
+        result.push_back(section.get());
     }
-    return res;
+    return result;
 }
+
+constexpr unsigned int DEFAULT_MAP_FD = 0xFFFFFFFF;
 
 static elf_global_data parse_btf_section(const parse_params_t& parse_params, const ELFIO::elfio& reader) {
     const auto btf_section = reader.sections[".BTF"];
     if (!btf_section) {
         return {};
     }
+
     const libbtf::btf_type_data btf_data(vector_of<std::byte>(*btf_section), false);
     if (parse_params.options.verbosity_opts.dump_btf_types_json) {
         dump_btf_types(btf_data, parse_params.path);
@@ -273,32 +303,46 @@ static elf_global_data parse_btf_section(const parse_params_t& parse_params, con
     elf_global_data global;
     MapOffsets map_offsets;
 
-    // Parse BTF-defined maps
+    // Parse BTF-defined maps from the .maps DATASEC
     for (const auto& map : parse_btf_map_section(btf_data)) {
         map_offsets.emplace(map.name, global.map_descriptors.size());
-        global.map_descriptors.push_back({
-            .original_fd = gsl::narrow<int>(map.type_id),
+        global.map_descriptors.push_back(EbpfMapDescriptor{
+            .original_fd = gsl::narrow<int>(map.type_id), // Temporary: stores BTF type ID
             .type = map.map_type,
             .key_size = map.key_size,
             .value_size = map.value_size,
             .max_entries = map.max_entries,
-            .inner_map_fd = map.inner_map_type_id != 0 ? map.inner_map_type_id : -1,
+            .inner_map_fd = map.inner_map_type_id == 0 ? DEFAULT_MAP_FD : map.inner_map_type_id,
         });
     }
 
+    // Remap BTF type IDs to pseudo file descriptors
+    // Only remap values that are actually set (not the sentinel)
     const auto type_id_to_fd_map = map_typeid_to_fd(global.map_descriptors);
     for (auto& desc : global.map_descriptors) {
-        desc.original_fd = type_id_to_fd_map.at(desc.original_fd);
+        // Remap the outer map's type ID to a pseudo-FD
+        if (auto it = type_id_to_fd_map.find(desc.original_fd); it != type_id_to_fd_map.end()) {
+            desc.original_fd = it->second;
+        } else {
+            throw UnmarshalError("Unknown map type ID in BTF: " + std::to_string(desc.original_fd));
+        }
+
+        // Only remap inner_map_fd if it's not the sentinel value
         if (desc.inner_map_fd != DEFAULT_MAP_FD) {
-            desc.inner_map_fd = type_id_to_fd_map.at(desc.inner_map_fd);
+            auto inner_it = type_id_to_fd_map.find(desc.inner_map_fd);
+            if (inner_it == type_id_to_fd_map.end()) {
+                throw UnmarshalError("Unknown inner map type ID in BTF: " + std::to_string(desc.inner_map_fd));
+            }
+            desc.inner_map_fd = inner_it->second;
         }
     }
 
+    // Remember the .maps section index if present (used for relocation classification)
     if (const auto maps_section = reader.sections[".maps"]) {
         global.map_section_indices.insert(maps_section->get_index());
     }
 
-    // Create implicit maps for ALL global variable sections (including .rodata.config!)
+    // Create implicit maps for all global variable sections
     for (const auto section : global_sections(reader)) {
         map_offsets[section->get_name()] = global.map_descriptors.size();
         global.map_descriptors.push_back(EbpfMapDescriptor{
@@ -307,7 +351,7 @@ static elf_global_data parse_btf_section(const parse_params_t& parse_params, con
             .key_size = sizeof(uint32_t),
             .value_size = gsl::narrow<uint32_t>(section->get_size()),
             .max_entries = 1,
-            .inner_map_fd = 0,
+            .inner_map_fd = DEFAULT_MAP_FD,
         });
         global.variable_section_indices.insert(section->get_index());
     }
@@ -334,14 +378,11 @@ static elf_global_data parse_btf_section(const parse_params_t& parse_params, con
 /// @return Global data with map descriptors for each non-empty variable section
 static elf_global_data create_global_variable_maps(const ELFIO::elfio& reader) {
     elf_global_data global;
-    // For legacy (non-BTF) files, create implicit map descriptors for global variable sections
+    MapOffsets offsets;
+
+    // For legacy (non-BTF) files without map sections, create implicit map descriptors
+    // for global variable sections only
     for (const auto section : global_sections(reader)) {
-        // Track the offset for this section's map
-        if (!std::holds_alternative<MapOffsets>(global.map_record_size_or_map_offsets)) {
-            // Convert from size_t to MapOffsets if needed
-            global.map_record_size_or_map_offsets = MapOffsets{};
-        }
-        auto& offsets = std::get<MapOffsets>(global.map_record_size_or_map_offsets);
         offsets[section->get_name()] = global.map_descriptors.size();
 
         global.map_descriptors.push_back(EbpfMapDescriptor{
@@ -350,73 +391,122 @@ static elf_global_data create_global_variable_maps(const ELFIO::elfio& reader) {
             .key_size = sizeof(uint32_t),
             .value_size = gsl::narrow<uint32_t>(section->get_size()),
             .max_entries = 1,
-            .inner_map_fd = 0,
+            .inner_map_fd = DEFAULT_MAP_FD,
         });
 
         global.variable_section_indices.insert(section->get_index());
     }
+
+    global.map_record_size_or_map_offsets = std::move(offsets);
     return global;
 }
 
+/// @brief Parse legacy map sections with per-section validation.
+///
+/// Legacy BPF ELF files define maps using struct bpf_elf_map in "maps" or "maps/*"
+/// sections. This function:
+/// 1. Identifies all legacy map sections
+/// 2. Calculates the per-section record size (section_size / symbol_count)
+/// 3. Validates symbol offsets are aligned and within bounds
+/// 4. Builds a name-to-descriptor mapping for relocation resolution
+///
+/// Note: Different map sections may have different record sizes, so validation
+/// must be done per-section, not globally.
+///
+/// @param parse_params Parsing parameters including platform callbacks
+/// @param reader The ELF file reader
+/// @param symbols Symbol table accessor
+/// @return Global data structure with map descriptors and metadata
 static elf_global_data parse_map_sections(const parse_params_t& parse_params, const ELFIO::elfio& reader,
                                           const ELFIO::const_symbol_section_accessor& symbols) {
     elf_global_data global;
-    std::map<ELFIO::Elf_Half, size_t> section_record_sizes; // Per-section record sizes
-    std::map<ELFIO::Elf_Half, size_t> section_base_index;   // Starting index in global.map_descriptors for each section
+    std::map<ELFIO::Elf_Half, size_t> section_record_sizes; // Per-section record size
+    std::map<ELFIO::Elf_Half, size_t> section_base_index;   // Starting descriptor index per section
 
+    // Parse each legacy map section
     for (ELFIO::Elf_Half i = 0; i < reader.sections.size(); ++i) {
         const auto s = reader.sections[i];
-        if (!is_map_section(s->get_name())) {
+        if (!s || !is_map_section(s->get_name())) {
             continue;
         }
 
+        // Count map symbols in this section
         int map_count = 0;
-        for (ELFIO::Elf_Xword index = 0; index < symbols.get_symbols_num(); index++) {
+        for (ELFIO::Elf_Xword index = 0; index < symbols.get_symbols_num(); ++index) {
             const auto symbol_details = get_symbol_details(symbols, index);
             if (symbol_details.section_index == i && !symbol_details.name.empty()) {
                 map_count++;
             }
         }
 
-        if (map_count > 0) {
-            const size_t base_index = global.map_descriptors.size();
-            const size_t map_record_size = s->get_size() / map_count;
-            if (s->get_data() == nullptr || map_record_size == 0 || s->get_size() % map_record_size != 0) {
-                throw UnmarshalError("bad maps section");
-            }
-            section_record_sizes[i] = map_record_size; // Store per-section
-            section_base_index[i] = base_index;        // Store starting descriptor index
-            parse_params.platform->parse_maps_section(global.map_descriptors, s->get_data(), map_record_size, map_count,
-                                                      parse_params.platform, parse_params.options);
-        }
+        // Track this as a map section even if empty
         global.map_section_indices.insert(s->get_index());
-    }
-    parse_params.platform->resolve_inner_map_references(global.map_descriptors);
-    // DON'T set map_record_size_or_map_offsets yet - we need MapOffsets mode
 
-    // For legacy files with global variable sections, create implicit maps
-    // Switch to MapOffsets mode to allow both maps and globals
-    MapOffsets map_offsets;
-
-    // First, populate offsets for existing legacy maps by symbol name
-    for (ELFIO::Elf_Xword index = 0; index < symbols.get_symbols_num(); index++) {
-        const auto sym_details = get_symbol_details(symbols, index);
-        if (global.map_section_indices.contains(sym_details.section_index) && !sym_details.name.empty()) {
-            const auto it = section_record_sizes.find(sym_details.section_index);
-            const auto bit = section_base_index.find(sym_details.section_index);
-            if (it != section_record_sizes.end() && bit != section_base_index.end()) {
-                const size_t local_index = sym_details.value / it->second;
-                const size_t descriptor_index = bit->second + local_index;
-                if (descriptor_index < global.map_descriptors.size()) {
-                    map_offsets[sym_details.name] = descriptor_index;
-                } else {
-                    throw UnmarshalError("Legacy map symbol index out of range");
-                }
-            }
+        if (map_count <= 0) {
+            continue;
         }
+
+        const size_t base_index = global.map_descriptors.size();
+        const size_t map_record_size = s->get_size() / map_count;
+
+        // Validate section structure
+        if (s->get_data() == nullptr || map_record_size == 0 || s->get_size() % map_record_size != 0) {
+            throw UnmarshalError("Malformed legacy maps section: " + s->get_name());
+        }
+
+        section_record_sizes[i] = map_record_size;
+        section_base_index[i] = base_index;
+
+        // Platform-specific parsing of map definitions
+        parse_params.platform->parse_maps_section(global.map_descriptors, s->get_data(), map_record_size, map_count,
+                                                  parse_params.platform, parse_params.options);
     }
 
-    // Then create implicit maps for global variable sections
+    // Resolve inner map references (platform-specific logic)
+    parse_params.platform->resolve_inner_map_references(global.map_descriptors);
+
+    // Build name-to-index mapping with per-section validation
+    MapOffsets map_offsets;
+    for (ELFIO::Elf_Xword index = 0; index < symbols.get_symbols_num(); ++index) {
+        const auto sym_details = get_symbol_details(symbols, index);
+
+        // Skip symbols not in map sections or without names
+        if (!global.map_section_indices.contains(sym_details.section_index) || sym_details.name.empty()) {
+            continue;
+        }
+
+        // Look up the per-section metadata
+        const auto record_size_it = section_record_sizes.find(sym_details.section_index);
+        const auto base_index_it = section_base_index.find(sym_details.section_index);
+        if (record_size_it == section_record_sizes.end() || base_index_it == section_base_index.end()) {
+            continue; // Section was not parsed (empty)
+        }
+
+        const auto* section = reader.sections[sym_details.section_index];
+        const size_t record_size = record_size_it->second;
+        if (!section) {
+            continue;
+        }
+
+        // CRITICAL: Validate alignment and bounds before calculating index
+        // A malformed ELF could have symbol offsets that don't align to record boundaries
+        // or that exceed the section size, leading to incorrect descriptor lookups
+        if (sym_details.value % record_size != 0 || sym_details.value >= section->get_size()) {
+            throw UnmarshalError("Legacy map symbol '" + sym_details.name + "' has invalid offset: not aligned to " +
+                                 std::to_string(record_size) + "-byte boundary or out of section bounds");
+        }
+
+        const size_t local_index = sym_details.value / record_size;
+        const size_t descriptor_index = base_index_it->second + local_index;
+
+        if (descriptor_index >= global.map_descriptors.size()) {
+            throw UnmarshalError("Legacy map symbol index out of range for: " + sym_details.name);
+        }
+
+        map_offsets[sym_details.name] = descriptor_index;
+    }
+
+    // Add implicit maps for global variable sections
     for (const auto section : global_sections(reader)) {
         map_offsets[section->get_name()] = global.map_descriptors.size();
         global.map_descriptors.push_back(EbpfMapDescriptor{
@@ -425,7 +515,7 @@ static elf_global_data parse_map_sections(const parse_params_t& parse_params, co
             .key_size = sizeof(uint32_t),
             .value_size = gsl::narrow<uint32_t>(section->get_size()),
             .max_entries = 1,
-            .inner_map_fd = 0,
+            .inner_map_fd = DEFAULT_MAP_FD,
         });
         global.variable_section_indices.insert(section->get_index());
     }
@@ -556,6 +646,10 @@ class ProgramReader {
     /// - **Map references**: Resolve to map file descriptor
     /// - **Global variables**: Resolve to implicit map FD + offset within section
     /// - **Config symbols**: Zero out (compile-time configuration)
+    ///
+    /// Global variable relocations MUST be applied to LDDW instruction pairs
+    /// (opcode 0x18 followed by opcode 0x00). This function validates the instruction
+    /// structure before patching to prevent corruption of non-LDDW instructions.
     ///
     /// @param symbol_name Name of the symbol (maybe empty for unnamed relocations)
     /// @param symbol_section_index Section containing the symbol
@@ -809,34 +903,44 @@ int ProgramReader::relocate_global_variable(const std::string& name) const {
 
 bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_Half symbol_section_index,
                               std::vector<EbpfInst>& instructions, const size_t location, const ELFIO::Elf_Word index,
-                              ELFIO::Elf_Sxword addend) {
+                              const ELFIO::Elf_Sxword addend) {
     // Handle empty symbol names for global variable sections
     // These occur in legacy ELF files where relocations reference
     // section symbols rather than named variable symbols
     if (symbol_name.empty()) {
         if (global.variable_section_indices.contains(symbol_section_index)) {
             if (!std::holds_alternative<MapOffsets>(global.map_record_size_or_map_offsets)) {
-                return false; // don't throw; legacy path must handle this
+                return false; // Legacy path without MapOffsets; let caller handle
             }
 
-            // This is a relocation to a global variable section
-            EbpfInst& instruction_to_relocate = instructions[location];
-            if ((instruction_to_relocate.opcode & INST_CLS_MASK) != INST_CLS_LD) {
-                return false;
-            }
-
+            // Validate LDDW pair structure
             if (instructions.size() <= location + 1) {
-                throw UnmarshalError("Invalid relocation data for global variable");
+                throw UnmarshalError("Invalid relocation: global variable reference at instruction boundary");
+            }
+
+            auto& lo_inst = instructions[location];
+            auto& hi_inst = instructions[location + 1];
+
+            // LDDW encoding: first instruction has opcode 0x18, second has opcode 0x00
+            if (lo_inst.opcode != 0x18) {
+                throw UnmarshalError("Invalid relocation: expected LDDW first slot (opcode 0x18) for global "
+                                     "variable, found opcode 0x" +
+                                     std::to_string(static_cast<int>(lo_inst.opcode)));
+            }
+            if (hi_inst.opcode != 0) {
+                throw UnmarshalError("Invalid relocation: expected LDDW second slot (opcode 0x00) for global "
+                                     "variable, found opcode 0x" +
+                                     std::to_string(static_cast<int>(hi_inst.opcode)));
             }
 
             // The symbol value contains the offset into the section
             const auto symbol_details = get_symbol_details(symbols, index);
-            instructions[location + 1].imm = gsl::narrow<int32_t>(symbol_details.value);
-            instruction_to_relocate.src = INST_LD_MODE_MAP_VALUE;
+            hi_inst.imm = gsl::narrow<int32_t>(symbol_details.value);
+            lo_inst.src = INST_LD_MODE_MAP_VALUE;
 
             // Get the section name to look up the map descriptor
             const std::string section_name = reader.sections[symbol_section_index]->get_name();
-            instruction_to_relocate.imm = relocate_global_variable(section_name);
+            lo_inst.imm = relocate_global_variable(section_name);
             return true;
         }
         // Empty symbol name in non-variable section - skip it
@@ -845,35 +949,54 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
 
     EbpfInst& instruction_to_relocate = instructions[location];
 
+    // Handle local function calls - queue for post-processing
     if (instruction_to_relocate.opcode == INST_OP_CALL && instruction_to_relocate.src == INST_CALL_LOCAL) {
         function_relocations.emplace_back(FunctionRelocation{raw_programs.size(), location, index, symbol_name});
         return true;
     }
 
+    // Only LD-class instructions can be map/global loads
     if ((instruction_to_relocate.opcode & INST_CLS_MASK) != INST_CLS_LD) {
         return false;
     }
 
-    // Handle map relocations
+    // Handle map relocations (BTF or legacy)
     if (global.map_section_indices.contains(symbol_section_index)) {
         instruction_to_relocate.src = INST_LD_MODE_MAP_FD;
         instruction_to_relocate.imm = relocate_map(symbol_name, index);
         return true;
     }
 
-    // Handle named global variables (including __config_* symbols in .rodata.config!)
+    // Handle named global variables (including __config_* symbols in .rodata.config)
     if (global.variable_section_indices.contains(symbol_section_index)) {
+        // Validate LDDW pair structure
         if (instructions.size() <= location + 1) {
-            throw UnmarshalError("Invalid relocation data for global variable");
+            throw UnmarshalError("Invalid relocation: global variable reference at instruction boundary");
         }
-        const int32_t offset = addend != 0 ? gsl::narrow<int32_t>(addend) : instruction_to_relocate.imm;
-        instructions[location + 1].imm = offset;
-        instruction_to_relocate.src = INST_LD_MODE_MAP_VALUE;
-        instruction_to_relocate.imm = relocate_global_variable(reader.sections[symbol_section_index]->get_name());
+
+        auto& lo_inst = instructions[location];
+        auto& hi_inst = instructions[location + 1];
+
+        // LDDW encoding: first instruction has opcode 0x18, second has opcode 0x00
+        if (lo_inst.opcode != 0x18) {
+            throw UnmarshalError("Invalid relocation: expected LDDW first slot (opcode 0x18) for global variable '" +
+                                 symbol_name + "', found opcode 0x" + std::to_string(static_cast<int>(lo_inst.opcode)));
+        }
+        if (hi_inst.opcode != 0) {
+            throw UnmarshalError("Invalid relocation: expected LDDW second slot (opcode 0x00) for global variable '" +
+                                 symbol_name + "', found opcode 0x" + std::to_string(static_cast<int>(hi_inst.opcode)));
+        }
+
+        // Calculate offset: prefer addend if present, otherwise use instruction immediate
+        const int32_t offset = addend != 0 ? gsl::narrow<int32_t>(addend) : lo_inst.imm;
+        hi_inst.imm = offset;
+        lo_inst.src = INST_LD_MODE_MAP_VALUE;
+        lo_inst.imm = relocate_global_variable(reader.sections[symbol_section_index]->get_name());
         return true;
     }
 
-    // ONLY zero out __config_* if NOT in a variable section (legacy fallback)
+    // Legacy fallback: zero out __config_* symbols not in a variable section
+    // (for compatibility with older toolchains)
     if (symbol_name.rfind("__config_", 0) == 0) {
         instruction_to_relocate.imm = 0;
         return true;

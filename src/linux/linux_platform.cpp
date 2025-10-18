@@ -9,8 +9,8 @@
 #define PTYPE(name, descr, native_type, prefixes) {name, descr, 0, prefixes}
 #define PTYPE_PRIVILEGED(name, descr, native_type, prefixes) {name, descr, 0, prefixes, true}
 #endif
-#include "asm_files.hpp"
 #include "crab_verifier.hpp"
+#include "elf_loader.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
 #include "linux_platform.hpp"
 #include "platform.hpp"
