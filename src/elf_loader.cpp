@@ -200,17 +200,8 @@ struct ElfGlobalData {
 
 /// @brief Collect all global variable sections from the ELF file.
 ///
-/// Global variables in eBPF are stored in special sections:
-/// - .data, .data.*    → initialized read-write globals (SHT_PROGBITS)
-/// - .rodata, .rodata.* → constants (SHT_PROGBITS)
-/// - .bss, .bss.*      → uninitialized globals (SHT_NOBITS, zero-initialized at load)
-///
-/// This function identifies all such sections and returns pointers to them.
-/// Note: .bss sections have type SHT_NOBITS and contain no file data, but still
-/// have a non-zero size representing the memory allocation needed at runtime.
-///
 /// @param reader The ELF file reader
-/// @return Vector of pointers to global variable sections (maybe empty)
+/// @return Vector of pointers to global variable sections (can be empty)
 std::vector<ELFIO::section*> global_sections(const ELFIO::elfio& reader) {
     std::vector<ELFIO::section*> result;
     for (auto& section : reader.sections) {
@@ -219,18 +210,16 @@ std::vector<ELFIO::section*> global_sections(const ELFIO::elfio& reader) {
         }
 
         const auto type = section->get_type();
-        // Only accept the canonical section types for global variables
-        if (type != ELFIO::SHT_PROGBITS && type != ELFIO::SHT_NOBITS) {
-            continue;
-        }
 
-        // Skip zero-sized PROGBITS sections (truly empty), but include
-        // SHT_NOBITS (.bss) even when get_size() returns the memory size
-        if (type == ELFIO::SHT_PROGBITS && section->get_size() == 0) {
-            continue;
+        // Global variables in eBPF are stored in special sections:
+        // - .data, .data.*     -> initialized read-write globals (SHT_PROGBITS)
+        // - .rodata, .rodata.* -> constants (SHT_PROGBITS)
+        // - .bss, .bss.*       -> uninitialized globals (SHT_NOBITS, zero-initialized at load)
+        // .bss sections have type SHT_NOBITS and contain no file data, but still
+        // have a non-zero size representing the memory allocation needed at runtime.
+        if (type == ELFIO::SHT_NOBITS || (type == ELFIO::SHT_PROGBITS && section->get_size() != 0)) {
+            result.push_back(section.get());
         }
-
-        result.push_back(section.get());
     }
     return result;
 }
@@ -398,9 +387,9 @@ ElfGlobalData parse_btf_section(const parse_params_t& parse_params, const ELFIO:
 /// @brief Create implicit map descriptors for global variable sections.
 ///
 /// In eBPF, global variables are implemented as single-entry array maps:
-/// - .data section → read-write array map (initialized globals)
-/// - .rodata section → read-only array map (constants)
-/// - .bss section → zero-initialized array map (uninitialized globals)
+/// - .data section -> read-write array map (initialized globals)
+/// - .rodata section -> read-only array map (constants)
+/// - .bss section -> zero-initialized array map (uninitialized globals)
 ///
 /// Each section becomes a map descriptor with:
 /// - key_size = 4 (uint32_t index, always 0)
@@ -523,7 +512,7 @@ ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO
             continue;
         }
 
-        // CRITICAL: Validate alignment and bounds before calculating index
+        // Validate alignment and bounds before calculating index.
         // A malformed ELF could have symbol offsets that don't align to record boundaries
         // or that exceed the section size, leading to incorrect descriptor lookups
         if (sym_details.value % record_size != 0 || sym_details.value >= section->get_size()) {
