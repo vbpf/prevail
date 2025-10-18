@@ -753,6 +753,9 @@ void EbpfTransformer::operator()(const Call& call) {
         case ArgSingle::Kind::PTR_TO_CTX:
             // Do nothing. We don't track the content of relevant memory regions
             break;
+        case ArgSingle::Kind::PTR_TO_STACK:
+            // Do nothing; the stack is passed as context, not to be modified.
+            break;
         }
     }
     for (ArgPair param : call.pairs) {

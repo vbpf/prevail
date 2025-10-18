@@ -175,7 +175,7 @@ void parse_maps_section_linux(std::vector<EbpfMapDescriptor>& map_descriptors, c
 void resolve_inner_map_references_linux(std::vector<EbpfMapDescriptor>& map_descriptors) {
     for (size_t i = 0; i < map_descriptors.size(); i++) {
         const int inner = map_descriptors[i].inner_map_fd; // Get the inner_map_idx back.
-        if (inner < 0 || inner >= map_descriptors.size()) {
+        if (inner < 0 || inner >= gsl::narrow<int>(map_descriptors.size())) {
             throw UnmarshalError("bad inner map index " + std::to_string(inner) + " for map " + std::to_string(i));
         }
         map_descriptors[i].inner_map_fd = map_descriptors.at(inner).original_fd;

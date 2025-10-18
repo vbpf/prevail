@@ -204,6 +204,7 @@ bool TypeDomain::is_in_group(const Reg& r, const TypeGroup group) const {
     case TypeGroup::map_fd: return inv.entail(t == T_MAP);
     case TypeGroup::map_fd_programs: return inv.entail(t == T_MAP_PROGRAMS);
     case TypeGroup::ctx: return inv.entail(t == T_CTX);
+    case TypeGroup::ctx_or_num: return inv.entail(t == T_CTX) || inv.entail(t == T_NUM);
     case TypeGroup::packet: return inv.entail(t == T_PACKET);
     case TypeGroup::stack: return inv.entail(t == T_STACK);
     case TypeGroup::shared: return inv.entail(t == T_SHARED);
@@ -250,6 +251,7 @@ std::ostream& operator<<(std::ostream& os, const TypeGroup ts) {
         {TypeGroup::map_fd, S_MAP},
         {TypeGroup::map_fd_programs, S_MAP_PROGRAMS},
         {TypeGroup::ctx, S_CTX},
+        {TypeGroup::ctx_or_num, typeset_to_string({T_NUM, T_CTX})},
         {TypeGroup::packet, S_PACKET},
         {TypeGroup::stack, S_STACK},
         {TypeGroup::shared, S_SHARED},

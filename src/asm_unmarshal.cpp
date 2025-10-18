@@ -461,11 +461,14 @@ struct Unmarshaller {
     static ArgSingle::Kind toArgSingleKind(const ebpf_argument_type_t t) {
         switch (t) {
         case EBPF_ARGUMENT_TYPE_ANYTHING: return ArgSingle::Kind::ANYTHING;
+        case EBPF_ARGUMENT_TYPE_PTR_TO_STACK: return ArgSingle::Kind::PTR_TO_STACK;
+        case EBPF_ARGUMENT_TYPE_PTR_TO_STACK_OR_NULL: return ArgSingle::Kind::PTR_TO_STACK;
         case EBPF_ARGUMENT_TYPE_PTR_TO_MAP: return ArgSingle::Kind::MAP_FD;
         case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_OF_PROGRAMS: return ArgSingle::Kind::MAP_FD_PROGRAMS;
         case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_KEY: return ArgSingle::Kind::PTR_TO_MAP_KEY;
         case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE: return ArgSingle::Kind::PTR_TO_MAP_VALUE;
         case EBPF_ARGUMENT_TYPE_PTR_TO_CTX: return ArgSingle::Kind::PTR_TO_CTX;
+        case EBPF_ARGUMENT_TYPE_PTR_TO_CTX_OR_NULL: return ArgSingle::Kind::PTR_TO_CTX;
         default: break;
         }
         return {};
@@ -507,8 +510,13 @@ struct Unmarshaller {
             case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_OF_PROGRAMS:
             case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_KEY:
             case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE:
+            case EBPF_ARGUMENT_TYPE_PTR_TO_STACK:
             case EBPF_ARGUMENT_TYPE_PTR_TO_CTX:
-                res.singles.push_back({toArgSingleKind(args[i]), Reg{gsl::narrow<uint8_t>(i)}});
+                res.singles.push_back({toArgSingleKind(args[i]), false, Reg{gsl::narrow<uint8_t>(i)}});
+                break;
+            case EBPF_ARGUMENT_TYPE_PTR_TO_STACK_OR_NULL:
+            case EBPF_ARGUMENT_TYPE_PTR_TO_CTX_OR_NULL:
+                res.singles.push_back({toArgSingleKind(args[i]), true, Reg{gsl::narrow<uint8_t>(i)}});
                 break;
             case EBPF_ARGUMENT_TYPE_CONST_SIZE: {
                 // Sanity check: This argument should never be seen in isolation.

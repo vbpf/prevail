@@ -655,13 +655,13 @@ TEST_PROGRAM("cilium-core", "bpf_overlay.o", "tc/entry", "cil_from_overlay", 2)
 // - cil_to_overlay: CRAB_ERROR("Bound: inf / inf")
 
 // cilium-core/bpf_sock.o
-TEST_SECTION_FAIL("cilium-core", "bpf_sock.o", "cgroup/connect4")
-TEST_SECTION_FAIL("cilium-core", "bpf_sock.o", "cgroup/post_bind4")
-TEST_SECTION_FAIL("cilium-core", "bpf_sock.o", "cgroup/sendmsg4")
-TEST_SECTION_FAIL("cilium-core", "bpf_sock.o", "cgroup/recvmsg4")
-TEST_SECTION_FAIL("cilium-core", "bpf_sock.o", "cgroup/post_bind6")
-TEST_SECTION_FAIL("cilium-core", "bpf_sock.o", "cgroup/connect6")
-TEST_SECTION_FAIL("cilium-core", "bpf_sock.o", "cgroup/sendmsg6")
+TEST_SECTION("cilium-core", "bpf_sock.o", "cgroup/connect4")
+TEST_SECTION("cilium-core", "bpf_sock.o", "cgroup/connect6")
+TEST_SECTION("cilium-core", "bpf_sock.o", "cgroup/post_bind4")
+TEST_SECTION("cilium-core", "bpf_sock.o", "cgroup/post_bind6")
+TEST_SECTION("cilium-core", "bpf_sock.o", "cgroup/sendmsg4")
+TEST_SECTION("cilium-core", "bpf_sock.o", "cgroup/sendmsg6")
+TEST_SECTION("cilium-core", "bpf_sock.o", "cgroup/recvmsg4")
 TEST_SECTION_FAIL("cilium-core", "bpf_sock.o", "cgroup/recvmsg6")
 // - bpf_sock.o cgroup/sock_release: invalid helper function id 46
 

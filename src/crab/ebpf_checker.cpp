@@ -470,6 +470,11 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
 void EbpfChecker::operator()(const ZeroCtxOffset& s) const {
     using namespace dsl_syntax;
     const auto reg = reg_pack(s.reg);
+    // The domain is not expressive enough to handle join of null and non-null ctx,
+    // Since non-null ctx pointers are nonzero numbers.
+    if (s.or_null && dom.rcp.types.get_type(s.reg) == T_NUM && dom.rcp.values.entail(reg.uvalue == 0)) {
+        return;
+    }
     require_value(dom.rcp, reg.ctx_offset == 0, "Nonzero context offset");
 }
 
