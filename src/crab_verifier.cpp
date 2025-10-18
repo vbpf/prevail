@@ -9,13 +9,13 @@
 #include <ranges>
 #include <string>
 
-#include "asm_files.hpp"
 #include "asm_syntax.hpp"
 #include "crab/ebpf_domain.hpp"
 #include "crab/fwd_analyzer.hpp"
 #include "crab/var_registry.hpp"
 #include "crab_utils/lazy_allocator.hpp"
 #include "crab_verifier.hpp"
+#include "elf_loader.hpp"
 #include "string_constraints.hpp"
 
 using std::string;
