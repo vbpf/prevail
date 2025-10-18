@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <istream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
 #include "platform.hpp"
+#include "program.hpp"
 namespace prevail {
 
 class UnmarshalError final : public std::runtime_error {

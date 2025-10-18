@@ -165,8 +165,8 @@ void parse_maps_section_linux(std::vector<EbpfMapDescriptor>& map_descriptors, c
             .key_size = s.key_size,
             .value_size = s.value_size,
             .max_entries = s.max_entries,
-            .inner_map_fd = s.inner_map_idx // Temporarily fill in the index. This will be replaced in the
-                                            // resolve_inner_map_references pass.
+            .inner_map_fd = gsl::narrow<int32_t>(s.inner_map_idx) // Temporarily fill in the index. This will be
+                                                                  // replaced in the resolve_inner_map_references pass.
         });
     }
 }

@@ -4,12 +4,16 @@
 #include <cerrno>
 #include <cstddef>
 #include <cstring>
+#include <functional>
 #include <iostream>
+#include <limits>
 #include <map>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <string>
 #include <sys/stat.h>
+#include <variant>
 #include <vector>
 
 #include "elfio/elfio.hpp"
@@ -21,6 +25,7 @@
 #include "crab_utils/num_safety.hpp"
 #include "elf_loader.hpp"
 #include "platform.hpp"
+#include "program.hpp"
 
 /// @brief ELF file parser for BPF programs with support for legacy and BTF-based formats.
 ///
@@ -37,9 +42,45 @@
 
 namespace prevail {
 
+namespace {
+
+/// @brief Validate and return a LDDW instruction pair for relocation.
+///
+/// LDDW (Load Double Word) is a two-slot instruction used for 64-bit immediate loads.
+/// Encoding: first slot has opcode 0x18, second slot has opcode 0x00.
+///
+/// @param instructions Instruction vector
+/// @param location Index of the first instruction
+/// @param context Description for error messages (e.g., "global variable 'foo'")
+/// @return Pair of references to the low and high instruction slots
+/// @throws UnmarshalError if validation fails
+std::pair<std::reference_wrapper<EbpfInst>, std::reference_wrapper<EbpfInst>>
+validate_and_get_lddw_pair(std::vector<EbpfInst>& instructions, size_t location, const std::string& context) {
+    constexpr uint8_t BPF_LDDW = 0x18;
+    constexpr uint8_t BPF_LDDW_HI = 0x00;
+
+    if (instructions.size() <= location + 1) {
+        throw UnmarshalError("Invalid relocation: " + std::string(context) + " reference at instruction boundary");
+    }
+
+    auto& lo_inst = instructions[location];
+    auto& hi_inst = instructions[location + 1];
+
+    if (lo_inst.opcode != BPF_LDDW) {
+        throw UnmarshalError("Invalid relocation: expected LDDW first slot (opcode 0x18) for " + std::string(context) +
+                             ", found opcode 0x" + std::to_string(static_cast<int>(lo_inst.opcode)));
+    }
+    if (hi_inst.opcode != BPF_LDDW_HI) {
+        throw UnmarshalError("Invalid relocation: expected LDDW second slot (opcode 0x00) for " + std::string(context) +
+                             ", found opcode 0x" + std::to_string(static_cast<int>(hi_inst.opcode)));
+    }
+
+    return {std::ref(lo_inst), std::ref(hi_inst)};
+}
+
 template <typename T>
     requires std::is_trivially_copyable_v<T>
-static std::vector<T> vector_of(const char* data, ELFIO::Elf_Xword size) {
+std::vector<T> vector_of(const char* data, ELFIO::Elf_Xword size) {
     if (!data || size % sizeof(T) != 0 || size > std::numeric_limits<uint32_t>::max()) {
         throw UnmarshalError("Invalid argument to vector_of");
     }
@@ -51,35 +92,16 @@ static std::vector<T> vector_of(const char* data, ELFIO::Elf_Xword size) {
 
 template <typename T>
     requires std::is_trivially_copyable_v<T>
-static std::vector<T> vector_of(const ELFIO::section& sec) {
+std::vector<T> vector_of(const ELFIO::section& sec) {
     return vector_of<T>(sec.get_data(), sec.get_size());
 }
 
-int create_map_crab(const EbpfMapType& map_type, const uint32_t key_size, const uint32_t value_size,
-                    const uint32_t max_entries, ebpf_verifier_options_t) {
-    const EquivalenceKey equiv{map_type.value_type, key_size, value_size, map_type.is_array ? max_entries : 0};
-    if (!thread_local_program_info->cache.contains(equiv)) {
-        // +1 so 0 is the null FD
-        thread_local_program_info->cache[equiv] = gsl::narrow<int>(thread_local_program_info->cache.size()) + 1;
-    }
-    return thread_local_program_info->cache.at(equiv);
-}
-
-EbpfMapDescriptor* find_map_descriptor(const int map_fd) {
-    for (EbpfMapDescriptor& map : thread_local_program_info->map_descriptors) {
-        if (map.original_fd == map_fd) {
-            return &map;
-        }
-    }
-    return nullptr;
-}
-
-static bool is_map_section(const std::string& name) {
+bool is_map_section(const std::string& name) {
     const std::string maps_prefix = "maps/";
     return name == "maps" || (name.length() > 5 && name.compare(0, maps_prefix.length(), maps_prefix) == 0);
 }
 
-static bool is_global_section(const std::string& name) {
+bool is_global_section(const std::string& name) {
     return name == ".data" || name == ".rodata" || name == ".bss" || name.starts_with(".data.") ||
            name.starts_with(".rodata.") || name.starts_with(".bss.");
 }
@@ -94,8 +116,7 @@ struct symbol_details_t {
     unsigned char other{};
 };
 
-static symbol_details_t get_symbol_details(const ELFIO::const_symbol_section_accessor& symbols,
-                                           const ELFIO::Elf_Xword index) {
+symbol_details_t get_symbol_details(const ELFIO::const_symbol_section_accessor& symbols, const ELFIO::Elf_Xword index) {
     symbol_details_t details;
     symbols.get_symbol(index, details.name, details.value, details.size, details.bind, details.type,
                        details.section_index, details.other);
@@ -109,7 +130,7 @@ struct parse_params_t {
     const std::string desired_section;
 };
 
-static std::tuple<std::string, ELFIO::Elf_Xword>
+std::tuple<std::string, ELFIO::Elf_Xword>
 get_program_name_and_size(const ELFIO::section& sec, const ELFIO::Elf_Xword start,
                           const ELFIO::const_symbol_section_accessor& symbols) {
     const ELFIO::Elf_Xword symbol_count = symbols.get_symbols_num();
@@ -133,7 +154,7 @@ get_program_name_and_size(const ELFIO::section& sec, const ELFIO::Elf_Xword star
     return {program_name, size};
 }
 
-static std::string bad_reloc_value(const size_t reloc_value) {
+std::string bad_reloc_value(const size_t reloc_value) {
     return "Bad reloc value (" + std::to_string(reloc_value) + "). " + "Make sure to compile with -O2.";
 }
 
@@ -144,8 +165,8 @@ struct FunctionRelocation {
     std::string target_function_name;
 };
 
-static RawProgram* find_subprogram(std::vector<RawProgram>& programs, const ELFIO::section& subprogram_section,
-                                   const std::string& symbol_name) {
+RawProgram* find_subprogram(std::vector<RawProgram>& programs, const ELFIO::section& subprogram_section,
+                            const std::string& symbol_name) {
     for (auto& subprog : programs) {
         if (subprog.section_name == subprogram_section.get_name() && subprog.function_name == symbol_name) {
             return &subprog;
@@ -161,7 +182,7 @@ using MapOffsets = std::map<std::string, size_t>;
 /// This structure aggregates all map descriptors and metadata about sections
 /// containing maps and global variables. It uses a variant to support both
 /// legacy and BTF-based map resolution strategies.
-struct elf_global_data {
+struct ElfGlobalData {
     /// Section indices containing map definitions (e.g., "maps", "maps/xyz")
     std::set<ELFIO::Elf_Half> map_section_indices;
 
@@ -177,19 +198,72 @@ struct elf_global_data {
     std::set<ELFIO::Elf_Half> variable_section_indices;
 };
 
-static std::map<int, int> map_typeid_to_fd(const std::vector<EbpfMapDescriptor>& map_descriptors) {
-    std::map<int, int> type_id_to_fd_map;
-    int pseudo_fd = 1;
-    for (const auto& map_descriptor : map_descriptors) {
-        if (!type_id_to_fd_map.contains(map_descriptor.original_fd)) {
-            type_id_to_fd_map[map_descriptor.original_fd] = pseudo_fd++;
+/// @brief Collect all global variable sections from the ELF file.
+///
+/// Global variables in eBPF are stored in special sections:
+/// - .data, .data.*    → initialized read-write globals (SHT_PROGBITS)
+/// - .rodata, .rodata.* → constants (SHT_PROGBITS)
+/// - .bss, .bss.*      → uninitialized globals (SHT_NOBITS, zero-initialized at load)
+///
+/// This function identifies all such sections and returns pointers to them.
+/// Note: .bss sections have type SHT_NOBITS and contain no file data, but still
+/// have a non-zero size representing the memory allocation needed at runtime.
+///
+/// @param reader The ELF file reader
+/// @return Vector of pointers to global variable sections (maybe empty)
+std::vector<ELFIO::section*> global_sections(const ELFIO::elfio& reader) {
+    std::vector<ELFIO::section*> result;
+    for (auto& section : reader.sections) {
+        if (!section || !is_global_section(section->get_name())) {
+            continue;
         }
+
+        const auto type = section->get_type();
+        // Only accept the canonical section types for global variables
+        if (type != ELFIO::SHT_PROGBITS && type != ELFIO::SHT_NOBITS) {
+            continue;
+        }
+
+        // Skip zero-sized PROGBITS sections (truly empty), but include
+        // SHT_NOBITS (.bss) even when get_size() returns the memory size
+        if (type == ELFIO::SHT_PROGBITS && section->get_size() == 0) {
+            continue;
+        }
+
+        result.push_back(section.get());
     }
-    return type_id_to_fd_map;
+    return result;
 }
 
-static ELFIO::const_symbol_section_accessor read_and_validate_symbol_section(const ELFIO::elfio& reader,
-                                                                             const std::string& path) {
+constexpr int DEFAULT_MAP_FD = -1;
+
+/// @brief Add implicit map descriptors for global variable sections.
+///
+/// Creates single-entry array maps for .data/.rodata/.bss sections.
+/// Each section becomes a map where the entire section content is the map value.
+///
+/// @param reader ELF file reader
+/// @param global Global data to populate with map descriptors
+/// @param map_offsets Map name to descriptor index mapping
+void add_global_variable_maps(const ELFIO::elfio& reader, ElfGlobalData& global, MapOffsets& map_offsets) {
+    for (const auto section : global_sections(reader)) {
+        map_offsets[section->get_name()] = global.map_descriptors.size();
+
+        global.map_descriptors.push_back(EbpfMapDescriptor{
+            .original_fd = gsl::narrow<int>(global.map_descriptors.size() + 1),
+            .type = 0,
+            .key_size = sizeof(uint32_t),
+            .value_size = gsl::narrow<uint32_t>(section->get_size()),
+            .max_entries = 1,
+            .inner_map_fd = DEFAULT_MAP_FD,
+        });
+
+        global.variable_section_indices.insert(section->get_index());
+    }
+}
+
+ELFIO::const_symbol_section_accessor read_and_validate_symbol_section(const ELFIO::elfio& reader,
+                                                                      const std::string& path) {
     const ELFIO::section* symbol_section = reader.sections[".symtab"];
     if (!symbol_section) {
         throw UnmarshalError("No symbol section found in ELF file " + path);
@@ -202,7 +276,7 @@ static ELFIO::const_symbol_section_accessor read_and_validate_symbol_section(con
     return ELFIO::const_symbol_section_accessor{reader, symbol_section};
 }
 
-static ELFIO::elfio load_elf(std::istream& input_stream, const std::string& path) {
+ELFIO::elfio load_elf(std::istream& input_stream, const std::string& path) {
     ELFIO::elfio reader;
     if (!reader.load(input_stream)) {
         throw UnmarshalError("Can't process ELF file " + path);
@@ -210,15 +284,15 @@ static ELFIO::elfio load_elf(std::istream& input_stream, const std::string& path
     return reader;
 }
 
-static void dump_btf_types(const libbtf::btf_type_data& btf_data, const std::string& path) {
+void dump_btf_types(const libbtf::btf_type_data& btf_data, const std::string& path) {
     std::stringstream output;
     std::cout << "Dumping BTF data for " << path << std::endl;
     btf_data.to_json(output);
     std::cout << libbtf::pretty_print_json(output.str()) << std::endl;
 }
 
-static void update_line_info(std::vector<RawProgram>& raw_programs, const ELFIO::section* btf_section,
-                             const ELFIO::section* btf_ext) {
+void update_line_info(std::vector<RawProgram>& raw_programs, const ELFIO::section* btf_section,
+                      const ELFIO::section* btf_ext) {
     auto visitor = [&raw_programs](const std::string& section, const uint32_t instruction_offset,
                                    const std::string& file_name, const std::string& source, const uint32_t line_number,
                                    const uint32_t column_number) {
@@ -250,46 +324,18 @@ static void update_line_info(std::vector<RawProgram>& raw_programs, const ELFIO:
     }
 }
 
-/// @brief Collect all global variable sections from the ELF file.
-///
-/// Global variables in eBPF are stored in special sections:
-/// - .data, .data.*    → initialized read-write globals (SHT_PROGBITS)
-/// - .rodata, .rodata.* → constants (SHT_PROGBITS)
-/// - .bss, .bss.*      → uninitialized globals (SHT_NOBITS, zero-initialized at load)
-///
-/// This function identifies all such sections and returns pointers to them.
-/// Note: .bss sections have type SHT_NOBITS and contain no file data, but still
-/// have a non-zero size representing the memory allocation needed at runtime.
-///
-/// @param reader The ELF file reader
-/// @return Vector of pointers to global variable sections (maybe empty)
-static std::vector<ELFIO::section*> global_sections(const ELFIO::elfio& reader) {
-    std::vector<ELFIO::section*> result;
-    for (auto& section : reader.sections) {
-        if (!section || !is_global_section(section->get_name())) {
-            continue;
+std::map<int, int> map_typeid_to_fd(const std::vector<EbpfMapDescriptor>& map_descriptors) {
+    std::map<int, int> type_id_to_fd_map;
+    int pseudo_fd = 1;
+    for (const auto& map_descriptor : map_descriptors) {
+        if (!type_id_to_fd_map.contains(map_descriptor.original_fd)) {
+            type_id_to_fd_map[map_descriptor.original_fd] = pseudo_fd++;
         }
-
-        const auto type = section->get_type();
-        // Only accept the canonical section types for global variables
-        if (type != ELFIO::SHT_PROGBITS && type != ELFIO::SHT_NOBITS) {
-            continue;
-        }
-
-        // Skip zero-sized PROGBITS sections (truly empty), but include
-        // SHT_NOBITS (.bss) even when get_size() returns the memory size
-        if (type == ELFIO::SHT_PROGBITS && section->get_size() == 0) {
-            continue;
-        }
-
-        result.push_back(section.get());
     }
-    return result;
+    return type_id_to_fd_map;
 }
 
-constexpr unsigned int DEFAULT_MAP_FD = 0xFFFFFFFF;
-
-static elf_global_data parse_btf_section(const parse_params_t& parse_params, const ELFIO::elfio& reader) {
+ElfGlobalData parse_btf_section(const parse_params_t& parse_params, const ELFIO::elfio& reader) {
     const auto btf_section = reader.sections[".BTF"];
     if (!btf_section) {
         return {};
@@ -300,7 +346,7 @@ static elf_global_data parse_btf_section(const parse_params_t& parse_params, con
         dump_btf_types(btf_data, parse_params.path);
     }
 
-    elf_global_data global;
+    ElfGlobalData global;
     MapOffsets map_offsets;
 
     // Parse BTF-defined maps from the .maps DATASEC
@@ -312,7 +358,7 @@ static elf_global_data parse_btf_section(const parse_params_t& parse_params, con
             .key_size = map.key_size,
             .value_size = map.value_size,
             .max_entries = map.max_entries,
-            .inner_map_fd = map.inner_map_type_id == 0 ? DEFAULT_MAP_FD : map.inner_map_type_id,
+            .inner_map_fd = map.inner_map_type_id == 0 ? DEFAULT_MAP_FD : gsl::narrow<int>(map.inner_map_type_id),
         });
     }
 
@@ -343,18 +389,7 @@ static elf_global_data parse_btf_section(const parse_params_t& parse_params, con
     }
 
     // Create implicit maps for all global variable sections
-    for (const auto section : global_sections(reader)) {
-        map_offsets[section->get_name()] = global.map_descriptors.size();
-        global.map_descriptors.push_back(EbpfMapDescriptor{
-            .original_fd = gsl::narrow<int>(global.map_descriptors.size() + 1),
-            .type = 0,
-            .key_size = sizeof(uint32_t),
-            .value_size = gsl::narrow<uint32_t>(section->get_size()),
-            .max_entries = 1,
-            .inner_map_fd = DEFAULT_MAP_FD,
-        });
-        global.variable_section_indices.insert(section->get_index());
-    }
+    add_global_variable_maps(reader, global, map_offsets);
 
     global.map_record_size_or_map_offsets = std::move(map_offsets);
     return global;
@@ -376,8 +411,8 @@ static elf_global_data parse_btf_section(const parse_params_t& parse_params, con
 ///
 /// @param reader ELF file reader
 /// @return Global data with map descriptors for each non-empty variable section
-static elf_global_data create_global_variable_maps(const ELFIO::elfio& reader) {
-    elf_global_data global;
+ElfGlobalData create_global_variable_maps(const ELFIO::elfio& reader) {
+    ElfGlobalData global;
     MapOffsets offsets;
 
     // For legacy (non-BTF) files without map sections, create implicit map descriptors
@@ -417,9 +452,9 @@ static elf_global_data create_global_variable_maps(const ELFIO::elfio& reader) {
 /// @param reader The ELF file reader
 /// @param symbols Symbol table accessor
 /// @return Global data structure with map descriptors and metadata
-static elf_global_data parse_map_sections(const parse_params_t& parse_params, const ELFIO::elfio& reader,
-                                          const ELFIO::const_symbol_section_accessor& symbols) {
-    elf_global_data global;
+ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO::elfio& reader,
+                                 const ELFIO::const_symbol_section_accessor& symbols) {
+    ElfGlobalData global;
     std::map<ELFIO::Elf_Half, size_t> section_record_sizes; // Per-section record size
     std::map<ELFIO::Elf_Half, size_t> section_base_index;   // Starting descriptor index per section
 
@@ -537,8 +572,8 @@ static elf_global_data parse_map_sections(const parse_params_t& parse_params, co
 /// @param reader The loaded ELF file reader
 /// @param symbols Symbol table accessor for the ELF file
 /// @return Global data structure containing all extracted metadata
-static elf_global_data extract_global_data(const parse_params_t& params, const ELFIO::elfio& reader,
-                                           const ELFIO::const_symbol_section_accessor& symbols) {
+ElfGlobalData extract_global_data(const parse_params_t& params, const ELFIO::elfio& reader,
+                                  const ELFIO::const_symbol_section_accessor& symbols) {
     const bool has_legacy_maps =
         std::ranges::any_of(reader.sections, [](const auto& s) { return is_map_section(s->get_name()); });
     // If we have legacy maps section, always use legacy parser regardless of BTF.
@@ -579,7 +614,7 @@ struct bpf_core_relo {
     bpf_core_relo_kind kind;
 };
 
-static std::vector<uint32_t> parse_core_access_string(const std::string& s) {
+std::vector<uint32_t> parse_core_access_string(const std::string& s) {
     std::vector<uint32_t> indices;
     std::stringstream ss(s);
     std::string item;
@@ -599,7 +634,7 @@ class ProgramReader {
     const parse_params_t& parse_params;
     const ELFIO::elfio& reader;
     const ELFIO::const_symbol_section_accessor& symbols;
-    const elf_global_data& global;
+    const ElfGlobalData& global;
     std::vector<FunctionRelocation> function_relocations;
     std::vector<std::string> unresolved_symbol_errors;
 
@@ -630,7 +665,7 @@ class ProgramReader {
     std::vector<RawProgram> raw_programs;
 
     ProgramReader(const parse_params_t& p, const ELFIO::elfio& r, const ELFIO::const_symbol_section_accessor& s,
-                  const elf_global_data& g)
+                  const ElfGlobalData& g)
         : parse_params{p}, reader{r}, symbols{s}, global{g} {}
 
     std::string append_subprograms(RawProgram& prog);
@@ -724,12 +759,12 @@ void ProgramReader::apply_core_relocation(RawProgram& prog, const bpf_core_relo&
                 throw UnmarshalError("CO-RE: indexing into non-aggregate type");
             }
         }
-        inst.imm = final_offset_bits / 8;
+        inst.imm = gsl::narrow<int32_t>(final_offset_bits) / 8;
         break;
     }
     case BPF_CORE_TYPE_ID_LOCAL:
-    case BPF_CORE_TYPE_ID_TARGET: inst.imm = relo.type_id; break;
-    case BPF_CORE_TYPE_SIZE: inst.imm = btf_data.get_size(relo.type_id); break;
+    case BPF_CORE_TYPE_ID_TARGET: inst.imm = gsl::narrow<int>(relo.type_id); break;
+    case BPF_CORE_TYPE_SIZE: inst.imm = gsl::narrow<int>(btf_data.get_size(relo.type_id)); break;
     default: throw UnmarshalError("Unsupported CO-RE relocation kind: " + std::to_string(relo.kind));
     }
 }
@@ -846,12 +881,10 @@ std::string ProgramReader::append_subprograms(RawProgram& prog) {
                 return "Subprogram not found: " + sym.name;
             }
         }
-        const int64_t target_offset = gsl::narrow<int64_t>(subprogram_offsets[reloc.target_function_name]);
-        const auto offset_diff = target_offset - gsl::narrow<int64_t>(reloc.source_offset) - 1;
-        if (offset_diff < INT32_MIN || offset_diff > INT32_MAX) {
-            throw UnmarshalError("Call offset out of range");
-        }
-        prog.prog[reloc.source_offset].imm = gsl::narrow<int32_t>(offset_diff);
+        // BPF uses signed 32-bit immediates: offset = target - (source + 1)
+        const auto target_offset = gsl::narrow<int64_t>(subprogram_offsets[reloc.target_function_name]);
+        const auto source_offset = gsl::narrow<int64_t>(reloc.source_offset);
+        prog.prog[reloc.source_offset].imm = gsl::narrow<int32_t>(target_offset - source_offset - 1);
     }
     currently_visiting.erase(&prog);
     resolved_subprograms[&prog] = true;
@@ -913,34 +946,14 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
                 return false; // Legacy path without MapOffsets; let caller handle
             }
 
-            // Validate LDDW pair structure
-            if (instructions.size() <= location + 1) {
-                throw UnmarshalError("Invalid relocation: global variable reference at instruction boundary");
-            }
+            auto [lo_inst, hi_inst] = validate_and_get_lddw_pair(instructions, location, "global variable");
 
-            auto& lo_inst = instructions[location];
-            auto& hi_inst = instructions[location + 1];
-
-            // LDDW encoding: first instruction has opcode 0x18, second has opcode 0x00
-            if (lo_inst.opcode != 0x18) {
-                throw UnmarshalError("Invalid relocation: expected LDDW first slot (opcode 0x18) for global "
-                                     "variable, found opcode 0x" +
-                                     std::to_string(static_cast<int>(lo_inst.opcode)));
-            }
-            if (hi_inst.opcode != 0) {
-                throw UnmarshalError("Invalid relocation: expected LDDW second slot (opcode 0x00) for global "
-                                     "variable, found opcode 0x" +
-                                     std::to_string(static_cast<int>(hi_inst.opcode)));
-            }
-
-            // The symbol value contains the offset into the section
             const auto symbol_details = get_symbol_details(symbols, index);
-            hi_inst.imm = gsl::narrow<int32_t>(symbol_details.value);
-            lo_inst.src = INST_LD_MODE_MAP_VALUE;
+            hi_inst.get().imm = gsl::narrow<int32_t>(symbol_details.value);
+            lo_inst.get().src = INST_LD_MODE_MAP_VALUE;
 
-            // Get the section name to look up the map descriptor
             const std::string section_name = reader.sections[symbol_section_index]->get_name();
-            lo_inst.imm = relocate_global_variable(section_name);
+            lo_inst.get().imm = relocate_global_variable(section_name);
             return true;
         }
         // Empty symbol name in non-variable section - skip it
@@ -969,29 +982,13 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
 
     // Handle named global variables (including __config_* symbols in .rodata.config)
     if (global.variable_section_indices.contains(symbol_section_index)) {
-        // Validate LDDW pair structure
-        if (instructions.size() <= location + 1) {
-            throw UnmarshalError("Invalid relocation: global variable reference at instruction boundary");
-        }
+        auto [lo_inst, hi_inst] =
+            validate_and_get_lddw_pair(instructions, location, "global variable '" + symbol_name + "'");
 
-        auto& lo_inst = instructions[location];
-        auto& hi_inst = instructions[location + 1];
-
-        // LDDW encoding: first instruction has opcode 0x18, second has opcode 0x00
-        if (lo_inst.opcode != 0x18) {
-            throw UnmarshalError("Invalid relocation: expected LDDW first slot (opcode 0x18) for global variable '" +
-                                 symbol_name + "', found opcode 0x" + std::to_string(static_cast<int>(lo_inst.opcode)));
-        }
-        if (hi_inst.opcode != 0) {
-            throw UnmarshalError("Invalid relocation: expected LDDW second slot (opcode 0x00) for global variable '" +
-                                 symbol_name + "', found opcode 0x" + std::to_string(static_cast<int>(hi_inst.opcode)));
-        }
-
-        // Calculate offset: prefer addend if present, otherwise use instruction immediate
-        const int32_t offset = addend != 0 ? gsl::narrow<int32_t>(addend) : lo_inst.imm;
-        hi_inst.imm = offset;
-        lo_inst.src = INST_LD_MODE_MAP_VALUE;
-        lo_inst.imm = relocate_global_variable(reader.sections[symbol_section_index]->get_name());
+        const int32_t offset = addend != 0 ? gsl::narrow<int32_t>(addend) : lo_inst.get().imm;
+        hi_inst.get().imm = offset;
+        lo_inst.get().src = INST_LD_MODE_MAP_VALUE;
+        lo_inst.get().imm = relocate_global_variable(reader.sections[symbol_section_index]->get_name());
         return true;
     }
 
@@ -1111,6 +1108,26 @@ void ProgramReader::read_programs() {
     if (raw_programs.empty()) {
         throw UnmarshalError(parse_params.desired_section.empty() ? "No executable sections" : "Section not found");
     }
+}
+} // namespace
+
+int create_map_crab(const EbpfMapType& map_type, const uint32_t key_size, const uint32_t value_size,
+                    const uint32_t max_entries, ebpf_verifier_options_t) {
+    const EquivalenceKey equiv{map_type.value_type, key_size, value_size, map_type.is_array ? max_entries : 0};
+    if (!thread_local_program_info->cache.contains(equiv)) {
+        // +1 so 0 is the null FD
+        thread_local_program_info->cache[equiv] = gsl::narrow<int>(thread_local_program_info->cache.size()) + 1;
+    }
+    return thread_local_program_info->cache.at(equiv);
+}
+
+EbpfMapDescriptor* find_map_descriptor(const int map_fd) {
+    for (EbpfMapDescriptor& map : thread_local_program_info->map_descriptors) {
+        if (map.original_fd == map_fd) {
+            return &map;
+        }
+    }
+    return nullptr;
 }
 
 std::vector<RawProgram> read_elf(std::istream& input_stream, const std::string& path,
