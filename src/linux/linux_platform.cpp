@@ -9,8 +9,8 @@
 #define PTYPE(name, descr, native_type, prefixes) {name, descr, 0, prefixes}
 #define PTYPE_PRIVILEGED(name, descr, native_type, prefixes) {name, descr, 0, prefixes, true}
 #endif
-#include "asm_files.hpp"
 #include "crab_verifier.hpp"
+#include "elf_loader.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
 #include "linux_platform.hpp"
 #include "platform.hpp"
@@ -165,8 +165,8 @@ void parse_maps_section_linux(std::vector<EbpfMapDescriptor>& map_descriptors, c
             .key_size = s.key_size,
             .value_size = s.value_size,
             .max_entries = s.max_entries,
-            .inner_map_fd = s.inner_map_idx // Temporarily fill in the index. This will be replaced in the
-                                            // resolve_inner_map_references pass.
+            .inner_map_fd = gsl::narrow<int32_t>(s.inner_map_idx) // Temporarily fill in the index. This will be
+                                                                  // replaced in the resolve_inner_map_references pass.
         });
     }
 }
@@ -174,8 +174,8 @@ void parse_maps_section_linux(std::vector<EbpfMapDescriptor>& map_descriptors, c
 // Initialize the inner_map_fd in each map descriptor.
 void resolve_inner_map_references_linux(std::vector<EbpfMapDescriptor>& map_descriptors) {
     for (size_t i = 0; i < map_descriptors.size(); i++) {
-        const unsigned int inner = map_descriptors[i].inner_map_fd; // Get the inner_map_idx back.
-        if (inner >= map_descriptors.size()) {
+        const int inner = map_descriptors[i].inner_map_fd; // Get the inner_map_idx back.
+        if (inner < 0 || inner >= gsl::narrow<int>(map_descriptors.size())) {
             throw UnmarshalError("bad inner map index " + std::to_string(inner) + " for map " + std::to_string(i));
         }
         map_descriptors[i].inner_map_fd = map_descriptors.at(inner).original_fd;
@@ -238,14 +238,15 @@ EbpfMapDescriptor& get_map_descriptor_linux(const int map_fd) {
     throw UnmarshalError("map_fd " + std::to_string(map_fd) + " not found");
 }
 
-const ebpf_platform_t g_ebpf_platform_linux = {get_program_type_linux,
-                                               get_helper_prototype_linux,
-                                               is_helper_usable_linux,
-                                               sizeof(BpfLoadMapDef),
-                                               parse_maps_section_linux,
-                                               get_map_descriptor_linux,
-                                               get_map_type_linux,
-                                               resolve_inner_map_references_linux,
-                                               bpf_conformance_groups_t::default_groups |
-                                                   bpf_conformance_groups_t::packet};
+const ebpf_platform_t g_ebpf_platform_linux = {
+    get_program_type_linux,
+    get_helper_prototype_linux,
+    is_helper_usable_linux,
+    sizeof(BpfLoadMapDef),
+    parse_maps_section_linux,
+    get_map_descriptor_linux,
+    get_map_type_linux,
+    resolve_inner_map_references_linux,
+    bpf_conformance_groups_t::default_groups | bpf_conformance_groups_t::packet,
+};
 } // namespace prevail

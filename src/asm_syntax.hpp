@@ -137,8 +137,10 @@ struct ArgSingle {
         PTR_TO_MAP_KEY,
         PTR_TO_MAP_VALUE,
         PTR_TO_CTX,
+        PTR_TO_STACK,
         ANYTHING,
     } kind{};
+    bool or_null{}; ///< true for PTR_TO_CTX_OR_NULL
     Reg reg;
     constexpr bool operator==(const ArgSingle&) const = default;
 };
@@ -344,6 +346,7 @@ struct FuncConstraint {
 /// Condition check whether something is a valid size.
 struct ZeroCtxOffset {
     Reg reg;
+    bool or_null{};
     constexpr bool operator==(const ZeroCtxOffset&) const = default;
 };
 

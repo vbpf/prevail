@@ -20,10 +20,10 @@ class AssertExtractor {
 
     static Imm imm(const Value& v) { return std::get<Imm>(v); }
 
-    static vector<Assertion> zero_offset_ctx(const Reg reg) {
+    static vector<Assertion> zero_offset_ctx(const Reg reg, const bool or_null) {
         vector<Assertion> res;
-        res.emplace_back(TypeConstraint{reg, TypeGroup::ctx});
-        res.emplace_back(ZeroCtxOffset{reg});
+        res.emplace_back(TypeConstraint{reg, or_null ? TypeGroup::ctx_or_num : TypeGroup::ctx});
+        res.emplace_back(ZeroCtxOffset{reg, or_null});
         return res;
     }
 
@@ -49,7 +49,7 @@ class AssertExtractor {
     vector<Assertion> operator()(const LoadMapAddress&) const { return {}; }
 
     /// Packet access implicitly uses R6, so verify that R6 still has a pointer to the context.
-    vector<Assertion> operator()(const Packet&) const { return zero_offset_ctx({6}); }
+    vector<Assertion> operator()(const Packet&) const { return zero_offset_ctx({6}, false); }
 
     vector<Assertion> operator()(const Exit&) const {
         vector<Assertion> res;
@@ -86,8 +86,12 @@ class AssertExtractor {
                 res.emplace_back(TypeConstraint{arg.reg, TypeGroup::mem});
                 res.emplace_back(ValidMapKeyValue{arg.reg, *map_fd_reg, arg.kind == ArgSingle::Kind::PTR_TO_MAP_KEY});
                 break;
+            case ArgSingle::Kind::PTR_TO_STACK:
+                res.emplace_back(TypeConstraint{arg.reg, arg.or_null ? TypeGroup::stack_or_num : TypeGroup::stack});
+                // TODO: check 0 when null
+                break;
             case ArgSingle::Kind::PTR_TO_CTX:
-                for (const Assertion& a : zero_offset_ctx(arg.reg)) {
+                for (const Assertion& a : zero_offset_ctx(arg.reg, arg.or_null)) {
                     res.emplace_back(a);
                 }
                 break;

@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <fstream>
 #include <string>
 #include <variant>
 
@@ -11,8 +12,8 @@
 #define MAX_PATH (256)
 #endif
 
-#include "asm_files.hpp"
 #include "asm_unmarshal.hpp"
+#include "elf_loader.hpp"
 
 #define TEST_OBJECT_FILE_DIRECTORY "ebpf-samples/build/"
 #define TEST_ASM_FILE_DIRECTORY "ebpf-samples/asm/"

@@ -56,8 +56,10 @@ enum class TypeGroup {
     number,
     map_fd,
     ctx,             ///< pointer to the special memory region named 'ctx'
+    ctx_or_num,      ///< reg == T_NUM || reg == T_CTX
     packet,          ///< pointer to the packet
     stack,           ///< pointer to the stack
+    stack_or_num,    ///< pointer to the stack or a null
     shared,          ///< pointer to shared memory
     map_fd_programs, ///< reg == T_MAP_PROGRAMS
     mem,             ///< shared | stack | packet = reg >= T_PACKET

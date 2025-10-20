@@ -105,12 +105,6 @@ namespace prevail {
 // Note: Function must be in same BPF program, cannot be helper or external function
 #define EBPF_ARGUMENT_TYPE_PTR_TO_FUNC EBPF_ARGUMENT_TYPE_UNSUPPORTED
 
-// Pointer to stack memory, NULL allowed (optional context for callbacks).
-// Used by: bpf_for_each_map_elem(), bpf_loop(), bpf_find_vma() (callback_ctx)
-// Requires: Stack bounds validation when non-NULL
-// Note: Typically used to pass optional context to callback functions
-#define EBPF_ARGUMENT_TYPE_PTR_TO_STACK_OR_NULL EBPF_ARGUMENT_TYPE_UNSUPPORTED
-
 // Constant allocation size, zero allowed (for dynamic memory allocation).
 // Used by: bpf_ringbuf_reserve() (size parameter)
 // Requires: Compile-time constant or bounded value, zero is valid (allocation fails gracefully)
@@ -2304,7 +2298,7 @@ static constexpr EbpfHelperPrototype bpf_get_netns_cookie_proto = {
     .return_type = EBPF_RETURN_TYPE_INTEGER,
     .argument_type =
         {
-            EBPF_ARGUMENT_TYPE_PTR_TO_CTX, // Can be NULL or various context types
+            EBPF_ARGUMENT_TYPE_PTR_TO_CTX_OR_NULL,
         },
 };
 

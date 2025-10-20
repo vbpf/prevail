@@ -26,10 +26,8 @@ struct EbpfMapDescriptor {
     unsigned int key_size;
     unsigned int value_size;
     unsigned int max_entries;
-    unsigned int inner_map_fd;
+    int inner_map_fd;
 };
-
-constexpr unsigned int DEFAULT_MAP_FD = 0xffffffff;
 
 struct EbpfProgramType {
     std::string name{}; // For ease of display, not used by the verifier.
@@ -61,7 +59,7 @@ struct ProgramInfo {
     std::vector<EbpfMapDescriptor> map_descriptors{};
     EbpfProgramType type{};
     std::map<EquivalenceKey, int> cache{};
-    std::map<int, btf_line_info_t> line_info{};
+    std::map<size_t, btf_line_info_t> line_info{};
 };
 
 struct RawProgram {

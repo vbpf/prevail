@@ -89,6 +89,11 @@ FAIL_ANALYZE("build", "badmapptr.o", "test")
         VERIFY_PROGRAM(project, filename, section_name, program_name, {}, &g_ebpf_platform_linux, true, count); \
     }
 
+#define TEST_PROGRAM_FAIL(project, filename, section_name, program_name, count)                                 \
+    TEST_CASE(project "/" filename " " program_name, "[!shouldfail][verify][samples][" project "]") {           \
+        VERIFY_PROGRAM(project, filename, section_name, program_name, {}, &g_ebpf_platform_linux, true, count); \
+    }
+
 #define TEST_PROGRAM_REJECT(project, filename, section_name, program_name, count)                                \
     TEST_CASE(project "/" filename " " program_name, "[verify][samples][" project "]") {                         \
         VERIFY_PROGRAM(project, filename, section_name, program_name, {}, &g_ebpf_platform_linux, false, count); \
@@ -622,13 +627,67 @@ TEST_SECTION_FAIL_SLOW("cilium", "bpf_xdp_snat_linux.o", "2/16")
 // False positive, unknown cause
 TEST_SECTION_FAIL("linux", "test_map_in_map_kern.o", "kprobe/sys_connect")
 
-// Used to fail due to #679: sign extension (r1 s32= r1) leading to bottom
 TEST_SECTION_LEGACY("cilium", "bpf_netdev.o", "from-netdev")
 TEST_SECTION_LEGACY_SLOW("bpf_cilium_test", "bpf_netdev.o", "from-netdev")
 TEST_SECTION_SLOW("cilium", "bpf_lxc.o", "2/7")
 TEST_SECTION_LEGACY_SLOW("cilium", "bpf_lxc.o", "2/10")
 TEST_SECTION_SLOW("cilium", "bpf_lxc.o", "2/11")
 TEST_SECTION_SLOW("cilium", "bpf_lxc.o", "2/12")
+
+// cilium-core/bpf_host.o
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/entry", "cil_from_netdev", 5)
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/entry", "cil_from_host", 5)
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/entry", "cil_to_netdev", 5)
+// - cil_to_host: unsupported function: skc_lookup_tcp
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/entry", "cil_host_policy", 5)
+
+// cilium-core/bpf_lxc.o
+TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/entry", "cil_from_container", 4)
+TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/entry", "cil_lxc_policy", 4)
+TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/entry", "cil_lxc_policy_egress", 4)
+TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/entry", "cil_to_container", 4)
+
+// cilium-core/bpf_network.o
+TEST_SECTION("cilium-core", "bpf_network.o", "tc/entry")
+
+// cilium-core/bpf_overlay.o
+TEST_PROGRAM("cilium-core", "bpf_overlay.o", "tc/entry", "cil_from_overlay", 2)
+// - cil_to_overlay: CRAB_ERROR("Bound: inf / inf")
+
+// cilium-core/bpf_sock.o
+TEST_SECTION("cilium-core", "bpf_sock.o", "cgroup/connect4")
+TEST_SECTION("cilium-core", "bpf_sock.o", "cgroup/connect6")
+TEST_SECTION("cilium-core", "bpf_sock.o", "cgroup/post_bind4")
+TEST_SECTION("cilium-core", "bpf_sock.o", "cgroup/post_bind6")
+TEST_SECTION("cilium-core", "bpf_sock.o", "cgroup/sendmsg4")
+TEST_SECTION("cilium-core", "bpf_sock.o", "cgroup/sendmsg6")
+TEST_SECTION("cilium-core", "bpf_sock.o", "cgroup/recvmsg4")
+TEST_SECTION_FAIL("cilium-core", "bpf_sock.o", "cgroup/recvmsg6")
+// - bpf_sock.o cgroup/sock_release: invalid helper function id 46
+
+// cilium-core/bpf_wireguard.o
+TEST_PROGRAM("cilium-core", "bpf_wireguard.o", "tc/entry", "cil_from_wireguard", 2)
+TEST_PROGRAM("cilium-core", "bpf_wireguard.o", "tc/entry", "cil_to_wireguard", 2)
+
+// cilium-core/bpf_xdp.o
+TEST_SECTION_FAIL("cilium-core", "bpf_xdp.o", "xdp/entry")
+
+// cilium-examples tests
+TEST_SECTION("cilium-examples", "cgroup_skb_bpf_bpfel.o", "cgroup_skb/egress")
+TEST_SECTION("cilium-examples", "kprobe_bpf_bpfel.o", "kprobe/sys_execve")
+TEST_SECTION("cilium-examples", "kprobe_percpu_bpf_bpfel.o", "kprobe/sys_execve")
+TEST_SECTION("cilium-examples", "kprobepin_bpf_bpfel.o", "kprobe/sys_execve")
+TEST_SECTION("cilium-examples", "tracepoint_in_c_bpf_bpfel.o", "tracepoint/kmem/mm_page_alloc")
+TEST_SECTION("cilium-examples", "xdp_bpf_bpfel.o", "xdp")
+// This is TEST_SECTION_FAIL, but with a shorter filename to avoid CATCH2 test name limits.
+TEST_CASE("expect failure cilium-examples/uretprobe_x86 uretprobe/bash_readline",
+          "[!shouldfail][verify][samples][cilium-examples]") {
+    VERIFY_SECTION("cilium-examples", "uretprobe_bpf_x86_bpfel.o", "uretprobe/bash_readline", {},
+                   &g_ebpf_platform_linux, true);
+}
+
+TEST_PROGRAM("cilium-examples", "tcx_bpf_bpfel.o", "tc", "ingress_prog_func", 2)
+TEST_PROGRAM("cilium-examples", "tcx_bpf_bpfel.o", "tc", "egress_prog_func", 2)
 
 static void test_analyze_thread(const Program* prog, const ProgramInfo* info, bool* res) {
     thread_local_program_info.set(*info);
