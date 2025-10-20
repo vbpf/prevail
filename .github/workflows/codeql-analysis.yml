@@ -25,6 +25,9 @@ jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write  # To upload code scanning results
 
     strategy:
       fail-fast: false
