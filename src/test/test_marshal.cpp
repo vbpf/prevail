@@ -208,7 +208,7 @@ static void check_unmarshal_succeed(const EbpfInst& ins, const ebpf_platform_t& 
     const ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
     constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
     const InstructionSeq parsed =
-        std::get<InstructionSeq>(unmarshal(RawProgram{"", "", 0, "", {ins, exit, exit}, info}));
+        std::get<InstructionSeq>(unmarshal(RawProgram{"", "", 0, "", {ins, exit, exit}, info}, thread_local_options));
     REQUIRE(parsed.size() == 3);
 }
 
@@ -217,8 +217,8 @@ static void check_unmarshal_succeed(EbpfInst inst1, EbpfInst inst2,
                                     const ebpf_platform_t& platform = g_ebpf_platform_linux) {
     const ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
     constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
-    const InstructionSeq parsed =
-        std::get<InstructionSeq>(unmarshal(RawProgram{"", "", 0, "", {inst1, inst2, exit, exit}, info}));
+    const InstructionSeq parsed = std::get<InstructionSeq>(
+        unmarshal(RawProgram{"", "", 0, "", {inst1, inst2, exit, exit}, info}, thread_local_options));
     REQUIRE(parsed.size() == 3);
 }
 
@@ -229,7 +229,7 @@ static void compare_unmarshal_marshal(const EbpfInst& ins, const EbpfInst& expec
     ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
     constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
     const InstructionSeq inst_seq =
-        std::get<InstructionSeq>(unmarshal(RawProgram{"", "", 0, "", {ins, exit, exit}, info}));
+        std::get<InstructionSeq>(unmarshal(RawProgram{"", "", 0, "", {ins, exit, exit}, info}, thread_local_options));
     REQUIRE(inst_seq.size() == 3);
     auto [_, single, _2] = inst_seq.front();
     (void)_;  // unused
@@ -246,8 +246,8 @@ static void compare_unmarshal_marshal(const EbpfInst& ins1, const EbpfInst& ins2
     ProgramInfo info{.platform = &g_ebpf_platform_linux,
                      .type = g_ebpf_platform_linux.get_program_type("unspec", "unspec")};
     constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
-    InstructionSeq parsed =
-        std::get<InstructionSeq>(unmarshal(RawProgram{"", "", 0, "", {ins1, ins2, exit, exit}, info}));
+    InstructionSeq parsed = std::get<InstructionSeq>(
+        unmarshal(RawProgram{"", "", 0, "", {ins1, ins2, exit, exit}, info}, thread_local_options));
     REQUIRE(parsed.size() == 3);
     auto [_, single, _2] = parsed.front();
     (void)_;  // unused
@@ -265,8 +265,8 @@ static void compare_unmarshal_marshal(const EbpfInst& ins1, const EbpfInst& ins2
     ProgramInfo info{.platform = &g_ebpf_platform_linux,
                      .type = g_ebpf_platform_linux.get_program_type("unspec", "unspec")};
     constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
-    const InstructionSeq inst_seq =
-        std::get<InstructionSeq>(unmarshal(RawProgram{"", "", 0, "", {ins1, ins2, exit, exit}, info}));
+    const InstructionSeq inst_seq = std::get<InstructionSeq>(
+        unmarshal(RawProgram{"", "", 0, "", {ins1, ins2, exit, exit}, info}, thread_local_options));
     REQUIRE(inst_seq.size() == 3);
     auto [_, single, _2] = inst_seq.front();
     (void)_;  // unused
@@ -285,7 +285,7 @@ static void compare_marshal_unmarshal(const Instruction& ins, bool double_cmd = 
                                       const ebpf_platform_t& platform = g_ebpf_platform_linux) {
     ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
     const InstructionSeq inst_seq =
-        std::get<InstructionSeq>(unmarshal(RawProgram{"", "", 0, "", marshal(ins, 0), info}));
+        std::get<InstructionSeq>(unmarshal(RawProgram{"", "", 0, "", marshal(ins, 0), info}, thread_local_options));
     REQUIRE(inst_seq.size() == 1);
     auto [_, single, _2] = inst_seq.back();
     (void)_;  // unused
@@ -296,7 +296,7 @@ static void compare_marshal_unmarshal(const Instruction& ins, bool double_cmd = 
 static void check_marshal_unmarshal_fail(const Instruction& ins, const std::string& expected_error_message,
                                          const ebpf_platform_t& platform = g_ebpf_platform_linux) {
     const ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
-    auto result = unmarshal(RawProgram{"", "", 0, "", marshal(ins, 0), info});
+    auto result = unmarshal(RawProgram{"", "", 0, "", marshal(ins, 0), info}, thread_local_options);
     auto* error_message = std::get_if<std::string>(&result);
     REQUIRE(error_message != nullptr);
     REQUIRE(*error_message == expected_error_message);
@@ -306,7 +306,7 @@ static void check_unmarshal_fail(EbpfInst inst, const std::string& expected_erro
                                  const ebpf_platform_t& platform = g_ebpf_platform_linux) {
     ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
     std::vector insns = {inst};
-    auto result = unmarshal(RawProgram{"", "", 0, "", insns, info});
+    auto result = unmarshal(RawProgram{"", "", 0, "", insns, info}, thread_local_options);
     auto* error_message = std::get_if<std::string>(&result);
     REQUIRE(error_message != nullptr);
     REQUIRE(*error_message == expected_error_message);
@@ -317,7 +317,7 @@ static void check_unmarshal_fail_goto(EbpfInst inst, const std::string& expected
     ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
     constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
     std::vector insns{inst, exit, exit};
-    auto result = unmarshal(RawProgram{"", "", 0, "", insns, info});
+    auto result = unmarshal(RawProgram{"", "", 0, "", insns, info}, thread_local_options);
     auto* error_message = std::get_if<std::string>(&result);
     REQUIRE(error_message != nullptr);
     REQUIRE(*error_message == expected_error_message);
@@ -328,7 +328,7 @@ static void check_unmarshal_fail(EbpfInst inst1, EbpfInst inst2, const std::stri
                                  const ebpf_platform_t& platform = g_ebpf_platform_linux) {
     ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
     std::vector insns{inst1, inst2};
-    auto result = unmarshal(RawProgram{"", "", 0, "", insns, info});
+    auto result = unmarshal(RawProgram{"", "", 0, "", insns, info}, thread_local_options);
     auto* error_message = std::get_if<std::string>(&result);
     REQUIRE(error_message != nullptr);
     REQUIRE(*error_message == expected_error_message);

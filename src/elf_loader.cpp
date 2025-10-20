@@ -862,9 +862,13 @@ std::string ProgramReader::append_subprograms(RawProgram& prog) {
                     return err;
                 }
                 const size_t base = subprogram_offsets[reloc.target_function_name];
+
+                // Appen subprogram to program
                 prog.prog.insert(prog.prog.end(), sub->prog.begin(), sub->prog.end());
-                for (const auto& [k, info] : sub->info.line_info) {
-                    prog.info.line_info[base + k] = info;
+                if (parse_params.options.verbosity_opts.print_line_info) {
+                    for (const auto& [k, info] : sub->info.line_info) {
+                        prog.info.line_info[base + k] = info;
+                    }
                 }
             } else {
                 return "Subprogram not found: " + sym.name;
@@ -1077,9 +1081,11 @@ void ProgramReader::read_programs() {
         throw UnmarshalError("Unresolved symbols found.");
     }
 
-    if (const auto btf_sec = reader.sections[".BTF"]) {
-        if (const auto btf_ext = reader.sections[".BTF.ext"]) {
-            update_line_info(raw_programs, btf_sec, btf_ext);
+    if (parse_params.options.verbosity_opts.print_line_info) {
+        if (const auto btf_sec = reader.sections[".BTF"]) {
+            if (const auto btf_ext = reader.sections[".BTF.ext"]) {
+                update_line_info(raw_programs, btf_sec, btf_ext);
+            }
         }
     }
 
@@ -1120,8 +1126,8 @@ EbpfMapDescriptor* find_map_descriptor(const int map_fd) {
 }
 
 std::vector<RawProgram> read_elf(std::istream& input_stream, const std::string& path,
-                                 const std::string& desired_section, const ebpf_verifier_options_t& options,
-                                 const ebpf_platform_t* platform) {
+                                 const std::string& desired_section, const std::string& desired_program,
+                                 const ebpf_verifier_options_t& options, const ebpf_platform_t* platform) {
     parse_params_t params{path, options, platform, desired_section};
     auto reader = load_elf(input_stream, path);
     auto symbols = read_and_validate_symbol_section(reader, path);
@@ -1132,9 +1138,10 @@ std::vector<RawProgram> read_elf(std::istream& input_stream, const std::string& 
 }
 
 std::vector<RawProgram> read_elf(const std::string& path, const std::string& desired_section,
-                                 const ebpf_verifier_options_t& options, const ebpf_platform_t* platform) {
+                                 const std::string& desired_program, const ebpf_verifier_options_t& options,
+                                 const ebpf_platform_t* platform) {
     if (std::ifstream stream{path, std::ios::in | std::ios::binary}) {
-        return read_elf(stream, path, desired_section, options, platform);
+        return read_elf(stream, path, desired_section, desired_program, options, platform);
     }
     struct stat st; // NOLINT(*-pro-type-member-init)
     if (stat(path.c_str(), &st)) {

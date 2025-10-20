@@ -32,9 +32,9 @@ static void trim_right(std::string& s) {
 
 void verify_printed_string(const std::string& file) {
     std::stringstream generated_output;
-    auto raw_progs = read_elf(std::string(TEST_OBJECT_FILE_DIRECTORY) + file + ".o", "", {}, &g_ebpf_platform_linux);
+    auto raw_progs = read_elf(std::string(TEST_OBJECT_FILE_DIRECTORY) + file + ".o", "", "", {}, &g_ebpf_platform_linux);
     const RawProgram& raw_prog = raw_progs.back();
-    std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog);
+    std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, thread_local_options);
     auto program = std::get_if<InstructionSeq>(&prog_or_error);
     REQUIRE(program != nullptr);
     print(*program, generated_output, {});

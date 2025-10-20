@@ -190,7 +190,7 @@ int main(int argc, char** argv) {
     // Read a set of raw program sections from an ELF file.
     vector<RawProgram> raw_progs;
     try {
-        raw_progs = read_elf(filename, desired_section, ebpf_verifier_options, &platform);
+        raw_progs = read_elf(filename, desired_section, desired_program, ebpf_verifier_options, &platform);
     } catch (std::runtime_error& e) {
         std::cerr << "error: " << e.what() << std::endl;
         return 1;
@@ -205,7 +205,7 @@ int main(int argc, char** argv) {
         if (!desired_section.empty() && raw_progs.empty()) {
             // We could not find the desired program, so get the full list
             // of possibilities.
-            raw_progs = read_elf(filename, string(), ebpf_verifier_options, &platform);
+            raw_progs = read_elf(filename, string(), string(), ebpf_verifier_options, &platform);
         }
         for (const RawProgram& raw_prog : raw_progs) {
             std::cout << "section=" << raw_prog.section_name << " function=" << raw_prog.function_name << std::endl;
@@ -216,7 +216,7 @@ int main(int argc, char** argv) {
     const RawProgram& raw_prog = *found_prog;
 
     // Convert the raw program section to a set of instructions.
-    std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog);
+    std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, ebpf_verifier_options);
     if (auto prog = std::get_if<string>(&prog_or_error)) {
         std::cout << "unmarshaling error at " << *prog << "\n";
         return 1;

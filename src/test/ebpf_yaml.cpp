@@ -353,7 +353,7 @@ ConformanceTestResult run_conformance_test_case(const std::vector<std::byte>& me
     raw_prog.info.platform = &platform;
 
     // Convert the raw program section to a set of instructions.
-    std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog);
+    std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, {});
     if (auto prog = std::get_if<std::string>(&prog_or_error)) {
         std::cerr << "unmarshaling error at " << *prog << "\n";
         return {};
