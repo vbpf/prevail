@@ -19,6 +19,7 @@ class Report final {
     friend void print_errors(std::ostream& os, const Report& report);
     friend void print_all_messages(std::ostream& os, const Report& report);
 
+    [[nodiscard]]
     std::set<std::string> all_messages() const {
         std::set<std::string> result = error_set();
         for (const auto& note : reachability_set()) {
@@ -27,16 +28,18 @@ class Report final {
         return result;
     }
 
+    [[nodiscard]]
     std::set<std::string> reachability_set() const {
         std::set<std::string> result;
-        for (const auto& [label, reach_error] : reachability) {
-            for (const auto& msg : reach_error) {
+        for (const auto& [label, notes] : reachability) {
+            for (const auto& msg : notes) {
                 result.insert(to_string(label) + ": " + msg);
             }
         }
         return result;
     }
 
+    [[nodiscard]]
     std::set<std::string> error_set() const {
         std::set<std::string> result;
         for (const auto& [label, error_vec] : errors) {
@@ -47,6 +50,7 @@ class Report final {
         return result;
     }
 
+    [[nodiscard]]
     bool verified() const { return errors.empty(); }
 };
 

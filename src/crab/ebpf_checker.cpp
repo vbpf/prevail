@@ -280,7 +280,7 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
             require_value(dom.rcp, access_reg.svalue > 0, "Possible null access");
             // Shared memory is zero-initialized when created so is safe to read and write.
         } else {
-            throw_fail("Only stack or packet can be used as a parameter");
+            throw_fail("Only stack, packet, or shared can be used as a parameter");
         }
     }
 }

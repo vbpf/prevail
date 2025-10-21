@@ -162,6 +162,7 @@ struct TypeToNumDomain {
     TypeToNumDomain join_over_types(const Reg& reg,
                                     const std::function<void(TypeToNumDomain&, TypeEncoding)>& transition) const;
 
+    [[nodiscard]]
     std::vector<TypeEncoding> foreach_type(const Reg& reg) const;
 
     void havoc_all_locations_having_type(TypeEncoding type);

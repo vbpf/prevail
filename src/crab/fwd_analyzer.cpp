@@ -28,11 +28,14 @@ class InterleavedFwdFixpointIterator final {
     /// Used to skip the analysis until _entry is found
     bool _skip{true};
 
-    bool has_error(const Label& node) const { return _inv.at(node).error.has_value(); }
+    [[nodiscard]]
+    bool has_error(const Label& node) const {
+        return _inv.at(node).error.has_value();
+    }
 
-    void set_error(const Label& node, const VerificationError&& error) { _inv.at(node).error = std::move(error); }
+    void set_error(const Label& node, VerificationError&& error) { _inv.at(node).error = std::move(error); }
 
-    void set_pre(const Label& label, const EbpfDomain&& v) { _inv.at(label).pre = std::move(v); }
+    void set_pre(const Label& label, EbpfDomain&& v) { _inv.at(label).pre = std::move(v); }
     void set_pre(const Label& label, const EbpfDomain& v) { _inv.at(label).pre = v; }
 
     EbpfDomain get_pre(const Label& node) const { return _inv.at(node).pre; }
@@ -178,7 +181,7 @@ void InterleavedFwdFixpointIterator::operator()(const std::shared_ptr<WtoCycle>&
             invariant = std::move(new_pre);
             break;
         } else {
-            invariant = extrapolate(invariant, std::move(new_pre), iteration);
+            invariant = extrapolate(invariant, new_pre, iteration);
         }
     }
 
