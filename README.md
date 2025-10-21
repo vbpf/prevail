@@ -147,9 +147,6 @@ Verbosity:
                               instructions into a single basic block. Default: enabled
           --line-info         Print line information
           --print-btf-types   Print BTF types
-          --assume-assert, --no-assume-assert{false}
-                              Assume assertions (useful for debugging verification failures).
-                              Default: disabled
   -i                          Print invariants
   -f                          Print verifier's failure logs
   -v                          Print both invariants and failures
