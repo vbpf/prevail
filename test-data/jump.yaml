@@ -330,17 +330,7 @@ code:
     r3 -= r1; trigger same_type(r2, r1)
 
 
-post:
-  - r0.type=number
-  - r0.uvalue=[0, +oo]
-  - r1.ctx_offset=4
-  - r1.type in {number, ctx}
-  - r2.ctx_offset=0
-  - r2.type in {number, ctx}
-  - r8.ctx_offset=4
-  - r8.type=ctx
-  - r9.ctx_offset=0
-  - r9.type=ctx
+post: []
 
 messages:
   - "8: Cannot subtract pointers to different regions (r1.type == number or r3.type == r1.type in {ctx, stack, packet})"
@@ -407,40 +397,10 @@ code:
     r3 = r1
     r3 += r2; the domain does not currently store inequalities so we can't yet tell that this is safe
 
-post:
-  - r2.svalue-r3.ctx_offset<=1020
-  - r3.ctx_offset-r0.uvalue<=1024
-  - r3.ctx_offset-r2.svalue<=1020
-  - r3.ctx_offset-r3.svalue<=1016
-  - r3.ctx_offset=[4, 1024]
-  - r3.svalue-r3.ctx_offset<=3068
-  - r1.uvalue=r1.svalue
-  - r2.uvalue=r2.svalue
-  - r3.type=r1.type
-  - r3.uvalue=r3.svalue
-  - r0.type=number
-  - r0.uvalue=[0, +oo]
-  - r1.ctx_offset=0
-  - r1.type in {number, ctx}
-  - r1.svalue-r3.svalue<=-4
-  - r1.svalue=[4, 1024]
-  - r2.ctx_offset=0
-  - r2.type in {number, ctx}
-  - r2.svalue-r0.uvalue<=1023
-  - r2.svalue-r3.svalue<=-4
-  - r2.svalue=[4, 1024]
-  - r3.svalue-r0.uvalue<=3071
-  - r3.svalue-r1.svalue<=2048
-  - r3.svalue-r2.svalue<=2048
-  - r3.svalue=[8, 3072]
-  - r8.ctx_offset=0
-  - r8.type=ctx
-  - r8.svalue=1024
-  - r8.uvalue=1024
+post: []
 
 messages:
   - "8: Only numbers can be added to pointers (r2.type in {ctx, stack, packet, shared} -> r3.type == number)"
-  - "8: Only numbers can be added to pointers (r3.type in {ctx, stack, packet, shared} -> r2.type == number)"
 ---
 test-case: multiple types compare
 
@@ -515,19 +475,13 @@ code:
   <end>: |
     exit
 
-post:
-  - meta_offset=0
-  - packet_size=[36, 65534]
-  - r2.packet_offset=packet_size
-  - packet_size-r1.packet_offset<=65480
-  - r0.type=number
-  - r1.type=packet
-  - r1.packet_offset=54
-  - r1.packet_offset-packet_size<=18
-  - r2.type=packet
-  - r4.type=number
-  - r4.svalue=[0, 1]
-  - r4.uvalue=r4.svalue
+post: ["meta_offset=0",
+    "packet_size-r1.packet_offset<=65480",
+    "packet_size=[36, 65534]",
+    "r0.svalue=0", "r0.type=number", "r0.uvalue=0",
+    "r1.packet_offset-packet_size<=18", "r1.packet_offset=54", "r1.type=packet",
+    "r2.packet_offset=packet_size", "r2.type=packet",
+    "r4.svalue=1", "r4.type=number", "r4.uvalue=r4.svalue"]
 
 messages:
   - "7: Upper bound must be at most packet_size (valid_access(r1.offset-8, width=8) for read)"
@@ -660,12 +614,7 @@ code:
   <start>: |
     assume r1 < r2
 
-post:
-  - r1.type=map_fd
-  - r1.map_fd=1
-  - r2.type=map_fd
-  - r2.map_fd=2
-  - r1.map_fd-r2.map_fd<=-1
+post: []
 
 messages:
   - "0: Invalid type (r1.type in {number, ctx, stack, packet, shared})"
@@ -673,7 +622,7 @@ messages:
 # # Test cases for special case of comparison of not a number against a number when immediate is 0
 ---
 test-case: JEQ with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"
@@ -698,7 +647,7 @@ messages:
   - "0:2: Code becomes unreachable (assume r1 == 0)"
 ---
 test-case: JNE with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"
@@ -719,7 +668,7 @@ messages:
 
 ---
 test-case: JSET with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"
@@ -739,7 +688,7 @@ messages:
 
 ---
 test-case: JNSET with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"
@@ -759,7 +708,7 @@ messages:
 
 ---
 test-case: JLT with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"
@@ -786,7 +735,7 @@ messages:
 
 ---
 test-case: JLE with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"
@@ -813,7 +762,7 @@ messages:
 
 ---
 test-case: JGT with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"
@@ -834,7 +783,7 @@ messages:
 
 ---
 test-case: JGE with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"
@@ -855,7 +804,7 @@ messages:
 
 ---
 test-case: JSLT with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"
@@ -875,7 +824,7 @@ messages:
 
 ---
 test-case: JSLE with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"
@@ -895,7 +844,7 @@ messages:
 
 ---
 test-case: JSGT with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"
@@ -915,7 +864,7 @@ messages:
 
 ---
 test-case: JSGE with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"
@@ -935,7 +884,7 @@ messages:
 
 ---
 test-case: JEQ32 with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"
@@ -955,7 +904,7 @@ messages:
 
 ---
 test-case: JNE32 with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"
@@ -975,7 +924,7 @@ messages:
 
 ---
 test-case: JSET32 with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"
@@ -995,7 +944,7 @@ messages:
 
 ---
 test-case: JNSET32 with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"
@@ -1015,7 +964,7 @@ messages:
 
 ---
 test-case: JLT32 with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"
@@ -1035,7 +984,7 @@ messages:
 
 ---
 test-case: JLE32 with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"
@@ -1055,7 +1004,7 @@ messages:
 
 ---
 test-case: JGT32 with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"
@@ -1075,7 +1024,7 @@ messages:
 
 ---
 test-case: JGE32 with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"
@@ -1095,7 +1044,7 @@ messages:
 
 ---
 test-case: JSLT32 with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"
@@ -1115,7 +1064,7 @@ messages:
 
 ---
 test-case: JSLE32 with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"
@@ -1135,7 +1084,7 @@ messages:
 
 ---
 test-case: JSGT32 with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"
@@ -1155,7 +1104,7 @@ messages:
 
 ---
 test-case: JSGE32 with imm 0 and pointer
-options: ["assume_assertions"]
+options: []
 pre:
   - "r1.type=ctx"
   - "r1.svalue=[1, 2147418112]"

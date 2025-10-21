@@ -35,10 +35,14 @@ class InterleavedFwdFixpointIterator final {
     EbpfDomain get_post(const Label& node) const { return _inv.at(node).post; }
 
     void transform_to_post(const Label& label, EbpfDomain pre) {
-        if (thread_local_options.assume_assertions) {
-            for (const auto& assertion : _prog.assertions_at(label)) {
-                // avoid redundant errors
-                ebpf_domain_assume(pre, assertion);
+        if (_inv.at(label).error) {
+            return;
+        }
+        for (const auto& assertion : _prog.assertions_at(label)) {
+            // Avoid redundant errors.
+            if (auto error = ebpf_domain_check(pre, assertion)) {
+                _inv.at(label).error = std::move(error);
+                return;
             }
         }
         ebpf_domain_transform(pre, _prog.instruction_at(label));
@@ -59,7 +63,7 @@ class InterleavedFwdFixpointIterator final {
 
     explicit InterleavedFwdFixpointIterator(const Program& prog) : _prog(prog), _cfg(prog.cfg()), _wto(prog.cfg()) {
         for (const auto& label : _cfg.labels()) {
-            _inv.emplace(label, InvariantMapPair{EbpfDomain::bottom(), EbpfDomain::bottom()});
+            _inv.emplace(label, InvariantMapPair{EbpfDomain::bottom(), {}, EbpfDomain::bottom()});
         }
     }
 
@@ -166,7 +170,7 @@ void InterleavedFwdFixpointIterator::operator()(const std::shared_ptr<WtoCycle>&
             invariant = std::move(new_pre);
             break;
         } else {
-            invariant = extrapolate(invariant, new_pre, iteration);
+            invariant = extrapolate(invariant, std::move(new_pre), iteration);
         }
     }
 
@@ -188,7 +192,7 @@ void InterleavedFwdFixpointIterator::operator()(const std::shared_ptr<WtoCycle>&
             if (iteration > _descending_iterations) {
                 break;
             }
-            invariant = refine(invariant, new_pre, iteration);
+            invariant = refine(invariant, std::move(new_pre), iteration);
             set_pre(head, invariant);
         }
     }

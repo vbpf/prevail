@@ -62,15 +62,10 @@ Invariants analyze(const Program& prog, const StringInvariant& entry_invariant) 
     return analyze(prog, EbpfDomain::from_constraints(entry_invariant.value(), thread_local_options.setup_constraints));
 }
 
-bool Invariants::verified(const Program& prog) const {
-    for (const auto& [label, inv_pair] : invariants) {
-        if (inv_pair.pre.is_bottom()) {
-            continue;
-        }
-        for (const Assertion& assertion : prog.assertions_at(label)) {
-            if (!ebpf_domain_check(inv_pair.pre, assertion).empty()) {
-                return false;
-            }
+bool Invariants::verified() const {
+    for (const auto& inv_pair : invariants | std::views::values) {
+        if (inv_pair.error) {
+            return false;
         }
     }
     return true;
@@ -82,11 +77,9 @@ Report Invariants::check_assertions(const Program& prog) const {
         if (inv_pair.pre.is_bottom()) {
             continue;
         }
-        for (const Assertion& assertion : prog.assertions_at(label)) {
-            const auto warnings = ebpf_domain_check(inv_pair.pre, assertion);
-            for (const auto& msg : warnings) {
-                report.warnings[label].emplace_back(msg);
-            }
+        if (inv_pair.error) {
+            report.errors[label].emplace_back(inv_pair.error->what());
+            continue;
         }
         if (const auto passume = std::get_if<Assume>(&prog.instruction_at(label))) {
             if (inv_pair.post.is_bottom()) {

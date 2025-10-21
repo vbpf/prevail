@@ -297,9 +297,7 @@ code:
   <start>: |
     *(u64 *)(r1 + 0) = r0
 
-post:
-  - "r1.type=ctx"
-  - "r1.ctx_offset=0"
+post: []
 
 messages:
   - "0: Only numbers can be stored to externally-visible regions (r1.type != stack -> r0.type == number)"
@@ -315,9 +313,7 @@ code:
   <start>: |
     *(u32 *)(r1 + 0) = r0
 
-post:
-  - "r1.type=ctx"
-  - "r1.ctx_offset=0"
+post: []
 
 messages:
   - "0: Invalid type (r0.type == number)"
@@ -333,9 +329,7 @@ code:
   <start>: |
     *(u16 *)(r1 + 0) = r0
 
-post:
-  - "r1.type=ctx"
-  - "r1.ctx_offset=0"
+post: []
 
 messages:
   - "0: Invalid type (r0.type == number)"
@@ -351,9 +345,7 @@ code:
   <start>: |
     *(u8 *)(r1 + 0) = r0
 
-post:
-  - "r1.type=ctx"
-  - "r1.ctx_offset=0"
+post: []
 
 messages:
   - "0: Invalid type (r0.type == number)"
@@ -369,9 +361,7 @@ code:
   <start>: |
     lock *(u64 *)(r1 + 0) += r5
 
-post:
-  - "r1.type=ctx"
-  - "r1.ctx_offset=0"
+post: []
 
 messages:
   - "0: Invalid type (r5.type == number)"
@@ -387,9 +377,7 @@ code:
   <start>: |
     lock *(u64 *)(r1 + 0) &= r5
 
-post:
-  - "r1.type=ctx"
-  - "r1.ctx_offset=0"
+post: []
 
 messages:
   - "0: Invalid type (r5.type == number)"
@@ -405,9 +393,7 @@ code:
   <start>: |
     lock *(u64 *)(r1 + 0) |= r5
 
-post:
-  - "r1.type=ctx"
-  - "r1.ctx_offset=0"
+post: []
 
 messages:
   - "0: Invalid type (r5.type == number)"
@@ -423,9 +409,7 @@ code:
   <start>: |
     lock *(u64 *)(r1 + 0) |= r5
 
-post:
-  - "r1.type=ctx"
-  - "r1.ctx_offset=0"
+post: []
 
 messages:
   - "0: Invalid type (r5.type == number)"
@@ -441,9 +425,7 @@ code:
   <start>: |
     lock *(u64 *)(r1 + 0) x= r5
 
-post:
-  - "r1.type=ctx"
-  - "r1.ctx_offset=0"
+post: []
 
 messages:
   - "0: Invalid type (r5.type == number)"
@@ -459,9 +441,7 @@ code:
   <start>: |
     lock *(u64 *)(r1 + 0) x= r5
 
-post:
-  - "r1.type=ctx"
-  - "r1.ctx_offset=0"
+post: []
 
 messages:
   - "0: Invalid type (r5.type == number)"

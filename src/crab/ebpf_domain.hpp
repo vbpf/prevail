@@ -9,7 +9,6 @@
 #include "arith/variable.hpp"
 #include "crab/array_domain.hpp"
 #include "crab/rcp.hpp"
-#include "crab/type_domain.hpp"
 #include "string_constraints.hpp"
 
 namespace prevail {
@@ -25,9 +24,12 @@ constexpr int64_t PTR_MAX = std::numeric_limits<int32_t>::max() - MAX_PACKET_SIZ
 
 class EbpfDomain;
 
+struct VerificationError final : std::runtime_error {
+    explicit VerificationError(const std::string& what) : std::runtime_error(what) {}
+};
+
 void ebpf_domain_transform(EbpfDomain& inv, const Instruction& ins);
-void ebpf_domain_assume(EbpfDomain& dom, const Assertion& assertion);
-std::vector<std::string> ebpf_domain_check(const EbpfDomain& dom, const Assertion& assertion);
+std::optional<VerificationError> ebpf_domain_check(const EbpfDomain& dom, const Assertion& assertion);
 
 // TODO: make this an explicit instruction
 void ebpf_domain_initialize_loop_counter(EbpfDomain& dom, const Label& label);

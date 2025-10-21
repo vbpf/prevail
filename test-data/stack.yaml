@@ -636,15 +636,7 @@ code:
     r0 = 0
     exit
 
-post:
-  - r0.type=number
-  - r0.svalue=0
-  - r0.uvalue=0
-  - r10.type=stack
-  - r10.stack_offset=1024
-  - s[511].type=number
-  - s[511].svalue=0
-  - s[511].uvalue=0
+post: []
 
 messages:
   - "0: Lower bound must be at least r10.stack_offset - EBPF_SUBPROGRAM_STACK_SIZE (valid_access(r10.offset-513, width=1) for write)"

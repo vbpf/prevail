@@ -31,9 +31,6 @@ struct ebpf_verifier_options_t {
     // Options that control how the control flow graph is built.
     prepare_cfg_options cfg_opts;
 
-    // True to assume prior failed assertions are true and continue verification.
-    bool assume_assertions = false;
-
     // False to use actual map fd's, true to use mock fd's.
     bool mock_map_fds = true;
 
@@ -53,7 +50,7 @@ struct ebpf_verifier_options_t {
 };
 
 struct ebpf_verifier_stats_t {
-    int total_warnings{};
+    int total_errors{};
     int max_loop_count{};
 };
 

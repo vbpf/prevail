@@ -247,7 +247,7 @@ void EbpfTransformer::operator()(const Assume& s) {
             });
         } else {
             // We should only reach here if `--assume-assert` is off
-            assert(!thread_local_options.assume_assertions || dom.is_bottom());
+            assert(dom.is_bottom());
             // be sound in any case, it happens to flush out bugs:
             dom.rcp.values.set_to_top();
         }

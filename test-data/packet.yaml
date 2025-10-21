@@ -41,10 +41,7 @@ code:
     r4 = 0
     *(u64 *)(r1 + 0) = r4
 
-post: ["meta_offset=0",
-       "r1.type=packet", "r1.packet_offset=0", "r1.svalue=[4098, 2147418112]", "r1.uvalue=[4098, 2147418112]",
-       "r2.type=packet", "r2.packet_offset=packet_size",
-       "packet_size=[0, 65534]", "r4.type=number", "r4.svalue=0", "r4.uvalue=0"]
+post: []
 messages:
   - "1: Upper bound must be at most packet_size (valid_access(r1.offset, width=8) for write)"
 
@@ -59,10 +56,7 @@ code:
   <start>: |
     r4 = *(u64 *)(r1 + 0)
 
-post: ["meta_offset=0",
-       "r1.type=packet", "r1.packet_offset=0", "r1.svalue=[4098, 2147418112]", "r1.uvalue=[4098, 2147418112]",
-       "r2.type=packet", "r2.packet_offset=packet_size",
-       "packet_size=[0, 65534]", "r4.type=number"]
+post: []
 messages:
   - "0: Upper bound must be at most packet_size (valid_access(r1.offset, width=8) for read)"
 
@@ -83,13 +77,22 @@ code:
   <out>: |
     r5=r5
 
-post: ["meta_offset=0",
-       "r1.type=packet", "r1.packet_offset=0", "r1.svalue=[4098, 2147418112]", "r1.uvalue=[4098, 2147418112]",
-       "r2.type=packet", "r2.packet_offset=packet_size",
-       "r3.type=packet", "r3.packet_offset=4", "r3.svalue=[4102, 2147418116]",
-       "r3.uvalue=r3.svalue",
-       "packet_size-r3.packet_offset<=65530", "packet_size=[0, 65534]",
-       "r3.packet_offset-packet_size<=4", "r3.svalue=r1.svalue+4"]
+post:
+  - packet_size-r3.packet_offset<=-1
+  - packet_size=[0, 3]
+  - meta_offset=0
+  - r1.packet_offset=0
+  - r1.svalue=[4098, 2147418112]
+  - r1.type=packet
+  - r1.uvalue=[4098, 2147418112]
+  - r2.packet_offset=packet_size
+  - r2.type=packet
+  - r3.packet_offset=4
+  - r3.svalue=[4102, 2147418116]
+  - r3.svalue=r1.svalue+4
+  - r3.type=packet
+  - r3.uvalue=r3.svalue
+
 messages:
   - "4: Upper bound must be at most packet_size (valid_access(r1.offset, width=8) for write)"
 
@@ -219,9 +222,8 @@ code:
   <start>: |
     r2 = *(u64 *)(r1 - 8)
 
-post: ["meta_offset=0", "packet_size=8",
-       "r1.type=packet", "r1.packet_offset=0", "r1.svalue=[4098, 2147418112]", "r1.uvalue=[4098, 2147418112]",
-       "r2.type=number"]
+post: []
+
 messages:
   - "0: Lower bound must be at least meta_offset (valid_access(r1.offset-8, width=8) for read)"
 ---
@@ -234,9 +236,8 @@ code:
   <start>: |
     r2 = *(u64 *)(r1 + 8)
 
-post: ["meta_offset=-8", "packet_size=0",
-       "r1.type=packet", "r1.packet_offset=-8", "r1.svalue=[4098, 2147418112]", "r1.uvalue=[4098, 2147418112]",
-       "r2.type=number"]
+post: []
+
 messages:
   - "0: Upper bound must be at most packet_size (valid_access(r1.offset+8, width=8) for read)"
 ---
@@ -268,10 +269,6 @@ code:
     assume r3 s<= r1;
     r0 = *(u8 *)(r2 + 100);
 
-post: ["meta_offset=[-4098, 0]",
-       "r0.svalue=[0, 255]", "r0.type=number", "r0.uvalue=[0, 255]",
-       "r1.svalue=[101, 4098]", "r1.type=number", "r1.uvalue=r1.svalue",
-       "r2.packet_offset=meta_offset", "r2.svalue=[4098, 2147418112]", "r2.type=packet",
-       "r3.svalue=101", "r3.type=number", "r3.uvalue=101"]
+post: []
 messages:
   - "3: Upper bound must be at most packet_size (valid_access(r2.offset+100, width=1) for read)"

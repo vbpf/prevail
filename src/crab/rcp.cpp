@@ -129,6 +129,14 @@ TypeToNumDomain::collect_type_dependent_constraints(const TypeToNumDomain& right
     return result;
 }
 
+std::vector<TypeEncoding> TypeToNumDomain::foreach_type(const Reg& reg) const {
+    using namespace dsl_syntax;
+    if (!types.is_initialized(reg)) {
+        return {T_UNINIT};
+    }
+    return types.iterate_types(reg);
+}
+
 TypeToNumDomain
 TypeToNumDomain::join_over_types(const Reg& reg,
                                  const std::function<void(TypeToNumDomain&, TypeEncoding)>& transition) const {

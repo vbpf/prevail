@@ -11,6 +11,7 @@ namespace prevail {
 
 struct InvariantMapPair {
     EbpfDomain pre;
+    std::optional<VerificationError> error;
     EbpfDomain post;
 };
 using InvariantTable = std::map<Label, InvariantMapPair>;
