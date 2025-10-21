@@ -28,6 +28,11 @@ class InterleavedFwdFixpointIterator final {
     /// Used to skip the analysis until _entry is found
     bool _skip{true};
 
+    bool has_error(const Label& node) const { return _inv.at(node).error.has_value(); }
+
+    void set_error(const Label& node, const VerificationError&& error) { _inv.at(node).error = std::move(error); }
+
+    void set_pre(const Label& label, const EbpfDomain&& v) { _inv.at(label).pre = std::move(v); }
     void set_pre(const Label& label, const EbpfDomain& v) { _inv.at(label).pre = v; }
 
     EbpfDomain get_pre(const Label& node) const { return _inv.at(node).pre; }
@@ -35,17 +40,20 @@ class InterleavedFwdFixpointIterator final {
     EbpfDomain get_post(const Label& node) const { return _inv.at(node).post; }
 
     void transform_to_post(const Label& label, EbpfDomain pre) {
-        if (_inv.at(label).error) {
-            return;
-        }
-        for (const auto& assertion : _prog.assertions_at(label)) {
-            // Avoid redundant errors.
-            if (auto error = ebpf_domain_check(pre, assertion)) {
-                _inv.at(label).error = std::move(error);
+        const auto& ins = _prog.instruction_at(label);
+        if (!std::holds_alternative<IncrementLoopCounter>(ins)) {
+            if (has_error(label)) {
                 return;
             }
+            for (const auto& assertion : _prog.assertions_at(label)) {
+                // Avoid redundant errors.
+                if (auto error = ebpf_domain_check(pre, assertion)) {
+                    set_error(label, std::move(*error));
+                    return;
+                }
+            }
         }
-        ebpf_domain_transform(pre, _prog.instruction_at(label));
+        ebpf_domain_transform(pre, ins);
 
         _inv.at(label).post = std::move(pre);
     }
@@ -86,7 +94,7 @@ InvariantTable run_forward_analyzer(const Program& prog, EbpfDomain entry_inv) {
         analyzer._wto.for_each_loop_head(
             [&](const Label& label) { ebpf_domain_initialize_loop_counter(entry_inv, label); });
     }
-    analyzer.set_pre(prog.cfg().entry_label(), entry_inv);
+    analyzer.set_pre(prog.cfg().entry_label(), std::move(entry_inv));
     for (const auto& component : analyzer._wto) {
         std::visit(analyzer, component);
     }
@@ -193,7 +201,7 @@ void InterleavedFwdFixpointIterator::operator()(const std::shared_ptr<WtoCycle>&
                 break;
             }
             invariant = refine(invariant, std::move(new_pre), iteration);
-            set_pre(head, invariant);
+            set_pre(head, std::move(invariant));
         }
     }
 }

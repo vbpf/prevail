@@ -77,6 +77,12 @@ Report Invariants::check_assertions(const Program& prog) const {
         if (inv_pair.pre.is_bottom()) {
             continue;
         }
+        if (std::holds_alternative<IncrementLoopCounter>(prog.instruction_at(label))) {
+            if (const auto error = ebpf_domain_check(inv_pair.pre, prog.assertions_at(label).front())) {
+                report.errors[label].emplace_back(error->what());
+            }
+            continue;
+        }
         if (inv_pair.error) {
             report.errors[label].emplace_back(inv_pair.error->what());
             continue;
