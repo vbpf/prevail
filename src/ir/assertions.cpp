@@ -121,10 +121,10 @@ class AssertExtractor {
 
     [[nodiscard]]
     vector<Assertion> explicate(const Condition& cond) const {
-        if (info.type.is_privileged) {
-            return {};
-        }
         vector<Assertion> res;
+        if (info.type.is_privileged) {
+            return res;
+        }
         if (const auto pimm = std::get_if<Imm>(&cond.right)) {
             if (pimm->v != 0) {
                 // no need to check for valid access, it must be a number
@@ -258,12 +258,10 @@ class AssertExtractor {
         }
         case Bin::Op::SUB: {
             if (const auto reg = std::get_if<Reg>(&ins.v)) {
-                vector<Assertion> res;
                 // disallow map-map since same type does not mean same offset
                 // TODO: map identities
-                res.emplace_back(TypeConstraint{ins.dst, TypeGroup::ptr_or_num});
-                res.emplace_back(Comparable{.r1 = ins.dst, .r2 = *reg, .or_r2_is_number = true});
-                return res;
+                return {TypeConstraint{ins.dst, TypeGroup::ptr_or_num},
+                        Comparable{.r1 = ins.dst, .r2 = *reg, .or_r2_is_number = true}};
             }
             return {Assertion{TypeConstraint{ins.dst, TypeGroup::ptr_or_num}}};
         }
