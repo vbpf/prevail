@@ -364,7 +364,7 @@ ConformanceTestResult run_conformance_test_case(const std::vector<std::byte>& me
     try {
         const Program prog = Program::from_sequence(inst_seq, info, options);
         const Invariants invariants = analyze(prog, pre_invariant);
-        return ConformanceTestResult{.success = invariants.verified(), .r0_value = invariants.exit_value()};
+        return ConformanceTestResult{.success = invariants.verified(prog), .r0_value = invariants.exit_value()};
     } catch (const std::exception&) {
         // Catch exceptions thrown in ebpf_domain.cpp.
         return {};

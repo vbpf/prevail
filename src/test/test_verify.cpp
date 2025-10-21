@@ -38,21 +38,6 @@ FAIL_LOAD_ELF("invalid", "badsymsize.o", "xdp_redirect_map")
 FAIL_UNMARSHAL("build", "wronghelper.o", "xdp")
 FAIL_UNMARSHAL("invalid", "invalid-lddw.o", ".text")
 
-#define FAIL_ANALYZE(dirname, filename, sectionname)                                                              \
-    TEST_CASE("Try analyze bad program: " dirname "/" filename " " sectionname, "[cfg]") {                        \
-        thread_local_options = {};                                                                                \
-        auto raw_progs = read_elf("ebpf-samples/" dirname "/" filename, sectionname, {}, &g_ebpf_platform_linux); \
-        REQUIRE(raw_progs.size() == 1);                                                                           \
-        const RawProgram& raw_prog = raw_progs.back();                                                            \
-        std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog);                            \
-        const auto inst_seq = std::get_if<InstructionSeq>(&prog_or_error);                                        \
-        REQUIRE(inst_seq);                                                                                        \
-        Program prog = Program::from_sequence(*inst_seq, raw_prog.info, thread_local_options);                    \
-        REQUIRE_THROWS_AS(analyze(prog), UnmarshalError);                                                         \
-    }
-
-FAIL_ANALYZE("build", "badmapptr.o", "test")
-
 // Verify a program in a section that may have multiple programs in it.
 #define VERIFY_PROGRAM(dirname, filename, section_name, program_name, _options, platform, should_pass, count) \
     do {                                                                                                      \
@@ -558,6 +543,7 @@ TEST_PROGRAM("build", "prog_array.o", ".text", "func2", 5);
 TEST_PROGRAM("build", "prog_array.o", ".text", "func3", 5);
 
 // Test some programs that ought to fail verification.
+TEST_SECTION_REJECT("build", "badmapptr.o", "test")
 TEST_SECTION_REJECT("build", "badhelpercall.o", ".text")
 TEST_SECTION_REJECT("build", "ctxoffset.o", "sockops")
 TEST_SECTION_FAIL("build", "dependent_read.o", "xdp")

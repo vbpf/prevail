@@ -62,10 +62,15 @@ Invariants analyze(const Program& prog, const StringInvariant& entry_invariant) 
     return analyze(prog, EbpfDomain::from_constraints(entry_invariant.value(), thread_local_options.setup_constraints));
 }
 
-bool Invariants::verified() const {
-    for (const auto& inv_pair : invariants | std::views::values) {
+bool Invariants::verified(const Program& prog) const {
+    for (const auto& [label, inv_pair] : invariants) {
         if (inv_pair.error) {
             return false;
+        }
+        if (std::holds_alternative<IncrementLoopCounter>(prog.instruction_at(label))) {
+            if (const auto error = ebpf_domain_check(inv_pair.pre, prog.assertions_at(label).front())) {
+                return false;
+            }
         }
     }
     return true;

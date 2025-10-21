@@ -65,7 +65,7 @@ class Invariants final {
     Interval exit_value() const;
 
     int max_loop_count() const;
-    bool verified() const;
+    bool verified(const Program& prog) const;
     Report check_assertions(const Program& prog) const;
 
     friend void print_invariants(std::ostream& os, const Program& prog, bool simplify, const Invariants& invariants);
@@ -73,7 +73,7 @@ class Invariants final {
 
 Invariants analyze(const Program& prog);
 Invariants analyze(const Program& prog, const StringInvariant& entry_invariant);
-inline bool verify(const Program& prog) { return analyze(prog).verified(); }
+inline bool verify(const Program& prog) { return analyze(prog).verified(prog); }
 
 int create_map_crab(const EbpfMapType& map_type, uint32_t key_size, uint32_t value_size, uint32_t max_entries,
                     ebpf_verifier_options_t options);
