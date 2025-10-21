@@ -476,12 +476,12 @@ code:
     exit
 
 post: ["meta_offset=0",
-    "packet_size-r1.packet_offset<=65480",
-    "packet_size=[36, 65534]",
-    "r0.svalue=0", "r0.type=number", "r0.uvalue=0",
-    "r1.packet_offset-packet_size<=18", "r1.packet_offset=54", "r1.type=packet",
-    "r2.packet_offset=packet_size", "r2.type=packet",
-    "r4.svalue=1", "r4.type=number", "r4.uvalue=r4.svalue"]
+       "packet_size-r1.packet_offset<=65480",
+       "packet_size=[36, 65534]",
+       "r0.svalue=0", "r0.type=number", "r0.uvalue=0",
+       "r1.packet_offset-packet_size<=18", "r1.packet_offset=54", "r1.type=packet",
+       "r2.packet_offset=packet_size", "r2.type=packet",
+       "r4.svalue=1", "r4.type=number", "r4.uvalue=r4.svalue"]
 
 messages:
   - "7: Upper bound must be at most packet_size (valid_access(r1.offset-8, width=8) for read)"
