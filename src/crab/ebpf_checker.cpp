@@ -235,7 +235,7 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
         width = value_size->narrow<int>();
     }
 
-    for (const auto access_reg_type : dom.rcp.foreach_type(s.access_reg)) {
+    for (const auto access_reg_type : dom.rcp.enumerate_types(s.access_reg)) {
         if (access_reg_type == T_STACK) {
             Interval offset = dom.rcp.values.eval_interval(access_reg.stack_offset);
             if (!dom.stack.all_num_width(offset, Interval{width})) {
@@ -300,7 +300,7 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
     const bool is_comparison_check = s.width == Value{Imm{0}};
 
     const auto reg = reg_pack(s.reg);
-    for (const auto type : dom.rcp.foreach_type(s.reg)) {
+    for (const auto type : dom.rcp.enumerate_types(s.reg)) {
         switch (type) {
         case T_PACKET: {
             auto [lb, ub] = lb_ub_access_pair(s, reg.packet_offset);

@@ -62,11 +62,12 @@ Invariants analyze(const Program& prog, const StringInvariant& entry_invariant) 
     return analyze(prog, EbpfDomain::from_constraints(entry_invariant.value(), thread_local_options.setup_constraints));
 }
 
-static std::optional<VerificationError> check_loop_bound(const Program& prog, const Label& label, const EbpfDomain& pre) {
+static std::optional<VerificationError> check_loop_bound(const Program& prog, const Label& label,
+                                                         const EbpfDomain& pre) {
     if (std::holds_alternative<IncrementLoopCounter>(prog.instruction_at(label))) {
         const auto assertions = prog.assertions_at(label);
         if (assertions.size() != 1) {
-            CRAB_ERROR("Empty assertions for IncrementLoopCounter");
+            CRAB_ERROR("Expected exactly 1 assertion for IncrementLoopCounter");
         }
         return ebpf_domain_check(pre, assertions.front());
     }
@@ -78,7 +79,7 @@ bool Invariants::verified(const Program& prog) const {
         if (inv_pair.error) {
             return false;
         }
-        if (!check_loop_bound(prog, label, inv_pair.pre)) {
+        if (check_loop_bound(prog, label, inv_pair.pre)) {
             return false;
         }
     }

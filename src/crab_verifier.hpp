@@ -51,7 +51,9 @@ class Report final {
     }
 
     [[nodiscard]]
-    bool verified() const { return errors.empty(); }
+    bool verified() const {
+        return errors.empty();
+    }
 };
 
 class Invariants final {

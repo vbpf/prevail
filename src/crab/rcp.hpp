@@ -163,7 +163,7 @@ struct TypeToNumDomain {
                                     const std::function<void(TypeToNumDomain&, TypeEncoding)>& transition) const;
 
     [[nodiscard]]
-    std::vector<TypeEncoding> foreach_type(const Reg& reg) const;
+    std::vector<TypeEncoding> enumerate_types(const Reg& reg) const;
 
     void havoc_all_locations_having_type(TypeEncoding type);
 
