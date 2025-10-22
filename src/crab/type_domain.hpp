@@ -6,11 +6,11 @@
 
 #include <optional>
 
-#include "ir/syntax.hpp"
 #include "arith/dsl_syntax.hpp"
 #include "arith/variable.hpp"
 #include "crab/split_dbm.hpp"
 #include "crab/type_encoding.hpp"
+#include "ir/syntax.hpp"
 
 namespace prevail {
 

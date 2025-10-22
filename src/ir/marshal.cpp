@@ -5,8 +5,8 @@
 #include <variant>
 #include <vector>
 
-#include "ir/marshal.hpp"
 #include "crab_utils/num_safety.hpp"
+#include "ir/marshal.hpp"
 
 using std::vector;
 

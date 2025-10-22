@@ -9,10 +9,10 @@
 #include "arith/linear_constraint.hpp"
 #include "crab/type_encoding.hpp"
 #include "crab/var_registry.hpp"
-#include "platform.hpp"
-#include "string_constraints.hpp"
 #include "ir/parse.hpp"
 #include "ir/unmarshal.hpp"
+#include "platform.hpp"
+#include "string_constraints.hpp"
 
 using std::regex;
 using std::regex_match;

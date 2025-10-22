@@ -5,12 +5,12 @@
 #include <optional>
 #include <utility>
 
-#include "ir/syntax.hpp"
 #include "arith/linear_constraint.hpp"
 #include "arith/variable.hpp"
 #include "crab/interval.hpp"
 #include "crab/split_dbm.hpp"
 #include "crab/var_registry.hpp"
+#include "ir/syntax.hpp"
 #include "string_constraints.hpp"
 
 namespace prevail {

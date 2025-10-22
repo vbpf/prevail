@@ -10,11 +10,11 @@
 
 #include <yaml-cpp/yaml.h>
 
-#include "ir/parse.hpp"
-#include "ir/syntax.hpp"
 #include "crab_verifier.hpp"
 #include "ebpf_verifier.hpp"
 #include "ebpf_yaml.hpp"
+#include "ir/parse.hpp"
+#include "ir/syntax.hpp"
 #include "string_constraints.hpp"
 
 using std::string;

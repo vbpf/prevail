@@ -8,8 +8,8 @@
 #include <tuple>
 #include <vector>
 
-#include "ir/syntax.hpp"
 #include "ebpf_vm_isa.hpp"
+#include "ir/syntax.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
 #include "spec_type_descriptors.hpp"
 
