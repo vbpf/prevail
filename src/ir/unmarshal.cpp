@@ -7,8 +7,8 @@
 
 #include "crab_utils/debug.hpp"
 #include "crab_utils/num_safety.hpp"
-#include "ebpf_vm_isa.hpp"
 #include "ir/unmarshal.hpp"
+#include "spec/vm_isa.hpp"
 
 using std::string;
 using std::vector;

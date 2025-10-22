@@ -10,7 +10,6 @@
 
 #include "config.hpp"
 #include "linux_verifier.hpp"
-#include "spec_type_descriptors.hpp"
 
 namespace prevail {
 static int do_bpf(const bpf_cmd cmd, bpf_attr& attr) { return syscall(321, cmd, &attr, sizeof(attr)); }

@@ -7,8 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "ir/program.hpp"
 #include "platform.hpp"
-#include "program.hpp"
 namespace prevail {
 
 class UnmarshalError final : public std::runtime_error {

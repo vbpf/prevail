@@ -8,7 +8,7 @@
 
 #include "ir/syntax.hpp"
 #include "platform.hpp"
-#include "spec_type_descriptors.hpp"
+#include "spec/type_descriptors.hpp"
 
 namespace prevail {
 

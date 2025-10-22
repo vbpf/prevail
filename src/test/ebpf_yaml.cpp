@@ -12,10 +12,10 @@
 
 #include "crab_verifier.hpp"
 #include "ebpf_verifier.hpp"
-#include "ebpf_yaml.hpp"
 #include "ir/parse.hpp"
 #include "ir/syntax.hpp"
 #include "string_constraints.hpp"
+#include "test/ebpf_yaml.hpp"
 
 using std::string;
 using std::vector;

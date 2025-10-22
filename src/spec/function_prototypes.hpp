@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include "ebpf_base.h"
+#include "spec/ebpf_base.h"
 
 namespace prevail {
 // A helper function's prototype is expressed by this struct.

@@ -3,7 +3,7 @@
 #include <iostream>
 
 #include "ebpf_verifier.hpp"
-#include "ebpf_yaml.hpp"
+#include "test/ebpf_yaml.hpp"
 
 // Avoid affecting other headers by macros.
 #include "CLI11/CLI11.hpp"

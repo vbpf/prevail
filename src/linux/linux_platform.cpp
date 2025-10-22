@@ -12,7 +12,7 @@
 #include "crab_verifier.hpp"
 #include "elf_loader.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
-#include "linux_platform.hpp"
+#include "linux/linux_platform.hpp"
 #include "platform.hpp"
 
 namespace prevail {

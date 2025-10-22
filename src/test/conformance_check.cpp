@@ -13,7 +13,7 @@
 
 #include "CLI11/CLI11.hpp"
 #include "ebpf_verifier.hpp"
-#include "ebpf_yaml.hpp"
+#include "test/ebpf_yaml.hpp"
 
 using namespace prevail;
 

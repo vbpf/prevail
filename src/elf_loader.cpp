@@ -24,8 +24,8 @@
 
 #include "crab_utils/num_safety.hpp"
 #include "elf_loader.hpp"
+#include "ir/program.hpp"
 #include "platform.hpp"
-#include "program.hpp"
 
 /// @brief ELF file parser for BPF programs with support for legacy and BTF-based formats.
 ///

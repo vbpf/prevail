@@ -8,7 +8,7 @@
 #include "config.hpp"
 #include "crab/ebpf_domain.hpp"
 #include "crab/fwd_analyzer.hpp"
-#include "program.hpp"
+#include "ir/program.hpp"
 
 namespace prevail {
 

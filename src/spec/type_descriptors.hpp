@@ -7,8 +7,8 @@
 #include <vector>
 
 #include "crab_utils/lazy_allocator.hpp"
-#include "ebpf_base.h"
-#include "ebpf_vm_isa.hpp"
+#include "spec/ebpf_base.h"
+#include "spec/vm_isa.hpp"
 
 namespace prevail {
 enum class EbpfMapValueType { ANY, MAP, PROGRAM };

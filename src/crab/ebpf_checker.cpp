@@ -12,10 +12,10 @@
 #include "crab/array_domain.hpp"
 #include "crab/ebpf_domain.hpp"
 #include "crab/var_registry.hpp"
+#include "ir/program.hpp"
 #include "ir/syntax.hpp"
 #include "ir/unmarshal.hpp"
 #include "platform.hpp"
-#include "program.hpp"
 
 namespace prevail {
 

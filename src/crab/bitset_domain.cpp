@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include <ostream>
 
-#include "bitset_domain.hpp"
+#include "crab/bitset_domain.hpp"
 
 namespace prevail {
 std::ostream& operator<<(std::ostream& o, const BitsetDomain& b) {
