@@ -8,7 +8,7 @@
 #include <tuple>
 #include <vector>
 
-#include "asm_syntax.hpp"
+#include "ir/syntax.hpp"
 #include "ebpf_vm_isa.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
 #include "spec_type_descriptors.hpp"

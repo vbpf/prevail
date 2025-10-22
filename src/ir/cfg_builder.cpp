@@ -7,11 +7,11 @@
 #include <string>
 #include <vector>
 
-#include "asm_syntax.hpp"
 #include "cfg/cfg.hpp"
 #include "cfg/wto.hpp"
 #include "config.hpp"
 #include "program.hpp"
+#include "ir/syntax.hpp"
 
 using std::optional;
 using std::set;

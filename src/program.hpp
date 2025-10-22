@@ -5,11 +5,11 @@
 #include <map>
 #include <vector>
 
-#include "asm_syntax.hpp"
 #include "cfg/cfg.hpp"
 #include "cfg/label.hpp"
 #include "config.hpp"
 #include "crab_utils/debug.hpp"
+#include "ir/syntax.hpp"
 
 namespace prevail {
 class Program {

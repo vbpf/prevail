@@ -3,10 +3,10 @@
 #include <optional>
 #include <utility>
 
+#include "ir/syntax.hpp"
 #include "arith/dsl_syntax.hpp"
 #include "arith/linear_constraint.hpp"
 #include "arith/variable.hpp"
-#include "asm_syntax.hpp" // for Condition::Op
 #include "crab/finite_domain.hpp"
 #include "crab/interval.hpp"
 #include "crab/split_dbm.hpp"

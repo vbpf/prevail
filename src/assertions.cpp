@@ -5,8 +5,8 @@
 #include <utility>
 #include <vector>
 
-#include "asm_syntax.hpp"
 #include "cfg/cfg.hpp"
+#include "ir/syntax.hpp"
 #include "platform.hpp"
 
 using std::string;

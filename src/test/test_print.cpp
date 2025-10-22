@@ -12,7 +12,7 @@
 #define MAX_PATH (256)
 #endif
 
-#include "asm_unmarshal.hpp"
+#include "ir/unmarshal.hpp"
 #include "elf_loader.hpp"
 
 #define TEST_OBJECT_FILE_DIRECTORY "ebpf-samples/build/"

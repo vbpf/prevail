@@ -7,12 +7,12 @@
 
 #include "arith/dsl_syntax.hpp"
 #include "arith/linear_constraint.hpp"
-#include "asm_parse.hpp"
-#include "asm_unmarshal.hpp"
 #include "crab/type_encoding.hpp"
 #include "crab/var_registry.hpp"
 #include "platform.hpp"
 #include "string_constraints.hpp"
+#include "ir/parse.hpp"
+#include "ir/unmarshal.hpp"
 
 using std::regex;
 using std::regex_match;

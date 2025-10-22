@@ -4,8 +4,8 @@
 
 #include <vector>
 
-#include "asm_syntax.hpp"
 #include "ebpf_vm_isa.hpp"
+#include "ir/syntax.hpp"
 
 namespace prevail {
 

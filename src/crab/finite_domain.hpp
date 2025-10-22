@@ -5,9 +5,9 @@
 #include <optional>
 #include <utility>
 
+#include "ir/syntax.hpp"
 #include "arith/linear_constraint.hpp"
 #include "arith/variable.hpp"
-#include "asm_syntax.hpp" // for Condition::Op
 #include "crab/interval.hpp"
 #include "crab/split_dbm.hpp"
 #include "crab/var_registry.hpp"

@@ -7,9 +7,9 @@
 #include <optional>
 #include <utility>
 
+#include "ir/unmarshal.hpp"
 #include "arith/dsl_syntax.hpp"
-#include "asm_syntax.hpp"
-#include "asm_unmarshal.hpp"
+#include "ir/syntax.hpp"
 #include "config.hpp"
 #include "crab/array_domain.hpp"
 #include "crab/ebpf_domain.hpp"

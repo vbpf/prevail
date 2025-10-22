@@ -4,7 +4,7 @@
 
 #include <string>
 
-#include "asm_syntax.hpp"
+#include "ir/syntax.hpp"
 
 namespace prevail {
 

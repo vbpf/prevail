@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 #include <catch2/catch_all.hpp>
 
-#include "asm_marshal.hpp"
-#include "asm_unmarshal.hpp"
+#include "ir/marshal.hpp"
+#include "ir/unmarshal.hpp"
 
 using namespace prevail;
 

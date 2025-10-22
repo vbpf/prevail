@@ -6,9 +6,9 @@
 #include <variant>
 #include <vector>
 
-#include "asm_syntax.hpp"
 #include "platform.hpp"
 #include "spec_type_descriptors.hpp"
+#include "ir/syntax.hpp"
 
 namespace prevail {
 
