@@ -3,7 +3,7 @@
 #include <catch2/catch_all.hpp>
 
 #include "ebpf_verifier.hpp"
-#include "ebpf_yaml.hpp"
+#include "test/ebpf_yaml.hpp"
 
 #define YAML_CASE(path)                                                                           \
     TEST_CASE("YAML suite: " path, "[yaml]") {                                                    \

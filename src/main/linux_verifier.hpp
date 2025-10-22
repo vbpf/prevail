@@ -8,10 +8,9 @@
 #include <tuple>
 #include <vector>
 
-#include "ebpf_vm_isa.hpp"
 #include "ir/syntax.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
-#include "spec_type_descriptors.hpp"
+#include "spec/vm_isa.hpp"
 
 namespace prevail {
 int create_map_linux(uint32_t map_type, uint32_t key_size, uint32_t value_size, uint32_t max_entries,

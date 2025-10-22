@@ -4,8 +4,8 @@
 
 #include "config.hpp"
 #include "crab/fwd_analyzer.hpp"
-#include "program.hpp"
-#include "spec_type_descriptors.hpp"
+#include "ir/program.hpp"
+#include "spec/type_descriptors.hpp"
 #include "string_constraints.hpp"
 
 namespace prevail {

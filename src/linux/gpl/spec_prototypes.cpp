@@ -1,5 +1,5 @@
 #include "platform.hpp"
-#include "spec_type_descriptors.hpp"
+#include "linux/gpl/spec_type_descriptors.hpp"
 
 namespace prevail {
 // Unsupported or partially supported return types

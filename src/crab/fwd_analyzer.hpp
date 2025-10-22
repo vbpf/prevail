@@ -5,7 +5,7 @@
 #include <map>
 
 #include "crab/ebpf_domain.hpp"
-#include "program.hpp"
+#include "ir/program.hpp"
 
 namespace prevail {
 

@@ -14,10 +14,10 @@
 #include "crab/type_encoding.hpp"
 #include "crab/var_registry.hpp"
 #include "crab_verifier.hpp"
-#include "helpers.hpp"
 #include "ir/syntax.hpp"
+#include "linux/gpl/spec_type_descriptors.hpp"
 #include "platform.hpp"
-#include "spec_type_descriptors.hpp"
+#include "spec/function_prototypes.hpp"
 
 using std::optional;
 using std::string;

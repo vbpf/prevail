@@ -4,7 +4,7 @@
 #include <bitset>
 #include <cassert>
 
-#include "ebpf_base.h" // for EBPF_TOTAL_STACK_SIZE constant
+#include "spec/ebpf_base.h"
 #include "string_constraints.hpp"
 
 namespace prevail {

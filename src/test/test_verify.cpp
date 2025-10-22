@@ -4,7 +4,7 @@
 #include <thread>
 
 #include "ebpf_verifier.hpp"
-#include "spec_type_descriptors.hpp"
+#include "linux/gpl/spec_type_descriptors.hpp"
 
 using namespace prevail;
 

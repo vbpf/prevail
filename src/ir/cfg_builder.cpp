@@ -10,8 +10,8 @@
 #include "cfg/cfg.hpp"
 #include "cfg/wto.hpp"
 #include "config.hpp"
+#include "ir/program.hpp"
 #include "ir/syntax.hpp"
-#include "program.hpp"
 
 using std::optional;
 using std::set;

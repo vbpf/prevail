@@ -13,7 +13,7 @@
 #include "cfg/label.hpp"
 #include "crab/type_encoding.hpp"
 #include "crab_utils/num_safety.hpp"
-#include "spec_type_descriptors.hpp"
+#include "spec/type_descriptors.hpp"
 
 // Assembly syntax.
 namespace prevail {
@@ -130,7 +130,6 @@ struct Jmp {
 };
 
 struct ArgSingle {
-    // see comments in spec_prototypes.hpp
     enum class Kind {
         MAP_FD,
         MAP_FD_PROGRAMS,

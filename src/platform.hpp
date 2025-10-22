@@ -9,8 +9,8 @@
 #include "../external/bpf_conformance/include/bpf_conformance.h"
 
 #include "config.hpp"
-#include "helpers.hpp"
-#include "spec_type_descriptors.hpp"
+#include "spec/function_prototypes.hpp"
+#include "spec/type_descriptors.hpp"
 
 namespace prevail {
 typedef EbpfProgramType (*ebpf_get_program_type_fn)(const std::string& section, const std::string& path);
