@@ -227,30 +227,25 @@ void EbpfTransformer::operator()(const Assume& s) {
     if (const auto psrc_reg = std::get_if<Reg>(&cond.right)) {
         const auto src_reg = *psrc_reg;
         const auto src = reg_pack(src_reg);
-        if (dom.rcp.types.same_type(cond.left, std::get<Reg>(cond.right))) {
-            dom.rcp = dom.rcp.join_over_types(cond.left, [&](TypeToNumDomain& rcp, const TypeEncoding type) {
-                if (type == T_NUM) {
-                    for (const LinearConstraint& cst : rcp.values->assume_cst_reg(cond.op, cond.is64, dst.svalue,
-                                                                                  dst.uvalue, src.svalue, src.uvalue)) {
-                        rcp.values.add_constraint(cst);
-                    }
-                } else {
-                    // Either pointers to a singleton region,
-                    // or an equality comparison on map descriptors/pointers to non-singleton locations
-                    if (const auto dst_offset = get_type_offset_variable(cond.left, type)) {
-                        if (const auto src_offset = get_type_offset_variable(src_reg, type)) {
-                            rcp.values.add_constraint(
-                                assume_cst_offsets_reg(cond.op, dst_offset.value(), src_offset.value()));
-                        }
+        // This should have been checked by EbpfChecker
+        assert(dom.rcp.types.same_type(cond.left, std::get<Reg>(cond.right)));
+        dom.rcp = dom.rcp.join_over_types(cond.left, [&](TypeToNumDomain& rcp, const TypeEncoding type) {
+            if (type == T_NUM) {
+                for (const LinearConstraint& cst :
+                     rcp.values->assume_cst_reg(cond.op, cond.is64, dst.svalue, dst.uvalue, src.svalue, src.uvalue)) {
+                    rcp.values.add_constraint(cst);
+                }
+            } else {
+                // Either pointers to a singleton region,
+                // or an equality comparison on map descriptors/pointers to non-singleton locations
+                if (const auto dst_offset = get_type_offset_variable(cond.left, type)) {
+                    if (const auto src_offset = get_type_offset_variable(src_reg, type)) {
+                        rcp.values.add_constraint(
+                            assume_cst_offsets_reg(cond.op, dst_offset.value(), src_offset.value()));
                     }
                 }
-            });
-        } else {
-            // We should only reach here if `--assume-assert` is off
-            assert(!thread_local_options.assume_assertions || dom.is_bottom());
-            // be sound in any case, it happens to flush out bugs:
-            dom.rcp.values.set_to_top();
-        }
+            }
+        });
     } else {
         const int64_t imm = gsl::narrow_cast<int64_t>(std::get<Imm>(cond.right).v);
         for (const LinearConstraint& cst :

@@ -136,10 +136,6 @@ int main(int argc, char** argv) {
     app.add_flag("--print-btf-types", ebpf_verifier_options.verbosity_opts.dump_btf_types_json, "Print BTF types")
         ->group("Verbosity");
 
-    app.add_flag("--assume-assert,!--no-assume-assert", ebpf_verifier_options.assume_assertions,
-                 "Assume assertions (useful for debugging verification failures). Default: disabled")
-        ->group("Verbosity");
-
     app.add_flag("-i", ebpf_verifier_options.verbosity_opts.print_invariants, "Print invariants")->group("Verbosity");
     app.add_flag("-f", ebpf_verifier_options.verbosity_opts.print_failures, "Print verifier's failure logs")
         ->group("Verbosity");
@@ -259,7 +255,7 @@ int main(int argc, char** argv) {
             bool pass;
             if (verbosity.print_failures) {
                 auto report = invariants.check_assertions(prog);
-                print_warnings(std::cout, report);
+                print_errors(std::cout, report);
                 pass = report.verified();
             } else {
                 pass = invariants.verified(prog);

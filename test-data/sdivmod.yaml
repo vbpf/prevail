@@ -10,9 +10,7 @@ code:
   <start>: |
     r1 s/= r2
 
-post:
-  - r2.svalue=1
-  - r2.uvalue=1
+post: []
 
 messages:
   - "0: Only numbers can be used as divisors (r2 != 0)"
@@ -54,13 +52,7 @@ code:
   <start>: |
     r1 s/= r2
 
-post:
-  - r1.type=number
-  - r1.svalue=0
-  - r1.uvalue=0
-  - r2.type=number
-  - r2.svalue=0
-  - r2.uvalue=0
+post: []
 
 messages:
   - "0: Possible division by zero (r2 != 0)"
@@ -93,13 +85,7 @@ code:
   <start>: |
     r1 s/= r2
 
-post:
-  - r1.type=number
-  - r1.svalue=0
-  - r1.uvalue=0
-  - r2.type=number
-  - r2.svalue=0
-  - r2.uvalue=0
+post: []
 
 messages:
   - "0: Possible division by zero (r2 != 0)"
@@ -115,11 +101,7 @@ code:
   <start>: |
     r1 s/= r2  ; this could divide by 0
 
-post:
-  - r1.type=number
-  - r1.svalue=[-6, 6]
-  - r2.type=number
-  - r2.svalue=[-5, 5]
+post: []
 
 messages:
   - "0: Possible division by zero (r2 != 0)"
@@ -135,12 +117,7 @@ code:
   <start>: |
     r1 s/= r2 ; this could divide by 0 but ok to set to 0
 
-post:
-  - r1.type=number
-  - r1.svalue=0
-  - r1.uvalue=0
-  - r2.type=number
-  - r2.svalue=[-5, 5]
+post: []
 
 messages:
   - "0: Possible division by zero (r2 != 0)"
@@ -156,13 +133,7 @@ code:
   <start>: |
     r1 s/= r2  ; this could divide by 0
 
-post:
-  - r1.type=number
-  - r1.svalue=[0, 6]
-  - r1.uvalue=r1.svalue
-  - r2.type=number
-  - r2.svalue=[0, 5]
-  - r2.uvalue=r2.svalue
+post: []
 
 messages:
   - "0: Possible division by zero (r2 != 0)"
@@ -178,12 +149,7 @@ code:
   <start>: |
     r1 s/= r2 ; this could divide by 0 but ok to set to 0
 
-post:
-  - r1.type=number
-  - r1.svalue=0
-  - r1.uvalue=0
-  - r2.type=number
-  - r2.svalue=[-5, 0]
+post: []
 
 messages:
   - "0: Possible division by zero (r2 != 0)"
@@ -199,10 +165,7 @@ code:
   <start>: |
     r1 s/= r2  ; this could divide by 0
 
-post:
-  - r1.type=number
-  - r1.svalue=[-6, 6]
-  - r2.type=number
+post: []
 
 messages:
   - "0: Possible division by zero (r2 != 0)"
@@ -218,11 +181,7 @@ code:
   <start>: |
     r1 s/= r2  ; this could divide by 0
 
-post:
-  - r1.type=number
-  - r1.svalue=0
-  - r1.uvalue=0
-  - r2.type=number
+post: []
 
 messages:
   - "0: Possible division by zero (r2 != 0)"
@@ -278,13 +237,7 @@ code:
   <start>: |
     r1 s%= r2
 
-post:
-  - r1.type=number
-  - r1.svalue=-6
-  - r1.uvalue=18446744073709551610
-  - r2.type=number
-  - r2.svalue=0
-  - r2.uvalue=0
+post: []
 
 messages:
   - "0: Possible division by zero (r2 != 0)"
@@ -317,13 +270,7 @@ code:
   <start>: |
     r1 s%= r2
 
-post:
-  - r1.type=number
-  - r1.svalue=0
-  - r1.uvalue=0
-  - r2.type=number
-  - r2.svalue=0
-  - r2.uvalue=0
+post: []
 
 messages:
   - "0: Possible division by zero (r2 != 0)"
@@ -339,12 +286,7 @@ code:
   <start>: |
     r1 s%= r2 ; this could do modulo 0 so could set r1 = r2
 
-post:
-  - r1.type=number
-  - r1.svalue=[0, 6]
-  - r1.uvalue=r1.svalue
-  - r2.type=number
-  - r2.svalue=[-5, 5]
+post: []
 
 messages:
   - "0: Possible division by zero (r2 != 0)"
@@ -360,12 +302,7 @@ code:
   <start>: |
     r1 s%= r2 ; this could do modulo 0 so could set r1 = r2
 
-post:
-  - r1.type=number
-  - r1.svalue=0
-  - r1.uvalue=0
-  - r2.type=number
-  - r2.svalue=[-5, 5]
+post: []
 
 messages:
   - "0: Possible division by zero (r2 != 0)"
@@ -381,13 +318,7 @@ code:
   <start>: |
     r1 s%= r2 ; this could do modulo 0 so could set r1 = r2
 
-post:
-  - r1.type=number
-  - r1.svalue=[0, 6]
-  - r1.uvalue=r1.svalue
-  - r2.type=number
-  - r2.svalue=[0, 5]
-  - r2.uvalue=r2.svalue
+post: []
 
 messages:
   - "0: Possible division by zero (r2 != 0)"
@@ -403,12 +334,7 @@ code:
   <start>: |
     r1 s%= r2 ; this could do modulo 0 so could set r1 = r2
 
-post:
-  - r1.type=number
-  - r1.svalue=0
-  - r1.uvalue=0
-  - r2.type=number
-  - r2.svalue=[-5, 0]
+post: []
 
 messages:
   - "0: Possible division by zero (r2 != 0)"
@@ -424,11 +350,7 @@ code:
   <start>: |
     r1 s%= r2  ; this could be modulo 0
 
-post:
-  - r1.type=number
-  - r1.svalue=[0, 6]
-  - r1.uvalue=r1.svalue
-  - r2.type=number
+post: []
 
 messages:
   - "0: Possible division by zero (r2 != 0)"
@@ -444,11 +366,7 @@ code:
   <start>: |
     r1 s%= r2  ; this could be modulo 0
 
-post:
-  - r1.type=number
-  - r1.svalue=0
-  - r1.uvalue=0
-  - r2.type=number
+post: []
 
 messages:
   - "0: Possible division by zero (r2 != 0)"

@@ -280,7 +280,7 @@ code:
     call 12; bpf_tail_call
     exit
 
-post: ["r0.type=number"]
+post: []
 
 messages:
   - "0/2: tail call not supported in subprogram (valid call(tail_call))"

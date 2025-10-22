@@ -181,11 +181,7 @@ code:
   <start>: |
     w2 = r10
 
-post:
-  - r2.svalue=[0, 4294967295]
-  - r2.uvalue=r2.svalue
-  - r10.type=stack
-  - r10.stack_offset=512
+post: []
 
 messages:
   - "0: Invalid type (r10.type == number)"
@@ -216,12 +212,7 @@ code:
   <start>: |
     w2 = r1
 
-post:
-  - r1.type=shared
-  - r1.shared_offset=0
-  - r1.shared_region_size=16
-  - r2.svalue=[0, 4294967295]
-  - r2.uvalue=r2.svalue
+post: []
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -318,12 +309,7 @@ code:
   <start>: |
     w1 = r2
 
-post:
-  - r1.svalue=[0, 4294967295]
-  - r1.uvalue=r1.svalue
-  - r2.packet_offset=packet_size
-  - r2.type=packet
-  - r2.svalue=[4098, 2147418112]
+post: []
 
 messages:
   - "0: Invalid type (r2.type == number)"
@@ -354,13 +340,7 @@ code:
   <start>: |
     w2 = r1
 
-post:
-  - r1.ctx_offset=0
-  - r1.type=ctx
-  - r1.svalue=[1, 2147418112]
-  - r1.uvalue=[1, 2147418112]
-  - r2.svalue=[0, 4294967295]
-  - r2.uvalue=r2.svalue
+post: []
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -389,11 +369,7 @@ code:
   <start>: |
     w2 = r1
 
-post:
-  - r1.map_fd=1
-  - r1.type=map_fd
-  - r2.svalue=[0, 4294967295]
-  - r2.uvalue=r2.svalue
+post: []
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -422,11 +398,7 @@ code:
   <start>: |
     w2 = r1
 
-post:
-  - r1.map_fd_programs=1
-  - r1.type=map_fd_programs
-  - r2.svalue=[0, 4294967295]
-  - r2.uvalue=r2.svalue
+post: []
 
 messages:
   - "0: Invalid type (r1.type == number)"

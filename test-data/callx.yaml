@@ -76,15 +76,7 @@ code:
   <start>: |
     callx r8; bpf_map_lookup_elem
 
-post:
-  - r0.type=shared
-  - r0.shared_offset=0
-  - r0.shared_region_size=4
-  - r0.svalue=[0, 2147418112]
-  - r0.uvalue=r0.svalue
-  - r8.type=number
-  - r8.svalue=1
-  - r8.uvalue=1
+post: []
 
 messages:
   - "0: Possible null access (within stack(r2:key_size(r1)))"
@@ -99,15 +91,8 @@ code:
   <start>: |
     callx r8; bpf_map_lookup_elem
 
-post:
-  - r0.type=shared
-  - r0.shared_offset=0
-  - r0.shared_region_size=4
-  - r0.svalue=[0, 2147418112]
-  - r0.uvalue=r0.svalue
-  - r8.type=number
-  - r8.svalue=1
-  - r8.uvalue=1
+
+post: []
 
 messages:
   - "0: Upper bound must be at most r2.shared_region_size (within stack(r2:key_size(r1)))"
@@ -122,15 +107,8 @@ code:
   <start>: |
     callx r8; bpf_map_lookup_elem
 
-post:
-  - r0.type=shared
-  - r0.shared_offset=0
-  - r0.shared_region_size=4
-  - r0.svalue=[0, 2147418112]
-  - r0.uvalue=r0.svalue
-  - r8.type=number
-  - r8.svalue=1
-  - r8.uvalue=1
+
+post: []
 
 messages:
   - "0: Lower bound must be at least 0 (within stack(r2:key_size(r1)))"
@@ -143,10 +121,8 @@ code:
   <start>: |
     callx r8
 
-post:
-  - r8.type=number
-  - r8.svalue=1000
-  - r8.uvalue=1000
+
+post: []
 
 messages:
   - "0: invalid helper function id 1000 (r8.type is helper)"
@@ -159,10 +135,8 @@ code:
   <start>: |
     callx r8
 
-post:
-  - r8.type=number
-  - r8.svalue=1000
-  - r8.uvalue=1000
+
+post: []
 
 messages:
   - "0: invalid helper function id 1000 (r8.type is helper)"
@@ -175,10 +149,7 @@ code:
   <start>: |
     callx r8; bpf_map_lookup_elem
 
-post:
-  - r8.type=number
-  - r8.svalue=[1, 2]
-  - r8.uvalue=[1, 2]
+post: []
 
 messages:
   - "0: callx helper function id is not a valid singleton (r8.type is helper)"
@@ -193,15 +164,8 @@ code:
   <start>: |
     callx r8; bpf_map_lookup_elem
 
-post:
-  - r0.type=shared
-  - r0.shared_offset=0
-  - r0.shared_region_size=4
-  - r0.svalue=[0, 2147418112]
-  - r0.uvalue=r0.svalue
-  - r8.type=number
-  - r8.svalue=1
-  - r8.uvalue=1
+
+post: []
 
 messages:
   - "0: Illegal map update with a non-numerical value [-oo-oo) (within stack(r2:key_size(r1)))"
@@ -264,12 +228,8 @@ code:
   <start>: |
     callx r8; bpf_map_update_elem
 
-post:
-  - r0.type=number
-  - s[496...511].type=number
-  - r8.type=number
-  - r8.svalue=2
-  - r8.uvalue=2
+
+post: []
 
 messages:
   - "0: Upper bound must be at most r3.shared_region_size (within stack(r3:value_size(r1)))"
@@ -309,12 +269,8 @@ code:
   <start>: |
     callx r8; bpf_map_update_elem
 
-post:
-  - r0.type=number
-  - s[496...511].type=number
-  - r8.type=number
-  - r8.svalue=2
-  - r8.uvalue=2
+
+post: []
 
 messages:
   - "0: Possible null access (within stack(r3:value_size(r1)))"
@@ -356,12 +312,8 @@ code:
   <start>: |
     callx r8; bpf_map_update_elem
 
-post:
-  - r0.type=number
-  - s[504...511].type=number
-  - r8.type=number
-  - r8.svalue=2
-  - r8.uvalue=2
+
+post: []
 
 messages:
   - "0: Illegal map update with a non-numerical value [496-500) (within stack(r3:value_size(r1)))"
@@ -379,16 +331,11 @@ code:
   <start>: |
     callx r8; bpf_map_update_elem
 
-post:
-  - r0.type=number
-  - s[504...511].type=number
-  - r8.type=number
-  - r8.svalue=2
-  - r8.uvalue=2
+
+post: []
 
 messages:
   - "0: Invalid type (r3.type in {stack, packet, shared})"
-  - "0: Only stack or packet can be used as a parameter (within stack(r3:value_size(r1)))"
 ---
 test-case: callx bpf_ringbuf_output with numeric stack value
 
@@ -426,13 +373,8 @@ code:
   <start>: |
     callx r8; bpf_ringbuf_output
 
-post:
-  - r0.type=number
-  - r8.type=number
-  - r8.svalue=130
-  - r8.uvalue=130
-  - r10.type=stack
-  - r10.stack_offset=512
+
+post: []
 
 messages:
   - "0: Stack content is not numeric (valid_access(r2.offset, width=r3) for read)"
@@ -450,12 +392,7 @@ code:
   <start>: |
     callx r8; bpf_ringbuf_output
 
-post:
-  - r0.type=number
-  - r8.type=number
-  - r8.svalue=130
-  - r8.uvalue=130
-  - s[504...511].type=number
+post: []
 
 messages:
   - "0: Invalid type (r2.type in {stack, packet, shared})"
@@ -494,11 +431,8 @@ code:
   <start>: |
     callx r8; bpf_get_stack
 
-post:
-  - r0.type=number
-  - r8.type=number
-  - r8.svalue=67
-  - r8.uvalue=67
+
+post: []
 
 messages:
   - "0: Invalid type (r2.type in {stack, packet, shared})"

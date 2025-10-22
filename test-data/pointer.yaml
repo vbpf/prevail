@@ -20,7 +20,6 @@ post: []
 
 messages:
   - "1: Invalid type (r1.type in {ctx, stack, packet, shared})"
-  - "1: Invalid type (valid_access(r1.offset, width=4) for read)"
 
 ---
 test-case: 32-bit pointer truncation - subtraction
@@ -42,7 +41,6 @@ post: []
 
 messages:
   - "1: Invalid type (r1.type in {ctx, stack, packet, shared})"
-  - "1: Invalid type (valid_access(r1.offset, width=4) for read)"
 
 ---
 test-case: 32-bit pointer truncation - multiplication
@@ -60,14 +58,10 @@ code:
     w1 *= 1
     r2 = *(u32 *)(r1 + 0)
 
-post:
-  - "r1.svalue=[0, 4294967295]"
-  - "r1.uvalue=r1.svalue"
+post: []
 
 messages:
   - "0: Invalid type (r1.type == number)"
-  - "1: Invalid type (r1.type in {ctx, stack, packet, shared})"
-  - "1: Invalid type (valid_access(r1.offset, width=4) for read)"
 
 ---
 test-case: 32-bit pointer truncation - division
@@ -85,14 +79,10 @@ code:
     w1 /= 1
     r2 = *(u32 *)(r1 + 0)
 
-post:
-  - "r1.svalue=[0, 4294967295]"
-  - "r1.uvalue=r1.svalue"
+post: []
 
 messages:
   - "0: Invalid type (r1.type == number)"
-  - "1: Invalid type (r1.type in {ctx, stack, packet, shared})"
-  - "1: Invalid type (valid_access(r1.offset, width=4) for read)"
 
 ---
 test-case: 32-bit pointer truncation - modulo
@@ -110,14 +100,10 @@ code:
     w1 %= 0
     r2 = *(u32 *)(r1 + 0)
 
-post:
-  - "r1.svalue=[0, 4294967295]"
-  - "r1.uvalue=r1.svalue"
+post: []
 
 messages:
   - "0: Invalid type (r1.type == number)"
-  - "1: Invalid type (r1.type in {ctx, stack, packet, shared})"
-  - "1: Invalid type (valid_access(r1.offset, width=4) for read)"
 
 ---
 test-case: 32-bit pointer truncation - signed division
@@ -134,14 +120,10 @@ code:
     w1 s/= 1
     r2 = *(u32 *)(r1 + 0)
 
-post:
-  - "r1.svalue=[0, 4294967295]"
-  - "r1.uvalue=r1.svalue"
+post: []
 
 messages:
   - "0: Invalid type (r1.type == number)"
-  - "1: Invalid type (r1.type in {ctx, stack, packet, shared})"
-  - "1: Invalid type (valid_access(r1.offset, width=4) for read)"
 
 ---
 test-case: 32-bit pointer truncation - signed modulo
@@ -159,14 +141,10 @@ code:
     w1 s%= 0
     r2 = *(u32 *)(r1 + 0)
 
-post:
-  - "r1.svalue=[0, 4294967295]"
-  - "r1.uvalue=r1.svalue"
+post: []
 
 messages:
   - "0: Invalid type (r1.type == number)"
-  - "1: Invalid type (r1.type in {ctx, stack, packet, shared})"
-  - "1: Invalid type (valid_access(r1.offset, width=4) for read)"
 
 ---
 test-case: 32-bit pointer truncation - AND
@@ -184,14 +162,10 @@ code:
     w1 &= -1
     r2 = *(u32 *)(r1 + 0)
 
-post:
-  - "r1.svalue=[0, 4294967295]"
-  - "r1.uvalue=r1.svalue"
+post: []
 
 messages:
   - "0: Invalid type (r1.type == number)"
-  - "1: Invalid type (r1.type in {ctx, stack, packet, shared})"
-  - "1: Invalid type (valid_access(r1.offset, width=4) for read)"
 
 ---
 test-case: 32-bit pointer truncation - OR
@@ -209,14 +183,10 @@ code:
     w1 |= 0
     r2 = *(u32 *)(r1 + 0)
 
-post:
-  - "r1.svalue=[0, 4294967295]"
-  - "r1.uvalue=r1.svalue"
+post: []
 
 messages:
   - "0: Invalid type (r1.type == number)"
-  - "1: Invalid type (r1.type in {ctx, stack, packet, shared})"
-  - "1: Invalid type (valid_access(r1.offset, width=4) for read)"
 
 ---
 test-case: 32-bit pointer truncation - XOR
@@ -234,14 +204,10 @@ code:
     w1 ^= 0
     r2 = *(u32 *)(r1 + 0)
 
-post:
-  - "r1.svalue=[0, 4294967295]"
-  - "r1.uvalue=r1.svalue"
+post: []
 
 messages:
   - "0: Invalid type (r1.type == number)"
-  - "1: Invalid type (r1.type in {ctx, stack, packet, shared})"
-  - "1: Invalid type (valid_access(r1.offset, width=4) for read)"
 
 ---
 test-case: 32-bit pointer truncation - LSH
@@ -259,14 +225,10 @@ code:
     w1 <<= 0
     r2 = *(u32 *)(r1 + 0)
 
-post:
-  - "r1.svalue=[0, 4294967295]"
-  - "r1.uvalue=r1.svalue"
+post: []
 
 messages:
   - "0: Invalid type (r1.type == number)"
-  - "1: Invalid type (r1.type in {ctx, stack, packet, shared})"
-  - "1: Invalid type (valid_access(r1.offset, width=4) for read)"
 
 ---
 test-case: 32-bit pointer truncation - RSH
@@ -284,14 +246,10 @@ code:
     w1 >>= 0
     r2 = *(u32 *)(r1 + 0)
 
-post:
-  - "r1.svalue=[0, 4294967295]"
-  - "r1.uvalue=r1.svalue"
+post: []
 
 messages:
   - "0: Invalid type (r1.type == number)"
-  - "1: Invalid type (r1.type in {ctx, stack, packet, shared})"
-  - "1: Invalid type (valid_access(r1.offset, width=4) for read)"
 
 ---
 test-case: 32-bit pointer truncation - ARSH
@@ -309,14 +267,10 @@ code:
     w1 s>>= 0
     r2 = *(u32 *)(r1 + 0)
 
-post:
-  - "r1.svalue=[0, 4294967295]"
-  - "r1.uvalue=r1.svalue"
+post: []
 
 messages:
   - "0: Invalid type (r1.type == number)"
-  - "1: Invalid type (r1.type in {ctx, stack, packet, shared})"
-  - "1: Invalid type (valid_access(r1.offset, width=4) for read)"
 
 ---
 test-case: 32-bit pointer truncation - NOT
@@ -335,14 +289,10 @@ code:
     w1 = - w1
     r2 = *(u32 *)(r1 + 0)
 
-post:
-  - "r1.type=ctx"
+post: []
 
 messages:
   - "0: Invalid type (r1.type == number)"
-  - "1: Invalid type (r1.type == number)"
-  - "2: Lower bound must be at least 0 (valid_access(r1.offset, width=4) for read)"
-  - "2: Upper bound must be at most 64 (valid_access(r1.offset, width=4) for read)"
 
 ---
 test-case: 64-bit return context pointer
@@ -362,15 +312,7 @@ code:
     r0 = r1
     exit
 
-post:
-  - r0.uvalue=r0.svalue
-  - r1.uvalue=r0.svalue
-  - r1.svalue=r0.svalue
-  - r0.ctx_offset=0
-  - r0.svalue=[0, 4294967295]
-  - r0.type=ctx
-  - r1.ctx_offset=0
-  - r1.type=ctx
+post: []
 
 messages:
   - "1: Invalid type (r0.type == number)"
@@ -393,13 +335,7 @@ code:
   <start>: |
     w0 = w1
 
-post:
-  - r1.ctx_offset=0
-  - r1.svalue=1234567890
-  - r1.uvalue=r1.svalue
-  - r1.type=ctx
-  - r0.svalue=[0, 4294967295]
-  - r0.uvalue=r0.svalue
+post: []
 
 messages:
   - "0: Invalid type (r1.type == number)"

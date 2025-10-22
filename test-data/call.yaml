@@ -63,12 +63,7 @@ code:
   <start>: |
     call 1; bpf_map_lookup_elem
 
-post:
-  - r0.type=shared
-  - r0.shared_offset=0
-  - r0.shared_region_size=4
-  - r0.svalue=[0, 2147418112]
-  - r0.uvalue=r0.svalue
+post: []
 
 messages:
   - "0: Possible null access (within stack(r2:key_size(r1)))"
@@ -83,12 +78,7 @@ code:
   <start>: |
     call 1; bpf_map_lookup_elem
 
-post:
-  - r0.type=shared
-  - r0.shared_offset=0
-  - r0.shared_region_size=4
-  - r0.svalue=[0, 2147418112]
-  - r0.uvalue=r0.svalue
+post: []
 
 messages:
   - "0: Upper bound must be at most r2.shared_region_size (within stack(r2:key_size(r1)))"
@@ -102,12 +92,7 @@ code:
   <start>: |
     call 1; bpf_map_lookup_elem
 
-post:
-  - r0.type=shared
-  - r0.shared_offset=0
-  - r0.shared_region_size=4
-  - r0.svalue=[0, 2147418112]
-  - r0.uvalue=r0.svalue
+post: []
 
 messages:
   - "0: Lower bound must be at least 0 (within stack(r2:key_size(r1)))"
@@ -121,12 +106,7 @@ code:
   <start>: |
     call 1; bpf_map_lookup_elem
 
-post:
-  - r0.type=shared
-  - r0.shared_offset=0
-  - r0.shared_region_size=4
-  - r0.svalue=[0, 2147418112]
-  - r0.uvalue=r0.svalue
+post: []
 
 messages:
   - "0: Illegal map update with a non-numerical value [-oo-oo) (within stack(r2:key_size(r1)))"
@@ -177,9 +157,7 @@ code:
   <start>: |
     call 2; bpf_map_update_elem
 
-post:
-  - r0.type=number
-  - s[496...511].type=number
+post: []
 
 messages:
   - "0: Upper bound must be at most r3.shared_region_size (within stack(r3:value_size(r1)))"
@@ -214,9 +192,7 @@ code:
   <start>: |
     call 2; bpf_map_update_elem
 
-post:
-  - r0.type=number
-  - s[496...511].type=number
+post: []
 
 messages:
   - "0: Possible null access (within stack(r3:value_size(r1)))"
@@ -254,9 +230,7 @@ code:
   <start>: |
     call 2; bpf_map_update_elem
 
-post:
-  - r0.type=number
-  - s[504...511].type=number
+post: []
 
 messages:
   - "0: Illegal map update with a non-numerical value [496-500) (within stack(r3:value_size(r1)))"
@@ -273,13 +247,10 @@ code:
   <start>: |
     call 2; bpf_map_update_elem
 
-post:
-  - r0.type=number
-  - s[504...511].type=number
+post: []
 
 messages:
   - "0: Invalid type (r3.type in {stack, packet, shared})"
-  - "0: Only stack or packet can be used as a parameter (within stack(r3:value_size(r1)))"
 ---
 test-case: bpf_ringbuf_output with numeric stack value
 
@@ -312,10 +283,7 @@ code:
   <start>: |
     call 130; bpf_ringbuf_output
 
-post:
-  - r0.type=number
-  - r10.type=stack
-  - r10.stack_offset=512
+post: []
 
 messages:
   - "0: Stack content is not numeric (valid_access(r2.offset, width=r3) for read)"
@@ -332,9 +300,7 @@ code:
   <start>: |
     call 130; bpf_ringbuf_output
 
-post:
-  - r0.type=number
-  - s[504...511].type=number
+post: []
 
 messages:
   - "0: Invalid type (r2.type in {stack, packet, shared})"
@@ -368,8 +334,7 @@ code:
   <start>: |
     call 67; bpf_get_stack
 
-post:
-  - r0.type=number
+post: []
 
 messages:
   - "0: Invalid type (r2.type in {stack, packet, shared})"
@@ -398,11 +363,7 @@ code:
   <start>: |
     call 6; bpf_trace_printk
 
-post:
-  - r0.type=number
-  - r10.type=stack
-  - r10.stack_offset=512
+post: []
 
 messages:
   - "0: Invalid size (r2.value > 0)"
-  - "0: Stack content is not numeric (valid_access(r1.offset, width=r2) for read)"

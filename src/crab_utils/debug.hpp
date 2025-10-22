@@ -39,7 +39,7 @@ void ___print___(std::ostream& os, ArgTypes... args) {
     // void() is to prevent Overloaded operator, messing things up
     // trick is to use the side effect of list-initializer to call a function
     // on every argument.
-    // (void) is to suppress "statement has no effect" warnings
+    // (void) is to suppress "statement has no effect" errors
     (void)ExpandVariadicPack{0, ((os << args), void(), 0)...};
 }
 

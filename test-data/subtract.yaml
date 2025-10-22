@@ -67,13 +67,7 @@ code:
   <start>: |
     r3 -= r2
 
-post:
-  - r2.type=shared
-  - r2.shared_offset=4
-  - r2.shared_region_size=8
-  - r3.type=number
-  - r3.svalue=4
-  - r3.uvalue=4
+post: []
 
 messages:
   - "0: Cannot subtract pointers to non-singleton regions (r2.type == number or r3.type == r2.type in {ctx, stack, packet})"
@@ -87,10 +81,7 @@ code:
   <start>: |
     r3 -= r2
 
-post:
-  - r2.type in {packet, stack}
-  - r2.packet_offset=4
-  - r2.stack_offset=4
+post: []
 
 messages:
   - "0: Cannot subtract pointers to different regions (r2.type == number or r3.type == r2.type in {ctx, stack, packet})"
@@ -147,14 +138,7 @@ code:
   <start>: |
     r1 -= r2
 
-post:
-  - r1.type=number
-  - r1.svalue=[3810, 3990]
-  - r1.uvalue=r1.svalue
-  - r2.type=stack
-  - r2.stack_offset=[140, 230]
-  - r10.type=stack
-  - r10.stack_offset=4096
+post: []
+
 messages:
   - "0: Upper bound must be at most EBPF_TOTAL_STACK_SIZE (r2.type == number or r1.type == r2.type in {ctx, stack, packet})"
-  - "0: Lower bound must be at least r10.stack_offset - EBPF_SUBPROGRAM_STACK_SIZE (r2.type == number or r1.type == r2.type in {ctx, stack, packet})"

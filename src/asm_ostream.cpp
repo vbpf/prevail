@@ -166,10 +166,10 @@ void print_reachability(std::ostream& os, const Report& report) {
     os << "\n";
 }
 
-void print_warnings(std::ostream& os, const Report& report) {
+void print_errors(std::ostream& os, const Report& report) {
     LineInfoPrinter printer{os};
-    for (const auto& [label, warnings] : report.warnings) {
-        for (const auto& msg : warnings) {
+    for (const auto& [label, errors] : report.errors) {
+        for (const auto& msg : errors) {
             printer.print_line_info(label);
             os << label << ": " << msg << "\n";
         }
@@ -179,7 +179,7 @@ void print_warnings(std::ostream& os, const Report& report) {
 
 void print_all_messages(std::ostream& os, const Report& report) {
     print_reachability(os, report);
-    print_warnings(os, report);
+    print_errors(os, report);
 }
 
 void print_invariants(std::ostream& os, const Program& prog, const bool simplify, const Invariants& invariants) {

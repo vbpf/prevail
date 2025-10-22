@@ -254,8 +254,7 @@ code:
   <start>: |
     lock *(u32 *)(r2 + 4) += r1
 
-post: ["r1.type=number", "r1.svalue=2", "r1.uvalue=2",
-       "r2.type=shared", "r2.shared_region_size=10", "r2.shared_offset=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=r2.svalue"]
+post: []
 
 messages:
   - "0: Upper bound must be at most r2.shared_region_size (valid_access(r2.offset+4, width=4) for write)"
@@ -593,12 +592,10 @@ code:
   <start>: |
     lock *(u32 *)(r2 + 4) += r1
 
-post: ["r1.type=number", "r1.svalue=2", "r1.uvalue=2",
-       "r2.type=number", "r2.svalue=[1, 2147418112]", "r2.uvalue=r2.svalue"]
+post: []
 
 messages:
   - "0: Invalid type (r2.type in {ctx, stack, packet, shared})"
-  - "0: Only pointers can be dereferenced (valid_access(r2.offset+4, width=4) for write)"
 ---
 test-case: atomic 64-bit CMPXCHG comparing against non-number
 
@@ -610,9 +607,7 @@ code:
   <start>: |
     lock *(u64 *)(r2 + 4) cx= r1
 
-post: ["r0.type=number", "r0.svalue=2", "r0.uvalue=2",
-       "r1.type=shared", "r1.shared_region_size=16", "r1.shared_offset=4",
-       "r2.type=shared", "r2.shared_region_size=16", "r2.shared_offset=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=r2.svalue"]
+post: []
 
 messages:
   - "0: Invalid type (r1.type == number)"
