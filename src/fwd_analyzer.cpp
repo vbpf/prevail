@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <utility>
 #include <variant>
+#include <ranges>
 
 #include "cfg/cfg.hpp"
 #include "cfg/wto.hpp"

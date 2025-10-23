@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include <iostream>
 #include <vector>
+#include <ranges>
 
 #include "ebpf_verifier.hpp"
 #ifdef _WIN32
@@ -71,7 +72,7 @@ static std::optional<RawProgram> find_program(vector<RawProgram>& raw_progs, con
 
 int main(int argc, char** argv) {
     // Always call ebpf_verifier_clear_thread_local_state on scope exit.
-    ThreadLocalGuard clear_thread_local_state;
+    ThreadLocalGuard thread_local_state_guard;
 
     ebpf_verifier_options_t ebpf_verifier_options;
 
