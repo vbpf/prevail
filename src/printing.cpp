@@ -9,15 +9,14 @@
 #include "arith/num_big.hpp"
 #include "arith/variable.hpp"
 #include "cfg/cfg.hpp"
-#include "crab/fwd_analyzer.hpp"
 #include "crab/interval.hpp"
 #include "crab/type_encoding.hpp"
 #include "crab/var_registry.hpp"
-#include "crab_verifier.hpp"
 #include "ir/syntax.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
 #include "platform.hpp"
 #include "spec/function_prototypes.hpp"
+#include "verifier.hpp"
 
 using std::optional;
 using std::string;
@@ -86,47 +85,87 @@ struct LineInfoPrinter {
     }
 };
 
-void print_jump(std::ostream& o, const std::string& direction, const std::set<Label>& labels) {
-    auto [it, et] = std::pair{labels.begin(), labels.end()};
-    if (it != et) {
-        o << "  " << direction << " ";
-        while (it != et) {
-            o << *it;
-            ++it;
-            if (it == et) {
-                o << ";";
-            } else {
-                o << ",";
+struct DetailedPrinter : LineInfoPrinter {
+    const Program& prog;
+
+    DetailedPrinter(std::ostream& os, const Program& prog) : LineInfoPrinter{os}, prog(prog) {}
+
+    void print_labels(const std::string& direction, const std::set<Label>& labels) {
+        auto [it, et] = std::pair{labels.begin(), labels.end()};
+        if (it != et) {
+            os << "  " << direction << " ";
+            while (it != et) {
+                os << *it;
+                ++it;
+                if (it == et) {
+                    os << ";";
+                } else {
+                    os << ",";
+                }
             }
         }
+        os << "\n";
     }
-    o << "\n";
-}
 
-void print_program(const Program& prog, std::ostream& os, const bool simplify, const printfunc& prefunc,
-                   const printfunc& postfunc) {
-    LineInfoPrinter printer{os};
+    void print_jump(const std::string& direction, const Label& label) {
+        print_labels(direction, direction == "from" ? prog.cfg().parents_of(label) : prog.cfg().children_of(label));
+    }
+
+    void print_instruction(const Program& prog, const Label& label) {
+        for (const auto& pre : prog.assertions_at(label)) {
+            os << "  " << "assert " << pre << ";\n";
+        }
+        os << "  " << prog.instruction_at(label) << ";\n";
+    }
+};
+
+void print_program(const Program& prog, std::ostream& os, const bool simplify) {
+    DetailedPrinter printer{os, prog};
     for (const BasicBlock& bb : BasicBlock::collect_basic_blocks(prog.cfg(), simplify)) {
-        prefunc(os, bb.first_label());
-        print_jump(os, "from", prog.cfg().parents_of(bb.first_label()));
+        printer.print_jump("from", bb.first_label());
         os << bb.first_label() << ":\n";
         for (const Label& label : bb) {
             printer.print_line_info(label);
-            for (const auto& pre : prog.assertions_at(label)) {
-                os << "  " << "assert " << pre << ";\n";
-            }
-            os << "  " << prog.instruction_at(label) << ";\n";
+            printer.print_instruction(prog, label);
         }
-        print_jump(os, "goto", prog.cfg().children_of(bb.last_label()));
-        postfunc(os, bb.last_label());
+        printer.print_jump("goto", bb.last_label());
     }
     os << "\n";
 }
 
-static void nop(std::ostream&, const Label&) {}
+void print_invariants(std::ostream& os, const Program& prog, const bool simplify, const AnalysisResult& result) {
+    DetailedPrinter printer{os, prog};
+    for (const BasicBlock& bb : BasicBlock::collect_basic_blocks(prog.cfg(), simplify)) {
+        if (result.invariants.at(bb.first_label()).pre.is_bottom()) {
+            continue;
+        }
+        os << "\nPre-invariant : " << result.invariants.at(bb.first_label()).pre << "\n";
+        printer.print_jump("from", bb.first_label());
+        os << bb.first_label() << ":\n";
+        Label last_label = bb.first_label();
+        for (const Label& label : bb) {
+            printer.print_line_info(label);
+            printer.print_instruction(prog, label);
+            last_label = label;
 
-void print_program(const Program& prog, std::ostream& os, const bool simplify) {
-    print_program(prog, os, simplify, nop, nop);
+            const auto current = result.invariants.at(last_label);
+            if (current.error) {
+                os << "\nVerification error:\n";
+                if (label != bb.last_label()) {
+                    os << "After " << current.pre << "\n";
+                }
+                print_error(os, *current.error);
+                os << "\n";
+                return;
+            }
+        }
+        const auto current = result.invariants.at(last_label);
+        if (!current.post.is_bottom()) {
+            printer.print_jump("goto", last_label);
+            os << "\nPost-invariant : " << current.post << "\n";
+        }
+    }
+    os << "\n";
 }
 
 void print_dot(const Program& prog, std::ostream& out) {
@@ -157,8 +196,8 @@ void print_dot(const Program& prog, const std::string& outfile) {
     print_dot(prog, out);
 }
 
-void print_reachability(std::ostream& os, const Report& report) {
-    for (const auto& [label, notes] : report.reachability) {
+void print_unreachable(std::ostream& os, const Program& prog, const AnalysisResult& result) {
+    for (const auto& [label, notes] : result.find_unreachable(prog)) {
         for (const auto& msg : notes) {
             os << label << ": " << msg << "\n";
         }
@@ -166,31 +205,23 @@ void print_reachability(std::ostream& os, const Report& report) {
     os << "\n";
 }
 
-void print_errors(std::ostream& os, const Report& report) {
-    LineInfoPrinter printer{os};
-    for (const auto& [label, errors] : report.errors) {
-        for (const auto& msg : errors) {
-            printer.print_line_info(label);
-            os << label << ": " << msg << "\n";
-        }
+std::string to_string(const VerificationError& error) {
+    std::stringstream ss;
+    if (const auto& label = error.where) {
+        ss << *label << ": ";
     }
+    ss << error.what();
+    return ss.str();
+}
+
+void print_error(std::ostream& os, const VerificationError& error) {
+    LineInfoPrinter printer{os};
+    if (const auto& label = error.where) {
+        printer.print_line_info(*label);
+        os << *label << ": ";
+    }
+    os << error.what() << "\n";
     os << "\n";
-}
-
-void print_all_messages(std::ostream& os, const Report& report) {
-    print_reachability(os, report);
-    print_errors(os, report);
-}
-
-void print_invariants(std::ostream& os, const Program& prog, const bool simplify, const Invariants& invariants) {
-    print_program(
-        prog, os, simplify,
-        [&](std::ostream& os, const Label& label) -> void {
-            os << "\nPre-invariant : " << invariants.invariants.at(label).pre << "\n";
-        },
-        [&](std::ostream& os, const Label& label) -> void {
-            os << "\nPost-invariant : " << invariants.invariants.at(label).post << "\n";
-        });
 }
 
 std::ostream& operator<<(std::ostream& os, const ArgSingle::Kind kind) {

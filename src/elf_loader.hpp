@@ -16,6 +16,11 @@ class UnmarshalError final : public std::runtime_error {
     explicit UnmarshalError(const std::string& what) : std::runtime_error(what) {}
 };
 
+int create_map_crab(const EbpfMapType& map_type, uint32_t key_size, uint32_t value_size, uint32_t max_entries,
+                    ebpf_verifier_options_t options);
+
+EbpfMapDescriptor* find_map_descriptor(int map_fd);
+
 /// Read an ELF file and return the programs in the desired section.
 /// @param input_stream The input stream to read the ELF file from.
 /// @param path The path to the ELF file (for error messages).

@@ -67,9 +67,6 @@ std::vector<Assertion> get_assertions(Instruction ins, const ProgramInfo& info, 
 std::vector<std::string> stats_headers();
 std::map<std::string, int> collect_stats(const Program& prog);
 
-using printfunc = std::function<void(std::ostream&, const Label& label)>;
-void print_program(const Program& prog, std::ostream& os, bool simplify, const printfunc& prefunc,
-                   const printfunc& postfunc);
 void print_program(const Program& prog, std::ostream& os, bool simplify);
 void print_dot(const Program& prog, const std::string& outfile);
 } // namespace prevail

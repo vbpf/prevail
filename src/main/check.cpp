@@ -128,7 +128,7 @@ int main(int argc, char** argv) {
         ->check(CLI::IsMember(get_conformance_group_names()));
 
     app.add_flag("--simplify,!--no-simplify", ebpf_verifier_options.verbosity_opts.simplify,
-                 "Simplify the CFG before analysis by merging chains of instructions into a single basic block. "
+                 "Simplify the display of the CFG by merging chains of instructions into a single basic block. "
                  "Default: enabled")
         ->group("Verbosity");
     app.add_flag("--line-info", ebpf_verifier_options.verbosity_opts.print_line_info, "Print line information")
@@ -136,11 +136,9 @@ int main(int argc, char** argv) {
     app.add_flag("--print-btf-types", ebpf_verifier_options.verbosity_opts.dump_btf_types_json, "Print BTF types")
         ->group("Verbosity");
 
-    app.add_flag("-i", ebpf_verifier_options.verbosity_opts.print_invariants, "Print invariants")->group("Verbosity");
-    app.add_flag("-f", ebpf_verifier_options.verbosity_opts.print_failures, "Print verifier's failure logs")
+    app.add_flag("-v", ebpf_verifier_options.verbosity_opts.print_invariants, "Print invariants and first failure")
         ->group("Verbosity");
-    bool verbose = false;
-    app.add_flag("-v", verbose, "Print both invariants and failures")->group("Verbosity");
+    app.add_flag("-f", ebpf_verifier_options.verbosity_opts.print_failures, "Print first failure")->group("Verbosity");
 
     std::string asmfile;
     app.add_option("--asm", asmfile, "Print disassembly to FILE")->group("CFG output")->type_name("FILE");
@@ -148,11 +146,6 @@ int main(int argc, char** argv) {
     app.add_option("--dot", dotfile, "Export control-flow graph to dot FILE")->group("CFG output")->type_name("FILE");
 
     CLI11_PARSE(app, argc, argv);
-
-    if (verbose) {
-        ebpf_verifier_options.verbosity_opts.print_invariants = ebpf_verifier_options.verbosity_opts.print_failures =
-            true;
-    }
 
     // Enable default conformance groups, which don't include callx or packet.
     ebpf_platform_t platform = g_ebpf_platform_linux;
@@ -245,24 +238,22 @@ int main(int argc, char** argv) {
                 return 0;
             }
             const auto begin = std::chrono::steady_clock::now();
-            auto invariants = analyze(prog);
+            auto result = analyze(prog);
             const auto end = std::chrono::steady_clock::now();
             const auto seconds = std::chrono::duration<double>(end - begin).count();
             if (verbosity.print_invariants) {
-                print_invariants(std::cout, prog, verbosity.simplify, invariants);
+                print_invariants(std::cout, prog, verbosity.simplify, result);
+            }
+            if (verbosity.print_failures) {
+                if (auto verification_error = result.find_first_error()) {
+                    print_error(std::cout, *verification_error);
+                }
             }
 
-            bool pass;
-            if (verbosity.print_failures) {
-                auto report = invariants.check_assertions(prog);
-                print_errors(std::cout, report);
-                pass = report.verified();
-            } else {
-                pass = invariants.verified(prog);
-            }
+            bool pass = !result.failed;
             if (pass && ebpf_verifier_options.cfg_opts.check_for_termination &&
                 (verbosity.print_failures || verbosity.print_invariants)) {
-                std::cout << "Program terminates within " << invariants.max_loop_count() << " loop iterations\n";
+                std::cout << "Program terminates within " << result.max_loop_count << " loop iterations\n";
             }
             std::cout << pass << "," << seconds << "," << resident_set_size_kb() << "\n";
             return pass ? 0 : 1;

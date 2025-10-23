@@ -69,13 +69,15 @@ class EbpfChecker final {
     const EbpfDomain& dom;
 };
 
-std::optional<VerificationError> ebpf_domain_check(const EbpfDomain& dom, const Assertion& assertion) {
+std::optional<VerificationError> ebpf_domain_check(const EbpfDomain& dom, const Assertion& assertion,
+                                                   const Label& where) {
     if (dom.is_bottom()) {
         return {};
     }
     try {
         EbpfChecker{dom, assertion}.visit();
-    } catch (const VerificationError& error) {
+    } catch (VerificationError& error) {
+        error.where = where;
         return {error};
     }
     return {};

@@ -5,7 +5,7 @@
 #include <set>
 #include <string>
 
-#include "crab_verifier.hpp"
+#include "verifier.hpp"
 
 namespace prevail {
 

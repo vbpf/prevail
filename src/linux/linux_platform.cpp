@@ -9,11 +9,11 @@
 #define PTYPE(name, descr, native_type, prefixes) {name, descr, 0, prefixes}
 #define PTYPE_PRIVILEGED(name, descr, native_type, prefixes) {name, descr, 0, prefixes, true}
 #endif
-#include "crab_verifier.hpp"
 #include "elf_loader.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
 #include "linux/linux_platform.hpp"
 #include "platform.hpp"
+#include "verifier.hpp"
 
 namespace prevail {
 // Map definitions as they appear in an ELF file, so field width matters.
