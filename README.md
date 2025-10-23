@@ -143,13 +143,12 @@ Features:
 
 Verbosity:
           --simplify, --no-simplify{false}
-                              Simplify the CFG before analysis by merging chains of
-                              instructions into a single basic block. Default: enabled
+                              Simplify the display of the CFG by merging chains of instructions
+                              into a single basic block. Default: enabled
           --line-info         Print line information
           --print-btf-types   Print BTF types
-  -i                          Print invariants
-  -f                          Print verifier's failure logs
-  -v                          Print both invariants and failures
+  -v                          Print invariants and first failure
+  -f                          Print first failure
 
 CFG output:
           --asm FILE          Print disassembly to FILE

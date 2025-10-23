@@ -25,11 +25,14 @@ constexpr int64_t PTR_MAX = std::numeric_limits<int32_t>::max() - MAX_PACKET_SIZ
 class EbpfDomain;
 
 struct VerificationError final : std::runtime_error {
+    std::optional<Label> where;
     explicit VerificationError(const std::string& what) : std::runtime_error(what) {}
 };
+std::string to_string(const VerificationError& error);
 
 void ebpf_domain_transform(EbpfDomain& inv, const Instruction& ins);
-std::optional<VerificationError> ebpf_domain_check(const EbpfDomain& dom, const Assertion& assertion);
+std::optional<VerificationError> ebpf_domain_check(const EbpfDomain& dom, const Assertion& assertion,
+                                                   const Label& where);
 
 // TODO: make this an explicit instruction
 void ebpf_domain_initialize_loop_counter(EbpfDomain& dom, const Label& label);

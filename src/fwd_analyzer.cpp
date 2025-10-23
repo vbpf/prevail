@@ -2,21 +2,38 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <utility>
 #include <variant>
+#include <ranges>
 
 #include "cfg/cfg.hpp"
 #include "cfg/wto.hpp"
 #include "config.hpp"
 #include "crab/ebpf_domain.hpp"
-#include "crab/fwd_analyzer.hpp"
 #include "ir/program.hpp"
+#include "result.hpp"
+#include "verifier.hpp"
 
 namespace prevail {
+
+thread_local LazyAllocator<ProgramInfo> thread_local_program_info;
+thread_local ebpf_verifier_options_t thread_local_options;
+
+static void ebpf_verifier_clear_before_analysis() {
+    clear_thread_local_state();
+    variable_registry.clear();
+}
+
+void ebpf_verifier_clear_thread_local_state() {
+    CrabStats::clear_thread_local_state();
+    thread_local_program_info.clear();
+    clear_thread_local_state();
+    SplitDBM::clear_thread_local_state();
+}
 
 class InterleavedFwdFixpointIterator final {
     const Program& _prog;
     const Cfg& _cfg;
     const Wto _wto;
-    InvariantTable _inv;
+    AnalysisResult& result;
 
     /// number of narrowing iterations. If the narrowing operator is
     /// indeed a narrowing operator this parameter is not
@@ -30,17 +47,20 @@ class InterleavedFwdFixpointIterator final {
 
     [[nodiscard]]
     bool has_error(const Label& node) const {
-        return _inv.at(node).error.has_value();
+        return result.invariants.at(node).error.has_value();
     }
 
-    void set_error(const Label& node, VerificationError&& error) { _inv.at(node).error = std::move(error); }
+    void set_error(const Label& node, VerificationError&& error) {
+        result.failed = true;
+        result.invariants.at(node).error = std::move(error);
+    }
 
-    void set_pre(const Label& label, EbpfDomain&& v) { _inv.at(label).pre = std::move(v); }
-    void set_pre(const Label& label, const EbpfDomain& v) { _inv.at(label).pre = v; }
+    void set_pre(const Label& label, EbpfDomain&& v) { result.invariants.at(label).pre = std::move(v); }
+    void set_pre(const Label& label, const EbpfDomain& v) { result.invariants.at(label).pre = v; }
 
-    EbpfDomain get_pre(const Label& node) const { return _inv.at(node).pre; }
+    EbpfDomain get_pre(const Label& node) const { return result.invariants.at(node).pre; }
 
-    EbpfDomain get_post(const Label& node) const { return _inv.at(node).post; }
+    EbpfDomain get_post(const Label& node) const { return result.invariants.at(node).post; }
 
     void transform_to_post(const Label& label, EbpfDomain pre) {
         const auto& ins = _prog.instruction_at(label);
@@ -50,7 +70,7 @@ class InterleavedFwdFixpointIterator final {
             }
             for (const auto& assertion : _prog.assertions_at(label)) {
                 // Avoid redundant errors.
-                if (auto error = ebpf_domain_check(pre, assertion)) {
+                if (auto error = ebpf_domain_check(pre, assertion, label)) {
                     set_error(label, std::move(*error));
                     return;
                 }
@@ -58,7 +78,7 @@ class InterleavedFwdFixpointIterator final {
         }
         ebpf_domain_transform(pre, ins);
 
-        _inv.at(label).post = std::move(pre);
+        result.invariants.at(label).post = std::move(pre);
     }
 
     EbpfDomain join_all_prevs(const Label& node) const {
@@ -72,10 +92,47 @@ class InterleavedFwdFixpointIterator final {
         return res;
     }
 
-    explicit InterleavedFwdFixpointIterator(const Program& prog) : _prog(prog), _cfg(prog.cfg()), _wto(prog.cfg()) {
+    explicit InterleavedFwdFixpointIterator(const Program& prog, AnalysisResult& result)
+        : _prog(prog), _cfg(prog.cfg()), _wto(prog.cfg()), result(result) {
         for (const auto& label : _cfg.labels()) {
-            _inv.emplace(label, InvariantMapPair{EbpfDomain::bottom(), {}, EbpfDomain::bottom()});
+            result.invariants.emplace(label, InvariantMapPair{EbpfDomain::bottom(), {}, EbpfDomain::bottom()});
         }
+    }
+
+    static std::optional<VerificationError> check_loop_bound(const Program& prog, const Label& label,
+                                                             const EbpfDomain& pre) {
+        if (std::holds_alternative<IncrementLoopCounter>(prog.instruction_at(label))) {
+            const auto assertions = prog.assertions_at(label);
+            if (assertions.size() != 1) {
+                CRAB_ERROR("Expected exactly 1 assertion for IncrementLoopCounter");
+            }
+            return ebpf_domain_check(pre, assertions.front(), label);
+        }
+        return {};
+    }
+
+    void find_termination_errors(const Program& prog) {
+        for (const auto& [label, inv_pair] : result.invariants) {
+            if (inv_pair.pre.is_bottom()) {
+                continue;
+            }
+            if (auto error = check_loop_bound(prog, label, inv_pair.pre)) {
+                set_error(label, std::move(*error));
+            }
+        }
+    }
+
+    int max_loop_count() const {
+        ExtendedNumber loop_count{0};
+        // Gather the upper bound of loop counts from post-invariants.
+        for (const auto& inv_pair : std::views::values(result.invariants)) {
+            loop_count = std::max(loop_count, inv_pair.post.get_loop_count_upper_bound());
+        }
+        const auto m = loop_count.number();
+        if (m && m->fits<int32_t>()) {
+            return m->cast_to<int32_t>();
+        }
+        return std::numeric_limits<int>::max();
     }
 
   public:
@@ -83,25 +140,18 @@ class InterleavedFwdFixpointIterator final {
 
     void operator()(const std::shared_ptr<WtoCycle>& cycle);
 
-    friend InvariantTable run_forward_analyzer(const Program& prog, EbpfDomain entry_inv);
+    static AnalysisResult run(const Program& prog, EbpfDomain entry_inv);
 };
 
-InvariantTable run_forward_analyzer(const Program& prog, EbpfDomain entry_inv) {
-    // Go over the CFG in weak topological order (accounting for loops).
-    InterleavedFwdFixpointIterator analyzer(prog);
-    if (thread_local_options.cfg_opts.check_for_termination) {
-        // Initialize loop counters for potential loop headers.
-        // This enables enforcement of upper bounds on loop iterations
-        // during program verification.
-        // TODO: Consider making this an instruction instead of an explicit call.
-        analyzer._wto.for_each_loop_head(
-            [&](const Label& label) { ebpf_domain_initialize_loop_counter(entry_inv, label); });
-    }
-    analyzer.set_pre(prog.cfg().entry_label(), std::move(entry_inv));
-    for (const auto& component : analyzer._wto) {
-        std::visit(analyzer, component);
-    }
-    return std::move(analyzer._inv);
+AnalysisResult analyze(const Program& prog) {
+    ebpf_verifier_clear_before_analysis();
+    return InterleavedFwdFixpointIterator::run(prog, EbpfDomain::setup_entry(thread_local_options.setup_constraints));
+}
+
+AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invariant) {
+    ebpf_verifier_clear_before_analysis();
+    return InterleavedFwdFixpointIterator::run(
+        prog, EbpfDomain::from_constraints(entry_invariant.value(), thread_local_options.setup_constraints));
 }
 
 static EbpfDomain extrapolate(const EbpfDomain& before, const EbpfDomain& after, const unsigned int iteration) {
@@ -207,6 +257,31 @@ void InterleavedFwdFixpointIterator::operator()(const std::shared_ptr<WtoCycle>&
             set_pre(head, std::move(invariant));
         }
     }
+}
+AnalysisResult InterleavedFwdFixpointIterator::run(const Program& prog, EbpfDomain entry_inv) {
+    // Go over the CFG in weak topological order (accounting for loops).
+    AnalysisResult result;
+    InterleavedFwdFixpointIterator analyzer(prog, result);
+    if (thread_local_options.cfg_opts.check_for_termination) {
+        // Initialize loop counters for potential loop headers.
+        // This enables enforcement of upper bounds on loop iterations
+        // during program verification.
+        // TODO: Consider making this an instruction instead of an explicit call.
+        analyzer._wto.for_each_loop_head(
+            [&](const Label& label) { ebpf_domain_initialize_loop_counter(entry_inv, label); });
+    }
+    analyzer.set_pre(prog.cfg().entry_label(), std::move(entry_inv));
+    for (const auto& component : analyzer._wto) {
+        std::visit(analyzer, component);
+    }
+    if (!result.failed && thread_local_options.cfg_opts.check_for_termination) {
+        analyzer.find_termination_errors(prog);
+        if (!result.failed) {
+            result.max_loop_count = analyzer.max_loop_count();
+        }
+    }
+    result.exit_value = analyzer.get_post(Label::exit).get_r0();
+    return result;
 }
 
 } // namespace prevail

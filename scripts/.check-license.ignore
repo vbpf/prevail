@@ -23,8 +23,7 @@ src/arith/num_extended.hpp
 src/arith/num_safeint.hpp
 src/crab/array_domain.cpp
 src/crab/array_domain.hpp
-src/crab/fwd_analyzer.cpp
-src/crab/fwd_analyzer.hpp
+src/fwd_analyzer.cpp
 src/crab/interval.cpp
 src/crab/interval.hpp
 src/crab/split_dbm.cpp

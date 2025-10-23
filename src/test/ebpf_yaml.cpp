@@ -10,12 +10,12 @@
 
 #include <yaml-cpp/yaml.h>
 
-#include "crab_verifier.hpp"
 #include "ebpf_verifier.hpp"
 #include "ir/parse.hpp"
 #include "ir/syntax.hpp"
 #include "string_constraints.hpp"
 #include "test/ebpf_yaml.hpp"
+#include "verifier.hpp"
 
 using std::string;
 using std::vector;
@@ -244,9 +244,17 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
     thread_local_options = test_case.options;
     try {
         const Program prog = Program::from_sequence(test_case.instruction_seq, info, test_case.options);
-        const Invariants invariants = analyze(prog, test_case.assumed_pre_invariant);
-        const StringInvariant actual_last_invariant = invariants.invariant_at(Label::exit);
-        const std::set<string> actual_messages = invariants.check_assertions(prog).all_messages();
+        const AnalysisResult result = analyze(prog, test_case.assumed_pre_invariant);
+        const StringInvariant actual_last_invariant = result.invariant_at(Label::exit);
+        std::set<string> actual_messages;
+        if (auto error = result.find_first_error()) {
+            actual_messages.insert(to_string(*error));
+        }
+        for (const auto& [label, msgs] : result.find_unreachable(prog)) {
+            for (const auto& msg : msgs) {
+                actual_messages.insert(msg);
+            }
+        }
 
         if (actual_last_invariant == test_case.expected_post_invariant &&
             actual_messages == test_case.expected_messages) {
@@ -363,8 +371,8 @@ ConformanceTestResult run_conformance_test_case(const std::vector<std::byte>& me
 
     try {
         const Program prog = Program::from_sequence(inst_seq, info, options);
-        const Invariants invariants = analyze(prog, pre_invariant);
-        return ConformanceTestResult{.success = invariants.verified(prog), .r0_value = invariants.exit_value()};
+        const AnalysisResult result = analyze(prog, pre_invariant);
+        return ConformanceTestResult{.success = !result.failed, .r0_value = result.exit_value};
     } catch (const std::exception&) {
         // Catch exceptions thrown in ebpf_domain.cpp.
         return {};
@@ -401,14 +409,6 @@ void print_failure(const Failure& failure, std::ostream& os) {
     } else {
         os << "Unseen messages: None\n";
     }
-}
-
-bool all_suites(const string& path) {
-    bool result = true;
-    for (const TestCase& test_case : read_suite(path)) {
-        result = result && static_cast<bool>(run_yaml_test_case(test_case));
-    }
-    return result;
 }
 
 void foreach_suite(const string& path, const std::function<void(const TestCase&)>& f) {

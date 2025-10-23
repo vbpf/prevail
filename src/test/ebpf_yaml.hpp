@@ -5,7 +5,7 @@
 #include <set>
 #include <string>
 
-#include "crab_verifier.hpp"
+#include "verifier.hpp"
 
 namespace prevail {
 
@@ -19,7 +19,6 @@ struct TestCase {
 };
 
 void foreach_suite(const std::string& path, const std::function<void(const TestCase&)>& f);
-bool all_suites(const std::string& path);
 
 template <typename T>
 struct Diff {
