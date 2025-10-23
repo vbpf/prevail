@@ -250,7 +250,7 @@ int main(int argc, char** argv) {
                 }
             }
 
-            bool pass = !result.failed;
+            const bool pass = !result.failed;
             if (pass && ebpf_verifier_options.cfg_opts.check_for_termination &&
                 (verbosity.print_failures || verbosity.print_invariants)) {
                 std::cout << "Program terminates within " << result.max_loop_count << " loop iterations\n";

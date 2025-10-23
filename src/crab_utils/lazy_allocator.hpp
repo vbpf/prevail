@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include <functional>
 #include <optional>
 
 namespace prevail {

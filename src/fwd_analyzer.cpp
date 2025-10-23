@@ -111,7 +111,6 @@ class InterleavedFwdFixpointIterator final {
     }
 
     void find_termination_errors(const Program& prog) {
-        std::map<Label, std::vector<std::string>> termination_errors;
         for (const auto& [label, inv_pair] : result.invariants) {
             if (inv_pair.pre.is_bottom()) {
                 continue;
@@ -123,12 +122,12 @@ class InterleavedFwdFixpointIterator final {
     }
 
     int max_loop_count() const {
-        ExtendedNumber max_loop_count{0};
+        ExtendedNumber loop_count{0};
         // Gather the upper bound of loop counts from post-invariants.
         for (const auto& inv_pair : std::views::values(result.invariants)) {
-            max_loop_count = std::max(max_loop_count, inv_pair.post.get_loop_count_upper_bound());
+            loop_count = std::max(loop_count, inv_pair.post.get_loop_count_upper_bound());
         }
-        const auto m = max_loop_count.number();
+        const auto m = loop_count.number();
         if (m && m->fits<int32_t>()) {
             return m->cast_to<int32_t>();
         }

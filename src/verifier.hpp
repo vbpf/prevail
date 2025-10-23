@@ -16,6 +16,10 @@ void ebpf_verifier_clear_thread_local_state();
 struct ThreadLocalGuard {
     ThreadLocalGuard() = default;
     ~ThreadLocalGuard() { ebpf_verifier_clear_thread_local_state(); }
+    ThreadLocalGuard(const ThreadLocalGuard&) = delete;
+    ThreadLocalGuard& operator=(const ThreadLocalGuard&) = delete;
+    ThreadLocalGuard(ThreadLocalGuard&&) = delete;
+    ThreadLocalGuard& operator=(ThreadLocalGuard&&) = delete;
 };
 
 } // namespace prevail

@@ -250,7 +250,7 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
         if (auto error = result.find_first_error()) {
             actual_messages.insert(to_string(*error));
         }
-        for (const auto [label, msgs] : result.find_unreachable(prog)) {
+        for (const auto& [label, msgs] : result.find_unreachable(prog)) {
             for (const auto& msg : msgs) {
                 actual_messages.insert(msg);
             }

@@ -3,6 +3,7 @@
 #pragma once
 
 #include <map>
+#include <optional>
 
 #include "crab/ebpf_domain.hpp"
 #include "ir/program.hpp"
@@ -21,12 +22,16 @@ struct AnalysisResult {
     int max_loop_count{};
     Interval exit_value = Interval::top();
 
+    [[nodiscard]]
     bool is_valid_after(const Label& label, const StringInvariant& state) const;
 
+    [[nodiscard]]
     StringInvariant invariant_at(const Label& label) const;
 
+    [[nodiscard]]
     std::optional<VerificationError> find_first_error() const;
 
+    [[nodiscard]]
     std::map<Label, std::vector<std::string>> find_unreachable(const Program& prog) const;
 };
 

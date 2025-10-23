@@ -1,6 +1,8 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
 #include <map>
+#include <ranges>
+#include <sstream>
 
 #include "crab/ebpf_domain.hpp"
 #include "ir/program.hpp"

@@ -148,7 +148,7 @@ void print_invariants(std::ostream& os, const Program& prog, const bool simplify
             printer.print_instruction(prog, label);
             last_label = label;
 
-            const auto current = result.invariants.at(last_label);
+            const auto& current = result.invariants.at(last_label);
             if (current.error) {
                 os << "\nVerification error:\n";
                 if (label != bb.last_label()) {
@@ -159,7 +159,7 @@ void print_invariants(std::ostream& os, const Program& prog, const bool simplify
                 return;
             }
         }
-        const auto current = result.invariants.at(last_label);
+        const auto& current = result.invariants.at(last_label);
         if (!current.post.is_bottom()) {
             printer.print_jump("goto", last_label);
             os << "\nPost-invariant : " << current.post << "\n";
