@@ -411,14 +411,6 @@ void print_failure(const Failure& failure, std::ostream& os) {
     }
 }
 
-bool all_suites(const string& path) {
-    bool result = true;
-    for (const TestCase& test_case : read_suite(path)) {
-        result = result && static_cast<bool>(run_yaml_test_case(test_case));
-    }
-    return result;
-}
-
 void foreach_suite(const string& path, const std::function<void(const TestCase&)>& f) {
     for (const TestCase& test_case : read_suite(path)) {
         f(test_case);
