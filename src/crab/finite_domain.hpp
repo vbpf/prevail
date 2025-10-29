@@ -15,10 +15,12 @@
 
 namespace prevail {
 
+// TODO: this should be "finite domain ops" with reference to SplitDBM.
 class FiniteDomain {
     SplitDBM dom;
 
   public:
+    explicit FiniteDomain(SplitDBM&& dom) : dom{std::move(dom)} {}
     explicit FiniteDomain(const SplitDBM& dom) : dom{dom} {}
 
     explicit FiniteDomain() = default;
@@ -57,8 +59,20 @@ class FiniteDomain {
         return FiniteDomain{dom.widen(o.dom)};
     }
 
+    [[nodiscard]]
+    FiniteDomain widen(const FiniteDomain&& o) const {
+        return FiniteDomain{dom.widen(std::move(o.dom))};
+    }
+
     std::optional<FiniteDomain> meet(const FiniteDomain& o) const {
         const auto res = dom.meet(o.dom);
+        if (!res) {
+            return {};
+        }
+        return FiniteDomain{*res};
+    }
+    std::optional<FiniteDomain> meet(const FiniteDomain&& o) const {
+        const auto res = dom.meet(std::move(o.dom));
         if (!res) {
             return {};
         }
@@ -68,6 +82,11 @@ class FiniteDomain {
     [[nodiscard]]
     FiniteDomain narrow(const FiniteDomain& o) const {
         return FiniteDomain{dom.narrow(o.dom)};
+    }
+
+    [[nodiscard]]
+    FiniteDomain narrow(const FiniteDomain&& o) const {
+        return FiniteDomain{dom.narrow(std::move(o.dom))};
     }
 
     Interval eval_interval(const Variable& v) const { return dom.eval_interval(v); }

@@ -437,9 +437,6 @@ bool SplitDBM::operator<=(const SplitDBM& o) const {
 }
 
 SplitDBM SplitDBM::operator|(const SplitDBM& o) const& {
-    CrabStats::count("SplitDBM.count.join");
-    ScopedCrabStats __st__("SplitDBM.join");
-
     if (o.is_top()) {
         return o;
     }
@@ -616,15 +613,6 @@ SplitDBM SplitDBM::operator|(const SplitDBM& o) const& {
 }
 
 SplitDBM SplitDBM::widen(const SplitDBM& o) const {
-    CrabStats::count("SplitDBM.count.widening");
-    ScopedCrabStats __st__("SplitDBM.widening");
-
-    CRAB_LOG("zones-split", std::cout << "Before widening:\n"
-                                      << "DBM 1\n"
-                                      << *this << "\n"
-                                      << "DBM 2\n"
-                                      << o << "\n");
-
     // Figure out the common renaming
     assert(!potential.empty());
     std::vector<Weight> widen_pot = {0};
@@ -656,8 +644,6 @@ SplitDBM SplitDBM::widen(const SplitDBM& o) const {
 
     SplitDBM res(std::move(out_vmap), std::move(out_revmap), std::move(widen_g), std::move(widen_pot),
                  std::move(widen_unstable));
-
-    CRAB_LOG("zones-split", std::cout << "Result widening:\n" << res << "\n");
     return res;
 }
 
