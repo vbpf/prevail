@@ -82,12 +82,12 @@ class ExtendedNumber final {
 
     [[nodiscard]]
     constexpr bool is_plus_infinity() const {
-        return (is_infinite() && _n > 0);
+        return is_infinite() && _n > 0;
     }
 
     [[nodiscard]]
     constexpr bool is_minus_infinity() const {
-        return (is_infinite() && _n < 0);
+        return is_infinite() && _n < 0;
     }
 
     ExtendedNumber operator-() const { return ExtendedNumber(_is_infinite, -_n); }
@@ -175,7 +175,7 @@ class ExtendedNumber final {
 
     constexpr bool operator>(const ExtendedNumber& x) const { return !operator<=(x); }
 
-    constexpr bool operator==(const ExtendedNumber& x) const { return (_is_infinite == x._is_infinite && _n == x._n); }
+    constexpr bool operator==(const ExtendedNumber& x) const { return _is_infinite == x._is_infinite && _n == x._n; }
 
     constexpr bool operator!=(const ExtendedNumber& x) const { return !operator==(x); }
 
@@ -221,7 +221,7 @@ class ExtendedNumber final {
 
     [[nodiscard]]
     ExtendedNumber abs() const {
-        if (operator>=(Number{0})) {
+        if (operator>=(0)) {
             return *this;
         } else {
             return operator-();

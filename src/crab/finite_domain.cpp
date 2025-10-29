@@ -17,15 +17,8 @@ namespace prevail {
 using NumAbsDomain = SplitDBM;
 
 Interval FiniteDomain::eval_interval(const Variable v, const int finite_width) const {
-    const bool is_unsigned = variable_registry->is_unsigned(v);
-    auto [lb, ub] = dom.eval_interval(v).pair();
-    if (lb.is_finite()) {
-        lb = is_unsigned ? lb.zero_extend(finite_width) : lb.sign_extend(finite_width);
-    }
-    if (ub.is_finite()) {
-        ub = is_unsigned ? ub.zero_extend(finite_width) : ub.sign_extend(finite_width);
-    }
-    return {lb, ub};
+    const Interval span = dom.eval_interval(v);
+    return variable_registry->is_unsigned(v) ? span.zero_extend(finite_width) : span.sign_extend(finite_width);
 }
 
 static std::vector<LinearConstraint> assume_bit_cst_interval(Condition::Op op, bool is64, Interval dst_interval,

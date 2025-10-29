@@ -406,4 +406,5 @@ Interval Interval::zero_extend(const int width) const {
     // [0b1111..., 0b0000...] is in the original range, so the result is [0b0000..., 0b1111...] which is the full
     return full_range;
 }
+
 } // namespace prevail

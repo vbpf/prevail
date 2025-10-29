@@ -363,8 +363,8 @@ EbpfDomain EbpfDomain::from_constraints(const std::set<std::string>& constraints
         inv.add_value_constraint(cst);
     }
     for (const Interval& range : numeric_ranges) {
-        const int start = range.lb().narrow<int>();
-        const int width = 1 + range.finite_size()->narrow<int>();
+        const auto [start, ub] = range.pair<int64_t>();
+        const int width = 1 + (ub - start);
         inv.stack.initialize_numbers(start, width);
     }
     // TODO: handle other stack type constraints

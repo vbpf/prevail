@@ -109,39 +109,74 @@ class Number final {
         return static_cast<T>(static_cast<U>(_n & mask));
     }
 
+    template <int width>
+    Number sign_extend_impl() const {
+        using namespace boost::multiprecision;
+        static const cpp_int sign_bit = cpp_int(1) << (width - 1);
+        static const cpp_int value_mask = (cpp_int(1) << width) - 1;
+        static const cpp_int offset = cpp_int(1) << width;
+
+        const cpp_int truncated = _n & value_mask;
+        if (truncated & sign_bit) {
+            return evaluate_if_expression((truncated - offset));
+        }
+        return truncated;
+    }
+
+    template <int width>
+    Number zero_extend_impl() const {
+        using namespace boost::multiprecision;
+        static const cpp_int value_mask = (cpp_int(1) << width) - 1;
+        return evaluate_if_expression(_n & value_mask);
+    }
+
     // Allow truncating to signed int as needed for finite width operations.
     // Unlike casting, sign_extend will not throw a prevail error if the number doesn't fit.
     [[nodiscard]]
     Number sign_extend(const int width) const {
-        using namespace boost::multiprecision;
-        if (width <= 0) {
-            return *this;
+        switch (width) {
+        case 1: return sign_extend_impl<1>();
+        case 2: return sign_extend_impl<2>();
+        case 4: return sign_extend_impl<4>();
+        case 8: return sign_extend_impl<8>();
+        case 16: return sign_extend_impl<16>();
+        case 32: return sign_extend_impl<32>();
+        case 64: return sign_extend_impl<64>();
+        case 0: return *this;
+        default: {
+            using namespace boost::multiprecision;
+            const cpp_int sign_bit = cpp_int(1) << (width - 1);
+            const cpp_int value_mask = (cpp_int(1) << width) - 1;
+            const cpp_int offset = cpp_int(1) << width;
+
+            const cpp_int truncated = _n & value_mask;
+            if (truncated & sign_bit) {
+                return evaluate_if_expression((truncated - offset));
+            }
+            return truncated;
         }
-
-        // Create a mask for the sign bit.
-        const cpp_int sign_bit = cpp_int(1) << (width - 1);
-        const cpp_int value_mask = (cpp_int(1) << width) - 1;
-
-        const cpp_int truncated = _n & value_mask;
-
-        // If sign bit is set, extend with 1s; otherwise, return truncated.
-        if (truncated & sign_bit) {
-            return truncated - (cpp_int(1) << width);
         }
-        return truncated;
     }
 
     // Allow truncating to unsigned int as needed for finite width operations.
     // Unlike casting, zero_extend will not throw a prevail error if the number doesn't fit.
     [[nodiscard]]
     Number zero_extend(const int width) const {
-        using namespace boost::multiprecision;
-        if (width <= 0) {
-            return *this;
+        switch (width) {
+        case 1: return zero_extend_impl<1>();
+        case 2: return zero_extend_impl<2>();
+        case 4: return zero_extend_impl<4>();
+        case 8: return zero_extend_impl<8>();
+        case 16: return zero_extend_impl<16>();
+        case 32: return zero_extend_impl<32>();
+        case 64: return zero_extend_impl<64>();
+        case 0: return *this;
+        default: {
+            using namespace boost::multiprecision;
+            const cpp_int value_mask = (cpp_int(1) << width) - 1;
+            return evaluate_if_expression(_n & value_mask);
         }
-        const cpp_int value_mask = (cpp_int(1) << width) - 1;
-        const cpp_int truncated = _n & value_mask;
-        return truncated;
+        }
     }
 
     static Number max_uint(const int width) { return max_int(width + 1); }
@@ -277,8 +312,7 @@ class Number final {
 
     [[nodiscard]]
     std::string to_string() const;
-};
-// class Number
+}; // class Number
 
 constexpr bool operator<=(std::integral auto left, const Number& rhs) { return rhs >= left; }
 constexpr bool operator<=(is_enum auto left, const Number& rhs) { return rhs >= left; }

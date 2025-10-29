@@ -14,7 +14,7 @@ enum class ConstraintKind { EQUALS_ZERO, LESS_THAN_OR_EQUALS_ZERO, LESS_THAN_ZER
 
 class LinearConstraint final {
   private:
-    LinearExpression _expression = LinearExpression(0);
+    LinearExpression _expression{0};
     ConstraintKind _constraint_kind;
 
   public:
