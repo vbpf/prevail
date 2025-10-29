@@ -54,7 +54,7 @@ bool EbpfDomain::operator<=(const EbpfDomain& other) const {
     return rcp <= other.rcp;
 }
 
-bool EbpfDomain::operator<=(const EbpfDomain&& other) const {
+bool EbpfDomain::operator<=(EbpfDomain&& other) const {
     if (!(stack <= other.stack)) {
         return false;
     }
