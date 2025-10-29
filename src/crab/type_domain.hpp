@@ -53,11 +53,10 @@ struct TypeDomain {
     }
 
     void operator|=(const TypeDomain& other) { inv |= other.inv; }
-    void operator|=(const TypeDomain&& other) { inv |= std::move(other.inv); }
+    void operator|=(TypeDomain&& other) { inv |= std::move(other.inv); }
 
     TypeDomain operator|(const TypeDomain& other) const { return TypeDomain{inv | other.inv}; }
     TypeDomain operator|(TypeDomain&& other) const { return TypeDomain{inv | std::move(other.inv)}; }
-    TypeDomain operator|(const TypeDomain&& other) && { return TypeDomain{std::move(inv) | other.inv}; }
 
     std::optional<TypeDomain> meet(const TypeDomain& other) const {
         if (auto res = this->inv & other.inv) {

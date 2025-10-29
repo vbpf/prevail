@@ -74,7 +74,7 @@ class FiniteDomain {
     }
 
     [[nodiscard]]
-    FiniteDomain widen(const FiniteDomain&& o) const {
+    FiniteDomain widen(FiniteDomain&& o) const {
         return FiniteDomain{dom.widen(std::move(o.dom))};
     }
 
@@ -85,7 +85,7 @@ class FiniteDomain {
         }
         return FiniteDomain{*res};
     }
-    std::optional<FiniteDomain> meet(const FiniteDomain&& o) const {
+    std::optional<FiniteDomain> meet(FiniteDomain&& o) const {
         const auto res = dom.meet(std::move(o.dom));
         if (!res) {
             return {};
@@ -99,7 +99,7 @@ class FiniteDomain {
     }
 
     [[nodiscard]]
-    FiniteDomain narrow(const FiniteDomain&& o) const {
+    FiniteDomain narrow(FiniteDomain&& o) const {
         return FiniteDomain{dom.narrow(std::move(o.dom))};
     }
 

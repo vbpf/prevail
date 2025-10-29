@@ -60,7 +60,7 @@ struct TypeToNumDomain {
     NumAbsDomain values{NumAbsDomain::top()};
 
     TypeToNumDomain() = default;
-    TypeToNumDomain(const TypeDomain t, NumAbsDomain n) : types(std::move(t)), values(std::move(n)) {}
+    TypeToNumDomain(TypeDomain t, NumAbsDomain n) : types(std::move(t)), values(std::move(n)) {}
 
     TypeToNumDomain(const TypeToNumDomain& other) = default;
     TypeToNumDomain(TypeToNumDomain&& other) noexcept = default;

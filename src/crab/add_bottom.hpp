@@ -118,7 +118,7 @@ class AddBottom final {
         return bottom();
     }
 
-    AddBottom operator&(const AddBottom&& o) const {
+    AddBottom operator&(AddBottom&& o) const {
         if (!dom || !o.dom) {
             return bottom();
         }
@@ -137,7 +137,7 @@ class AddBottom final {
     }
 
     [[nodiscard]]
-    AddBottom narrow(const AddBottom&& o) const {
+    AddBottom narrow(AddBottom&& o) const {
         if (!dom || !o.dom) {
             return bottom();
         }
