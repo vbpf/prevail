@@ -16,8 +16,20 @@ namespace prevail {
 
 using NumAbsDomain = SplitDBM;
 
-std::vector<LinearConstraint> FiniteDomain::assume_bit_cst_interval(Condition::Op op, bool is64, Interval dst_interval,
-                                                                    Interval src_interval) const {
+Interval FiniteDomain::eval_interval(const Variable v, const int finite_width) const {
+    const bool is_unsigned = variable_registry->is_unsigned(v);
+    auto [lb, ub] = dom.eval_interval(v).pair();
+    if (lb.is_finite()) {
+        lb = is_unsigned ? lb.zero_extend(finite_width) : lb.sign_extend(finite_width);
+    }
+    if (ub.is_finite()) {
+        ub = is_unsigned ? ub.zero_extend(finite_width) : ub.sign_extend(finite_width);
+    }
+    return {lb, ub};
+}
+
+static std::vector<LinearConstraint> assume_bit_cst_interval(Condition::Op op, bool is64, Interval dst_interval,
+                                                             Interval src_interval) {
     using namespace dsl_syntax;
     using Op = Condition::Op;
 
@@ -673,29 +685,119 @@ std::vector<LinearConstraint> FiniteDomain::assume_cst_reg(const Condition::Op o
     throw std::exception();
 }
 
-void FiniteDomain::assign(Variable x, const std::optional<LinearExpression>& e) { dom.assign(x, e); }
+void FiniteDomain::assign(const Variable x, const std::optional<LinearExpression>& e) { dom.assign(x, e); }
 void FiniteDomain::assign(const Variable x, const Variable e) { dom.assign(x, e); }
 void FiniteDomain::assign(const Variable x, const LinearExpression& e) { dom.assign(x, e); }
 void FiniteDomain::assign(const Variable x, const int64_t e) { dom.set(x, Interval(e)); }
 
-void FiniteDomain::apply(const ArithBinOp op, const Variable x, const Variable y, const Number& z,
-                         const int finite_width) {
-    dom.apply(op, x, y, z, finite_width);
+// As defined in the BPF ISA specification, the immediate value of an unsigned modulo and division is treated
+// differently depending on the width:
+// * for 32 bit, as a 32-bit unsigned integer
+// * for 64 bit, as a 32-bit (not 64 bit) signed integer
+static Number read_imm_for_udiv_or_umod(const Number& imm, const int width) {
+    assert(width == 32 || width == 64);
+    if (width == 32) {
+        return Number{imm.cast_to<uint32_t>()};
+    }
+    return Number{imm.cast_to<int32_t>()};
 }
 
 void FiniteDomain::apply(const ArithBinOp op, const Variable x, const Variable y, const Variable z,
                          const int finite_width) {
-    dom.apply(op, x, y, z, finite_width);
+    switch (op) {
+    case ArithBinOp::ADD: assign(x, LinearExpression(y).plus(z)); break;
+    case ArithBinOp::SUB: assign(x, LinearExpression(y).subtract(z)); break;
+    case ArithBinOp::MUL: set(x, eval_interval(y, finite_width) * eval_interval(z, finite_width)); break;
+    default: CRAB_ERROR("DBM: unreachable");
+    }
 }
 
-void FiniteDomain::apply(const BitwiseBinOp op, const Variable x, const Variable y, const Variable z,
+void FiniteDomain::apply(const ArithBinOp op, const Variable x, const Variable y, const Number& z,
                          const int finite_width) {
-    dom.apply(op, x, y, z, finite_width);
+    switch (op) {
+    case ArithBinOp::ADD: assign(x, LinearExpression(y).plus(z)); break;
+    case ArithBinOp::SUB: assign(x, LinearExpression(y).subtract(z)); break;
+    case ArithBinOp::MUL: set(x, eval_interval(y, finite_width) * Interval{z}); break;
+    default: CRAB_ERROR("DBM: unreachable");
+    }
 }
 
-void FiniteDomain::apply(const BitwiseBinOp op, const Variable x, const Variable y, const Number& k,
+// As defined in the BPF ISA specification, the immediate value of a signed modulo and division is treated
+// differently depending on the width:
+// * for 32 bit, as a 32-bit signed integer
+// * for 64 bit, as a 64-bit signed integer
+static Number read_imm_for_sdiv_or_smod(const Number& imm, const int width) {
+    assert(width == 32 || width == 64);
+    if (width == 32) {
+        return Number{imm.cast_to<int32_t>()};
+    }
+    return Number{imm.cast_to<int64_t>()};
+}
+
+void FiniteDomain::apply(const SignedArithBinOp op, const Variable x, const Variable y, const Number& k,
                          const int finite_width) {
-    dom.apply(op, x, y, k, finite_width);
+    switch (op) {
+    case SignedArithBinOp::SDIV:
+        set(x, eval_interval(y, finite_width).sdiv(Interval{read_imm_for_sdiv_or_smod(k, finite_width)}));
+        break;
+    case SignedArithBinOp::UDIV:
+        set(x, eval_interval(y, finite_width).udiv(Interval{read_imm_for_udiv_or_umod(k, finite_width)}));
+        break;
+    case SignedArithBinOp::SREM:
+        set(x, eval_interval(y, finite_width).srem(Interval{read_imm_for_sdiv_or_smod(k, finite_width)}));
+        break;
+    case SignedArithBinOp::UREM:
+        set(x, eval_interval(y, finite_width).urem(Interval{read_imm_for_udiv_or_umod(k, finite_width)}));
+        break;
+    default: CRAB_ERROR("DBM: unreachable");
+    }
+}
+
+void FiniteDomain::apply(const SignedArithBinOp op, const Variable x, const Variable y, const Variable z,
+                         const int finite_width) {
+    switch (op) {
+    case SignedArithBinOp::SDIV: set(x, eval_interval(y, finite_width).sdiv(eval_interval(z, finite_width))); break;
+    case SignedArithBinOp::UDIV: set(x, eval_interval(y, finite_width).udiv(eval_interval(z, finite_width))); break;
+    case SignedArithBinOp::SREM: set(x, eval_interval(y, finite_width).srem(eval_interval(z, finite_width))); break;
+    case SignedArithBinOp::UREM: set(x, eval_interval(y, finite_width).urem(eval_interval(z, finite_width))); break;
+    default: CRAB_ERROR("DBM: unreachable");
+    }
+}
+
+void FiniteDomain::apply(BitwiseBinOp op, Variable x, Variable y, Variable z, int finite_width) {
+    // Convert to intervals and perform the operation
+    Interval yi = dom.eval_interval(y);
+    Interval zi = dom.eval_interval(z);
+    Interval xi = Interval::bottom();
+    switch (op) {
+    case BitwiseBinOp::AND: xi = yi.bitwise_and(zi); break;
+    case BitwiseBinOp::OR: xi = yi.bitwise_or(zi); break;
+    case BitwiseBinOp::XOR: xi = yi.bitwise_xor(zi); break;
+    case BitwiseBinOp::SHL: xi = yi.shl(zi); break;
+    case BitwiseBinOp::LSHR: xi = yi.lshr(zi); break;
+    case BitwiseBinOp::ASHR: xi = yi.ashr(zi); break;
+    default: CRAB_ERROR("DBM: unreachable");
+    }
+    set(x, xi);
+}
+
+// Apply a bitwise operator to a uvalue.
+void FiniteDomain::apply(BitwiseBinOp op, Variable x, Variable y, const Number& k, int finite_width) {
+    // Convert to intervals and perform the operation
+    Interval yi = dom.eval_interval(y);
+    Interval zi(Number(k.cast_to<uint64_t>()));
+    Interval xi = Interval::bottom();
+
+    switch (op) {
+    case BitwiseBinOp::AND: xi = yi.bitwise_and(zi); break;
+    case BitwiseBinOp::OR: xi = yi.bitwise_or(zi); break;
+    case BitwiseBinOp::XOR: xi = yi.bitwise_xor(zi); break;
+    case BitwiseBinOp::SHL: xi = yi.shl(zi); break;
+    case BitwiseBinOp::LSHR: xi = yi.lshr(zi); break;
+    case BitwiseBinOp::ASHR: xi = yi.ashr(zi); break;
+    default: CRAB_ERROR("DBM: unreachable");
+    }
+    set(x, xi);
 }
 
 void FiniteDomain::apply(BinOp op, Variable x, Variable y, const Number& z, int finite_width) {
@@ -704,6 +806,10 @@ void FiniteDomain::apply(BinOp op, Variable x, Variable y, const Number& z, int 
 
 void FiniteDomain::apply(BinOp op, Variable x, Variable y, Variable z, int finite_width) {
     std::visit([&](auto top) { apply(top, x, y, z, finite_width); }, op);
+}
+
+void FiniteDomain::apply(const BinOp op, const Variable x, const Variable y, const Variable z) {
+    apply(op, x, y, z, 0);
 }
 
 void FiniteDomain::overflow_bounds(Variable lhs, int finite_width, bool issigned) {
@@ -814,28 +920,28 @@ void FiniteDomain::mul(const Variable lhss, const Variable lhsu, const Number& o
     apply_signed(ArithBinOp::MUL, lhss, lhsu, lhss, op2, finite_width);
 }
 void FiniteDomain::sdiv(const Variable lhss, const Variable lhsu, const Variable op2, const int finite_width) {
-    apply_signed(ArithBinOp::SDIV, lhss, lhsu, lhss, op2, finite_width);
+    apply_signed(SignedArithBinOp::SDIV, lhss, lhsu, lhss, op2, finite_width);
 }
 void FiniteDomain::sdiv(const Variable lhss, const Variable lhsu, const Number& op2, const int finite_width) {
-    apply_signed(ArithBinOp::SDIV, lhss, lhsu, lhss, op2, finite_width);
+    apply_signed(SignedArithBinOp::SDIV, lhss, lhsu, lhss, op2, finite_width);
 }
 void FiniteDomain::udiv(const Variable lhss, const Variable lhsu, const Variable op2, const int finite_width) {
-    apply_unsigned(ArithBinOp::UDIV, lhss, lhsu, lhsu, op2, finite_width);
+    apply_unsigned(SignedArithBinOp::UDIV, lhss, lhsu, lhsu, op2, finite_width);
 }
 void FiniteDomain::udiv(const Variable lhss, const Variable lhsu, const Number& op2, const int finite_width) {
-    apply_unsigned(ArithBinOp::UDIV, lhss, lhsu, lhsu, op2, finite_width);
+    apply_unsigned(SignedArithBinOp::UDIV, lhss, lhsu, lhsu, op2, finite_width);
 }
 void FiniteDomain::srem(const Variable lhss, const Variable lhsu, const Variable op2, const int finite_width) {
-    apply_signed(ArithBinOp::SREM, lhss, lhsu, lhss, op2, finite_width);
+    apply_signed(SignedArithBinOp::SREM, lhss, lhsu, lhss, op2, finite_width);
 }
 void FiniteDomain::srem(const Variable lhss, const Variable lhsu, const Number& op2, const int finite_width) {
-    apply_signed(ArithBinOp::SREM, lhss, lhsu, lhss, op2, finite_width);
+    apply_signed(SignedArithBinOp::SREM, lhss, lhsu, lhss, op2, finite_width);
 }
 void FiniteDomain::urem(const Variable lhss, const Variable lhsu, const Variable op2, const int finite_width) {
-    apply_unsigned(ArithBinOp::UREM, lhss, lhsu, lhsu, op2, finite_width);
+    apply_unsigned(SignedArithBinOp::UREM, lhss, lhsu, lhsu, op2, finite_width);
 }
 void FiniteDomain::urem(const Variable lhss, const Variable lhsu, const Number& op2, const int finite_width) {
-    apply_unsigned(ArithBinOp::UREM, lhss, lhsu, lhsu, op2, finite_width);
+    apply_unsigned(SignedArithBinOp::UREM, lhss, lhsu, lhsu, op2, finite_width);
 }
 
 void FiniteDomain::bitwise_and(const Variable lhss, const Variable lhsu, const Variable op2, const int finite_width) {

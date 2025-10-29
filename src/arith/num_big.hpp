@@ -20,10 +20,10 @@ class Number final {
     cpp_int _n{};
 
   public:
-    Number() = default;
+    constexpr Number() = default;
     Number(cpp_int n) : _n(std::move(n)) {}
-    Number(std::integral auto n) : _n{n} {}
-    Number(is_enum auto n) : _n{static_cast<std::underlying_type_t<decltype(n)>>(n)} {}
+    constexpr Number(std::integral auto n) : _n{n} {}
+    constexpr Number(is_enum auto n) : _n{static_cast<std::underlying_type_t<decltype(n)>>(n)} {}
     explicit Number(const std::string& s) { _n = cpp_int(s); }
 
     template <std::integral T>
@@ -35,31 +35,31 @@ class Number final {
     }
 
     template <is_enum T>
-    T narrow() const {
+    constexpr T narrow() const {
         return static_cast<T>(static_cast<std::underlying_type_t<T>>(_n));
     }
 
     template <is_enum T>
-    T cast_to() const {
+    constexpr T cast_to() const {
         return static_cast<T>(static_cast<std::underlying_type_t<T>>(_n));
     }
 
     explicit operator cpp_int() const { return _n; }
 
     [[nodiscard]]
-    friend std::size_t hash_value(const Number& z) {
+    constexpr friend std::size_t hash_value(const Number& z) {
         return hash_value(z._n);
     }
 
     template <std::integral T>
     [[nodiscard]]
-    bool fits() const {
+    constexpr bool fits() const {
         return std::numeric_limits<T>::min() <= _n && _n <= std::numeric_limits<T>::max();
     }
 
     template <std::integral T>
     [[nodiscard]]
-    bool fits_cast_to() const {
+    constexpr bool fits_cast_to() const {
         return fits<T>() || fits<SwapSignedness<T>>();
     }
 
@@ -103,7 +103,7 @@ class Number final {
     }
 
     template <std::integral T>
-    T truncate_to() const {
+    constexpr T truncate_to() const {
         using U = std::make_unsigned_t<T>;
         constexpr U mask = std::numeric_limits<U>::max();
         return static_cast<T>(static_cast<U>(_n & mask));
@@ -225,17 +225,17 @@ class Number final {
         return r;
     }
 
-    bool operator==(const Number& x) const { return _n == x._n; }
+    constexpr bool operator==(const Number& x) const { return _n == x._n; }
 
-    bool operator!=(const Number& x) const { return _n != x._n; }
+    constexpr bool operator!=(const Number& x) const { return _n != x._n; }
 
-    bool operator<(const Number& x) const { return _n < x._n; }
+    constexpr bool operator<(const Number& x) const { return _n < x._n; }
 
-    bool operator<=(const Number& x) const { return _n <= x._n; }
+    constexpr bool operator<=(const Number& x) const { return _n <= x._n; }
 
-    bool operator>(const Number& x) const { return _n > x._n; }
+    constexpr bool operator>(const Number& x) const { return _n > x._n; }
 
-    bool operator>=(const Number& x) const { return _n >= x._n; }
+    constexpr bool operator>=(const Number& x) const { return _n >= x._n; }
 
     Number abs() const { return _n < 0 ? -_n : _n; }
 
@@ -280,8 +280,8 @@ class Number final {
 };
 // class Number
 
-bool operator<=(std::integral auto left, const Number& rhs) { return rhs >= left; }
-bool operator<=(is_enum auto left, const Number& rhs) { return rhs >= left; }
+constexpr bool operator<=(std::integral auto left, const Number& rhs) { return rhs >= left; }
+constexpr bool operator<=(is_enum auto left, const Number& rhs) { return rhs >= left; }
 
 template <typename T>
 concept finite_integral = std::integral<T> || std::is_same_v<T, Number>;

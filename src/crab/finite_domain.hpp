@@ -15,6 +15,10 @@
 
 namespace prevail {
 
+enum class SignedArithBinOp { SDIV, UDIV, SREM, UREM };
+enum class BitwiseBinOp { AND, OR, XOR, SHL, LSHR, ASHR };
+using BinOp = std::variant<ArithBinOp, SignedArithBinOp, BitwiseBinOp>;
+
 // TODO: this should be "finite domain ops" with reference to SplitDBM.
 class FiniteDomain {
     SplitDBM dom;
@@ -39,6 +43,16 @@ class FiniteDomain {
     bool is_top() const {
         return dom.is_top();
     }
+
+    void apply(ArithBinOp op, Variable x, Variable y, Variable z, int finite_width);
+    void apply(ArithBinOp op, Variable x, Variable y, const Number& k, int finite_width);
+    void apply(SignedArithBinOp op, Variable x, Variable y, const Number& z, int finite_width);
+    void apply(SignedArithBinOp op, Variable x, Variable y, Variable z, int finite_width);
+    void apply(BitwiseBinOp op, Variable x, Variable y, Variable z, int finite_width);
+    void apply(BitwiseBinOp op, Variable x, Variable y, const Number& k, int finite_width);
+    void apply(BinOp op, Variable x, Variable y, const Number& z, int finite_width);
+    void apply(BinOp op, Variable x, Variable y, Variable z, int finite_width);
+    void apply(BinOp op, Variable x, Variable y, Variable z);
 
     bool operator<=(const FiniteDomain& o) const { return dom <= o.dom; }
 
@@ -89,21 +103,14 @@ class FiniteDomain {
         return FiniteDomain{dom.narrow(std::move(o.dom))};
     }
 
-    Interval eval_interval(const Variable& v) const { return dom.eval_interval(v); }
+    Interval eval_interval(Variable v, int finite_width) const;
+    Interval eval_interval(const Variable v) const { return dom.eval_interval(v); }
     Interval eval_interval(const LinearExpression& exp) const { return dom.eval_interval(exp); }
 
     void assign(Variable x, const std::optional<LinearExpression>& e);
     void assign(Variable x, Variable e);
     void assign(Variable x, const LinearExpression& e);
     void assign(Variable x, int64_t e);
-
-    void apply(ArithBinOp op, Variable x, Variable y, const Number& z, int finite_width);
-    void apply(ArithBinOp op, Variable x, Variable y, Variable z, int finite_width);
-    void apply(BitwiseBinOp op, Variable x, Variable y, Variable z, int finite_width);
-    void apply(BitwiseBinOp op, Variable x, Variable y, const Number& k, int finite_width);
-    void apply(BinOp op, Variable x, Variable y, const Number& z, int finite_width);
-    void apply(BinOp op, Variable x, Variable y, Variable z, int finite_width);
-    void apply(const BinOp& op, const Variable x, const Variable y, const Variable z) { apply(op, x, y, z, 0); }
 
     void overflow_bounds(Variable lhs, int finite_width, bool issigned);
     void overflow_bounds(Variable svalue, Variable uvalue, int finite_width);
@@ -187,9 +194,6 @@ class FiniteDomain {
                                                          const LinearExpression& right_uvalue) const;
     std::vector<LinearConstraint> assume_signed_32bit_eq(Variable left_svalue, Variable left_uvalue,
                                                          const Interval& right_interval) const;
-
-    std::vector<LinearConstraint> assume_bit_cst_interval(Condition::Op op, bool is64, Interval dst_interval,
-                                                          Interval src_interval) const;
 
     void get_unsigned_intervals(bool is64, Variable left_svalue, Variable left_uvalue,
                                 const LinearExpression& right_uvalue, Interval& left_interval, Interval& right_interval,

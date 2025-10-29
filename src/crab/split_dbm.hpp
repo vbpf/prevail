@@ -37,9 +37,7 @@
 
 namespace prevail {
 
-enum class ArithBinOp { ADD, SUB, MUL, SDIV, UDIV, SREM, UREM };
-enum class BitwiseBinOp { AND, OR, XOR, SHL, LSHR, ASHR };
-using BinOp = std::variant<ArithBinOp, BitwiseBinOp>;
+enum class ArithBinOp { ADD, SUB, MUL };
 
 class SplitDBM final {
     friend class SplitDBMJoiner;
@@ -90,7 +88,7 @@ class SplitDBM final {
      *     x - v <= lb((a-1)*x + b*y + k)
      *     y - v <= lb(a*x + (b-1)*y + k)
      **/
-    void diffcsts_of_assign(Variable x, const LinearExpression& exp,
+    void diffcsts_of_assign(const LinearExpression& exp,
                             /* if true then process the upper
                                bounds, else the lower bounds */
                             bool extract_upper_bounds,
@@ -99,7 +97,7 @@ class SplitDBM final {
                             std::vector<std::pair<Variable, Weight>>& diff_csts) const;
 
     // Turn an assignment into a set of difference constraints.
-    void diffcsts_of_assign(Variable x, const LinearExpression& exp, std::vector<std::pair<Variable, Weight>>& lb,
+    void diffcsts_of_assign(const LinearExpression& exp, std::vector<std::pair<Variable, Weight>>& lb,
                             std::vector<std::pair<Variable, Weight>>& ub) const;
 
     /**
@@ -119,13 +117,19 @@ class SplitDBM final {
     // x != n
     bool add_univar_disequation(Variable x, const Number& n);
 
-    [[nodiscard]]
-    Interval get_interval(Variable x, int finite_width) const;
-
     // Restore potential after an edge addition
     bool repair_potential(VertId src, VertId dest);
 
     void normalize();
+
+    std::optional<VertId> get_vertid(Variable x) const;
+    Bound get_lb(const std::optional<VertId>& v) const;
+    Bound get_ub(const std::optional<VertId>& v) const;
+
+    Interval get_interval(Variable x) const;
+
+    Bound get_lb(Variable x) const;
+    Bound get_ub(Variable x) const;
 
     SplitDBM(VertMap&& _vert_map, RevMap&& _rev_map, Graph&& _g, std::vector<Weight>&& _potential, VertSet&& _unstable)
         : vert_map(std::move(_vert_map)), rev_map(std::move(_rev_map)), g(std::move(_g)),
@@ -160,10 +164,8 @@ class SplitDBM final {
 
     bool operator<=(const SplitDBM& o) const;
 
-    void operator|=(const auto&& o);
-    SplitDBM operator|(const SplitDBM&& o) const;
-    SplitDBM operator|(const SplitDBM& o) const;
-    SplitDBM operator|(const auto&& o);
+    void operator|=(const SplitDBM& right);
+    SplitDBM operator|(const SplitDBM& right) const;
 
     [[nodiscard]]
     SplitDBM widen(const SplitDBM& o) const;
@@ -194,29 +196,19 @@ class SplitDBM final {
 
     void havoc(Variable v);
 
-    void apply(ArithBinOp op, Variable x, Variable y, Variable z, int finite_width);
+    void apply(ArithBinOp op, Variable x, Variable y, Variable z);
 
-    void apply(ArithBinOp op, Variable x, Variable y, const Number& k, int finite_width);
-
-    // bitwise_operators_api
-    void apply(BitwiseBinOp op, Variable x, Variable y, Variable z, int finite_width);
-
-    void apply(BitwiseBinOp op, Variable x, Variable y, const Number& k, int finite_width);
-
-    void apply(BinOp op, Variable x, Variable y, const Number& z, int finite_width) {
-        std::visit([&](auto top) { apply(top, x, y, z, finite_width); }, op);
-    }
-
-    void apply(BinOp op, Variable x, Variable y, Variable z, int finite_width) {
-        std::visit([&](auto top) { apply(top, x, y, z, finite_width); }, op);
-    }
+    void apply(ArithBinOp op, Variable x, Variable y, const Number& k);
 
     bool add_constraint(const LinearConstraint& cst);
 
     [[nodiscard]]
     Interval eval_interval(const LinearExpression& e) const;
 
-    Interval operator[](Variable x) const;
+    [[nodiscard]]
+    Interval eval_interval(const Variable e) const {
+        return get_interval(e);
+    }
 
     void set(Variable x, const Interval& intv);
 

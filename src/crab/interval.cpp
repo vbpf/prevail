@@ -301,7 +301,7 @@ Interval Interval::bitwise_or(const Interval& x) const {
                 return Interval{0, std::max(*left_ub, *right_ub).fill_ones()};
             }
         }
-        return Interval{0, Bound::plus_infinity()};
+        return Interval{0, PLUS_INFINITY};
     }
     return top();
 }

@@ -15,7 +15,7 @@ class ExtendedNumber final {
     bool _is_infinite;
     Number _n;
 
-    ExtendedNumber(const bool is_infinite, const Number& n) : _is_infinite(is_infinite), _n(n) {
+    constexpr ExtendedNumber(const bool is_infinite, const Number& n) : _is_infinite(is_infinite), _n(n) {
         if (is_infinite) {
             if (n > 0) {
                 _n = 1;
@@ -43,11 +43,9 @@ class ExtendedNumber final {
     }
 
     ExtendedNumber(Number n) : _is_infinite(false), _n(std::move(n)) {}
-    ExtendedNumber(std::integral auto n) : _is_infinite(false), _n{n} {}
-
-    ExtendedNumber(const ExtendedNumber& o) = default;
-
-    ExtendedNumber(ExtendedNumber&&) noexcept = default;
+    constexpr ExtendedNumber(std::integral auto n) : _is_infinite(false), _n{n} {}
+    constexpr ExtendedNumber(const ExtendedNumber& o) = default;
+    constexpr ExtendedNumber(ExtendedNumber&&) noexcept = default;
 
     template <std::integral T>
     T narrow() const {
@@ -73,22 +71,22 @@ class ExtendedNumber final {
     }
 
     [[nodiscard]]
-    bool is_infinite() const {
+    constexpr bool is_infinite() const {
         return _is_infinite;
     }
 
     [[nodiscard]]
-    bool is_finite() const {
+    constexpr bool is_finite() const {
         return !_is_infinite;
     }
 
     [[nodiscard]]
-    bool is_plus_infinity() const {
+    constexpr bool is_plus_infinity() const {
         return (is_infinite() && _n > 0);
     }
 
     [[nodiscard]]
-    bool is_minus_infinity() const {
+    constexpr bool is_minus_infinity() const {
         return (is_infinite() && _n < 0);
     }
 
@@ -173,13 +171,13 @@ class ExtendedNumber final {
 
     ExtendedNumber& operator/=(const ExtendedNumber& x) { return operator=(operator/(x)); }
 
-    bool operator<(const ExtendedNumber& x) const { return !operator>=(x); }
+    constexpr bool operator<(const ExtendedNumber& x) const { return !operator>=(x); }
 
-    bool operator>(const ExtendedNumber& x) const { return !operator<=(x); }
+    constexpr bool operator>(const ExtendedNumber& x) const { return !operator<=(x); }
 
-    bool operator==(const ExtendedNumber& x) const { return (_is_infinite == x._is_infinite && _n == x._n); }
+    constexpr bool operator==(const ExtendedNumber& x) const { return (_is_infinite == x._is_infinite && _n == x._n); }
 
-    bool operator!=(const ExtendedNumber& x) const { return !operator==(x); }
+    constexpr bool operator!=(const ExtendedNumber& x) const { return !operator==(x); }
 
     [[nodiscard]]
     Number sign_extend(const int width) const {
@@ -201,7 +199,7 @@ class ExtendedNumber final {
      *	results include up to 20% improvements in performance in the octagon domain
      *	over a more naive implementation.
      */
-    bool operator<=(const ExtendedNumber& x) const {
+    constexpr bool operator<=(const ExtendedNumber& x) const {
         if (_is_infinite xor x._is_infinite) {
             if (_is_infinite) {
                 return _n < 0;
@@ -211,7 +209,7 @@ class ExtendedNumber final {
         return _n <= x._n;
     }
 
-    bool operator>=(const ExtendedNumber& x) const {
+    constexpr bool operator>=(const ExtendedNumber& x) const {
         if (_is_infinite xor x._is_infinite) {
             if (_is_infinite) {
                 return _n > 0;
@@ -251,5 +249,8 @@ class ExtendedNumber final {
     }
 
 }; // class ExtendedNumber
+
+inline const ExtendedNumber PLUS_INFINITY = ExtendedNumber::plus_infinity();
+inline const ExtendedNumber MINUS_INFINITY = ExtendedNumber::minus_infinity();
 
 } // namespace prevail

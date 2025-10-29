@@ -7,7 +7,7 @@
 
 #include "arith/dsl_syntax.hpp"
 #include "arith/variable.hpp"
-#include "crab/split_dbm.hpp"
+#include "crab/add_bottom.hpp"
 #include "crab/type_encoding.hpp"
 #include "ir/syntax.hpp"
 

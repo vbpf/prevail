@@ -23,7 +23,7 @@ class Interval final {
     Bound _ub;
 
   public:
-    static Interval top() { return Interval{Bound::minus_infinity(), Bound::plus_infinity()}; }
+    static Interval top() { return Interval{MINUS_INFINITY, PLUS_INFINITY}; }
 
     static Interval bottom() { return Interval{}; }
 
@@ -167,7 +167,7 @@ class Interval final {
         } else if (x.is_bottom()) {
             return *this;
         } else {
-            return Interval{x._lb < _lb ? Bound::minus_infinity() : _lb, _ub < x._ub ? Bound::plus_infinity() : _ub};
+            return Interval{x._lb < _lb ? MINUS_INFINITY : _lb, _ub < x._ub ? PLUS_INFINITY : _ub};
         }
     }
 
