@@ -32,7 +32,6 @@
 #include "arith/variable.hpp"
 #include "crab/interval.hpp"
 #include "crab_utils/adapt_sgraph.hpp"
-#include "crab_utils/debug.hpp"
 #include "crab_utils/stats.hpp"
 #include "string_constraints.hpp"
 
@@ -43,6 +42,8 @@ enum class BitwiseBinOp { AND, OR, XOR, SHL, LSHR, ASHR };
 using BinOp = std::variant<ArithBinOp, BitwiseBinOp>;
 
 class SplitDBM final {
+    friend class SplitDBMJoiner;
+
   public:
     using Graph = AdaptGraph;
     using Weight = Graph::Weight;
@@ -132,9 +133,6 @@ class SplitDBM final {
         normalize();
     }
 
-    // Serves as a static cast for the default join operation
-    SplitDBM const_join(const SplitDBM& o) const& { return *this | o; }
-
   public:
     explicit SplitDBM() {
         g.growTo(1); // Allocate the zero vector
@@ -162,35 +160,10 @@ class SplitDBM final {
 
     bool operator<=(const SplitDBM& o) const;
 
-    // FIXME: can be done more efficient
-    void operator|=(const SplitDBM& o) { *this = *this | o; }
-    void operator|=(SplitDBM&& o) { *this = *this | o; }
-
-    SplitDBM operator|(const SplitDBM& o) const&;
-
-    SplitDBM operator|(SplitDBM&& o) && {
-        if (o.is_top()) {
-            return std::move(o);
-        }
-        if (is_top()) {
-            return std::move(*this);
-        }
-        return const_join(o);
-    }
-
-    SplitDBM operator|(const SplitDBM& o) && {
-        if (is_top()) {
-            return std::move(*this);
-        }
-        return const_join(o);
-    }
-
-    SplitDBM operator|(SplitDBM&& o) const& {
-        if (o.is_top()) {
-            return std::move(o);
-        }
-        return const_join(o);
-    }
+    void operator|=(const auto&& o);
+    SplitDBM operator|(const SplitDBM&& o) const;
+    SplitDBM operator|(const SplitDBM& o) const;
+    SplitDBM operator|(const auto&& o);
 
     [[nodiscard]]
     SplitDBM widen(const SplitDBM& o) const;
@@ -202,16 +175,16 @@ class SplitDBM final {
 
     void assign(Variable lhs, const LinearExpression& e);
 
-    void assign(std::optional<Variable> x, const LinearExpression& e) {
+    void assign(const std::optional<Variable> x, const LinearExpression& e) {
         if (x) {
             assign(*x, e);
         }
     }
-    void assign(Variable x, signed long long int n) { assign(x, LinearExpression(n)); }
+    void assign(const Variable x, const signed long long int n) { assign(x, LinearExpression(n)); }
 
-    void assign(Variable x, Variable v) { assign(x, LinearExpression{v}); }
+    void assign(const Variable x, const Variable v) { assign(x, LinearExpression{v}); }
 
-    void assign(Variable x, const std::optional<LinearExpression>& e) {
+    void assign(const Variable x, const std::optional<LinearExpression>& e) {
         if (e) {
             assign(x, *e);
         } else {

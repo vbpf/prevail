@@ -250,7 +250,7 @@ bool SplitDBM::add_linear_leq(const LinearExpression& exp) {
     for (const auto& [var, n] : lbs) {
         CRAB_LOG("zones-split", std::cout << var << ">=" << n << "\n");
         const VertId vert = get_vert(var);
-        if (auto w = g.lookup(vert, 0)) {
+        if (const auto w = g.lookup(vert, 0)) {
             if (*w <= -n) {
                 continue;
             }
@@ -264,7 +264,7 @@ bool SplitDBM::add_linear_leq(const LinearExpression& exp) {
     for (const auto& [var, n] : ubs) {
         CRAB_LOG("zones-split", std::cout << var << "<=" << n << "\n");
         const VertId vert = get_vert(var);
-        if (auto w = g.lookup(0, vert)) {
+        if (const auto w = g.lookup(0, vert)) {
             if (*w <= n) {
                 continue;
             }
@@ -372,9 +372,6 @@ bool SplitDBM::add_univar_disequation(Variable x, const Number& n) {
 }
 
 bool SplitDBM::operator<=(const SplitDBM& o) const {
-    CrabStats::count("SplitDBM.count.leq");
-    ScopedCrabStats __st__("SplitDBM.leq");
-
     // cover all trivial cases to avoid allocating a dbm matrix
     if (o.is_top()) {
         return true;
@@ -404,27 +401,27 @@ bool SplitDBM::operator<=(const SplitDBM& o) const {
     }
 
     assert(g.size() > 0);
-    for (VertId ox : o.g.verts()) {
+    for (const VertId ox : o.g.verts()) {
         if (o.g.succs(ox).size() == 0) {
             continue;
         }
 
         assert(vert_renaming[ox] != INVALID_VERT);
-        VertId x = vert_renaming[ox];
+        const VertId x = vert_renaming[ox];
         for (const auto edge : o.g.e_succs(ox)) {
-            VertId oy = edge.vert;
+            const VertId oy = edge.vert;
             assert(vert_renaming[oy] != INVALID_VERT);
-            VertId y = vert_renaming[oy];
+            const VertId y = vert_renaming[oy];
             Weight ow = edge.val;
 
-            if (auto w = g.lookup(x, y)) {
+            if (const auto w = g.lookup(x, y)) {
                 if (*w <= ow) {
                     continue;
                 }
             }
 
-            if (auto wx = g.lookup(x, 0)) {
-                if (auto wy = g.lookup(0, y)) {
+            if (const auto wx = g.lookup(x, 0)) {
+                if (const auto wy = g.lookup(0, y)) {
                     if (*wx + *wy <= ow) {
                         continue;
                     }
@@ -436,181 +433,191 @@ bool SplitDBM::operator<=(const SplitDBM& o) const {
     return true;
 }
 
-SplitDBM SplitDBM::operator|(const SplitDBM& o) const& {
-    if (o.is_top()) {
-        return o;
-    }
-    if (is_top()) {
-        return *this;
-    }
-    CRAB_LOG("zones-split", std::cout << "Before join:\n"
-                                      << "DBM 1\n"
-                                      << *this << "\n"
-                                      << "DBM 2\n"
-                                      << o << "\n");
-    // Figure out the common renaming, initializing the
-    // resulting potentials as we go.
-    std::vector<VertId> perm_x;
-    std::vector<VertId> perm_y;
-    std::vector<Variable> perm_inv;
+class SplitDBMJoiner {
+    friend class SplitDBM;
 
-    std::vector<Weight> pot_rx;
-    std::vector<Weight> pot_ry;
-    VertMap out_vmap;
-    RevMap out_revmap;
-    // Add the zero vertex
-    assert(!potential.empty());
-    pot_rx.emplace_back(0);
-    pot_ry.emplace_back(0);
-    perm_x.push_back(0);
-    perm_y.push_back(0);
-    out_revmap.push_back(std::nullopt);
-
-    for (const auto& [v, n] : vert_map) {
-        if (auto y = try_at(o.vert_map, v)) {
-            // Variable exists in both
-            out_vmap.emplace(v, gsl::narrow<VertId>(perm_x.size()));
-            out_revmap.push_back(v);
-
-            pot_rx.push_back(potential[n] - potential[0]);
-            // XXX JNL: check this out
-            // pot_ry.push_back(o.potential[p.second] - o.potential[0]);
-            pot_ry.push_back(o.potential[*y] - o.potential[0]);
-            perm_inv.push_back(v);
-            perm_x.push_back(n);
-            perm_y.push_back(*y);
+    static SplitDBM join(const SplitDBM& left, const SplitDBM& right) {
+        using Graph = SplitDBM::Graph;
+        using VertId = SplitDBM::VertId;
+        using VertMap = SplitDBM::VertMap;
+        using Weight = SplitDBM::Weight;
+        using RevMap = SplitDBM::RevMap;
+        if (right.is_top()) {
+            return right;
         }
-    }
-    size_t sz = perm_x.size();
+        if (left.is_top()) {
+            return left;
+        }
+        // Figure out the common renaming, initializing the
+        // resulting potentials as we go.
+        std::vector<VertId> perm_x;
+        std::vector<VertId> perm_y;
+        std::vector<Variable> perm_inv;
 
-    // Build the permuted view of x and y.
-    assert(g.size() > 0);
-    GraphPerm gx(perm_x, g);
-    assert(o.g.size() > 0);
-    GraphPerm gy(perm_y, o.g);
+        std::vector<Weight> pot_rx;
+        std::vector<Weight> pot_ry;
+        VertMap out_vmap;
+        RevMap out_revmap;
+        // Add the zero vertex
+        assert(!potential.empty());
+        pot_rx.emplace_back(0);
+        pot_ry.emplace_back(0);
+        perm_x.push_back(0);
+        perm_y.push_back(0);
+        out_revmap.push_back(std::nullopt);
 
-    // Compute the deferred relations
-    Graph g_ix_ry;
-    g_ix_ry.growTo(sz);
-    SubGraph gy_excl(gy, 0);
-    for (VertId s : gy_excl.verts()) {
-        for (VertId d : gy_excl.succs(s)) {
-            if (auto ws = gx.lookup(s, 0)) {
-                if (auto wd = gx.lookup(0, d)) {
-                    g_ix_ry.add_edge(s, *ws + *wd, d);
+        for (const auto& [v, n] : left.vert_map) {
+            if (auto y = try_at(right.vert_map, v)) {
+                // Variable exists in both
+                out_vmap.emplace(v, gsl::narrow<VertId>(perm_x.size()));
+                out_revmap.push_back(v);
+
+                pot_rx.push_back(left.potential[n] - left.potential[0]);
+                // XXX JNL: check this out
+                // pot_ry.push_back(o.potential[p.second] - o.potential[0]);
+                pot_ry.push_back(right.potential[*y] - right.potential[0]);
+                perm_inv.push_back(v);
+                perm_x.push_back(n);
+                perm_y.push_back(*y);
+            }
+        }
+        size_t sz = perm_x.size();
+
+        // Build the permuted view of x and y.
+        assert(g.size() > 0);
+        GraphPerm gx(perm_x, left.g);
+        assert(o.g.size() > 0);
+        GraphPerm gy(perm_y, right.g);
+
+        // Compute the deferred relations
+        Graph g_ix_ry;
+        g_ix_ry.growTo(sz);
+        SubGraph gy_excl(gy, 0);
+        for (VertId s : gy_excl.verts()) {
+            for (VertId d : gy_excl.succs(s)) {
+                if (auto ws = gx.lookup(s, 0)) {
+                    if (auto wd = gx.lookup(0, d)) {
+                        g_ix_ry.add_edge(s, *ws + *wd, d);
+                    }
                 }
             }
         }
-    }
-    // Apply the deferred relations, and re-close.
-    bool is_closed;
-    Graph g_rx(GraphOps::meet(gx, g_ix_ry, is_closed));
-    if (!is_closed) {
-        GraphOps::apply_delta(g_rx, GraphOps::close_after_meet(SubGraph(g_rx, 0), index_to_call(pot_rx), gx, g_ix_ry));
-    }
+        // Apply the deferred relations, and re-close.
+        bool is_closed;
+        Graph g_rx(GraphOps::meet(gx, g_ix_ry, is_closed));
+        if (!is_closed) {
+            GraphOps::apply_delta(g_rx,
+                                  GraphOps::close_after_meet(SubGraph(g_rx, 0), index_to_call(pot_rx), gx, g_ix_ry));
+        }
 
-    Graph g_rx_iy;
-    g_rx_iy.growTo(sz);
+        Graph g_rx_iy;
+        g_rx_iy.growTo(sz);
 
-    SubGraph gx_excl(gx, 0);
-    for (VertId s : gx_excl.verts()) {
-        for (VertId d : gx_excl.succs(s)) {
-            // Assumption: gx.mem(s, d) -> gx.edge_val(s, d) <= ranges[var(s)].ub() - ranges[var(d)].lb()
-            // That is, if the relation exists, it's at least as strong as the bounds.
-            if (auto ws = gy.lookup(s, 0)) {
-                if (auto wd = gy.lookup(0, d)) {
-                    g_rx_iy.add_edge(s, *ws + *wd, d);
+        SubGraph gx_excl(gx, 0);
+        for (VertId s : gx_excl.verts()) {
+            for (VertId d : gx_excl.succs(s)) {
+                // Assumption: gx.mem(s, d) -> gx.edge_val(s, d) <= ranges[var(s)].ub() - ranges[var(d)].lb()
+                // That is, if the relation exists, it's at least as strong as the bounds.
+                if (auto ws = gy.lookup(s, 0)) {
+                    if (auto wd = gy.lookup(0, d)) {
+                        g_rx_iy.add_edge(s, *ws + *wd, d);
+                    }
                 }
             }
         }
-    }
-    // Similarly, should use a SubGraph view.
-    Graph g_ry(GraphOps::meet(gy, g_rx_iy, is_closed));
-    if (!is_closed) {
-        GraphOps::apply_delta(g_ry, GraphOps::close_after_meet(SubGraph(g_ry, 0), index_to_call(pot_ry), gy, g_rx_iy));
-    }
+        // Similarly, should use a SubGraph view.
+        Graph g_ry(GraphOps::meet(gy, g_rx_iy, is_closed));
+        if (!is_closed) {
+            GraphOps::apply_delta(g_ry,
+                                  GraphOps::close_after_meet(SubGraph(g_ry, 0), index_to_call(pot_ry), gy, g_rx_iy));
+        }
 
-    // We now have the relevant set of relations. Because g_rx and g_ry are closed,
-    // the result is also closed.
-    Graph join_g(GraphOps::join(g_rx, g_ry));
+        // We now have the relevant set of relations. Because g_rx and g_ry are closed,
+        // the result is also closed.
+        Graph join_g(GraphOps::join(g_rx, g_ry));
 
-    // Now reapply the missing independent relations.
-    // Need to derive vert_ids from lb_up/lb_down, and make sure the vertices exist
-    std::vector<VertId> lb_up;
-    std::vector<VertId> lb_down;
-    std::vector<VertId> ub_up;
-    std::vector<VertId> ub_down;
+        // Now reapply the missing independent relations.
+        // Need to derive vert_ids from lb_up/lb_down, and make sure the vertices exist
+        std::vector<VertId> lb_up;
+        std::vector<VertId> lb_down;
+        std::vector<VertId> ub_up;
+        std::vector<VertId> ub_down;
 
-    for (VertId v : gx_excl.verts()) {
-        if (auto wx = gx.lookup(0, v)) {
-            if (auto wy = gy.lookup(0, v)) {
-                if (*wx < *wy) {
-                    ub_up.push_back(v);
+        for (VertId v : gx_excl.verts()) {
+            if (auto wx = gx.lookup(0, v)) {
+                if (auto wy = gy.lookup(0, v)) {
+                    if (*wx < *wy) {
+                        ub_up.push_back(v);
+                    }
+                    if (*wy < *wx) {
+                        ub_down.push_back(v);
+                    }
                 }
-                if (*wy < *wx) {
-                    ub_down.push_back(v);
+            }
+            if (auto wx = gx.lookup(v, 0)) {
+                if (auto wy = gy.lookup(v, 0)) {
+                    if (*wx < *wy) {
+                        lb_down.push_back(v);
+                    }
+                    if (*wy < *wx) {
+                        lb_up.push_back(v);
+                    }
                 }
             }
         }
-        if (auto wx = gx.lookup(v, 0)) {
-            if (auto wy = gy.lookup(v, 0)) {
-                if (*wx < *wy) {
-                    lb_down.push_back(v);
+
+        for (VertId s : lb_up) {
+            Weight dx_s = gx.edge_val(s, 0);
+            Weight dy_s = gy.edge_val(s, 0);
+            for (VertId d : ub_up) {
+                if (s == d) {
+                    continue;
                 }
-                if (*wy < *wx) {
-                    lb_up.push_back(v);
-                }
+
+                join_g.update_edge(s, std::max(dx_s + gx.edge_val(0, d), dy_s + gy.edge_val(0, d)), d);
             }
         }
-    }
 
-    for (VertId s : lb_up) {
-        Weight dx_s = gx.edge_val(s, 0);
-        Weight dy_s = gy.edge_val(s, 0);
-        for (VertId d : ub_up) {
-            if (s == d) {
+        for (VertId s : lb_down) {
+            Weight dx_s = gx.edge_val(s, 0);
+            Weight dy_s = gy.edge_val(s, 0);
+            for (VertId d : ub_down) {
+                if (s == d) {
+                    continue;
+                }
+
+                join_g.update_edge(s, std::max(dx_s + gx.edge_val(0, d), dy_s + gy.edge_val(0, d)), d);
+            }
+        }
+
+        // Conjecture: join_g remains closed.
+
+        // Now garbage collect any unused vertices
+        for (VertId v : join_g.verts()) {
+            if (v == 0) {
                 continue;
             }
-
-            join_g.update_edge(s, std::max(dx_s + gx.edge_val(0, d), dy_s + gy.edge_val(0, d)), d);
-        }
-    }
-
-    for (VertId s : lb_down) {
-        Weight dx_s = gx.edge_val(s, 0);
-        Weight dy_s = gy.edge_val(s, 0);
-        for (VertId d : ub_down) {
-            if (s == d) {
-                continue;
-            }
-
-            join_g.update_edge(s, std::max(dx_s + gx.edge_val(0, d), dy_s + gy.edge_val(0, d)), d);
-        }
-    }
-
-    // Conjecture: join_g remains closed.
-
-    // Now garbage collect any unused vertices
-    for (VertId v : join_g.verts()) {
-        if (v == 0) {
-            continue;
-        }
-        if (join_g.succs(v).size() == 0 && join_g.preds(v).size() == 0) {
-            join_g.forget(v);
-            if (out_revmap[v]) {
-                out_vmap.erase(*(out_revmap[v]));
-                out_revmap[v] = std::nullopt;
+            if (join_g.succs(v).size() == 0 && join_g.preds(v).size() == 0) {
+                join_g.forget(v);
+                if (out_revmap[v]) {
+                    out_vmap.erase(*(out_revmap[v]));
+                    out_revmap[v] = std::nullopt;
+                }
             }
         }
+        return SplitDBM(std::move(out_vmap), std::move(out_revmap), std::move(join_g), std::move(pot_rx), {});
     }
+};
 
-    // SplitDBM res(join_range, out_vmap, out_revmap, join_g, join_pot);
-    SplitDBM res(std::move(out_vmap), std::move(out_revmap), std::move(join_g), std::move(pot_rx), VertSet());
-    // join_g.check_adjs();
-    CRAB_LOG("zones-split", std::cout << "Result join:\n" << res << "\n");
-
-    return res;
+// FIXME: can be done more efficient
+void SplitDBM::operator|=(const auto&& o) {
+    // Calls the base const& | const& operator
+    *this = SplitDBMJoiner::join(*this, std::forward<decltype(o)>(o));
 }
+
+SplitDBM SplitDBM::operator|(const SplitDBM&& o) const { return SplitDBMJoiner::join(*this, o); }
+SplitDBM SplitDBM::operator|(const SplitDBM& o) const { return SplitDBMJoiner::join(*this, o); }
+SplitDBM SplitDBM::operator|(const auto&& o) { return SplitDBMJoiner::join(*this, std::forward<decltype(o)>(o)); }
 
 SplitDBM SplitDBM::widen(const SplitDBM& o) const {
     // Figure out the common renaming
