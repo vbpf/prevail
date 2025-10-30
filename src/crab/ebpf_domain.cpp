@@ -66,10 +66,10 @@ void EbpfDomain::operator|=(EbpfDomain&& other) {
         return;
     }
     if (is_bottom()) {
-        stack = other.stack;
-    } else if (!other.is_bottom()) {
-        stack |= other.stack;
+        *this = std::move(other);
+        return;
     }
+    stack |= std::move(other.stack);
     rcp |= std::move(other.rcp);
 }
 
