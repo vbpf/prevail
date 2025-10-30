@@ -301,7 +301,7 @@ Interval Interval::bitwise_or(const Interval& x) const {
                 return Interval{0, std::max(*left_ub, *right_ub).fill_ones()};
             }
         }
-        return Interval{0, Bound::plus_infinity()};
+        return Interval{0, PLUS_INFINITY};
     }
     return top();
 }
@@ -406,4 +406,5 @@ Interval Interval::zero_extend(const int width) const {
     // [0b1111..., 0b0000...] is in the original range, so the result is [0b0000..., 0b1111...] which is the full
     return full_range;
 }
+
 } // namespace prevail

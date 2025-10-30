@@ -330,7 +330,7 @@ ElfGlobalData parse_btf_section(const parse_params_t& parse_params, const ELFIO:
         return {};
     }
 
-    const libbtf::btf_type_data btf_data(vector_of<std::byte>(*btf_section), false);
+    const libbtf::btf_type_data btf_data(vector_of<std::byte>(*btf_section));
     if (parse_params.options.verbosity_opts.dump_btf_types_json) {
         dump_btf_types(btf_data, parse_params.path);
     }
@@ -1067,7 +1067,7 @@ void ProgramReader::read_programs() {
     }
 
     if (const auto btf_sec = reader.sections[".BTF"]) {
-        process_core_relocations({vector_of<std::byte>(*btf_sec), false});
+        process_core_relocations({vector_of<std::byte>(*btf_sec)});
     }
 
     if (!unresolved_symbol_errors.empty()) {
