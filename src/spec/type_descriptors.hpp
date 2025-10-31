@@ -69,6 +69,7 @@ struct RawProgram {
     std::string function_name{};
     std::vector<EbpfInst> prog{};
     ProgramInfo info{};
+    std::map<uint32_t, std::string> relocations{}; // Offset to external function name mapping.
 };
 
 void print_map_descriptors(const std::vector<EbpfMapDescriptor>& descriptors, std::ostream& o);
