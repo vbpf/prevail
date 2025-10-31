@@ -541,6 +541,7 @@ TEST_PROGRAM("build", "prog_array.o", ".text", "func0", 5);
 TEST_PROGRAM("build", "prog_array.o", ".text", "func1", 5);
 TEST_PROGRAM("build", "prog_array.o", ".text", "func2", 5);
 TEST_PROGRAM("build", "prog_array.o", ".text", "func3", 5);
+TEST_SECTION("build", "externalfunction.o", ".text");
 
 // Test some programs that ought to fail verification.
 TEST_SECTION_REJECT("build", "badmapptr.o", "test")

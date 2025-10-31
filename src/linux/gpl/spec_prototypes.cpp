@@ -2756,10 +2756,40 @@ bool is_helper_usable_linux(const int32_t n) {
     return true;
 }
 
+bool is_helper_usable_by_name_linux(const std::string& name) {
+    // Trim the "bpf_" prefix if present.
+    if (name.rfind("bpf_", 0) == 0) {
+        return is_helper_usable_by_name_linux(name.substr(4));
+    }
+    for (size_t i = 0; i < std::size(prototypes); ++i) {
+        if (prototypes[i].name == name) {
+            return is_helper_usable_linux(static_cast<int32_t>(i));
+        }
+    }
+    return false;
+}
+
 EbpfHelperPrototype get_helper_prototype_linux(const int32_t n) {
     if (!is_helper_usable_linux(n)) {
         throw std::exception();
     }
     return prototypes[n];
+}
+
+EbpfHelperPrototype get_helper_prototype_by_name_linux(const std::string& name, int32_t& out_id) {
+    // Trim the "bpf_" prefix if present.
+    if (name.rfind("bpf_", 0) == 0) {
+        return get_helper_prototype_by_name_linux(name.substr(4), out_id);
+    }
+    for (size_t i = 0; i < std::size(prototypes); ++i) {
+        if (prototypes[i].name == name) {
+            if (!is_helper_usable_linux(static_cast<int32_t>(i))) {
+                throw std::runtime_error("Helper function '" + name + "' is not usable in current context");
+            }
+            out_id = static_cast<int32_t>(i);
+            return prototypes[i];
+        }
+    }
+    throw std::runtime_error("Helper function '" + name + "' not found");
 }
 } // namespace prevail
