@@ -1,5 +1,6 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: Apache-2.0
+#include <cassert>
 #include <utility>
 
 #include <gsl/narrow>
@@ -11,8 +12,6 @@
 #include "crab_utils/stats.hpp"
 #include "string_constraints.hpp"
 #include "type_encoding.hpp"
-
-#include <cassert>
 
 namespace prevail {
 
