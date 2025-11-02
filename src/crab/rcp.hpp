@@ -60,7 +60,7 @@ struct TypeToNumDomain {
     NumAbsDomain values{NumAbsDomain::top()};
 
     TypeToNumDomain() = default;
-    TypeToNumDomain(const TypeDomain& t, const NumAbsDomain& n) : types(t), values(n) {}
+    TypeToNumDomain(TypeDomain t, NumAbsDomain n) : types(std::move(t)), values(std::move(n)) {}
 
     TypeToNumDomain(const TypeToNumDomain& other) = default;
     TypeToNumDomain(TypeToNumDomain&& other) noexcept = default;
@@ -95,8 +95,10 @@ struct TypeToNumDomain {
     void join_selective(const TypeToNumDomain& right);
 
     void operator|=(const TypeToNumDomain& other);
+    void operator|=(TypeToNumDomain&& other);
 
     TypeToNumDomain operator&(const TypeToNumDomain& other) const;
+    TypeToNumDomain operator&(TypeToNumDomain&& other) const;
 
     std::optional<Variable> get_type_offset_variable(const Reg& reg) const;
 

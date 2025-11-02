@@ -40,7 +40,9 @@ class ArrayDomain final {
   public:
     ArrayDomain() = default;
 
+    // no move constructor to BitsetDomain, and therefore no copy-then-move for ArrayDomain
     explicit ArrayDomain(const BitsetDomain& num_bytes) : num_bytes(num_bytes) {}
+    ArrayDomain(const ArrayDomain& arr) = default;
 
     void set_to_top();
     void set_to_bottom();
@@ -53,6 +55,7 @@ class ArrayDomain final {
     bool operator==(const ArrayDomain& other) const;
 
     void operator|=(const ArrayDomain& other);
+    void operator|=(ArrayDomain&& other);
 
     ArrayDomain operator|(const ArrayDomain& other) const;
     ArrayDomain operator&(const ArrayDomain& other) const;

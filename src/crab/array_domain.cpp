@@ -689,8 +689,8 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, const
     return {};
 }
 
-std::optional<LinearExpression> ArrayDomain::load_type(const Interval& ii, int width) const {
-    if (std::optional<Number> n = ii.singleton()) {
+std::optional<LinearExpression> ArrayDomain::load_type(const Interval& i, int width) const {
+    if (std::optional<Number> n = i.singleton()) {
         offset_map_t& offset_map = lookup_array_map(DataKind::types);
         int64_t k = n->narrow<int64_t>();
         auto [only_num, only_non_num] = num_bytes.uniformity(k, width);
@@ -721,8 +721,8 @@ std::optional<LinearExpression> ArrayDomain::load_type(const Interval& ii, int w
         */
     } else {
         // Check whether the kind is uniform across the entire interval.
-        auto lb = ii.lb().number();
-        auto ub = ii.ub().number();
+        auto lb = i.lb().number();
+        auto ub = i.ub().number();
         if (lb.has_value() && ub.has_value()) {
             Number fullwidth = ub.value() - lb.value() + width;
             if (lb->fits<uint32_t>() && fullwidth.fits<uint32_t>()) {
@@ -841,6 +841,14 @@ void ArrayDomain::operator|=(const ArrayDomain& other) {
         return;
     }
     num_bytes |= other.num_bytes;
+}
+
+void ArrayDomain::operator|=(ArrayDomain&& other) {
+    if (is_bottom()) {
+        *this = std::move(other);
+        return;
+    }
+    num_bytes |= std::move(other.num_bytes);
 }
 
 ArrayDomain ArrayDomain::operator|(const ArrayDomain& other) const { return ArrayDomain(num_bytes | other.num_bytes); }

@@ -32,20 +32,20 @@ EbpfDomain EbpfDomain::bottom() {
     return abs;
 }
 
-EbpfDomain::EbpfDomain() {}
+EbpfDomain::EbpfDomain() = default;
 
 EbpfDomain::EbpfDomain(TypeToNumDomain rcp, ArrayDomain stack) : rcp(std::move(rcp)), stack(std::move(stack)) {}
 
 void EbpfDomain::set_to_top() {
-    rcp.values.set_to_top();
+    rcp.set_to_top();
     stack.set_to_top();
 }
 
-void EbpfDomain::set_to_bottom() { rcp.values.set_to_bottom(); }
+void EbpfDomain::set_to_bottom() { rcp.set_to_bottom(); }
 
-bool EbpfDomain::is_bottom() const { return rcp.values.is_bottom(); }
+bool EbpfDomain::is_bottom() const { return rcp.is_bottom(); }
 
-bool EbpfDomain::is_top() const { return rcp.values.is_top() && stack.is_top(); }
+bool EbpfDomain::is_top() const { return rcp.is_top() && stack.is_top(); }
 
 bool EbpfDomain::operator<=(const EbpfDomain& other) const {
     if (!(stack <= other.stack)) {
@@ -54,46 +54,75 @@ bool EbpfDomain::operator<=(const EbpfDomain& other) const {
     return rcp <= other.rcp;
 }
 
-bool EbpfDomain::operator==(const EbpfDomain& other) const {
-    return stack == other.stack && rcp <= other.rcp && other.rcp <= rcp;
+bool EbpfDomain::operator<=(EbpfDomain&& other) const {
+    if (!(stack <= other.stack)) {
+        return false;
+    }
+    return rcp <= std::move(other.rcp);
 }
 
 void EbpfDomain::operator|=(EbpfDomain&& other) {
-    if (is_bottom()) {
-        stack = other.stack;
-    } else if (!other.is_bottom()) {
-        stack |= other.stack;
+    if (other.is_bottom()) {
+        return;
     }
+    if (is_bottom()) {
+        *this = std::move(other);
+        return;
+    }
+    stack |= std::move(other.stack);
     rcp |= std::move(other.rcp);
 }
 
 void EbpfDomain::operator|=(const EbpfDomain& other) {
-    EbpfDomain tmp{other};
-    operator|=(std::move(tmp));
+    if (other.is_bottom()) {
+        return;
+    }
+    if (is_bottom()) {
+        *this = other;
+        return;
+    }
+    stack |= other.stack;
+    rcp |= other.rcp;
 }
 
 EbpfDomain EbpfDomain::operator|(EbpfDomain&& other) const {
-    EbpfDomain res{std::move(other)};
-    res |= *this;
-    return res;
+    if (other.is_bottom()) {
+        return *this;
+    }
+    if (is_bottom()) {
+        return std::move(other);
+    }
+    other |= *this;
+    return other;
 }
 
 EbpfDomain EbpfDomain::operator|(const EbpfDomain& other) const& {
+    if (other.is_bottom()) {
+        return *this;
+    }
+    if (is_bottom()) {
+        return other;
+    }
     EbpfDomain res{other};
     res |= *this;
     return res;
 }
 
 EbpfDomain EbpfDomain::operator|(const EbpfDomain& other) && {
-    EbpfDomain res{std::move(*this)};
-    res |= other;
-    return res;
+    if (other.is_bottom()) {
+        return std::move(*this);
+    }
+    if (is_bottom()) {
+        return other;
+    }
+    *this |= other;
+    return std::move(*this);
 }
 
 EbpfDomain EbpfDomain::operator&(const EbpfDomain& other) const {
     auto res = rcp & other.rcp;
     if (!res.is_bottom()) {
-        return EbpfDomain(res, stack & other.stack);
+        return {std::move(res), stack & other.stack};
     }
     return bottom();
 }
@@ -135,9 +164,7 @@ EbpfDomain EbpfDomain::widen(const EbpfDomain& other, const bool to_constants) c
     return res;
 }
 
-EbpfDomain EbpfDomain::narrow(const EbpfDomain& other) const {
-    return EbpfDomain(rcp.narrow(other.rcp), stack & other.stack);
-}
+EbpfDomain EbpfDomain::narrow(const EbpfDomain& other) const { return {rcp.narrow(other.rcp), stack & other.stack}; }
 
 void EbpfDomain::add_value_constraint(const LinearConstraint& cst) { rcp.values.add_constraint(cst); }
 
@@ -170,19 +197,19 @@ bool EbpfDomain::get_map_fd_range(const Reg& map_fd_reg, int32_t* start_fd, int3
 std::optional<uint32_t> EbpfDomain::get_map_type(const Reg& map_fd_reg) const {
     int32_t start_fd, end_fd;
     if (!get_map_fd_range(map_fd_reg, &start_fd, &end_fd)) {
-        return std::optional<uint32_t>();
+        return {};
     }
 
     std::optional<uint32_t> type;
     for (int32_t map_fd = start_fd; map_fd <= end_fd; map_fd++) {
         EbpfMapDescriptor* map = &thread_local_program_info->platform->get_map_descriptor(map_fd);
         if (map == nullptr) {
-            return std::optional<uint32_t>();
+            return {};
         }
         if (!type.has_value()) {
             type = map->type;
         } else if (map->type != *type) {
-            return std::optional<uint32_t>();
+            return {};
         }
     }
     return type;
@@ -337,8 +364,8 @@ EbpfDomain EbpfDomain::from_constraints(const std::set<std::string>& constraints
         inv.add_value_constraint(cst);
     }
     for (const Interval& range : numeric_ranges) {
-        const int start = range.lb().narrow<int>();
-        const int width = 1 + range.finite_size()->narrow<int>();
+        const auto [start, ub] = range.pair<int64_t>();
+        const int width = 1 + (ub - start);
         inv.stack.initialize_numbers(start, width);
     }
     // TODO: handle other stack type constraints

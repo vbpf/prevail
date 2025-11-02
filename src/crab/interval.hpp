@@ -23,7 +23,7 @@ class Interval final {
     Bound _ub;
 
   public:
-    static Interval top() { return Interval{Bound::minus_infinity(), Bound::plus_infinity()}; }
+    static Interval top() { return Interval{MINUS_INFINITY, PLUS_INFINITY}; }
 
     static Interval bottom() { return Interval{}; }
 
@@ -33,7 +33,7 @@ class Interval final {
     }
 
   private:
-    Interval() : _lb(Number{0}), _ub(-1) {}
+    Interval() : _lb{0}, _ub{-1} {}
 
   public:
     Interval(const Bound& lb, const Bound& ub) : _lb(lb > ub ? Bound{Number{0}} : lb), _ub(lb > ub ? Bound{-1} : ub) {}
@@ -167,7 +167,7 @@ class Interval final {
         } else if (x.is_bottom()) {
             return *this;
         } else {
-            return Interval{x._lb < _lb ? Bound::minus_infinity() : _lb, _ub < x._ub ? Bound::plus_infinity() : _ub};
+            return Interval{x._lb < _lb ? MINUS_INFINITY : _lb, _ub < x._ub ? PLUS_INFINITY : _ub};
         }
     }
 
@@ -249,7 +249,6 @@ class Interval final {
     friend std::ostream& operator<<(std::ostream& o, const Interval& interval);
 
     // division and remainder operations
-
     [[nodiscard]]
     Interval sdiv(const Interval& x) const;
 
@@ -263,6 +262,9 @@ class Interval final {
     Interval urem(const Interval& x) const;
 
     // bitwise operations
+    void mask_value(int width);
+    void mask_shift_count(int width);
+
     [[nodiscard]]
     Interval bitwise_and(const Interval& x) const;
 
@@ -305,27 +307,52 @@ class Interval final {
     // Return an interval in the range [INT_MIN, INT_MAX] which can only
     // be represented as an svalue.
     static Interval signed_int(const int width) { return Interval{Number::min_int(width), Number::max_int(width)}; }
+    template <int width>
+    static Interval signed_int() {
+        static Interval res{Number::min_int(width), Number::max_int(width)};
+        return res;
+    }
 
     Interval unsigned_int(bool is64) const = delete;
     // Return an interval in the range [0, UINT_MAX] which can only be
     // represented as a uvalue.
     static Interval unsigned_int(const int width) { return Interval{0, Number::max_uint(width)}; }
+    template <int width>
+    static Interval unsigned_int() {
+        static Interval res{0, Number::max_uint(width)};
+        return res;
+    }
 
     Interval nonnegative(bool is64) const = delete;
     // Return a non-negative interval in the range [0, INT_MAX],
     // which can be represented as both an svalue and a uvalue.
     static Interval nonnegative(const int width) { return Interval{Number{0}, Number::max_int(width)}; }
+    template <int width>
+    static Interval nonnegative() {
+        static Interval res{Number{0}, Number::max_int(width)};
+        return res;
+    }
 
     Interval negative(bool is64) const = delete;
     // Return a negative interval in the range [INT_MIN, -1],
     // which can be represented as both an svalue and a uvalue.
     static Interval negative(const int width) { return Interval{Number::min_int(width), Number{-1}}; }
+    template <int width>
+    static Interval negative() {
+        static Interval res{Number::min_int(width), Number{-1}};
+        return res;
+    }
 
     Interval unsigned_high(bool is64) const = delete;
     // Return an interval in the range [INT_MAX+1, UINT_MAX], which can only be represented as a uvalue.
     // The svalue equivalent using the same width would be negative().
     static Interval unsigned_high(const int width) {
         return Interval{Number::max_int(width) + 1, Number::max_uint(width)};
+    }
+    template <int width>
+    static Interval unsigned_high() {
+        static Interval res{Number::max_int(width) + 1, Number::max_uint(width)};
+        return res;
     }
 
     [[nodiscard]]

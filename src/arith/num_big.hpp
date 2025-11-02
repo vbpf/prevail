@@ -20,10 +20,10 @@ class Number final {
     cpp_int _n{};
 
   public:
-    Number() = default;
+    constexpr Number() = default;
     Number(cpp_int n) : _n(std::move(n)) {}
-    Number(std::integral auto n) : _n{n} {}
-    Number(is_enum auto n) : _n{static_cast<std::underlying_type_t<decltype(n)>>(n)} {}
+    constexpr Number(std::integral auto n) : _n{n} {}
+    constexpr Number(is_enum auto n) : _n{static_cast<std::underlying_type_t<decltype(n)>>(n)} {}
     explicit Number(const std::string& s) { _n = cpp_int(s); }
 
     template <std::integral T>
@@ -36,30 +36,35 @@ class Number final {
 
     template <is_enum T>
     T narrow() const {
-        return static_cast<T>(static_cast<std::underlying_type_t<T>>(_n));
+        using underlying = std::underlying_type_t<T>;
+        // Note: This does not check that the enum is a valid enum value
+        if (!fits<underlying>()) {
+            CRAB_ERROR("Number ", _n, " does not fit into ", typeid(T).name());
+        }
+        return static_cast<T>(static_cast<underlying>(_n));
     }
 
     template <is_enum T>
-    T cast_to() const {
-        return static_cast<T>(static_cast<std::underlying_type_t<T>>(_n));
+    constexpr T cast_to() const {
+        return static_cast<T>(cast_to<std::underlying_type_t<T>>(_n));
     }
 
     explicit operator cpp_int() const { return _n; }
 
     [[nodiscard]]
-    friend std::size_t hash_value(const Number& z) {
+    constexpr friend std::size_t hash_value(const Number& z) {
         return hash_value(z._n);
     }
 
     template <std::integral T>
     [[nodiscard]]
-    bool fits() const {
+    constexpr bool fits() const {
         return std::numeric_limits<T>::min() <= _n && _n <= std::numeric_limits<T>::max();
     }
 
     template <std::integral T>
     [[nodiscard]]
-    bool fits_cast_to() const {
+    constexpr bool fits_cast_to() const {
         return fits<T>() || fits<SwapSignedness<T>>();
     }
 
@@ -103,45 +108,80 @@ class Number final {
     }
 
     template <std::integral T>
-    T truncate_to() const {
+    constexpr T truncate_to() const {
         using U = std::make_unsigned_t<T>;
         constexpr U mask = std::numeric_limits<U>::max();
         return static_cast<T>(static_cast<U>(_n & mask));
+    }
+
+    template <int width>
+    Number sign_extend_impl() const {
+        using namespace boost::multiprecision;
+        static const cpp_int sign_bit = cpp_int(1) << (width - 1);
+        static const cpp_int value_mask = (cpp_int(1) << width) - 1;
+        static const cpp_int offset = cpp_int(1) << width;
+
+        const cpp_int truncated = _n & value_mask;
+        if (truncated & sign_bit) {
+            return cpp_int(truncated - offset);
+        }
+        return truncated;
+    }
+
+    template <int width>
+    Number zero_extend_impl() const {
+        using namespace boost::multiprecision;
+        static const cpp_int value_mask = (cpp_int(1) << width) - 1;
+        return cpp_int(_n & value_mask);
     }
 
     // Allow truncating to signed int as needed for finite width operations.
     // Unlike casting, sign_extend will not throw a prevail error if the number doesn't fit.
     [[nodiscard]]
     Number sign_extend(const int width) const {
-        using namespace boost::multiprecision;
-        if (width <= 0) {
-            return *this;
+        switch (width) {
+        case 1: return sign_extend_impl<1>();
+        case 2: return sign_extend_impl<2>();
+        case 4: return sign_extend_impl<4>();
+        case 8: return sign_extend_impl<8>();
+        case 16: return sign_extend_impl<16>();
+        case 32: return sign_extend_impl<32>();
+        case 64: return sign_extend_impl<64>();
+        case 0: return *this;
+        default: {
+            using namespace boost::multiprecision;
+            const cpp_int sign_bit = cpp_int(1) << (width - 1);
+            const cpp_int value_mask = (cpp_int(1) << width) - 1;
+            const cpp_int offset = cpp_int(1) << width;
+
+            const cpp_int truncated = _n & value_mask;
+            if (truncated & sign_bit) {
+                return cpp_int((truncated - offset));
+            }
+            return truncated;
         }
-
-        // Create a mask for the sign bit.
-        const cpp_int sign_bit = cpp_int(1) << (width - 1);
-        const cpp_int value_mask = (cpp_int(1) << width) - 1;
-
-        const cpp_int truncated = _n & value_mask;
-
-        // If sign bit is set, extend with 1s; otherwise, return truncated.
-        if (truncated & sign_bit) {
-            return truncated - (cpp_int(1) << width);
         }
-        return truncated;
     }
 
     // Allow truncating to unsigned int as needed for finite width operations.
     // Unlike casting, zero_extend will not throw a prevail error if the number doesn't fit.
     [[nodiscard]]
     Number zero_extend(const int width) const {
-        using namespace boost::multiprecision;
-        if (width <= 0) {
-            return *this;
+        switch (width) {
+        case 1: return zero_extend_impl<1>();
+        case 2: return zero_extend_impl<2>();
+        case 4: return zero_extend_impl<4>();
+        case 8: return zero_extend_impl<8>();
+        case 16: return zero_extend_impl<16>();
+        case 32: return zero_extend_impl<32>();
+        case 64: return zero_extend_impl<64>();
+        case 0: return *this;
+        default: {
+            using namespace boost::multiprecision;
+            const cpp_int value_mask = (cpp_int(1) << width) - 1;
+            return cpp_int(_n & value_mask);
         }
-        const cpp_int value_mask = (cpp_int(1) << width) - 1;
-        const cpp_int truncated = _n & value_mask;
-        return truncated;
+        }
     }
 
     static Number max_uint(const int width) { return max_int(width + 1); }
@@ -225,17 +265,17 @@ class Number final {
         return r;
     }
 
-    bool operator==(const Number& x) const { return _n == x._n; }
+    constexpr bool operator==(const Number& x) const { return _n == x._n; }
 
-    bool operator!=(const Number& x) const { return _n != x._n; }
+    constexpr bool operator!=(const Number& x) const { return _n != x._n; }
 
-    bool operator<(const Number& x) const { return _n < x._n; }
+    constexpr bool operator<(const Number& x) const { return _n < x._n; }
 
-    bool operator<=(const Number& x) const { return _n <= x._n; }
+    constexpr bool operator<=(const Number& x) const { return _n <= x._n; }
 
-    bool operator>(const Number& x) const { return _n > x._n; }
+    constexpr bool operator>(const Number& x) const { return _n > x._n; }
 
-    bool operator>=(const Number& x) const { return _n >= x._n; }
+    constexpr bool operator>=(const Number& x) const { return _n >= x._n; }
 
     Number abs() const { return _n < 0 ? -_n : _n; }
 
@@ -277,11 +317,10 @@ class Number final {
 
     [[nodiscard]]
     std::string to_string() const;
-};
-// class Number
+}; // class Number
 
-bool operator<=(std::integral auto left, const Number& rhs) { return rhs >= left; }
-bool operator<=(is_enum auto left, const Number& rhs) { return rhs >= left; }
+constexpr bool operator<=(std::integral auto left, const Number& rhs) { return rhs >= left; }
+constexpr bool operator<=(is_enum auto left, const Number& rhs) { return rhs >= left; }
 
 template <typename T>
 concept finite_integral = std::integral<T> || std::is_same_v<T, Number>;

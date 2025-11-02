@@ -50,14 +50,14 @@ bool TypeToNumDomain::operator<=(const TypeToNumDomain& other) const {
 
 void TypeToNumDomain::join_selective(const TypeToNumDomain& right) {
     if (is_bottom()) {
-        *this = std::move(right);
+        *this = right;
         return;
     }
     if (right.is_bottom()) {
         return;
     }
     auto extra_invariants = collect_type_dependent_constraints(right);
-    this->values |= std::move(right.values);
+    this->values |= right.values;
     for (const auto& [variable, interval] : extra_invariants) {
         values.set(variable, interval);
     }
@@ -71,7 +71,18 @@ void TypeToNumDomain::operator|=(const TypeToNumDomain& other) {
         return;
     }
     this->join_selective(other);
-    this->types = types | other.types;
+    this->types |= other.types;
+}
+
+void TypeToNumDomain::operator|=(TypeToNumDomain&& other) {
+    if (is_bottom()) {
+        *this = other;
+    }
+    if (other.is_bottom()) {
+        return;
+    }
+    this->join_selective(other);
+    this->types |= std::move(other.types);
 }
 
 TypeToNumDomain TypeToNumDomain::operator&(const TypeToNumDomain& other) const {
@@ -80,6 +91,14 @@ TypeToNumDomain TypeToNumDomain::operator&(const TypeToNumDomain& other) const {
         return TypeToNumDomain{std::move(*type_inv), values & other.values};
     }
     return TypeToNumDomain{TypeDomain::top(), NumAbsDomain::bottom()};
+}
+
+TypeToNumDomain TypeToNumDomain::operator&(TypeToNumDomain&& other) const {
+    if (auto type_inv = types.meet(std::move(other.types))) {
+        // TODO: remove unuseful variables from the numeric domain
+        return TypeToNumDomain{std::move(*type_inv), values & std::move(other.values)};
+    }
+    return {TypeDomain::top(), NumAbsDomain::bottom()};
 }
 
 std::vector<Variable> TypeToNumDomain::get_nonexistent_kind_variables() const {

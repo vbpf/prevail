@@ -118,12 +118,30 @@ class AddBottom final {
         return bottom();
     }
 
+    AddBottom operator&(AddBottom&& o) const {
+        if (!dom || !o.dom) {
+            return bottom();
+        }
+        if (auto res = dom->meet(std::move(*o.dom))) {
+            return AddBottom(*res);
+        }
+        return bottom();
+    }
+
     [[nodiscard]]
     AddBottom narrow(const AddBottom& o) const {
         if (!dom || !o.dom) {
             return bottom();
         }
         return AddBottom(dom->narrow(*o.dom));
+    }
+
+    [[nodiscard]]
+    AddBottom narrow(AddBottom&& o) const {
+        if (!dom || !o.dom) {
+            return bottom();
+        }
+        return AddBottom(dom->narrow(std::move(*o.dom)));
     }
 
     [[nodiscard]]
@@ -138,7 +156,7 @@ class AddBottom final {
         return bottom();
     }
 
-    void havoc(Variable v) {
+    void havoc(const Variable v) {
         if (dom) {
             dom->havoc(v);
         }
