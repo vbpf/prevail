@@ -40,7 +40,9 @@ class ArrayDomain final {
   public:
     ArrayDomain() = default;
 
-    explicit ArrayDomain(BitsetDomain num_bytes) : num_bytes(std::move(num_bytes)) {}
+    // no move constructor to BitsetDomain, and therefore no copy-then-move for ArrayDomain
+    explicit ArrayDomain(const BitsetDomain& num_bytes) : num_bytes(num_bytes) {}
+    ArrayDomain(const ArrayDomain& arr) = default;
 
     void set_to_top();
     void set_to_bottom();
