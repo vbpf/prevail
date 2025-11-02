@@ -247,6 +247,19 @@ Interval Interval::urem(const Interval& x) const {
     }
 }
 
+void Interval::mask_value(const int width) {
+    // we assume never to have wider widths than 64
+    if (width > 0 && width < 64) {
+        *this = bitwise_and(Interval{(1ULL << width) - 1});
+    }
+}
+
+void Interval::mask_shift_count(const int width) {
+    if (width > 0) {
+        *this = bitwise_and(Interval{width - 1});
+    }
+}
+
 // Do a bitwise-AND between two uvalue intervals.
 Interval Interval::bitwise_and(const Interval& x) const {
     if (is_bottom() || x.is_bottom()) {

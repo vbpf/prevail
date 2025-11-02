@@ -758,9 +758,12 @@ void FiniteDomain::apply(const SignedArithBinOp op, const Variable x, const Vari
 }
 
 void FiniteDomain::apply(BitwiseBinOp op, Variable x, Variable y, Variable z, int finite_width) {
-    // Convert to intervals and perform the operation
     Interval yi = dom.eval_interval(y);
     Interval zi = dom.eval_interval(z);
+    if (op == BitwiseBinOp::SHL || op == BitwiseBinOp::LSHR || op == BitwiseBinOp::ASHR) {
+        zi.mask_shift_count(finite_width);
+    }
+
     Interval xi = Interval::bottom();
     switch (op) {
     case BitwiseBinOp::AND: xi = yi.bitwise_and(zi); break;
@@ -771,6 +774,7 @@ void FiniteDomain::apply(BitwiseBinOp op, Variable x, Variable y, Variable z, in
     case BitwiseBinOp::ASHR: xi = yi.ashr(zi); break;
     default: CRAB_ERROR("DBM: unreachable");
     }
+    xi.mask_value(finite_width);
     set(x, xi);
 }
 
@@ -778,8 +782,11 @@ void FiniteDomain::apply(BitwiseBinOp op, Variable x, Variable y, Variable z, in
 void FiniteDomain::apply(BitwiseBinOp op, Variable x, Variable y, const Number& k, int finite_width) {
     // Convert to intervals and perform the operation
     Interval yi = dom.eval_interval(y);
-    Interval zi(Number(k.cast_to<uint64_t>()));
-    Interval xi = Interval::bottom();
+    Interval zi{k.cast_to<uint64_t>()};
+    if (op == BitwiseBinOp::SHL || op == BitwiseBinOp::LSHR || op == BitwiseBinOp::ASHR) {
+        zi.mask_shift_count(finite_width);
+    }
+    Interval xi = Interval::top();
 
     switch (op) {
     case BitwiseBinOp::AND: xi = yi.bitwise_and(zi); break;
@@ -790,6 +797,7 @@ void FiniteDomain::apply(BitwiseBinOp op, Variable x, Variable y, const Number& 
     case BitwiseBinOp::ASHR: xi = yi.ashr(zi); break;
     default: CRAB_ERROR("DBM: unreachable");
     }
+    xi.mask_value(finite_width);
     set(x, xi);
 }
 

@@ -249,7 +249,6 @@ class Interval final {
     friend std::ostream& operator<<(std::ostream& o, const Interval& interval);
 
     // division and remainder operations
-
     [[nodiscard]]
     Interval sdiv(const Interval& x) const;
 
@@ -263,6 +262,9 @@ class Interval final {
     Interval urem(const Interval& x) const;
 
     // bitwise operations
+    void mask_value(int width);
+    void mask_shift_count(int width);
+
     [[nodiscard]]
     Interval bitwise_and(const Interval& x) const;
 
