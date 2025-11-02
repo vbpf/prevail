@@ -35,13 +35,18 @@ class Number final {
     }
 
     template <is_enum T>
-    constexpr T narrow() const {
-        return static_cast<T>(static_cast<std::underlying_type_t<T>>(_n));
+    T narrow() const {
+        using underlying = std::underlying_type_t<T>;
+        // Note: This does not check that the enum is a valid enum value
+        if (!fits<underlying>()) {
+            CRAB_ERROR("Number ", _n, " does not fit into ", typeid(T).name());
+        }
+        return static_cast<T>(static_cast<underlying>(_n));
     }
 
     template <is_enum T>
     constexpr T cast_to() const {
-        return static_cast<T>(static_cast<std::underlying_type_t<T>>(_n));
+        return static_cast<T>(cast_to<std::underlying_type_t<T>>(_n));
     }
 
     explicit operator cpp_int() const { return _n; }
