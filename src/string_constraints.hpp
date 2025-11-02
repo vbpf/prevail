@@ -17,10 +17,12 @@ struct StringInvariant {
 
     StringInvariant() = default;
 
-    explicit StringInvariant(std::set<std::string> inv) : maybe_inv(std::move(inv)) {}
+    explicit StringInvariant(std::set<std::string>&& inv) : maybe_inv(std::move(inv)) {}
 
     StringInvariant(const StringInvariant& inv) = default;
     StringInvariant& operator=(const StringInvariant& inv) = default;
+    StringInvariant(StringInvariant&& inv) = default;
+    StringInvariant& operator=(StringInvariant&& inv) = default;
 
     [[nodiscard]]
     bool is_bottom() const {

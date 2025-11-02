@@ -12,6 +12,8 @@
 #include "string_constraints.hpp"
 #include "type_encoding.hpp"
 
+#include <cassert>
+
 namespace prevail {
 
 static std::optional<SplitDBM::VertId> try_at(const SplitDBM::VertMap& map, const Variable v) {
@@ -1228,7 +1230,7 @@ StringInvariant SplitDBM::to_set() const {
         result.insert(elem.str());
     }
 
-    return StringInvariant{result};
+    return StringInvariant{std::move(result)};
 }
 
 std::ostream& operator<<(std::ostream& o, const SplitDBM& dom) { return o << dom.to_set(); }
