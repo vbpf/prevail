@@ -91,7 +91,6 @@ struct TypeToNumDomain {
      * evaluates `x <= Top` for all irrelevant variables on the left-hand side.
      */
     bool operator<=(const TypeToNumDomain& other) const;
-    bool operator<=(TypeToNumDomain&& other) const;
 
     void join_selective(const TypeToNumDomain& right);
 

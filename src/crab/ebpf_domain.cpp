@@ -81,7 +81,8 @@ void EbpfDomain::operator|=(const EbpfDomain& other) {
         *this = other;
         return;
     }
-    operator|=(EbpfDomain{other});
+    stack |= other.stack;
+    rcp |= other.rcp;
 }
 
 EbpfDomain EbpfDomain::operator|(EbpfDomain&& other) const {

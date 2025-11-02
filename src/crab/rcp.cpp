@@ -48,26 +48,6 @@ bool TypeToNumDomain::operator<=(const TypeToNumDomain& other) const {
     return values <= tmp.values;
 }
 
-bool TypeToNumDomain::operator<=(TypeToNumDomain&& other) const {
-    if (is_bottom()) {
-        return true;
-    }
-    if (other.is_bottom()) {
-        return false;
-    }
-    // First, check the type domain.
-    // For example, if r1 in `this` has type {stack} and r1 in `other` has type {stack, packet},
-    // then `this` is less than or equal to `other`.
-    if (!(types <= other.types)) {
-        return false;
-    }
-    // Then, check the numeric domain with consideration of type-specific variables.
-    for (const Variable& v : this->get_nonexistent_kind_variables()) {
-        other.values.havoc(v);
-    }
-    return values <= other.values;
-}
-
 void TypeToNumDomain::join_selective(const TypeToNumDomain& right) {
     if (is_bottom()) {
         *this = right;
