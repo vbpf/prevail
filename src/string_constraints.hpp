@@ -21,6 +21,8 @@ struct StringInvariant {
 
     StringInvariant(const StringInvariant& inv) = default;
     StringInvariant& operator=(const StringInvariant& inv) = default;
+    StringInvariant(StringInvariant&& inv) = default;
+    StringInvariant& operator=(StringInvariant&& inv) = default;
 
     [[nodiscard]]
     bool is_bottom() const {

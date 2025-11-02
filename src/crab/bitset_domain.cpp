@@ -1,6 +1,7 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
 #include <ostream>
+#include <string>
 
 #include "crab/bitset_domain.hpp"
 
@@ -60,6 +61,6 @@ StringInvariant BitsetDomain::to_set() const {
         result.insert(value);
         i = j;
     }
-    return StringInvariant{result};
+    return StringInvariant{std::move(result)};
 }
 } // namespace prevail
