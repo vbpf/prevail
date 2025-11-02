@@ -33,7 +33,7 @@ struct StringInvariant {
         return maybe_inv && maybe_inv->empty();
     }
 
-    static StringInvariant top() { return StringInvariant{}; }
+    static StringInvariant top() { return StringInvariant{std::set<std::string>()}; }
     static StringInvariant bottom() { return StringInvariant{}; }
 
     [[nodiscard]]
