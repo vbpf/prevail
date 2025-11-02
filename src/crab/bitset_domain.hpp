@@ -16,7 +16,7 @@ class BitsetDomain final {
   public:
     BitsetDomain() { non_numerical_bytes.set(); }
 
-    explicit BitsetDomain(const bits_t& non_numerical_bytes) : non_numerical_bytes{non_numerical_bytes} {}
+    explicit BitsetDomain(bits_t non_numerical_bytes) : non_numerical_bytes{std::move(non_numerical_bytes)} {}
 
     void set_to_top() { non_numerical_bytes.set(); }
 

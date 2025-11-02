@@ -123,7 +123,7 @@ class Number final {
 
         const cpp_int truncated = _n & value_mask;
         if (truncated & sign_bit) {
-            return evaluate_if_expression((truncated - offset));
+            return cpp_int(truncated - offset);
         }
         return truncated;
     }
@@ -132,7 +132,7 @@ class Number final {
     Number zero_extend_impl() const {
         using namespace boost::multiprecision;
         static const cpp_int value_mask = (cpp_int(1) << width) - 1;
-        return evaluate_if_expression(_n & value_mask);
+        return cpp_int(_n & value_mask);
     }
 
     // Allow truncating to signed int as needed for finite width operations.
@@ -156,7 +156,7 @@ class Number final {
 
             const cpp_int truncated = _n & value_mask;
             if (truncated & sign_bit) {
-                return evaluate_if_expression((truncated - offset));
+                return cpp_int((truncated - offset));
             }
             return truncated;
         }
@@ -179,7 +179,7 @@ class Number final {
         default: {
             using namespace boost::multiprecision;
             const cpp_int value_mask = (cpp_int(1) << width) - 1;
-            return evaluate_if_expression(_n & value_mask);
+            return cpp_int(_n & value_mask);
         }
         }
     }

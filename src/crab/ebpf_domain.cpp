@@ -37,7 +37,7 @@ EbpfDomain::EbpfDomain() = default;
 EbpfDomain::EbpfDomain(TypeToNumDomain rcp, ArrayDomain stack) : rcp(std::move(rcp)), stack(std::move(stack)) {}
 
 void EbpfDomain::set_to_top() {
-    rcp.values.set_to_top();
+    rcp.set_to_top();
     stack.set_to_top();
 }
 

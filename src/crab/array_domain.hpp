@@ -40,7 +40,7 @@ class ArrayDomain final {
   public:
     ArrayDomain() = default;
 
-    explicit ArrayDomain(const BitsetDomain& num_bytes) : num_bytes(num_bytes) {}
+    explicit ArrayDomain(BitsetDomain num_bytes) : num_bytes(std::move(num_bytes)) {}
 
     void set_to_top();
     void set_to_bottom();
@@ -53,7 +53,7 @@ class ArrayDomain final {
     bool operator==(const ArrayDomain& other) const;
 
     void operator|=(const ArrayDomain& other);
-    void operator|=(const ArrayDomain&& other);
+    void operator|=(ArrayDomain&& other);
 
     ArrayDomain operator|(const ArrayDomain& other) const;
     ArrayDomain operator&(const ArrayDomain& other) const;
