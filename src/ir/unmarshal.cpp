@@ -83,14 +83,11 @@ static Instruction shift32(const Reg dst, const Bin::Op op) {
 struct Unmarshaller {
     vector<vector<string>>& notes;
     const ProgramInfo& info;
-    std::map<Pc, std::string> relocations{}; // Program counter to external function name mapping.
     // ReSharper disable once CppMemberFunctionMayBeConst
     void note(const string& what) { notes.back().emplace_back(what); }
     // ReSharper disable once CppMemberFunctionMayBeConst
     void note_next_pc() { notes.emplace_back(); }
-    explicit Unmarshaller(vector<vector<string>>& notes, const ProgramInfo& info,
-                          std::map<Pc, std::string> relocations = {})
-        : notes{notes}, info{info}, relocations{relocations} {
+    explicit Unmarshaller(vector<vector<string>>& notes, const ProgramInfo& info) : notes{notes}, info{info} {
         note_next_pc();
     }
 
@@ -489,25 +486,13 @@ struct Unmarshaller {
     }
 
     [[nodiscard]]
-    auto makeCall(const std::variant<int32_t, std::string>& helper) const -> Call {
-        EbpfHelperPrototype proto;
-        int32_t func_id;
-
-        if (std::holds_alternative<int32_t>(helper)) {
-            func_id = std::get<int32_t>(helper);
-            proto = info.platform->get_helper_prototype(func_id);
-        } else {
-            const std::string& name = std::get<std::string>(helper);
-            // Note: get_helper_prototype_by_name throws if the name is not found.
-            proto = info.platform->get_helper_prototype_by_name(name, func_id);
-        }
-
+    auto makeCall(const int32_t imm) const -> Call {
+        const EbpfHelperPrototype proto = info.platform->get_helper_prototype(imm);
         if (proto.return_type == EBPF_RETURN_TYPE_UNSUPPORTED) {
             throw std::runtime_error(std::string("unsupported function: ") + proto.name);
         }
-
         Call res;
-        res.func = func_id;
+        res.func = imm;
         res.name = proto.name;
         res.reallocate_packet = proto.reallocate_packet;
         res.is_map_lookup = proto.return_type == EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL;
@@ -644,21 +629,10 @@ struct Unmarshaller {
             if (inst.dst != 0) {
                 throw InvalidInstruction(pc, make_opcode_message("nonzero dst for register", inst.opcode));
             }
-            if (inst.imm == -1) {
-                const auto it = relocations.find(pc);
-                if (it == relocations.end()) {
-                    throw InvalidInstruction(pc, "call by name not resolved at " + std::to_string(pc));
-                }
-                if (!info.platform->is_helper_usable_by_name(it->second)) {
-                    throw InvalidInstruction(pc, "invalid helper function name " + it->second);
-                }
-                return makeCall(it->second);
-            } else {
-                if (!info.platform->is_helper_usable(inst.imm)) {
-                    throw InvalidInstruction(pc, "invalid helper function id " + std::to_string(inst.imm));
-                }
-                return makeCall(inst.imm);
+            if (!info.platform->is_helper_usable(inst.imm)) {
+                throw InvalidInstruction(pc, "invalid helper function id " + std::to_string(inst.imm));
             }
+            return makeCall(inst.imm);
         case INST_EXIT:
             if (!info.platform->supports_group(bpf_conformance_groups_t::base32)) {
                 throw InvalidInstruction(pc, inst.opcode);
@@ -836,7 +810,7 @@ struct Unmarshaller {
 std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog, vector<vector<string>>& notes) {
     thread_local_program_info = raw_prog.info;
     try {
-        return Unmarshaller{notes, raw_prog.info, raw_prog.relocations}.unmarshal(raw_prog.prog);
+        return Unmarshaller{notes, raw_prog.info}.unmarshal(raw_prog.prog);
     } catch (InvalidInstruction& arg) {
         std::ostringstream ss;
         ss << arg.pc << ": " << arg.what() << "\n";

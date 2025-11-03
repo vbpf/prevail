@@ -626,7 +626,6 @@ class ProgramReader {
     const ElfGlobalData& global;
     std::vector<FunctionRelocation> function_relocations;
     std::vector<std::string> unresolved_symbol_errors;
-    std::map<uint32_t, std::string> external_function_relocations;
 
     // loop detection for recursive subprogram resolution
     std::map<const RawProgram*, bool> resolved_subprograms;
@@ -955,10 +954,8 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
     // Calls to external helper functions are flagged as local calls with an undefined section index (0).
     if (instruction_to_relocate.opcode == INST_OP_CALL && instruction_to_relocate.src == INST_CALL_LOCAL &&
         symbol_section_index == 0) {
-        // To prevent the eBPF verifier from attempting to resolve this as a local function,
-        // change the instruction to a call to a static helper and add it to the external function map.
         instruction_to_relocate.src = INST_CALL_STATIC_HELPER;
-        external_function_relocations[location] = symbol_name;
+        instruction_to_relocate.imm = parse_params.platform->get_helper_index(symbol_name);
         return true;
     }
 
@@ -1065,7 +1062,6 @@ void ProgramReader::read_programs() {
                 process_relocations(instructions, ELFIO::const_relocation_section_accessor{reader, reloc_sec}, sec_name,
                                     offset, size);
             }
-
             raw_programs.emplace_back(RawProgram{
                 parse_params.path,
                 sec_name,
@@ -1073,9 +1069,7 @@ void ProgramReader::read_programs() {
                 name,
                 std::move(instructions),
                 {parse_params.platform, global.map_descriptors, prog_type},
-                external_function_relocations,
             });
-            external_function_relocations.clear();
             offset += size;
         }
     }

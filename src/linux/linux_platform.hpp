@@ -6,7 +6,6 @@
 
 namespace prevail {
 EbpfHelperPrototype get_helper_prototype_linux(int32_t n);
-EbpfHelperPrototype get_helper_prototype_by_name_linux(const std::string& name, int32_t& out_id);
 bool is_helper_usable_linux(int32_t n);
-bool is_helper_usable_by_name_linux(const std::string& name);
+int32_t get_helper_index_linux(const std::string& name);
 } // namespace prevail

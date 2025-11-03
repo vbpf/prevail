@@ -18,10 +18,10 @@ typedef EbpfProgramType (*ebpf_get_program_type_fn)(const std::string& section, 
 typedef EbpfMapType (*ebpf_get_map_type_fn)(uint32_t platform_specific_type);
 
 typedef EbpfHelperPrototype (*ebpf_get_helper_prototype_fn)(int32_t n);
-typedef EbpfHelperPrototype (*ebpf_get_helper_prototype_by_name_fn)(const std::string& name, int32_t& out_id);
 
 typedef bool (*ebpf_is_helper_usable_fn)(int32_t n);
-typedef bool (*ebpf_is_helper_usable_by_name_fn)(const std::string& name);
+
+typedef int32_t (*ebpf_get_helper_index_fn)(const std::string& name);
 
 #if 0
 // Return an fd for a map created with the given parameters.
@@ -40,9 +40,8 @@ typedef EbpfMapDescriptor& (*ebpf_get_map_descriptor_fn)(int map_fd);
 struct ebpf_platform_t {
     ebpf_get_program_type_fn get_program_type;
     ebpf_get_helper_prototype_fn get_helper_prototype;
-    ebpf_get_helper_prototype_by_name_fn get_helper_prototype_by_name;
     ebpf_is_helper_usable_fn is_helper_usable;
-    ebpf_is_helper_usable_by_name_fn is_helper_usable_by_name;
+    ebpf_get_helper_index_fn get_helper_index;
 
     // Size of a record in the "maps" section of an ELF file.
     size_t map_record_size;

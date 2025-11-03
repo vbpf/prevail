@@ -241,9 +241,8 @@ EbpfMapDescriptor& get_map_descriptor_linux(const int map_fd) {
 const ebpf_platform_t g_ebpf_platform_linux = {
     get_program_type_linux,
     get_helper_prototype_linux,
-    get_helper_prototype_by_name_linux,
     is_helper_usable_linux,
-    is_helper_usable_by_name_linux,
+    get_helper_index_linux,
     sizeof(BpfLoadMapDef),
     parse_maps_section_linux,
     get_map_descriptor_linux,
