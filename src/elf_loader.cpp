@@ -959,7 +959,7 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
         // Patch instruction to call static helper if found.
         if (helper_index >= 0) {
             instruction_to_relocate.src = INST_CALL_STATIC_HELPER;
-            instruction_to_relocate.imm = parse_params.platform->get_helper_index(symbol_name);
+            instruction_to_relocate.imm = helper_index;
             return true;
         }
     }
