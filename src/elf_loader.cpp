@@ -954,9 +954,14 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
     // Calls to external helper functions are flagged as local calls with an undefined section index (0).
     if (instruction_to_relocate.opcode == INST_OP_CALL && instruction_to_relocate.src == INST_CALL_LOCAL &&
         symbol_section_index == 0) {
-        instruction_to_relocate.src = INST_CALL_STATIC_HELPER;
-        instruction_to_relocate.imm = parse_params.platform->get_helper_index(symbol_name);
-        return true;
+        int32_t helper_index = parse_params.platform->get_helper_index(symbol_name);
+
+        // Patch instruction to call static helper if found.
+        if (helper_index >= 0) {
+            instruction_to_relocate.src = INST_CALL_STATIC_HELPER;
+            instruction_to_relocate.imm = parse_params.platform->get_helper_index(symbol_name);
+            return true;
+        }
     }
 
     // Handle local function calls - queue for post-processing

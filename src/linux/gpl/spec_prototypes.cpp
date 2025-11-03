@@ -2764,7 +2764,7 @@ int32_t get_helper_index_linux(const std::string& name) {
             return i;
         }
     }
-    throw std::runtime_error("Helper function '" + name + "' not found");
+    return -1;
 }
 
 EbpfHelperPrototype get_helper_prototype_linux(const int32_t n) {
