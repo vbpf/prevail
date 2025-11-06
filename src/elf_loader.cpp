@@ -1134,6 +1134,16 @@ std::vector<RawProgram> read_elf(std::istream& input_stream, const std::string& 
     auto global = extract_global_data(params, reader, symbols);
     ProgramReader program_reader{params, reader, symbols, global};
     program_reader.read_programs();
+
+    // Return the desired_program, or raw_programs
+    if (desired_program.empty()) {
+        return std::move(program_reader.raw_programs);
+    }
+    for (RawProgram& cur : program_reader.raw_programs) {
+        if (cur.function_name == desired_program) {
+            return std::vector<RawProgram>{std::move(cur)};
+        }
+    }
     return std::move(program_reader.raw_programs);
 }
 

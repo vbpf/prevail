@@ -57,19 +57,6 @@ static std::set<std::string> get_conformance_group_names() {
     return result;
 }
 
-static std::optional<RawProgram> find_program(vector<RawProgram>& raw_progs, const std::string& desired_program) {
-    if (desired_program.empty() && raw_progs.size() == 1) {
-        // Select the last program section.
-        return raw_progs.back();
-    }
-    for (RawProgram current_program : raw_progs) {
-        if (current_program.function_name == desired_program) {
-            return current_program;
-        }
-    }
-    return {};
-}
-
 int main(int argc, char** argv) {
     // Always call ebpf_verifier_clear_thread_local_state on scope exit.
     ThreadLocalGuard thread_local_state_guard;
@@ -196,8 +183,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    std::optional<RawProgram> found_prog = find_program(raw_progs, desired_program);
-    if (list || !found_prog) {
+    if (list || raw_progs.size() != 1) {
         if (!list) {
             std::cout << "please specify a program\n";
             std::cout << "available programs:\n";
@@ -213,7 +199,7 @@ int main(int argc, char** argv) {
         std::cout << "\n";
         return list ? 0 : 64;
     }
-    const RawProgram& raw_prog = *found_prog;
+    const RawProgram& raw_prog = raw_progs.back();
 
     // Convert the raw program section to a set of instructions.
     std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, ebpf_verifier_options);
