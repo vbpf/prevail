@@ -863,7 +863,7 @@ std::string ProgramReader::append_subprograms(RawProgram& prog) {
                 }
                 const size_t base = subprogram_offsets[reloc.target_function_name];
 
-                // Appen subprogram to program
+                // Append subprogram to program
                 prog.prog.insert(prog.prog.end(), sub->prog.begin(), sub->prog.end());
                 if (parse_params.options.verbosity_opts.print_line_info) {
                     for (const auto& [k, info] : sub->info.line_info) {
@@ -1143,7 +1143,7 @@ std::vector<RawProgram> read_elf(std::istream& input_stream, const std::string& 
     for (RawProgram& cur : program_reader.raw_programs) {
         if (cur.function_name == desired_program) {
             res.emplace_back(std::move(cur));
-            return cur;
+            return res;
         }
     }
     return std::move(program_reader.raw_programs);
