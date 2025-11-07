@@ -8,14 +8,14 @@
 
 using namespace prevail;
 
-#define FAIL_LOAD_ELF(dirname, filename, sectionname)                                                \
-    TEST_CASE("Try loading nonexisting program: " dirname "/" filename, "[elf]") {                   \
-        try {                                                                                        \
-            thread_local_options = {};                                                               \
+#define FAIL_LOAD_ELF(dirname, filename, sectionname)                                                    \
+    TEST_CASE("Try loading nonexisting program: " dirname "/" filename, "[elf]") {                       \
+        try {                                                                                            \
+            thread_local_options = {};                                                                   \
             read_elf("ebpf-samples/" dirname "/" filename, sectionname, "", {}, &g_ebpf_platform_linux); \
-            REQUIRE(false);                                                                          \
-        } catch (const std::runtime_error&) {                                                        \
-        }                                                                                            \
+            REQUIRE(false);                                                                              \
+        } catch (const std::runtime_error&) {                                                            \
+        }                                                                                                \
     }
 
 // Some intentional failures
@@ -24,14 +24,14 @@ FAIL_LOAD_ELF("cilium", "bpf_lxc.o", "not-found")
 FAIL_LOAD_ELF("build", "badrelo.o", ".text")
 FAIL_LOAD_ELF("invalid", "badsymsize.o", "xdp_redirect_map")
 
-#define FAIL_UNMARSHAL(dirname, filename, sectionname)                                                            \
-    TEST_CASE("Try unmarshalling bad program: " dirname "/" filename " " sectionname, "[unmarshal]") {            \
-        thread_local_options = {};                                                                                \
+#define FAIL_UNMARSHAL(dirname, filename, sectionname)                                                                \
+    TEST_CASE("Try unmarshalling bad program: " dirname "/" filename " " sectionname, "[unmarshal]") {                \
+        thread_local_options = {};                                                                                    \
         auto raw_progs = read_elf("ebpf-samples/" dirname "/" filename, sectionname, "", {}, &g_ebpf_platform_linux); \
-        REQUIRE(raw_progs.size() == 1);                                                                           \
-        const RawProgram& raw_prog = raw_progs.back();                                                            \
-        std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, thread_local_options);      \
-        REQUIRE(std::holds_alternative<std::string>(prog_or_error));                                              \
+        REQUIRE(raw_progs.size() == 1);                                                                               \
+        const RawProgram& raw_prog = raw_progs.back();                                                                \
+        std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, thread_local_options);          \
+        REQUIRE(std::holds_alternative<std::string>(prog_or_error));                                                  \
     }
 
 // Some intentional unmarshal failures
@@ -42,7 +42,8 @@ FAIL_UNMARSHAL("invalid", "invalid-lddw.o", ".text")
 #define VERIFY_PROGRAM(dirname, filename, section_name, program_name, _options, platform, should_pass, count) \
     do {                                                                                                      \
         thread_local_options = _options;                                                                      \
-        const auto raw_progs = read_elf("ebpf-samples/" dirname "/" filename, section_name, "", thread_local_options, platform); \
+        const auto raw_progs =                                                                                \
+            read_elf("ebpf-samples/" dirname "/" filename, section_name, "", thread_local_options, platform); \
         REQUIRE(raw_progs.size() == count);                                                                   \
         for (const auto& raw_prog : raw_progs) {                                                              \
             if (count == 1 || raw_prog.function_name == program_name) {                                       \
@@ -118,15 +119,15 @@ FAIL_UNMARSHAL("invalid", "invalid-lddw.o", ".text")
         VERIFY_SECTION(project, filename, section, {}, &g_ebpf_platform_linux, false);                             \
     }
 
-#define TEST_LEGACY(dirname, filename, sectionname)                                                  \
-    TEST_CASE("Fail unmarshalling: " dirname "/" filename " " sectionname, "[unmarshal]") {          \
-        ebpf_platform_t platform = g_ebpf_platform_linux;                                            \
-        platform.supported_conformance_groups &= ~bpf_conformance_groups_t::packet;                  \
+#define TEST_LEGACY(dirname, filename, sectionname)                                                      \
+    TEST_CASE("Fail unmarshalling: " dirname "/" filename " " sectionname, "[unmarshal]") {              \
+        ebpf_platform_t platform = g_ebpf_platform_linux;                                                \
+        platform.supported_conformance_groups &= ~bpf_conformance_groups_t::packet;                      \
         auto raw_progs = read_elf("ebpf-samples/" dirname "/" filename, sectionname, "", {}, &platform); \
-        REQUIRE(raw_progs.size() == 1);                                                              \
-        RawProgram raw_prog = raw_progs.back();                                                      \
-        std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, {}); \
-        REQUIRE(std::holds_alternative<std::string>(prog_or_error));                                 \
+        REQUIRE(raw_progs.size() == 1);                                                                  \
+        RawProgram raw_prog = raw_progs.back();                                                          \
+        std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, {});               \
+        REQUIRE(std::holds_alternative<std::string>(prog_or_error));                                     \
     }
 
 #define TEST_SECTION_LEGACY(dirname, filename, sectionname) \
