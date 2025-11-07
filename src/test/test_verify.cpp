@@ -42,7 +42,7 @@ FAIL_UNMARSHAL("invalid", "invalid-lddw.o", ".text")
 #define VERIFY_PROGRAM(dirname, filename, section_name, program_name, _options, platform, should_pass, count) \
     do {                                                                                                      \
         thread_local_options = _options;                                                                      \
-        const auto raw_progs = read_elf("ebpf-samples/" dirname "/" filename, section_name, "", {}, platform);    \
+        const auto raw_progs = read_elf("ebpf-samples/" dirname "/" filename, section_name, "", thread_local_options, platform); \
         REQUIRE(raw_progs.size() == count);                                                                   \
         for (const auto& raw_prog : raw_progs) {                                                              \
             if (count == 1 || raw_prog.function_name == program_name) {                                       \
