@@ -15,8 +15,8 @@ using std::vector;
 
 namespace prevail {
 class AssertExtractor {
-    ProgramInfo info;
-    std::optional<Label> current_label; ///< Pre-simplification label this assert is part of.
+    const ProgramInfo& info;
+    const std::optional<Label>& current_label; ///< Pre-simplification label this assert is part of.
 
     static Imm imm(const Value& v) { return std::get<Imm>(v); }
 
@@ -35,8 +35,8 @@ class AssertExtractor {
     }
 
   public:
-    explicit AssertExtractor(ProgramInfo info, std::optional<Label> label)
-        : info{std::move(info)}, current_label(std::move(label)) {}
+    explicit AssertExtractor(const ProgramInfo& info, const std::optional<Label>& label)
+        : info{info}, current_label{label} {}
 
     vector<Assertion> operator()(const Undefined&) const {
         // assert(false);
@@ -121,10 +121,10 @@ class AssertExtractor {
 
     [[nodiscard]]
     vector<Assertion> explicate(const Condition& cond) const {
-        if (info.type.is_privileged) {
-            return {};
-        }
         vector<Assertion> res;
+        if (info.type.is_privileged) {
+            return res;
+        }
         if (const auto pimm = std::get_if<Imm>(&cond.right)) {
             if (pimm->v != 0) {
                 // no need to check for valid access, it must be a number
@@ -258,12 +258,10 @@ class AssertExtractor {
         }
         case Bin::Op::SUB: {
             if (const auto reg = std::get_if<Reg>(&ins.v)) {
-                vector<Assertion> res;
                 // disallow map-map since same type does not mean same offset
                 // TODO: map identities
-                res.emplace_back(TypeConstraint{ins.dst, TypeGroup::ptr_or_num});
-                res.emplace_back(Comparable{.r1 = ins.dst, .r2 = *reg, .or_r2_is_number = true});
-                return res;
+                return {TypeConstraint{ins.dst, TypeGroup::ptr_or_num},
+                        Comparable{.r1 = ins.dst, .r2 = *reg, .or_r2_is_number = true}};
             }
             return {Assertion{TypeConstraint{ins.dst, TypeGroup::ptr_or_num}}};
         }
@@ -297,7 +295,7 @@ class AssertExtractor {
 /// compare numbers and pointers, or pointers to potentially distinct memory
 /// regions. The verifier will use these assertions to treat the program as
 /// unsafe unless it can prove that the assertions can never fail.
-vector<Assertion> get_assertions(Instruction ins, const ProgramInfo& info, const std::optional<Label>& label) {
+vector<Assertion> get_assertions(const Instruction& ins, const ProgramInfo& info, const std::optional<Label>& label) {
     return std::visit(AssertExtractor{info, label}, ins);
 }
 } // namespace prevail

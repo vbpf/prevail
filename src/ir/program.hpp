@@ -62,7 +62,8 @@ class InvalidControlFlow final : public std::runtime_error {
     explicit InvalidControlFlow(const std::string& what) : std::runtime_error(what) {}
 };
 
-std::vector<Assertion> get_assertions(Instruction ins, const ProgramInfo& info, const std::optional<Label>& label);
+std::vector<Assertion> get_assertions(const Instruction& ins, const ProgramInfo& info,
+                                      const std::optional<Label>& label);
 
 std::vector<std::string> stats_headers();
 std::map<std::string, int> collect_stats(const Program& prog);
