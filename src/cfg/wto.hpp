@@ -91,9 +91,37 @@ class WtoCycle final {
         return _components.crbegin();
     }
 
+    /**
+     * @brief Obtain a reverse-end iterator for iterating over the components.
+     *
+     * Provides a const reverse iterator that denotes the end of reverse iteration
+     * over the WTO partition's components.
+     *
+     * @return WtoPartition::const_reverse_iterator Iterator positioned past the
+     *         last element for reverse iteration (equivalent to `crend()`).
+     */
     [[nodiscard]]
     WtoPartition::const_reverse_iterator end() const {
         return _components.crend();
+    }
+
+    /**
+     * @brief Invoke a callable for every loop head contained in this cycle (recursively).
+     *
+     * Calls the provided callable for the head of each nested loop component; traversal
+     * descends into nested cycles and applies the callable to their heads as well.
+     *
+     * @param f Callable invoked with a `Label` argument for each loop head.
+     *
+     * The order in which heads are visited is not specified.
+     */
+    void for_each_loop_head(auto&& f) const {
+        for (const auto& component : *this) {
+            if (const auto pc = std::get_if<std::shared_ptr<WtoCycle>>(&component)) {
+                f((*pc)->head());
+                (*pc)->for_each_loop_head(f);
+            }
+        }
     }
 };
 
@@ -135,16 +163,20 @@ class Wto final {
     const WtoNesting& nesting(const Label& label) const;
 
     /**
-     * Visit the heads of all loops in the WTO.
+     * @brief Invoke a callable for every loop head contained in this cycle (recursively).
      *
-     * @param f The callable to be invoked for each loop head.
+     * Calls the provided callable for the head of each nested loop component; traversal
+     * descends into nested cycles and applies the callable to their heads as well.
      *
-     * The order in which the heads are visited is not specified.
+     * @param f Callable invoked with a `Label` argument for each loop head.
+     *
+     * The order in which heads are visited is not specified.
      */
     void for_each_loop_head(auto&& f) const {
         for (const auto& component : *this) {
             if (const auto pc = std::get_if<std::shared_ptr<WtoCycle>>(&component)) {
                 f((*pc)->head());
+                (*pc)->for_each_loop_head(f);
             }
         }
     }

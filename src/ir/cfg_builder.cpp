@@ -287,6 +287,21 @@ static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const bool
     return builder;
 }
 
+/**
+ * @brief Construct a Program from a linear instruction sequence.
+ *
+ * Builds a deterministic control-flow graph from the provided instruction sequence,
+ * optionally inserts loop-counter labels at loop entry points when termination checking
+ * is enabled, and attaches verification assertions to each CFG label.
+ *
+ * This function also sets thread-local program info and verifier options used during
+ * construction.
+ *
+ * @param inst_seq Sequence of instructions to convert into a Program CFG.
+ * @param info Program metadata and analysis hints used to generate assertions.
+ * @param options Verifier and CFG construction options (controls termination checks and CFG behavior).
+ * @return Program The constructed Program containing the CFG, any inserted loop counters, and per-label assertions.
+ */
 Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo& info,
                                const ebpf_verifier_options_t& options) {
     thread_local_program_info.set(info);
@@ -309,9 +324,27 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
     for (const auto& label : builder.prog.labels()) {
         builder.set_assertions(label, get_assertions(builder.prog.instruction_at(label), info, label));
     }
-    return builder.prog;
+    return std::move(builder.prog);
 }
 
+/**
+ * @brief Collects basic blocks from a control-flow graph.
+ *
+ * When `simplify` is false, returns one BasicBlock per CFG label excluding
+ * the entry and exit labels. When `simplify` is true, performs a worklist-based
+ * reduction that merges linear single-predecessor/single-successor chains into
+ * contiguous basic blocks:
+ * - Skips labels that have in-degree 1 and exactly one sibling.
+ * - Starts a block at labels that are not simple chain members and extends it
+ *   while the sole successor is unseen, not the exit, and has in-degree 1.
+ * - If a block begins at the entry label, its initial timestamp vector is
+ *   cleared to reflect the entry's synthetic/undefined instruction.
+ *
+ * @param cfg The control-flow graph to analyze.
+ * @param simplify If true, perform chain-merging simplification; otherwise
+ *                 collect a separate BasicBlock for each non-entry/non-exit label.
+ * @return std::set<BasicBlock> The set of collected basic blocks.
+ */
 std::set<BasicBlock> BasicBlock::collect_basic_blocks(const Cfg& cfg, const bool simplify) {
     if (!simplify) {
         std::set<BasicBlock> res;
