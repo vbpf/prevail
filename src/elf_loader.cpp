@@ -1128,6 +1128,7 @@ EbpfMapDescriptor* find_map_descriptor(const int map_fd) {
 std::vector<RawProgram> read_elf(std::istream& input_stream, const std::string& path,
                                  const std::string& desired_section, const std::string& desired_program,
                                  const ebpf_verifier_options_t& options, const ebpf_platform_t* platform) {
+    std::vector<RawProgram> res;
     parse_params_t params{path, options, platform, desired_section};
     auto reader = load_elf(input_stream, path);
     auto symbols = read_and_validate_symbol_section(reader, path);
@@ -1141,7 +1142,8 @@ std::vector<RawProgram> read_elf(std::istream& input_stream, const std::string& 
     }
     for (RawProgram& cur : program_reader.raw_programs) {
         if (cur.function_name == desired_program) {
-            return std::vector<RawProgram>{std::move(cur)};
+            res.emplace_back(std::move(cur));
+            return cur;
         }
     }
     return std::move(program_reader.raw_programs);
