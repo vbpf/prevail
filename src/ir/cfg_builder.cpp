@@ -309,7 +309,7 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
     for (const auto& label : builder.prog.labels()) {
         builder.set_assertions(label, get_assertions(builder.prog.instruction_at(label), info, label));
     }
-    return builder.prog;
+    return std::move(builder.prog);
 }
 
 std::set<BasicBlock> BasicBlock::collect_basic_blocks(const Cfg& cfg, const bool simplify) {

@@ -95,6 +95,15 @@ class WtoCycle final {
     WtoPartition::const_reverse_iterator end() const {
         return _components.crend();
     }
+
+    void for_each_loop_head(auto&& f) const {
+        for (const auto& component : *this) {
+            if (const auto pc = std::get_if<std::shared_ptr<WtoCycle>>(&component)) {
+                f((*pc)->head());
+                (*pc)->for_each_loop_head(f);
+            }
+        }
+    }
 };
 
 // Check if node is a member of the wto component.
@@ -145,6 +154,7 @@ class Wto final {
         for (const auto& component : *this) {
             if (const auto pc = std::get_if<std::shared_ptr<WtoCycle>>(&component)) {
                 f((*pc)->head());
+                (*pc)->for_each_loop_head(f);
             }
         }
     }
