@@ -57,19 +57,6 @@ static std::set<std::string> get_conformance_group_names() {
     return result;
 }
 
-static std::optional<RawProgram> find_program(vector<RawProgram>& raw_progs, const std::string& desired_program) {
-    if (desired_program.empty() && raw_progs.size() == 1) {
-        // Select the last program section.
-        return raw_progs.back();
-    }
-    for (RawProgram current_program : raw_progs) {
-        if (current_program.function_name == desired_program) {
-            return current_program;
-        }
-    }
-    return {};
-}
-
 int main(int argc, char** argv) {
     // Always call ebpf_verifier_clear_thread_local_state on scope exit.
     ThreadLocalGuard thread_local_state_guard;
@@ -190,14 +177,13 @@ int main(int argc, char** argv) {
     // Read a set of raw program sections from an ELF file.
     vector<RawProgram> raw_progs;
     try {
-        raw_progs = read_elf(filename, desired_section, ebpf_verifier_options, &platform);
+        raw_progs = read_elf(filename, desired_section, desired_program, ebpf_verifier_options, &platform);
     } catch (std::runtime_error& e) {
         std::cerr << "error: " << e.what() << std::endl;
         return 1;
     }
 
-    std::optional<RawProgram> found_prog = find_program(raw_progs, desired_program);
-    if (list || !found_prog) {
+    if (list || raw_progs.size() != 1) {
         if (!list) {
             std::cout << "please specify a program\n";
             std::cout << "available programs:\n";
@@ -205,7 +191,7 @@ int main(int argc, char** argv) {
         if (!desired_section.empty() && raw_progs.empty()) {
             // We could not find the desired program, so get the full list
             // of possibilities.
-            raw_progs = read_elf(filename, string(), ebpf_verifier_options, &platform);
+            raw_progs = read_elf(filename, string(), string(), ebpf_verifier_options, &platform);
         }
         for (const RawProgram& raw_prog : raw_progs) {
             std::cout << "section=" << raw_prog.section_name << " function=" << raw_prog.function_name << std::endl;
@@ -213,10 +199,10 @@ int main(int argc, char** argv) {
         std::cout << "\n";
         return list ? 0 : 64;
     }
-    const RawProgram& raw_prog = *found_prog;
+    const RawProgram& raw_prog = raw_progs.back();
 
     // Convert the raw program section to a set of instructions.
-    std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog);
+    std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, ebpf_verifier_options);
     if (auto prog = std::get_if<string>(&prog_or_error)) {
         std::cout << "unmarshaling error at " << *prog << "\n";
         return 1;

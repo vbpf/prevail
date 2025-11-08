@@ -414,8 +414,8 @@ struct Unmarshaller {
     }
 
     [[nodiscard]]
-    auto makeLddw(const EbpfInst inst, const int32_t next_imm, const vector<EbpfInst>& insts, const Pc pc) const
-        -> Instruction {
+    auto makeLddw(const EbpfInst inst, const int32_t next_imm, const vector<EbpfInst>& insts,
+                  const Pc pc) const -> Instruction {
         if (!info.platform->supports_group(bpf_conformance_groups_t::base64)) {
             throw InvalidInstruction{pc, inst.opcode};
         }
@@ -710,7 +710,8 @@ struct Unmarshaller {
         }
     }
 
-    vector<LabeledInstruction> unmarshal(vector<EbpfInst> const& insts) {
+    vector<LabeledInstruction> unmarshal(vector<EbpfInst> const& insts,
+                                         const prevail::ebpf_verifier_options_t& options) {
         vector<LabeledInstruction> prog;
         int exit_count = 0;
         if (insts.empty()) {
@@ -787,7 +788,7 @@ struct Unmarshaller {
 
             std::optional<btf_line_info_t> current_line_info = {};
 
-            if (pc < info.line_info.size()) {
+            if (options.verbosity_opts.print_line_info && pc < info.line_info.size()) {
                 current_line_info = info.line_info.at(pc);
             }
 
@@ -807,10 +808,11 @@ struct Unmarshaller {
     }
 };
 
-std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog, vector<vector<string>>& notes) {
+std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog, vector<vector<string>>& notes,
+                                                    const prevail::ebpf_verifier_options_t& options) {
     thread_local_program_info = raw_prog.info;
     try {
-        return Unmarshaller{notes, raw_prog.info}.unmarshal(raw_prog.prog);
+        return Unmarshaller{notes, raw_prog.info}.unmarshal(raw_prog.prog, options);
     } catch (InvalidInstruction& arg) {
         std::ostringstream ss;
         ss << arg.pc << ": " << arg.what() << "\n";
@@ -818,9 +820,10 @@ std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog, 
     }
 }
 
-std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog) {
+std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog,
+                                                    const prevail::ebpf_verifier_options_t& options) {
     vector<vector<string>> notes;
-    return unmarshal(raw_prog, notes);
+    return unmarshal(raw_prog, notes, options);
 }
 
 Call make_call(const int imm, const ebpf_platform_t& platform) {

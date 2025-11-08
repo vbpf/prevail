@@ -29,10 +29,11 @@ EbpfMapDescriptor* find_map_descriptor(int map_fd);
 /// @param platform pointer handling platform-specific behavior.
 /// @return a vector of parsed and relocated RawProgram structs.
 std::vector<RawProgram> read_elf(std::istream& input_stream, const std::string& path,
-                                 const std::string& desired_section, const ebpf_verifier_options_t& options,
-                                 const ebpf_platform_t* platform);
+                                 const std::string& desired_section, const std::string& desired_program,
+                                 const ebpf_verifier_options_t& options, const ebpf_platform_t* platform);
 
 std::vector<RawProgram> read_elf(const std::string& path, const std::string& desired_section,
-                                 const ebpf_verifier_options_t& options, const ebpf_platform_t* platform);
+                                 const std::string& desired_program, const ebpf_verifier_options_t& options,
+                                 const ebpf_platform_t* platform);
 
 } // namespace prevail
