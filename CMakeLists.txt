@@ -11,11 +11,11 @@ project(prevail)
 
 include(FetchContent)
 
-if (EXISTS "${PROJECT_SOURCE_DIR}/.git" AND NOT CMAKE_CROSSCOMPILING)
+if (IS_DIRECTORY "${PROJECT_SOURCE_DIR}/.git" AND NOT CMAKE_CROSSCOMPILING)
   file(COPY "${CMAKE_SOURCE_DIR}/scripts/pre-commit" "${CMAKE_SOURCE_DIR}/scripts/commit-msg" DESTINATION "${PROJECT_SOURCE_DIR}/.git/hooks")
-  option(prevail_ENABLE_TESTS "Build tests" ON)
+  option(VERIFIER_ENABLE_TESTS "Build tests" ON)
 else ()
-  option(prevail_ENABLE_TESTS "Build tests" OFF)
+    option(VERIFIER_ENABLE_TESTS "Build tests" OFF)
 endif ()
 
 message("Building tests: ${prevail_ENABLE_TESTS}")
