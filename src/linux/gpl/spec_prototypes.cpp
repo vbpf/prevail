@@ -2756,6 +2756,17 @@ bool is_helper_usable_linux(const int32_t n) {
     return true;
 }
 
+int32_t get_helper_index_linux(const std::string& name) {
+    for (size_t i = 0; i < std::size(prototypes); ++i) {
+        // Entries in prototypes are missing the "bpf_" prefix
+        std::string full_name = std::string("bpf_") + prototypes[i].name;
+        if (full_name == name) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 EbpfHelperPrototype get_helper_prototype_linux(const int32_t n) {
     if (!is_helper_usable_linux(n)) {
         throw std::exception();
