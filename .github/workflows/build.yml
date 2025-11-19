@@ -6,6 +6,13 @@ name: CPP CI
     paths-ignore:
       - '**.md'
       - 'Dockerfile'
+      - '.github/dependabot.yml'
+      - '.github/workflows/coverage.yml'
+      - '.github/workflows/codeql-analysis.yml'
+      - '.github/workflows/validate-yaml.yml'
+      - 'docs/**'
+      - 'scripts/pre-commit'
+      - 'scripts/commit-msg'
 
 concurrency:
   group: build-${{ github.event.pull_request.number || github.sha }}
@@ -29,6 +36,16 @@ jobs:
       - name: Verify conformance tests cover all .data files
         if: ${{ matrix.target == 'tests' && matrix.configurations == 'Release' }}
         run: python3 scripts/check_conformance_list.py
+
+      - name: Cache apt packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            /var/cache/apt/archives
+            /var/lib/apt/lists
+          key: apt-${{ runner.os }}-${{ hashFiles('.github/workflows/*.yml') }}
+          restore-keys: |
+            apt-${{ runner.os }}-
 
       - name: Install dependencies (Ubuntu)
         run: |
@@ -77,7 +94,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}\build\packages
-          key: boost-${{ runner.os }}
+          key: boost-${{ runner.os }}-${{ hashFiles('.github/workflows/*.yml') }}
+          restore-keys: |
+            boost-${{ runner.os }}-
 
       - name: Configure CMake
         shell: pwsh
