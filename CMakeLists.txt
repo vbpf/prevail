@@ -5,7 +5,9 @@ cmake_minimum_required(VERSION 3.24)
 if (POLICY CMP0167)
   cmake_policy(SET CMP0167 NEW)
 endif ()
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+if (NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+endif()
 
 project(prevail)
 
