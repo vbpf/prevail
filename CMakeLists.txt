@@ -57,17 +57,9 @@ if (MSVC)
     "Add the configurations that we need" FORCE)
 
   # Derive base debug flags and add sanitizer instrumentation
-  set(CMAKE_C_FLAGS_FUZZERDEBUG
-    "${CMAKE_C_FLAGS_DEBUG} /fsanitize=address /fsanitize=fuzzer "
-    "/fsanitize-coverage=inline-bool-flag /fsanitize-coverage=edge "
-    "/fsanitize-coverage=trace-cmp /fsanitize-coverage=trace-div "
-    "/ZH:SHA_256")
+  set(CMAKE_C_FLAGS_FUZZERDEBUG "${CMAKE_C_FLAGS_DEBUG} /fsanitize=address /fsanitize=fuzzer /fsanitize-coverage=inline-bool-flag /fsanitize-coverage=edge /fsanitize-coverage=trace-cmp /fsanitize-coverage=trace-div /ZH:SHA_256")
 
-  set(CMAKE_CXX_FLAGS_FUZZERDEBUG
-    "${CMAKE_CXX_FLAGS_DEBUG} /fsanitize=address /fsanitize=fuzzer "
-    "/fsanitize-coverage=inline-bool-flag /fsanitize-coverage=edge "
-    "/fsanitize-coverage=trace-cmp /fsanitize-coverage=trace-div "
-    "/ZH:SHA_256")
+  set(CMAKE_CXX_FLAGS_FUZZERDEBUG "${CMAKE_CXX_FLAGS_DEBUG} /fsanitize=address /fsanitize=fuzzer /fsanitize-coverage=inline-bool-flag /fsanitize-coverage=edge /fsanitize-coverage=trace-cmp /fsanitize-coverage=trace-div /ZH:SHA_256")
 
   # Propagate linker flags (same as Debug)
   set(CMAKE_EXE_LINKER_FLAGS_FUZZERDEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG}")
