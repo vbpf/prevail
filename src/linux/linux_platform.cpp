@@ -242,6 +242,7 @@ const ebpf_platform_t g_ebpf_platform_linux = {
     get_program_type_linux,
     get_helper_prototype_linux,
     is_helper_usable_linux,
+    get_helper_index_linux,
     sizeof(BpfLoadMapDef),
     parse_maps_section_linux,
     get_map_descriptor_linux,
