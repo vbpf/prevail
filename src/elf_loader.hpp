@@ -25,6 +25,7 @@ EbpfMapDescriptor* find_map_descriptor(int map_fd);
 /// @param input_stream The input stream to read the ELF file from.
 /// @param path The path to the ELF file (for error messages).
 /// @param desired_section The section to read programs from.
+/// @param desired_program The specific program to read (or empty string for all programs).
 /// @param options Verifier options (control verbosity, platform behavior, etc.).
 /// @param platform pointer handling platform-specific behavior.
 /// @return a vector of parsed and relocated RawProgram structs.

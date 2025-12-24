@@ -1,0 +1,12 @@
+# Copyright (c) Prevail Verifier contributors.
+# SPDX-License-Identifier: MIT
+
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(Boost REQUIRED)
+find_dependency(Microsoft.GSL REQUIRED)
+
+include("${CMAKE_CURRENT_LIST_DIR}/prevailTargets.cmake")
+
+check_required_components(prevail)
