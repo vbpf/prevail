@@ -5,7 +5,7 @@
 #include <filesystem>
 #include <string>
 
-#include "bpf_conformance/include/bpf_conformance.h"
+#include <bpf_conformance/bpf_conformance.h>
 
 #ifndef CONFORMANCE_CHECK_PATH
 #ifdef _WIN32

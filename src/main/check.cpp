@@ -1,8 +1,8 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
 #include <iostream>
-#include <vector>
 #include <ranges>
+#include <vector>
 
 #include "ebpf_verifier.hpp"
 #ifdef _WIN32
@@ -13,7 +13,7 @@
 #include "linux_verifier.hpp"
 
 // Avoid affecting other headers by macros.
-#include "CLI11/CLI11.hpp"
+#include <CLI11/CLI11.hpp>
 
 using std::string;
 using std::vector;

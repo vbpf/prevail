@@ -1,0 +1,52 @@
+# Copyright (c) Prevail Verifier contributors.
+# SPDX-License-Identifier: MIT
+
+# Example GitHub Actions workflow to test prevail installation
+# Rename to test-installation.yml to enable
+
+name: Test Installation
+
+on:
+  push:
+    branches: [ main, lib ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-install:
+    name: Test Install on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup CMake
+      uses: lukka/get-cmake@latest
+
+    - name: Run Installation Test (Bash)
+      if: runner.os != 'Windows'
+      run: |
+        chmod +x scripts/test_install.sh
+        ./scripts/test_install.sh
+
+    - name: Run Installation Test (PowerShell)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        .\scripts\test_install.ps1
+
+    - name: Upload installation artifacts on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: install-failure-${{ matrix.os }}
+        path: |
+          test_install_output/
+          build_install_test/CMakeFiles/CMakeError.log
+          build_install_test/CMakeFiles/CMakeOutput.log

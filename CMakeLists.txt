@@ -7,9 +7,12 @@ if (POLICY CMP0167)
 endif ()
 if (NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
   set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
-endif()
+endif ()
 
-project(prevail)
+project(prevail VERSION 0.1.0)
+
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
 include(FetchContent)
 
@@ -17,7 +20,7 @@ if (IS_DIRECTORY "${PROJECT_SOURCE_DIR}/.git" AND NOT CMAKE_CROSSCOMPILING)
   file(COPY "${CMAKE_SOURCE_DIR}/scripts/pre-commit" "${CMAKE_SOURCE_DIR}/scripts/commit-msg" DESTINATION "${PROJECT_SOURCE_DIR}/.git/hooks")
   option(prevail_ENABLE_TESTS "Build tests" ON)
 else ()
-    option(prevail_ENABLE_TESTS "Build tests" OFF)
+  option(prevail_ENABLE_TESTS "Build tests" OFF)
 endif ()
 
 message("Building tests: ${prevail_ENABLE_TESTS}")
@@ -71,6 +74,8 @@ FetchContent_Declare(GSL
   GIT_TAG "v4.2.0"
   GIT_SHALLOW ON
 )
+set(GSL_INSTALL ON CACHE BOOL "Force GSL install to vendor it with prevail" FORCE)
+set(GSL_TEST OFF CACHE BOOL "Skip GSL tests when building as a dependency" FORCE)
 FetchContent_MakeAvailable(GSL)
 
 if (prevail_ENABLE_TESTS)
@@ -91,15 +96,52 @@ list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${CMAKE_SOURCE_DIR}/src/main/.*")
 list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${CMAKE_SOURCE_DIR}/src/test/.*")
 
 add_library(prevail ${prevail_LIB_SRC})
-
+# 1. Standard library include paths
 target_include_directories(prevail PUBLIC
-  ${CMAKE_SOURCE_DIR}/src
+  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
+
+# 2. Setup the bpf_conformance shim for local development
+# This allows #include <bpf_conformance/bpf_conformance.h> to work locally
+set(BPF_CONFORMANCE_SHIM "${CMAKE_CURRENT_BINARY_DIR}/shim")
+file(MAKE_DIRECTORY "${BPF_CONFORMANCE_SHIM}/bpf_conformance")
+file(COPY "${CMAKE_SOURCE_DIR}/external/bpf_conformance/include/bpf_conformance.h"
+  DESTINATION "${BPF_CONFORMANCE_SHIM}/bpf_conformance")
+
+# 3. Consolidated Target Include Directories (Interface)
+# We use SYSTEM to suppress warnings from external headers
 target_include_directories(prevail SYSTEM PUBLIC
-  "${CMAKE_SOURCE_DIR}/external"
-  "${CMAKE_SOURCE_DIR}/external/bpf_conformance/external/elfio"
-  "${CMAKE_SOURCE_DIR}/external/libbtf"
-  "${Boost_INCLUDE_DIR}"
+  # Local build tree paths
+  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/external>
+  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/external/bpf_conformance/external/elfio>
+  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/external/libbtf>
+  $<BUILD_INTERFACE:${BPF_CONFORMANCE_SHIM}>
+  $<BUILD_INTERFACE:${Boost_INCLUDE_DIR}>
+
+  # Install tree paths
+  # All dependencies (bpf_conformance, elfio, libbtf, prevail) are rooted in include/
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+
+# 4. Installation Directives
+# Ensure bpf_conformance is reachable via <bpf_conformance/...>
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/external/bpf_conformance/include/"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/bpf_conformance"
+  FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+)
+
+# Ensure elfio is reachable via <elfio/...>
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/external/bpf_conformance/external/elfio/elfio/"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/elfio"
+  FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+)
+
+# Ensure libbtf is reachable via <libbtf/...>
+# Note: Use the nested libbtf/ directory to match the include namespace
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/external/libbtf/libbtf/"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libbtf"
+  FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
 )
 
 option(ENABLE_ASAN "Enable AddressSanitizer if supported" OFF)
@@ -114,6 +156,10 @@ target_compile_options(prevail PRIVATE
 
 add_subdirectory("${CMAKE_SOURCE_DIR}/external/bpf_conformance/external/elfio")
 add_subdirectory("${CMAKE_SOURCE_DIR}/external/libbtf")
+target_include_directories(libbtf INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/external/libbtf/libbtf>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/libbtf>
+)
 
 # CMake derives a Visual Studio project GUID from the file path but can be overridden via a property
 # (see https://gitlab.kitware.com/cmake/cmake/-/commit/c85367f4).  Using a non-constant GUID
@@ -123,8 +169,7 @@ set(prevail_GUID_CMAKE "7d5b4e68-c0fa-3f86-9405-f6400219b440" CACHE INTERNAL "Pr
 set(yaml-cpp_GUID_CMAKE "98d56b8a-d8eb-3d98-b8ee-c83696b4d58a" CACHE INTERNAL "Project GUID")
 
 # Core libraries
-target_link_libraries(prevail PRIVATE libbtf)
-target_link_libraries(prevail PUBLIC Microsoft.GSL::GSL)
+target_link_libraries(prevail PUBLIC libbtf Microsoft.GSL::GSL)
 if (TARGET Boost::headers)
   target_link_libraries(prevail PUBLIC Boost::headers)
 endif ()
@@ -195,3 +240,56 @@ if (prevail_ENABLE_TESTS)
     CONFORMANCE_CHECK_PATH="$<TARGET_FILE:conformance_check>"
   )
 endif ()
+
+# Installation
+set(prevail_config_dir "${CMAKE_INSTALL_LIBDIR}/cmake/prevail")
+
+# Create convenience header: #include <prevail.hpp>
+# This redirects to prevail/ebpf_verifier.hpp which provides core functionality
+set(prevail_redirect_header "${CMAKE_CURRENT_BINARY_DIR}/prevail.hpp")
+file(WRITE "${prevail_redirect_header}" "#pragma once\n#include <prevail/ebpf_verifier.hpp>\n")
+
+install(TARGETS prevail libbtf GSL
+  EXPORT prevailTargets
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/src/"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/prevail"
+  FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h"
+  PATTERN "main/*" EXCLUDE
+  PATTERN "test/*" EXCLUDE
+)
+
+# Install convenience header to top-level include/
+# This allows: #include <prevail.hpp>
+# While specific headers use: #include <prevail/arith/linear_constraint.hpp>
+install(FILES "${prevail_redirect_header}"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+)
+
+install(EXPORT prevailTargets
+  FILE prevailTargets.cmake
+  NAMESPACE prevail::
+  DESTINATION "${prevail_config_dir}"
+)
+
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/prevailConfigVersion.cmake"
+  VERSION ${PROJECT_VERSION}
+  COMPATIBILITY AnyNewerVersion
+)
+
+configure_package_config_file(
+  "${CMAKE_SOURCE_DIR}/cmake/prevailConfig.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/prevailConfig.cmake"
+  INSTALL_DESTINATION "${prevail_config_dir}"
+)
+
+install(FILES
+  "${CMAKE_CURRENT_BINARY_DIR}/prevailConfig.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/prevailConfigVersion.cmake"
+  DESTINATION "${prevail_config_dir}"
+)

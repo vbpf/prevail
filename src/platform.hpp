@@ -6,7 +6,7 @@
 // that supports eBPF can have an ebpf_platform_t struct that the verifier
 // can use to call platform-specific functions.
 
-#include "../external/bpf_conformance/include/bpf_conformance.h"
+#include <bpf_conformance/bpf_conformance.h>
 
 #include "config.hpp"
 #include "spec/function_prototypes.hpp"
