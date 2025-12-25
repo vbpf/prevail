@@ -96,35 +96,50 @@ list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${CMAKE_SOURCE_DIR}/src/main/.*")
 list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${CMAKE_SOURCE_DIR}/src/test/.*")
 
 add_library(prevail ${prevail_LIB_SRC})
-
+# 1. Standard library include paths
 target_include_directories(prevail PUBLIC
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-# Define the Include Directories (The Interface)
+# 2. Setup the bpf_conformance shim for local development
+# This allows #include <bpf_conformance/bpf_conformance.h> to work locally
+set(BPF_CONFORMANCE_SHIM "${CMAKE_CURRENT_BINARY_DIR}/shim")
+file(MAKE_DIRECTORY "${BPF_CONFORMANCE_SHIM}/bpf_conformance")
+file(COPY "${CMAKE_SOURCE_DIR}/external/bpf_conformance/include/bpf_conformance.h"
+  DESTINATION "${BPF_CONFORMANCE_SHIM}/bpf_conformance")
+
+# 3. Consolidated Target Include Directories (Interface)
+# We use SYSTEM to suppress warnings from external headers
 target_include_directories(prevail SYSTEM PUBLIC
+  # Local build tree paths
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/external>
-  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/external>
-
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/external/bpf_conformance/external/elfio>
-  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
-
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/external/libbtf>
+  $<BUILD_INTERFACE:${BPF_CONFORMANCE_SHIM}>
+  $<BUILD_INTERFACE:${Boost_INCLUDE_DIR}>
+
+  # Install tree paths
+  # All dependencies (bpf_conformance, elfio, libbtf, prevail) are rooted in include/
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
-
-  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/external/bpf_conformance/include>
-  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/external/bpf_conformance/include>
-
-  ${Boost_INCLUDE_DIR}
 )
 
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/external/bpf_conformance/external/elfio/"
-  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+# 4. Installation Directives
+# Ensure bpf_conformance is reachable via <bpf_conformance/...>
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/external/bpf_conformance/include/"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/bpf_conformance"
   FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
 )
 
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/external/libbtf/"
+# Ensure elfio is reachable via <elfio/...>
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/external/bpf_conformance/external/elfio/elfio/"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/elfio"
+  FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+)
+
+# Ensure libbtf is reachable via <libbtf/...>
+# Note: Use the nested libbtf/ directory to match the include namespace
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/external/libbtf/libbtf/"
   DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libbtf"
   FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
 )
