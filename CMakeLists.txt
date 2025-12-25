@@ -104,17 +104,17 @@ target_include_directories(prevail PUBLIC
 
 # Define the Include Directories (The Interface)
 target_include_directories(prevail SYSTEM PUBLIC
-  # Map 'external' source dir -> 'include/external' install dir
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/external>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/external>
 
-  # Map 'elfio' source dir -> 'include' (Caution: Ensure headers don't collide)
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/external/bpf_conformance/external/elfio>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 
-  # Map 'libbtf' source dir -> 'include'
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/external/libbtf>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+
+  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/external/bpf_conformance/include>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/external/bpf_conformance/include>
 
   ${Boost_INCLUDE_DIR}
 )
