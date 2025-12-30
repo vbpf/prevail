@@ -197,7 +197,7 @@ endif ()
 if (prevail_ENABLE_TESTS)
   FetchContent_Declare(Catch2
     GIT_REPOSITORY "https://github.com/catchorg/Catch2.git"
-    GIT_TAG "v3.11.0"
+    GIT_TAG "v3.12.0"
     GIT_SHALLOW ON
   )
   FetchContent_MakeAvailable(Catch2)
