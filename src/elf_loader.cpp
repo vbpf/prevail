@@ -24,7 +24,6 @@
 
 #include "crab_utils/num_safety.hpp"
 #include "elf_loader.hpp"
-#include "ir/program.hpp"
 #include "platform.hpp"
 
 /// @brief ELF file parser for BPF programs with support for legacy and BTF-based formats.
@@ -642,13 +641,15 @@ class ProgramReader {
     /// - TYPE_ID_LOCAL/TARGET: Replace with type ID
     /// - TYPE_SIZE: Replace with sizeof(type)
     ///
-    /// @param prog Program containing the instruction to relocate
+    /// @param prog RawProgram containing the instruction to relocate
     /// @param relo CO-RE relocation descriptor (from .BTF.ext section)
     /// @param btf_data BTF type information for offset calculations
     /// @throws UnmarshalError if relocation is invalid or unsupported
     void apply_core_relocation(RawProgram& prog, const bpf_core_relo& relo,
                                const libbtf::btf_type_data& btf_data) const;
     void process_core_relocations(const libbtf::btf_type_data& btf_data);
+
+    int32_t compute_lddw_reloc_offset_imm(ELFIO::Elf_Sxword addend, ELFIO::Elf_Word index, int32_t lo_inst_imm) const;
 
   public:
     std::vector<RawProgram> raw_programs;
@@ -828,7 +829,7 @@ void ProgramReader::process_core_relocations(const libbtf::btf_type_data& btf_da
 ///
 /// Note: Recursive calls are detected and rejected.
 ///
-/// @param prog Program to process
+/// @param prog RawProgram to process
 /// @return Empty string on success, error message on failure
 std::string ProgramReader::append_subprograms(RawProgram& prog) {
     if (resolved_subprograms[&prog]) {
@@ -927,6 +928,32 @@ int ProgramReader::relocate_global_variable(const std::string& name) const {
     return global.map_descriptors.at(val).original_fd;
 }
 
+/// Compute the 32-bit offset to store in the *high* LDDW imm for a global-variable relocation.
+///
+/// The encoding rules differ depending on the relocation kind:
+/// - For relocations against a _section_ symbol (sym.type == STT_SECTION):
+///   * In RELA ELFs, the relocation addend holds the section-relative offset.
+///   * In REL ELFs, the addend is zero and the compiler encodes the offset in the
+///     low LDDW instruction's imm field (`lo_inst_imm`).
+///   In both cases, we interpret:
+///       offset = (addend != 0) ? addend : lo_inst_imm
+///
+/// - For relocations against a _data_ symbol (e.g., `global_var4`):
+///   The symbol value is already section-relative, so the offset is:
+///       offset = sym.value + addend
+///
+/// The result is narrowed to int32_t, matching the 32-bit imm field of a BPF instruction.
+///
+/// This function is only used for global-variable LDDW relocations.
+int32_t ProgramReader::compute_lddw_reloc_offset_imm(const ELFIO::Elf_Sxword addend, const ELFIO::Elf_Word index,
+                                                     const int32_t lo_inst_imm) const {
+    const auto& sym = get_symbol_details(symbols, index);
+    if (sym.type == ELFIO::STT_SECTION) {
+        return addend != 0 ? gsl::narrow<int32_t>(addend) : lo_inst_imm;
+    }
+    return gsl::narrow<int32_t>(sym.value + addend);
+}
+
 bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_Half symbol_section_index,
                               std::vector<EbpfInst>& instructions, const size_t location, const ELFIO::Elf_Word index,
                               const ELFIO::Elf_Sxword addend) {
@@ -941,8 +968,7 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
 
             auto [lo_inst, hi_inst] = validate_and_get_lddw_pair(instructions, location, "global variable");
 
-            const auto symbol_details = get_symbol_details(symbols, index);
-            hi_inst.get().imm = gsl::narrow<int32_t>(symbol_details.value);
+            hi_inst.get().imm = compute_lddw_reloc_offset_imm(addend, lo_inst.get().imm, index);
             lo_inst.get().src = INST_LD_MODE_MAP_VALUE;
 
             const std::string section_name = reader.sections[symbol_section_index]->get_name();
@@ -978,8 +1004,7 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
         auto [lo_inst, hi_inst] =
             validate_and_get_lddw_pair(instructions, location, "global variable '" + symbol_name + "'");
 
-        const int32_t offset = addend != 0 ? gsl::narrow<int32_t>(addend) : lo_inst.get().imm;
-        hi_inst.get().imm = offset;
+        hi_inst.get().imm = compute_lddw_reloc_offset_imm(addend, lo_inst.get().imm, index);
         lo_inst.get().src = INST_LD_MODE_MAP_VALUE;
         lo_inst.get().imm = relocate_global_variable(reader.sections[symbol_section_index]->get_name());
         return true;
