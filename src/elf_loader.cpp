@@ -649,7 +649,7 @@ class ProgramReader {
                                const libbtf::btf_type_data& btf_data) const;
     void process_core_relocations(const libbtf::btf_type_data& btf_data);
 
-    int32_t compute_lddw_reloc_offset_imm(ELFIO::Elf_Sxword addend, ELFIO::Elf_Word index, int32_t lo_inst_imm) const;
+    int32_t compute_lddw_reloc_offset_imm(ELFIO::Elf_Sxword addend, ELFIO::Elf_Word index, std::reference_wrapper<EbpfInst> lo_inst) const;
 
   public:
     std::vector<RawProgram> raw_programs;
@@ -946,10 +946,10 @@ int ProgramReader::relocate_global_variable(const std::string& name) const {
 ///
 /// This function is only used for global-variable LDDW relocations.
 int32_t ProgramReader::compute_lddw_reloc_offset_imm(const ELFIO::Elf_Sxword addend, const ELFIO::Elf_Word index,
-                                                     const int32_t lo_inst_imm) const {
+                                                     const std::reference_wrapper<EbpfInst> lo_inst) const {
     const auto& sym = get_symbol_details(symbols, index);
     if (sym.type == ELFIO::STT_SECTION) {
-        return addend != 0 ? gsl::narrow<int32_t>(addend) : lo_inst_imm;
+        return addend != 0 ? gsl::narrow<int32_t>(addend) : lo_inst.get().imm;
     }
     return gsl::narrow<int32_t>(sym.value + addend);
 }
@@ -968,7 +968,7 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
 
             auto [lo_inst, hi_inst] = validate_and_get_lddw_pair(instructions, location, "global variable");
 
-            hi_inst.get().imm = compute_lddw_reloc_offset_imm(addend, lo_inst.get().imm, index);
+            hi_inst.get().imm = compute_lddw_reloc_offset_imm(addend, index, lo_inst);
             lo_inst.get().src = INST_LD_MODE_MAP_VALUE;
 
             const std::string section_name = reader.sections[symbol_section_index]->get_name();
@@ -1004,7 +1004,7 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
         auto [lo_inst, hi_inst] =
             validate_and_get_lddw_pair(instructions, location, "global variable '" + symbol_name + "'");
 
-        hi_inst.get().imm = compute_lddw_reloc_offset_imm(addend, lo_inst.get().imm, index);
+        hi_inst.get().imm = compute_lddw_reloc_offset_imm(addend, index, lo_inst);
         lo_inst.get().src = INST_LD_MODE_MAP_VALUE;
         lo_inst.get().imm = relocate_global_variable(reader.sections[symbol_section_index]->get_name());
         return true;
