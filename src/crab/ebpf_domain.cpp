@@ -14,6 +14,7 @@
 #include "crab/array_domain.hpp"
 #include "crab/ebpf_domain.hpp"
 #include "crab/var_registry.hpp"
+#include "crab_utils/lazy_allocator.hpp"
 #include "ir/unmarshal.hpp"
 
 namespace prevail {
@@ -153,13 +154,23 @@ EbpfDomain EbpfDomain::calculate_constant_limits() {
     return inv;
 }
 
-static const EbpfDomain constant_limits = EbpfDomain::calculate_constant_limits();
+// Lazy init via LazyAllocator<EbpfDomain, EbpfDomain::calculate_constant_limits> ensures
+// thread_local_options and variable_registry are populated before EbpfDomain::calculate_constant_limits
+// captures their state. LazyAllocator::get() has no reentrancy guard, but calculate_constant_limits
+// does not call get_constant_limits() or widen(to_constants=true), so recursion cannot occur.
+// Clamping via intersection (operator&) is sound because it only shrinks the domain by tightening
+// constraints element-wise, preserving the over-approximation required for soundness.
+static thread_local LazyAllocator<EbpfDomain, EbpfDomain::calculate_constant_limits> constant_limits;
+
+static const EbpfDomain& get_constant_limits() { return constant_limits.get(); }
+
+void EbpfDomain::clear_thread_local_state() { constant_limits.clear(); }
 
 EbpfDomain EbpfDomain::widen(const EbpfDomain& other, const bool to_constants) const {
     EbpfDomain res{this->rcp.widen(other.rcp), stack.widen(other.stack)};
 
     if (to_constants) {
-        return res & constant_limits;
+        return res & get_constant_limits();
     }
     return res;
 }

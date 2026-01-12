@@ -1,8 +1,8 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: Apache-2.0
+#include <ranges>
 #include <utility>
 #include <variant>
-#include <ranges>
 
 #include "cfg/cfg.hpp"
 #include "cfg/wto.hpp"
@@ -27,6 +27,7 @@ void ebpf_verifier_clear_thread_local_state() {
     thread_local_program_info.clear();
     clear_thread_local_state();
     SplitDBM::clear_thread_local_state();
+    EbpfDomain::clear_thread_local_state();
 }
 
 class InterleavedFwdFixpointIterator final {
