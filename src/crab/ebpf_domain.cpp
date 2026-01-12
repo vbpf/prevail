@@ -14,6 +14,7 @@
 #include "crab/array_domain.hpp"
 #include "crab/ebpf_domain.hpp"
 #include "crab/var_registry.hpp"
+#include "crab_utils/lazy_allocator.hpp"
 #include "ir/unmarshal.hpp"
 
 namespace prevail {
@@ -153,13 +154,16 @@ EbpfDomain EbpfDomain::calculate_constant_limits() {
     return inv;
 }
 
-static const EbpfDomain constant_limits = EbpfDomain::calculate_constant_limits();
+// Lazy init via LazyAllocator so thread_local_options is populated before we clamp to constants.
+static thread_local LazyAllocator<EbpfDomain, EbpfDomain::calculate_constant_limits> constant_limits;
+
+static const EbpfDomain& get_constant_limits() { return constant_limits.get(); }
 
 EbpfDomain EbpfDomain::widen(const EbpfDomain& other, const bool to_constants) const {
     EbpfDomain res{this->rcp.widen(other.rcp), stack.widen(other.stack)};
 
     if (to_constants) {
-        return res & constant_limits;
+        return res & get_constant_limits();
     }
     return res;
 }
