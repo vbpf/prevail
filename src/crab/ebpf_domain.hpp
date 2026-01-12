@@ -68,6 +68,7 @@ class EbpfDomain final {
     EbpfDomain narrow(const EbpfDomain& other) const;
 
     static EbpfDomain calculate_constant_limits();
+    static void clear_thread_local_state();
     ExtendedNumber get_loop_count_upper_bound() const;
     Interval get_r0() const;
 
