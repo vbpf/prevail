@@ -13,24 +13,30 @@ typedef enum _ebpf_return_type {
     EBPF_RETURN_TYPE_UNSUPPORTED,
 } ebpf_return_type_t;
 
+// Describes the type of an eBPF program argument.
+// This information is used by the verifier to ensure that
+// the program uses its arguments correctly.
+// Note: Some dependent products may rely on the specific integer values
+// assigned to these enum members. If possible only add new members
+// at the end of the list.
 typedef enum _ebpf_argument_type {
     EBPF_ARGUMENT_TYPE_DONTCARE = 0,
-    EBPF_ARGUMENT_TYPE_ANYTHING, // All values are valid, e.g., 64-bit flags.
-    EBPF_ARGUMENT_TYPE_CONST_SIZE,
-    EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO,
-    EBPF_ARGUMENT_TYPE_PTR_TO_STACK,
-    EBPF_ARGUMENT_TYPE_PTR_TO_STACK_OR_NULL,
-    EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
-    EBPF_ARGUMENT_TYPE_PTR_TO_CTX_OR_NULL,
-    EBPF_ARGUMENT_TYPE_PTR_TO_MAP,
-    EBPF_ARGUMENT_TYPE_PTR_TO_MAP_OF_PROGRAMS,
-    EBPF_ARGUMENT_TYPE_PTR_TO_MAP_KEY,
-    EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE,
-    EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // Memory must have been initialized.
-    EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL,
-    EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM,
-    EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL,
-    EBPF_ARGUMENT_TYPE_UNSUPPORTED,
+    EBPF_ARGUMENT_TYPE_ANYTHING = 1, // All values are valid, e.g., 64-bit flags.
+    EBPF_ARGUMENT_TYPE_CONST_SIZE = 2,
+    EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO = 3,
+    EBPF_ARGUMENT_TYPE_PTR_TO_CTX = 4,
+    EBPF_ARGUMENT_TYPE_PTR_TO_MAP = 5,
+    EBPF_ARGUMENT_TYPE_PTR_TO_MAP_OF_PROGRAMS = 6,
+    EBPF_ARGUMENT_TYPE_PTR_TO_MAP_KEY = 7,
+    EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE = 8,
+    EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM = 9, // Memory must have been initialized.
+    EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL = 10,
+    EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM = 11,
+    EBPF_ARGUMENT_TYPE_PTR_TO_STACK = 12,
+    EBPF_ARGUMENT_TYPE_PTR_TO_STACK_OR_NULL = 13,
+    EBPF_ARGUMENT_TYPE_PTR_TO_CTX_OR_NULL = 14,
+    EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL = 15,
+    EBPF_ARGUMENT_TYPE_UNSUPPORTED = 16,
 } ebpf_argument_type_t;
 
 // The following struct describes how to access the layout in
