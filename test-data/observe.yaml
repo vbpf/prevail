@@ -1,0 +1,168 @@
+# Copyright (c) Prevail Verifier contributors.
+# SPDX-License-Identifier: MIT
+
+# Tests for observation–invariant consistency checks.
+#
+# 'observe' entries assert whether a partial concrete-state observation is
+# consistent with (or entailed by) the abstract state at a program label.
+
+---
+test-case: observe consistent with partial observation
+
+pre:
+  - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0
+
+code:
+  <start>: |
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0
+
+observe:
+  - at: exit
+    point: post
+    mode: consistent
+    constraints:
+      - r0.svalue=0
+
+---
+test-case: observe detects contradictory observation
+
+pre:
+  - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0
+
+code:
+  <start>: |
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0
+
+observe:
+  - at: exit
+    point: post
+    mode: consistent
+    constraints:
+      - r0.svalue=0
+      - r0.svalue=1
+
+messages:
+  - "exit: observation consistent failed at post"
+
+---
+test-case: observe entailed fails for partial observation
+
+pre:
+  - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0
+
+code:
+  <start>: |
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0
+
+observe:
+  - at: exit
+    point: post
+    mode: entailed
+    constraints:
+      - r0.svalue=0
+
+messages:
+  - "exit: observation entailed failed at post"
+
+---
+test-case: observe entailed succeeds for precise observation
+
+pre:
+  - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0
+
+code:
+  <start>: |
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0
+
+observe:
+  - at: exit
+    point: post
+    mode: entailed
+    constraints:
+      - r0.type=number
+      - r0.svalue=0
+      - r0.uvalue=0
+
+---
+test-case: observe consistent with stack-backed state
+
+options:
+  - "!big_endian"
+
+pre:
+  - r10.type=stack
+  - r10.stack_offset=512
+  - s[504...504].type=number
+  - s[504...504].svalue=120
+  - s[504...504].uvalue=120
+  - s[505...505].type=number
+  - s[505...505].svalue=86
+  - s[505...505].uvalue=86
+  - s[506...506].type=number
+  - s[506...506].svalue=52
+  - s[506...506].uvalue=52
+  - s[507...507].type=number
+  - s[507...507].svalue=18
+  - s[507...507].uvalue=18
+
+code:
+  <start>: |
+    r0 = *(u32 *)(r10 - 8)
+    exit
+
+post:
+  - r10.type=stack
+  - r10.stack_offset=512
+  - s[504...507].type=number
+  - s[504].svalue=120
+  - s[504].uvalue=120
+  - s[505].svalue=86
+  - s[505].uvalue=86
+  - s[506].svalue=52
+  - s[506].uvalue=52
+  - s[507].svalue=18
+  - s[507].uvalue=18
+  - r0.type=number
+  - r0.svalue=305419896
+  - r0.uvalue=305419896
+
+observe:
+  - at: exit
+    point: post
+    mode: consistent
+    constraints:
+      - r10.type=stack
+      - r10.stack_offset=512
+      - s[504...507].type=number
+      - s[504...504].uvalue=120
+      - s[507...507].uvalue=18
+      - r0.type=number
+      - r0.uvalue=305419896

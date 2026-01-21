@@ -16,6 +16,13 @@ struct TestCase {
     InstructionSeq instruction_seq;
     StringInvariant expected_post_invariant;
     std::set<std::string> expected_messages;
+    struct Observation {
+        Label label = Label::entry;
+        InvariantPoint point = InvariantPoint::pre;
+        ObservationCheckMode mode = ObservationCheckMode::consistent;
+        StringInvariant constraints;
+    };
+    std::vector<Observation> observations;
 };
 
 void foreach_suite(const std::string& path, const std::function<void(const TestCase&)>& f);

@@ -36,4 +36,25 @@ properties:
     type: array
     items:
       type: string
+  observe:
+    type: array
+    items:
+      type: object
+      required:
+        - at
+        - constraints
+      properties:
+        at:
+          type: string
+        point:
+          type: string
+          enum: [pre, post]
+        mode:
+          type: string
+          enum: [consistent, entailed]
+        constraints:
+          type: array
+          items:
+            type: string
+      additionalProperties: false
 additionalProperties: false
