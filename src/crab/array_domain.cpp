@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <optional>
 #include <set>
+#include <stdexcept>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -52,16 +53,27 @@ int radix_length(const offset_t& offset) {
 // Get a range of bits out of the middle of a key, starting at [begin] for a given length.
 [[maybe_unused]]
 offset_t radix_substr(const offset_t& key, const int begin, const int length) {
-    Index mask;
-
-    if (length == offset_t::bitsize) {
-        mask = 0;
-    } else {
-        mask = Index{1} << length;
+    // radix_tree should only call this with valid bit-slice arguments.
+    // If this is violated, treat it as a verifier bug and fail fast.
+    if (begin < 0 || length < 0) {
+        throw std::runtime_error("radix_substr: negative begin/length");
+    }
+    if (begin > offset_t::bitsize || length > offset_t::bitsize || begin + length > offset_t::bitsize) {
+        throw std::runtime_error("radix_substr: invalid begin/length");
     }
 
-    mask -= 1;
-    mask <<= offset_t::bitsize - length - begin;
+    if (length == 0) {
+        return offset_t{0, 0};
+    }
+
+    // begin + length <= bitsize implies begin == 0 when length == bitsize.
+    if (length == offset_t::bitsize) {
+        return offset_t{gsl::narrow_cast<Index>(key), length};
+    }
+
+    // 1 <= length <= 63 here, so shifts are well-defined.
+    Index mask = (Index{1} << length) - 1;
+    mask <<= (offset_t::bitsize - length - begin);
 
     const Index value = (gsl::narrow_cast<Index>(key) & mask) << begin;
     return offset_t{value, length};
