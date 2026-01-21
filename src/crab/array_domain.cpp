@@ -58,8 +58,11 @@ offset_t radix_substr(const offset_t& key, const int begin, const int length) {
     if (begin < 0 || length < 0) {
         throw std::runtime_error("radix_substr: negative begin/length");
     }
-    if (begin > offset_t::bitsize || length > offset_t::bitsize || begin + length > offset_t::bitsize) {
-        throw std::runtime_error("radix_substr: invalid begin/length");
+    if (begin >= offset_t::bitsize || length > offset_t::bitsize) {
+        throw std::runtime_error("radix_substr: begin or length exceeds bitsize");
+    }
+    if (static_cast<long long>(begin) + static_cast<long long>(length) > offset_t::bitsize) {
+        throw std::runtime_error("radix_substr: begin + length exceeds bitsize");
     }
 
     if (length == 0) {
