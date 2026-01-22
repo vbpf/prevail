@@ -23,7 +23,7 @@ enum class ObservationCheckMode {
 };
 
 struct ObservationCheckResult {
-    bool ok;
+    bool ok = false;
     std::string message;
 };
 

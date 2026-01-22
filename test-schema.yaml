@@ -47,7 +47,7 @@ oneOf:
             - constraints
           properties:
             at:
-              type: string
+              type: [string, integer]
             point:
               type: string
               enum: [pre, post]
@@ -59,8 +59,6 @@ oneOf:
               items:
                 type: string
           additionalProperties: false
-      expected-exception:
-        type: string
     additionalProperties: false
 
   # Exception fixtures: allow intentionally-invalid 'observe' (or other) nodes,

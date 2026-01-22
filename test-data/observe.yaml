@@ -168,6 +168,30 @@ observe:
       - r0.uvalue=305419896
 
 ---
+test-case: observe supports unquoted numeric instruction index
+
+pre:
+  - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0
+
+code:
+  <start>: |
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0
+
+observe:
+  - at: 0
+    point: pre
+    mode: consistent
+    constraints:
+      - r0.type=number
+
+---
 test-case: observe invalid - observe must be sequence
 expected-exception: observe must be a sequence
 

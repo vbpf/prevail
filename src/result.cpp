@@ -44,7 +44,7 @@ ObservationCheckResult AnalysisResult::check_observation_at_label(const Label& l
         if (observed_state <= abstract_state) {
             return {.ok = true, .message = ""};
         }
-        return {.ok = false, .message = "Observation does not entail the invariant (C ⊑ A is false)"};
+        return {.ok = false, .message = "Invariant does not entail the observation (C ⊑ A is false)"};
 
     case ObservationCheckMode::consistent:
         // Default: consistency / satisfiability.
