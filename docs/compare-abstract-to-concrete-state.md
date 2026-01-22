@@ -1,6 +1,6 @@
 # Observation–Invariant Consistency Checking
 
-Related issue: https://github.com/vbpf/prevail/issues/728
+Related issue: [`#728`](https://github.com/vbpf/prevail/issues/728)
 
 ## Summary
 

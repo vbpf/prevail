@@ -4,6 +4,7 @@
 #include <functional>
 #include <set>
 #include <string>
+#include <vector>
 
 #include "verifier.hpp"
 

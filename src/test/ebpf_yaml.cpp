@@ -116,6 +116,9 @@ static Label parse_label_scalar(const YAML::Node& node) {
         if (pos != s.size()) {
             throw std::runtime_error("Invalid observation label: " + s);
         }
+        if (index < 0) {
+            throw std::runtime_error("Invalid observation label: " + s);
+        }
         return Label{index};
     } catch (const std::exception&) {
         throw std::runtime_error("Invalid observation label: " + s);
