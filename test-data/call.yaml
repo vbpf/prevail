@@ -66,7 +66,7 @@ code:
 post: []
 
 messages:
-  - "0: Possible null access (within stack(r2:key_size(r1)))"
+  - "0: Possible null access (within(r2:key_size(r1)))"
 
 ---
 test-case: bpf_map_lookup_elem shared key - too small
@@ -81,7 +81,7 @@ code:
 post: []
 
 messages:
-  - "0: Upper bound must be at most r2.shared_region_size (within stack(r2:key_size(r1)))"
+  - "0: Upper bound must be at most r2.shared_region_size (within(r2:key_size(r1)))"
 ---
 test-case: bpf_map_lookup_elem shared key - too small
 
@@ -95,7 +95,7 @@ code:
 post: []
 
 messages:
-  - "0: Lower bound must be at least 0 (within stack(r2:key_size(r1)))"
+  - "0: Lower bound must be at least 0 (within(r2:key_size(r1)))"
 ---
 test-case: bpf_map_lookup_elem with non-numeric stack key
 
@@ -109,7 +109,7 @@ code:
 post: []
 
 messages:
-  - "0: Illegal map update with a non-numerical value [-oo-oo) (within stack(r2:key_size(r1)))"
+  - "0: Illegal map update with a non-numerical value [-oo-oo) (within(r2:key_size(r1)))"
 ---
 test-case: bpf_map_update_elem with numeric stack value
 
@@ -160,7 +160,7 @@ code:
 post: []
 
 messages:
-  - "0: Upper bound must be at most r3.shared_region_size (within stack(r3:value_size(r1)))"
+  - "0: Upper bound must be at most r3.shared_region_size (within(r3:value_size(r1)))"
 
 ---
 test-case: bpf_map_update_elem with shared value larger than target region
@@ -195,7 +195,7 @@ code:
 post: []
 
 messages:
-  - "0: Possible null access (within stack(r3:value_size(r1)))"
+  - "0: Possible null access (within(r3:value_size(r1)))"
 
 ---
 test-case: bpf_map_update_elem with packet value
@@ -233,7 +233,7 @@ code:
 post: []
 
 messages:
-  - "0: Illegal map update with a non-numerical value [496-500) (within stack(r3:value_size(r1)))"
+  - "0: Illegal map update with a non-numerical value [496-500) (within(r3:value_size(r1)))"
 ---
 test-case: bpf_map_update_elem with context value
 
