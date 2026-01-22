@@ -18,7 +18,7 @@ enum class InvariantPoint {
 enum class ObservationCheckMode {
     // Default: supports partial observations.
     consistent,
-    // Stricter: useful only when the observation is near-complete.
+    // Stricter: ok iff observation entails invariant (C ⊑ A); useful only when the observation is near-complete.
     entailed,
 };
 

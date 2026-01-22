@@ -166,3 +166,81 @@ observe:
       - s[507...507].uvalue=18
       - r0.type=number
       - r0.uvalue=305419896
+
+---
+test-case: observe invalid - observe must be sequence
+expected-exception: observe must be a sequence
+
+pre: []
+
+code:
+  <start>: |
+    exit
+
+post: []
+
+observe:
+  at: exit
+  constraints: []
+
+---
+test-case: observe invalid - item must be map
+expected-exception: observe item must be a map
+
+pre: []
+
+code:
+  <start>: |
+    exit
+
+post: []
+
+observe:
+  - 1
+
+---
+test-case: observe invalid - missing constraints
+expected-exception: observe item missing required 'constraints' field
+
+pre: []
+
+code:
+  <start>: |
+    exit
+
+post: []
+
+observe:
+  - at: exit
+
+---
+test-case: observe invalid - constraints not sequence
+expected-exception: observe.constraints must be a sequence of strings
+
+pre: []
+
+code:
+  <start>: |
+    exit
+
+post: []
+
+observe:
+  - at: exit
+    constraints: 1
+
+---
+test-case: observe invalid - negative label
+expected-exception: "Invalid observation label: -1"
+
+pre: []
+
+code:
+  <start>: |
+    exit
+
+post: []
+
+observe:
+  - at: "-1"
+    constraints: []

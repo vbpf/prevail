@@ -6,7 +6,7 @@ Related issue: [`#728`](https://github.com/vbpf/prevail/issues/728)
 
 Prevail provides a test-oriented API that checks whether a *runtime observation* (expressed as a set of string constraints) is compatible with Prevail’s computed abstract invariant at a given program point.
 
-This is an abstract-interpretation focused feature: it acts as a **semantic cross-check** that helps validate transfer functions, invariant construction, and modeling assumptions by comparing them against observed (often partial) executions.
+This is an abstract-interpretation-focused feature: it acts as a **semantic cross-check** that helps validate transfer functions, invariant construction, and modeling assumptions by comparing them against observed (often partial) executions.
 
 Typical use cases include YAML-driven regression tests and VM/JIT instrumentation during fuzzing.
 
@@ -96,10 +96,10 @@ struct AnalysisResult {
 Semantics:
 - Prevail converts `observation` constraints into an `EbpfDomain` element ($C_L$).
 - Prevail selects the computed `pre`/`post` invariant as the abstract state ($A_L$).
-- If `mode == ObservationCheckMode::consistent`, the check passes iff the meet is not bottom.
-- If `mode == ObservationCheckMode::entailed`, the check passes iff the observation is entailed by the invariant.
+- When `mode == ObservationCheckMode::consistent`, the check passes iff the meet is not bottom.
+- When `mode == ObservationCheckMode::entailed`, the check passes iff the observation is entailed by the invariant.
 
-If the observation constraints themselves are unsatisfiable (i.e., they map to bottom), the check fails and returns a diagnostic message.
+When the observation constraints themselves are unsatisfiable (i.e., they map to bottom), the check fails and returns a diagnostic message.
 
 ## Labels and constraint format
 

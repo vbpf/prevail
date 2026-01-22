@@ -188,6 +188,7 @@ static std::vector<TestCase::Observation> parse_observations(const YAML::Node& o
 
 struct RawTestCase {
     string test_case;
+    std::optional<string> expected_exception;
     std::set<string> options;
     vector<string> pre;
     vector<std::tuple<string, vector<string>>> raw_blocks;
@@ -221,9 +222,17 @@ static std::set<string> as_set_empty_default(const YAML::Node& optional_node) {
     return vector_to_set(optional_node.as<vector<string>>());
 }
 
+static std::optional<string> as_optional_string(const YAML::Node& optional_node) {
+    if (!optional_node.IsDefined() || optional_node.IsNull()) {
+        return std::nullopt;
+    }
+    return optional_node.as<string>();
+}
+
 static RawTestCase parse_case(const YAML::Node& case_node) {
     return RawTestCase{
         .test_case = case_node["test-case"].as<string>(),
+        .expected_exception = as_optional_string(case_node["expected-exception"]),
         .options = as_set_empty_default(case_node["options"]),
         .pre = case_node["pre"].as<vector<string>>(),
         .raw_blocks = parse_code(case_node["code"]),
@@ -312,7 +321,23 @@ static vector<TestCase> read_suite(const string& path) {
     std::ifstream f{path};
     vector<TestCase> res;
     for (const YAML::Node& config : YAML::LoadAll(f)) {
-        res.push_back(read_case(parse_case(config)));
+        const RawTestCase raw_case = parse_case(config);
+        if (raw_case.expected_exception.has_value()) {
+            TestCase tc;
+            tc.name = raw_case.test_case;
+            tc.expected_exception = raw_case.expected_exception;
+
+            try {
+                (void)read_case(raw_case);
+                tc.actual_exception = std::nullopt;
+            } catch (const std::exception& ex) {
+                tc.actual_exception = ex.what();
+            }
+
+            res.push_back(std::move(tc));
+        } else {
+            res.push_back(read_case(raw_case));
+        }
     }
     return res;
 }
@@ -326,6 +351,21 @@ static Diff<T> make_diff(const T& actual, const T& expected) {
 }
 
 std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
+    if (test_case.expected_exception.has_value()) {
+        const std::set<string> expected_messages{"Exception: " + *test_case.expected_exception};
+        std::set<string> actual_messages;
+        if (test_case.actual_exception.has_value()) {
+            actual_messages.insert("Exception: " + *test_case.actual_exception);
+        }
+        if (actual_messages == expected_messages) {
+            return {};
+        }
+        return Failure{
+            .invariant = make_diff(StringInvariant::top(), StringInvariant::top()),
+            .messages = make_diff(actual_messages, expected_messages),
+        };
+    }
+
     thread_local_options = {};
     ThreadLocalGuard clear_thread_local_state;
     test_case.options.verbosity_opts.print_failures = true;
