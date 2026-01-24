@@ -28,7 +28,11 @@ static void test_conformance(const std::string& filename, const bpf_conformance_
         REQUIRE(file_result == expected_result);
         if (file_result != bpf_conformance_test_result_t::TEST_RESULT_PASS && !expected_reason.empty()) {
             reason.erase(reason.find_last_not_of(" \n\r\t") + 1); // Remove trailing whitespace.
-            REQUIRE(reason == "Plugin returned error code 1 and output " + expected_reason);
+            if (expected_result == bpf_conformance_test_result_t::TEST_RESULT_ERROR) {
+                REQUIRE(reason == "Plugin returned error code 1 and output " + expected_reason);
+            } else {
+                REQUIRE(reason == expected_reason);
+            }
         }
     }
 }
@@ -59,6 +63,13 @@ static void test_conformance(const std::string& filename, const bpf_conformance_
         test_conformance(filename, bpf_conformance_test_result_t::TEST_RESULT_ERROR, "r0 value is range " range); \
     }
 
+// Tests that are known to fail today and need investigation (potential bugs).
+// Unlike TEST_CONFORMANCE_VERIFICATION_FAILED, these are not expected-safe failures.
+#define TEST_CONFORMANCE_FAIL(filename, expected_reason)                                              \
+    TEST_CASE("conformance_check " filename, "[conformance]") {                                       \
+        test_conformance(filename, bpf_conformance_test_result_t::TEST_RESULT_FAIL, expected_reason); \
+    }
+
 TEST_CONFORMANCE("add.data")
 TEST_CONFORMANCE("add64.data")
 TEST_CONFORMANCE("alu-arith.data")
@@ -82,6 +93,9 @@ TEST_CONFORMANCE("be16.data")
 TEST_CONFORMANCE("be32-high.data")
 TEST_CONFORMANCE("be32.data")
 TEST_CONFORMANCE("be64.data")
+TEST_CONFORMANCE("bswap16.data")
+TEST_CONFORMANCE("bswap32.data")
+TEST_CONFORMANCE("bswap64.data")
 TEST_CONFORMANCE("call_local.data")
 TEST_CONFORMANCE("call_unwind_fail.data")
 TEST_CONFORMANCE("callx.data")
@@ -281,3 +295,95 @@ TEST_CONFORMANCE("swap16.data")
 TEST_CONFORMANCE("swap32.data")
 TEST_CONFORMANCE("swap64.data")
 TEST_CONFORMANCE("subnet.data")
+
+// RFC 9669 generated tests (kept as individual test cases, matching the pattern above).
+TEST_CONFORMANCE("rfc9669_add32.data")
+TEST_CONFORMANCE("rfc9669_add64.data")
+TEST_CONFORMANCE("rfc9669_and32.data")
+TEST_CONFORMANCE("rfc9669_and64.data")
+TEST_CONFORMANCE("rfc9669_arsh32.data")
+TEST_CONFORMANCE("rfc9669_arsh64.data")
+TEST_CONFORMANCE("rfc9669_be16.data")
+TEST_CONFORMANCE("rfc9669_be32.data")
+TEST_CONFORMANCE("rfc9669_be64.data")
+TEST_CONFORMANCE("rfc9669_bswap16.data")
+TEST_CONFORMANCE("rfc9669_bswap32.data")
+TEST_CONFORMANCE("rfc9669_bswap64.data")
+TEST_CONFORMANCE("rfc9669_call_local.data")
+TEST_CONFORMANCE("rfc9669_div32.data")
+TEST_CONFORMANCE("rfc9669_div64.data")
+TEST_CONFORMANCE("rfc9669_exit.data")
+TEST_CONFORMANCE("rfc9669_ja.data")
+TEST_CONFORMANCE("rfc9669_ja32.data")
+TEST_CONFORMANCE("rfc9669_jeq.data")
+TEST_CONFORMANCE("rfc9669_jge.data")
+TEST_CONFORMANCE("rfc9669_jgt.data")
+TEST_CONFORMANCE("rfc9669_jle.data")
+TEST_CONFORMANCE("rfc9669_jlt.data")
+TEST_CONFORMANCE("rfc9669_jne.data")
+TEST_CONFORMANCE("rfc9669_jset.data")
+TEST_CONFORMANCE("rfc9669_jsge.data")
+TEST_CONFORMANCE("rfc9669_jsgt.data")
+TEST_CONFORMANCE("rfc9669_jsle.data")
+TEST_CONFORMANCE("rfc9669_jslt.data")
+TEST_CONFORMANCE("rfc9669_lddw.data")
+TEST_CONFORMANCE("rfc9669_ldxb.data")
+TEST_CONFORMANCE("rfc9669_ldxdw.data")
+TEST_CONFORMANCE("rfc9669_ldxh.data")
+// LDXS* (LDXSB/LDXSH/LDXSW) / MEMSX sign-extending loads are currently not implemented by Prevail.
+// Keep these as expected verification failures until the verifier gains support.
+TEST_CONFORMANCE_VERIFICATION_FAILED("rfc9669_ldxsb.data")
+TEST_CONFORMANCE_VERIFICATION_FAILED("rfc9669_ldxsh.data")
+TEST_CONFORMANCE_VERIFICATION_FAILED("rfc9669_ldxsw.data")
+TEST_CONFORMANCE("rfc9669_ldxw.data")
+TEST_CONFORMANCE("rfc9669_le16.data")
+TEST_CONFORMANCE("rfc9669_le32.data")
+TEST_CONFORMANCE("rfc9669_le64.data")
+TEST_CONFORMANCE("rfc9669_lock_add32.data")
+TEST_CONFORMANCE("rfc9669_lock_add64.data")
+TEST_CONFORMANCE("rfc9669_lock_and32.data")
+TEST_CONFORMANCE("rfc9669_lock_and64.data")
+TEST_CONFORMANCE_RANGE("rfc9669_lock_cmpxchg32.data", "[0, 1]")
+TEST_CONFORMANCE_RANGE("rfc9669_lock_cmpxchg64.data", "[0, 1]")
+TEST_CONFORMANCE("rfc9669_lock_fetch_add32.data")
+TEST_CONFORMANCE("rfc9669_lock_fetch_add64.data")
+TEST_CONFORMANCE("rfc9669_lock_or32.data")
+TEST_CONFORMANCE("rfc9669_lock_or64.data")
+TEST_CONFORMANCE("rfc9669_lock_xchg32.data")
+TEST_CONFORMANCE("rfc9669_lock_xchg64.data")
+TEST_CONFORMANCE("rfc9669_lock_xor32.data")
+TEST_CONFORMANCE("rfc9669_lock_xor64.data")
+TEST_CONFORMANCE("rfc9669_lsh32.data")
+TEST_CONFORMANCE("rfc9669_lsh64.data")
+TEST_CONFORMANCE("rfc9669_mod32.data")
+TEST_CONFORMANCE("rfc9669_mod64.data")
+TEST_CONFORMANCE("rfc9669_mov32.data")
+TEST_CONFORMANCE("rfc9669_mov64.data")
+TEST_CONFORMANCE("rfc9669_movsx.data")
+TEST_CONFORMANCE("rfc9669_mul32.data")
+TEST_CONFORMANCE("rfc9669_mul64.data")
+TEST_CONFORMANCE("rfc9669_neg32.data")
+TEST_CONFORMANCE("rfc9669_neg64.data")
+TEST_CONFORMANCE("rfc9669_or32.data")
+TEST_CONFORMANCE("rfc9669_or64.data")
+TEST_CONFORMANCE("rfc9669_rsh32.data")
+TEST_CONFORMANCE("rfc9669_rsh64.data")
+TEST_CONFORMANCE("rfc9669_sdiv32.data")
+TEST_CONFORMANCE("rfc9669_sdiv64.data")
+TEST_CONFORMANCE("rfc9669_smod32.data")
+TEST_CONFORMANCE("rfc9669_smod64.data")
+TEST_CONFORMANCE("rfc9669_stb.data")
+TEST_CONFORMANCE("rfc9669_stdw.data")
+TEST_CONFORMANCE("rfc9669_sth.data")
+TEST_CONFORMANCE("rfc9669_stw.data")
+TEST_CONFORMANCE("rfc9669_stxb.data")
+TEST_CONFORMANCE("rfc9669_stxdw.data")
+TEST_CONFORMANCE("rfc9669_stxh.data")
+TEST_CONFORMANCE("rfc9669_stxw.data")
+TEST_CONFORMANCE("rfc9669_sub32.data")
+TEST_CONFORMANCE("rfc9669_sub64.data")
+TEST_CONFORMANCE("rfc9669_swap16.data")
+TEST_CONFORMANCE("rfc9669_swap32.data")
+TEST_CONFORMANCE("rfc9669_swap64.data")
+TEST_CONFORMANCE("rfc9669_xor32.data")
+TEST_CONFORMANCE("rfc9669_xor64.data")
