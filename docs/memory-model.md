@@ -18,7 +18,7 @@ eBPF programs can access several memory regions:
 
 ### Stack Layout
 
-```
+```text
 R10 (frame pointer) ────────────────┐
                                     │
     ┌───────────────────────────────▼───────┐
@@ -180,7 +180,7 @@ Packet data is accessed via pointers derived from context.
 
 ### Packet Pointer Derivation
 
-```
+```asm
 R1 = ctx                    ; type: CTX
 R2 = *(u32*)(R1 + data)     ; type: PACKET, offset: 0
 R3 = *(u32*)(R1 + data_end) ; type: PACKET, offset: packet_len
@@ -255,14 +255,19 @@ BPF maps provide key-value storage.
 // r0 = bpf_map_lookup_elem(r1, r2)
 
 void handle_map_lookup() {
-    // Return value is either NULL or pointer to value
-    inv.assign_type(R0, T_MAP);  // or T_NUM if null
-    
-    // Track nullability
-    inv.assume(R0.svalue >= 0);  // Non-negative (null = 0)
-    
-    // If non-null, valid for map_value_size bytes
+    // Return value is either NULL (0) or pointer to value.
+    // The analysis splits into two states:
+    //
+    // Non-null branch (R0 != 0):
+    inv.assign_type(R0, T_MAP);
+    inv.assume(R0.svalue > 0);
     inv.assume(R0.map_value_size == map_descriptor.value_size);
+
+    // Null branch (R0 == 0):
+    // inv.assign_type(R0, T_NUM);
+    // inv.assume(R0.svalue == 0);
+    //
+    // Programs must check for NULL before dereferencing.
 }
 ```
 

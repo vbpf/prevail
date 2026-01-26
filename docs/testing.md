@@ -173,6 +173,7 @@ code:
 ```
 
 Hex format:
+
 ```yaml
 code:
   - b7 00 00 00 01 00 00 00  # mov r0, 1
@@ -183,7 +184,7 @@ code:
 
 ### Test Data Format
 
-```
+```text
 # tests/add.data
 -- asm
 mov %r0, 1
@@ -218,6 +219,7 @@ TEST_CONFORMANCE_FAIL("problematic.data", "expected error message")
 ### Add a YAML Test
 
 1. Create file in `test-data/`:
+
    ```yaml
    # test-data/my_test.yaml
    test-case: my new test
@@ -233,6 +235,7 @@ TEST_CONFORMANCE_FAIL("problematic.data", "expected error message")
 ### Add a Unit Test
 
 1. Add to existing test file or create new one in `src/test/`:
+
    ```cpp
    // src/test/test_myfeature.cpp
    #include <catch2/catch_all.hpp>

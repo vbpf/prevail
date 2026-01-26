@@ -11,16 +11,14 @@ Prevail uses types to:
 
 ## Type Lattice
 
-```
+```text
                     T_TOP (any type, imprecise)
-                   /  |  \  \  \  \
-                  /   |   \  \  \  \
-            T_CTX T_STACK T_PACKET T_SHARED T_MAP T_MAP_FD T_NUM
-                  \   |   /  /  /  /
-                   \  |  /  /  /  /
-                    T_UNINIT
-                        |
-                   T_BOTTOM (contradiction)
+                   /  |  \  \  \  \  \  \
+                  /   |   \  \  \  \  \  \
+            T_CTX T_STACK T_PACKET T_SHARED T_MAP T_MAP_FD T_NUM T_UNINIT
+                  \   |   /  /  /  /  /  /
+                   \  |  /  /  /  /  /  /
+                    T_BOTTOM (contradiction)
 ```
 
 ### Type Definitions
@@ -59,6 +57,7 @@ Type join(Type a, Type b) {
 ```
 
 **Example**:
+
 ```cpp
 // Path 1: R1 = ctx
 // Path 2: R1 = stack_ptr
@@ -79,6 +78,7 @@ Type meet(Type a, Type b) {
 ```
 
 **Example**:
+
 ```cpp
 // State: R1 type = T_TOP
 // Assume: R1 is pointer (not null check passed)

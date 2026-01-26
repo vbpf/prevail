@@ -103,9 +103,9 @@ Verifies safety properties by checking domain entailment:
 
 ## Data Flow
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
-│                         Program                                  │
+│                         Program                                 │
 │  ┌──────────┐  ┌──────────────────┐  ┌────────────────────┐     │
 │  │   CFG    │  │  Instructions    │  │    Assertions      │     │
 │  │ (graph)  │  │ (per-label map)  │  │  (per-label list)  │     │
@@ -114,25 +114,25 @@ Verifies safety properties by checking domain entailment:
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│              InterleavedFwdFixpointIterator                      │
-│                                                                  │
-│  for each node in WTO order:                                     │
-│    pre_state = join(post_states of predecessors)                 │
-│    check_assertions(pre_state, node.assertions)                  │
-│    post_state = transform(pre_state, node.instruction)           │
-│    if iteration > threshold: apply widening/narrowing            │
-│    store invariant(node) = { pre_state, post_state }             │
-│                                                                  │
+│              InterleavedFwdFixpointIterator                     │
+│                                                                 │
+│  for each node in WTO order:                                    │
+│    pre_state = join(post_states of predecessors)                │
+│    check_assertions(pre_state, node.assertions)                 │
+│    post_state = transform(pre_state, node.instruction)          │
+│    if iteration > threshold: apply widening/narrowing           │
+│    store invariant(node) = { pre_state, post_state }            │
+│                                                                 │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                      AnalysisResult                              │
+│                      AnalysisResult                             │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │ invariants: Map<Label, {pre, error, post}>              │    │
-│  │ failed: bool                                             │    │
-│  │ max_loop_count: int                                      │    │
-│  │ exit_value: Interval                                     │    │
+│  │ failed: bool                                            │    │
+│  │ max_loop_count: int                                     │    │
+│  │ exit_value: Interval                                    │    │
 │  └─────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -145,6 +145,7 @@ Prevail uses forward (rather than backward) analysis because:
 - eBPF programs have a single entry point
 - Memory safety depends on tracking pointer provenance from entry
 - Type information flows naturally forward
+- Backward analysis in abstract interpretation is more complex and typically requires forward analysis as a prerequisite
 
 ### 2. Composite Domain
 

@@ -44,52 +44,52 @@ Prevail verifies that eBPF programs:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        ELF Binary Input                          │
+│                        ELF Binary Input                         │
 └─────────────────────────────────────────────────────────────────┘
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    ELF Loader & Unmarshaller                     │
-│              (elf_loader.cpp, asm_unmarshal.cpp)                 │
+│                    ELF Loader & Unmarshaller                    │
+│              (elf_loader.cpp, asm_unmarshal.cpp)                │
 └─────────────────────────────────────────────────────────────────┘
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                     Instruction Sequence                         │
-│                        (src/ir/syntax.hpp)                       │
+│                     Instruction Sequence                        │
+│                        (src/ir/syntax.hpp)                      │
 └─────────────────────────────────────────────────────────────────┘
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                CFG Builder + Assertion Generator                 │
-│                      (src/ir/cfg_builder.cpp)                    │
+│                CFG Builder + Assertion Generator                │
+│                      (src/ir/cfg_builder.cpp)                   │
 └─────────────────────────────────────────────────────────────────┘
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Program (CFG + Assertions)                    │
+│                    Program (CFG + Assertions)                   │
 └─────────────────────────────────────────────────────────────────┘
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│              Forward Fixpoint Iterator (WTO-based)               │
-│                      (src/fwd_analyzer.cpp)                      │
-│  ┌───────────────┐    ┌───────────────┐    ┌───────────────┐    │
-│  │  EbpfDomain   │◄──►│ EbpfTransformer│◄──►│  EbpfChecker  │    │
-│  │  (state)      │    │ (semantics)    │    │ (assertions)  │    │
-│  └───────────────┘    └───────────────┘    └───────────────┘    │
+│              Forward Fixpoint Iterator (WTO-based)              │
+│                      (src/fwd_analyzer.cpp)                     │
+│  ┌──────────────┐    ┌─────────────────┐    ┌──────────────┐    │
+│  │ EbpfDomain   │◄──►│ EbpfTransformer │◄──►│ EbpfChecker  │    │
+│  │ (state)      │    │ (semantics)     │    │ (assertions) │    │
+│  └──────────────┘    └─────────────────┘    └──────────────┘    │
 └─────────────────────────────────────────────────────────────────┘
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                       Analysis Result                            │
-│           (invariants, errors, loop bounds, exit value)          │
+│                       Analysis Result                           │
+│           (invariants, errors, loop bounds, exit value)         │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Source Code Organization
 
-```
+```text
 src/
 ├── main/           # Entry points (check.cpp - CLI verifier)
 ├── ir/             # Intermediate representation

@@ -7,7 +7,7 @@ This document covers building the Prevail eBPF verifier on all supported platfor
 ### All Platforms
 
 - CMake 3.14 or later
-- C++20 compatible compiler
+- C++20-compatible compiler
 - Git (with submodule support)
 
 ### Linux
@@ -194,6 +194,7 @@ Recommended extensions:
 - CMake Tools
 
 `.vscode/settings.json`:
+
 ```json
 {
     "cmake.buildDirectory": "${workspaceFolder}/build",
@@ -213,7 +214,7 @@ Use the generated `.sln` file from CMake.
 
 ### Missing Boost
 
-```
+```text
 Could not find Boost
 ```
 
@@ -223,7 +224,7 @@ Could not find Boost
 
 ### yaml-cpp Not Found
 
-```
+```text
 Could not find yaml-cpp
 ```
 
@@ -237,7 +238,7 @@ brew install yaml-cpp                  # macOS
 
 ### Submodule Issues
 
-```
+```text
 external/bpf_conformance is empty
 ```
 
@@ -247,7 +248,7 @@ git submodule update --init --recursive
 
 ### Compiler Too Old
 
-```
+```text
 error: 'span' is not a member of 'std'
 ```
 

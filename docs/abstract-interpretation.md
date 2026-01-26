@@ -4,7 +4,7 @@ This document explains the abstract interpretation framework used by Prevail.
 
 ## What is Abstract Interpretation?
 
-Abstract interpretation is a theory of sound approximation of program semantics. Instead of executing a program with concrete values, we execute it with *abstract values* that represent sets of concrete values.
+Abstract interpretation is a theory of sound approximation of program semantics. Instead of executing a program with concrete values, we execute it with *abstract values* that represent sets of concrete values. See the [Wikipedia article](https://en.wikipedia.org/wiki/Abstract_interpretation) for a general introduction.
 
 **Example**: Instead of tracking that `x = 5`, we might track that `x ∈ [0, 10]` (an interval).
 
@@ -22,7 +22,7 @@ The goal is to find program invariants—properties that hold at each program po
 
 Prevail performs forward analysis starting from the program entry:
 
-```
+```text
 entry_state = { R1 = ctx_pointer, R10 = stack_pointer, ... }
 
 for each instruction in execution order:
@@ -83,15 +83,16 @@ WTO is an ordering of CFG nodes that enables efficient fixpoint computation.
 
 Consider this CFG:
 
-```
-    ┌───────────────┐
-    │               ▼
-1 → 2 → 3 → 4 → 5 → 6 → exit
+```text
+    ┌─────────────────────┐
+    │                     │
+    ▼                     │
+1 → 2 → 3 → 4 → 5 → 6 ────┘
         ▲       │
         └───────┘
 ```
 
-There are two loops: (2) and (3,4,5). Naive iteration processes all nodes equally, but we should:
+There are two loops: (2,3,4,5,6) and (3,4,5). Naive iteration processes all nodes equally, but we should:
 1. Stabilize inner loop (3,4,5) first
 2. Then stabilize outer loop (2)
 
@@ -99,7 +100,7 @@ There are two loops: (2) and (3,4,5). Naive iteration processes all nodes equall
 
 WTO represents this as nested components:
 
-```
+```text
 1 (2 (3 4 5) 6) exit
 
 Where:
@@ -279,10 +280,9 @@ bool NumAbsDomain::entails(Condition cond) {
 
 The analysis is guaranteed to terminate because:
 
-1. **Finite height**: Abstract domains have finite ascending chains (or widening enforces this)
-2. **Monotonic transfer**: Transfer functions are monotonic
-3. **Widening**: Jumps to stable approximations after bounded iterations
-4. **Iteration limit**: Maximum 2M narrowing iterations (safety bound)
+1. **Finite height or widening**: Abstract domains have finite ascending chains, or widening enforces termination for infinite-height domains
+2. **Widening**: Jumps to stable approximations after bounded iterations
+3. **Iteration limit**: Maximum 2M narrowing iterations (safety bound, needed because narrowing doesn't guarantee termination)
 
 ## Example Analysis
 

@@ -6,7 +6,7 @@ This document describes the abstract domain hierarchy used in Prevail.
 
 Prevail uses a composite domain structure:
 
-```
+```text
 EbpfDomain
 ├── TypeToNumDomain (Reduced Cardinal Power)
 │   ├── TypeDomain (pointer type tracking)
@@ -65,7 +65,7 @@ EbpfDomain EbpfDomain::setup_entry(bool check_termination) {
 
 This domain implements a *reduced cardinal power* construction:
 
-```
+```text
 TypeToNumDomain = TypeDomain × NumAbsDomain
 ```
 
@@ -121,7 +121,7 @@ enum class Type {
 
 ### Type Lattice
 
-```
+```text
            T_TOP (any type)
          /   |   \    \
     T_CTX T_STACK T_NUM ...
@@ -203,17 +203,19 @@ The core relational numeric domain.
 
 A DBM represents constraints of the form `x - y ≤ k`:
 
-```
-       x      y      z
-x   [  0,    3,     5  ]    // x - x ≤ 0, x - y ≤ 3, x - z ≤ 5
-y   [ -2,    0,     2  ]    // y - x ≤ -2, y - y ≤ 0, y - z ≤ 2
-z   [ ∞,    ∞,     0  ]    // z - x ≤ ∞, z - y ≤ ∞, z - z ≤ 0
+```text
+         x       y       z
+x   [    0,      3,      5  ]    // x - x ≤ 0, x - y ≤ 3, x - z ≤ 5
+y   [   -2,      0,      2  ]    // y - x ≤ -2, y - y ≤ 0, y - z ≤ 2
+z   [    ∞,      ∞,      0  ]    // z - x ≤ ∞, z - y ≤ ∞, z - z ≤ 0
 ```
 
 ### Split Representation
 
-"Split" means the matrix is stored as:
-- **Potential function**: Maps each variable to a value
+The name "Split" refers to the conceptual separation between interval constraints and difference constraints. While both kinds of constraints are physically stored in the DBM, the algorithms (transfer functions) work differently on each set. Importantly, the transfer functions ensure that the DBM does not contain explicit difference constraints that can be represented by intervals, since those would be redundant.
+
+The matrix is stored as:
+- **Potential function**: Maps each variable to a value (enables fast satisfiability checks)
 - **Difference graph**: Sparse graph of non-trivial constraints
 
 This is more efficient than a full matrix for sparse constraint sets.
