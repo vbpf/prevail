@@ -8,7 +8,7 @@ Prevail uses a composite domain structure:
 
 ```text
 EbpfDomain
-├── TypeToNumDomain (Reduced Cardinal Power)
+├── TypeToNumDomain (type-guided numeric constraints)
 │   ├── TypeDomain (pointer type tracking)
 │   └── NumAbsDomain (numeric constraints)
 │       └── FiniteDomain
@@ -59,17 +59,13 @@ EbpfDomain EbpfDomain::setup_entry(bool check_termination) {
 }
 ```
 
-## TypeToNumDomain (Reduced Cardinal Power)
+## TypeToNumDomain (Type-Guided Numeric Constraints)
 
 **File**: `src/crab/rcp.hpp`
 
-This domain implements a *reduced cardinal power* construction:
+`TypeToNumDomain` tracks two things: the possible type of each register (number vs different pointer kinds), and numeric constraints (intervals / DBM constraints) over per-register variables.
 
-```text
-TypeToNumDomain = TypeDomain × NumAbsDomain
-```
-
-The key insight: **type information guides numeric precision**.
+Some numeric variables are type-dependent ("kind variables") such as `packet_offset`, `stack_offset`, `ctx_offset`, etc. A kind variable is only meaningful when the type domain says the register may have the corresponding type; otherwise that variable is inactive / not applicable.
 
 ### Type-Dependent Variables
 
@@ -85,7 +81,17 @@ Each register has multiple associated variables:
 | `shared_offset` | type = SHARED | Offset into shared memory |
 | `map_fd` | type = MAP_FD | Map file descriptor |
 
-### Reduction
+### Type-Aware Domain Operations
+
+This affects the main domain operations:
+
+* **Subsumption (A ⊆ B)** is type-aware: kind variables that are inactive in A are treated as "don't care" during numeric comparison, so states like `{r is NUM}` can be subsumed by `{r is NUM or PACKET, r.packet_offset = 5}` without failing on `packet_offset`.
+
+* **Join** is type-aware: constraints on kind variables that exist only on the branch where the guarding type is possible are preserved instead of being dropped by a naive numeric join.
+
+Intuitively, this behaves like "splitting the numeric state by possible types", but it's implemented compactly as one relational numeric domain plus type-aware subsumption and join.
+
+### Type Assignment
 
 When type changes, irrelevant variables are havocked:
 
