@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 #include <functional>
+#include <optional>
 #include <set>
 #include <string>
+#include <vector>
 
 #include "verifier.hpp"
 
@@ -11,11 +13,22 @@ namespace prevail {
 
 struct TestCase {
     std::string name;
+    // If set, this YAML test case is expected to throw while being loaded/parsing.
+    // In that case, analysis is skipped and the exception message is compared.
+    std::optional<std::string> expected_exception;
+    std::optional<std::string> actual_exception;
     ebpf_verifier_options_t options{};
     StringInvariant assumed_pre_invariant;
     InstructionSeq instruction_seq;
     StringInvariant expected_post_invariant;
     std::set<std::string> expected_messages;
+    struct Observation {
+        Label label = Label::entry;
+        InvariantPoint point = InvariantPoint::pre;
+        ObservationCheckMode mode = ObservationCheckMode::consistent;
+        StringInvariant constraints;
+    };
+    std::vector<Observation> observations;
 };
 
 void foreach_suite(const std::string& path, const std::function<void(const TestCase&)>& f);

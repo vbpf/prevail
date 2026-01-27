@@ -5,7 +5,11 @@
 #include <bit>
 #include <fstream>
 #include <iostream>
+#include <map>
+#include <ranges>
 #include <set>
+#include <sstream>
+#include <stdexcept>
 #include <variant>
 
 #include <yaml-cpp/yaml.h>
@@ -93,13 +97,104 @@ static StringInvariant read_invariant(const vector<string>& raw_invariant) {
     return StringInvariant{std::move(res)};
 }
 
+static Label parse_label_scalar(const YAML::Node& node) {
+    if (!node.IsDefined() || node.IsNull() || !node.IsScalar()) {
+        throw std::runtime_error("Invalid observation label; expected scalar 'entry'/'exit' or instruction index");
+    }
+
+    const auto s = node.as<string>();
+    if (s == "entry") {
+        return Label::entry;
+    }
+    if (s == "exit") {
+        return Label::exit;
+    }
+
+    try {
+        size_t pos = 0;
+        const int index = std::stoi(s, &pos);
+        if (pos != s.size()) {
+            throw std::runtime_error("Invalid observation label: " + s);
+        }
+        if (index < 0) {
+            throw std::runtime_error("Invalid observation label: " + s);
+        }
+        return Label{index};
+    } catch (const std::exception&) {
+        throw std::runtime_error("Invalid observation label: " + s);
+    }
+}
+
+static InvariantPoint parse_point(const YAML::Node& node) {
+    if (!node.IsDefined() || node.IsNull()) {
+        return InvariantPoint::pre;
+    }
+    const auto s = node.as<string>();
+    if (s == "pre") {
+        return InvariantPoint::pre;
+    }
+    if (s == "post") {
+        return InvariantPoint::post;
+    }
+    throw std::runtime_error("Invalid observation point: " + s);
+}
+
+static ObservationCheckMode parse_mode(const YAML::Node& node) {
+    if (!node.IsDefined() || node.IsNull()) {
+        return ObservationCheckMode::consistent;
+    }
+    const auto s = node.as<string>();
+    if (s == "consistent") {
+        return ObservationCheckMode::consistent;
+    }
+    if (s == "entailed") {
+        return ObservationCheckMode::entailed;
+    }
+    throw std::runtime_error("Invalid observation mode: " + s);
+}
+
+static std::vector<TestCase::Observation> parse_observations(const YAML::Node& observe_node) {
+    std::vector<TestCase::Observation> res;
+    if (!observe_node.IsDefined() || observe_node.IsNull()) {
+        return res;
+    }
+    if (!observe_node.IsSequence()) {
+        throw std::runtime_error("observe must be a sequence");
+    }
+    for (const auto& item : observe_node) {
+        if (!item.IsMap()) {
+            throw std::runtime_error("observe item must be a map");
+        }
+        const Label label = parse_label_scalar(item["at"]);
+        const InvariantPoint point = parse_point(item["point"]);
+        const ObservationCheckMode mode = parse_mode(item["mode"]);
+        const YAML::Node constraints_node = item["constraints"];
+        if (!constraints_node.IsDefined() || constraints_node.IsNull()) {
+            throw std::runtime_error("observe item missing required 'constraints' field");
+        }
+        if (!constraints_node.IsSequence()) {
+            throw std::runtime_error("observe.constraints must be a sequence of strings");
+        }
+        const auto constraints_vec = constraints_node.as<vector<string>>();
+        TestCase::Observation obs;
+        obs.label = label;
+        obs.point = point;
+        obs.mode = mode;
+        obs.constraints = read_invariant(constraints_vec);
+        res.push_back(std::move(obs));
+    }
+    return res;
+}
+
 struct RawTestCase {
     string test_case;
+    std::optional<string> expected_exception;
     std::set<string> options;
     vector<string> pre;
     vector<std::tuple<string, vector<string>>> raw_blocks;
     vector<string> post;
     std::set<string> messages;
+    YAML::Node observe;
 };
 
 static vector<string> parse_block(const YAML::Node& block_node) {
@@ -127,14 +222,23 @@ static std::set<string> as_set_empty_default(const YAML::Node& optional_node) {
     return vector_to_set(optional_node.as<vector<string>>());
 }
 
+static std::optional<string> as_optional_string(const YAML::Node& optional_node) {
+    if (!optional_node.IsDefined() || optional_node.IsNull()) {
+        return std::nullopt;
+    }
+    return optional_node.as<string>();
+}
+
 static RawTestCase parse_case(const YAML::Node& case_node) {
     return RawTestCase{
         .test_case = case_node["test-case"].as<string>(),
+        .expected_exception = as_optional_string(case_node["expected-exception"]),
         .options = as_set_empty_default(case_node["options"]),
         .pre = case_node["pre"].as<vector<string>>(),
         .raw_blocks = parse_code(case_node["code"]),
         .post = case_node["post"].as<vector<string>>(),
         .messages = as_set_empty_default(case_node["messages"]),
+        .observe = case_node["observe"],
     };
 }
 
@@ -209,14 +313,31 @@ static TestCase read_case(const RawTestCase& raw_case) {
                     .assumed_pre_invariant = read_invariant(raw_case.pre),
                     .instruction_seq = raw_cfg_to_instruction_seq(raw_case.raw_blocks),
                     .expected_post_invariant = read_invariant(raw_case.post),
-                    .expected_messages = raw_case.messages};
+                    .expected_messages = raw_case.messages,
+                    .observations = parse_observations(raw_case.observe)};
 }
 
 static vector<TestCase> read_suite(const string& path) {
     std::ifstream f{path};
     vector<TestCase> res;
     for (const YAML::Node& config : YAML::LoadAll(f)) {
-        res.push_back(read_case(parse_case(config)));
+        const RawTestCase raw_case = parse_case(config);
+        if (raw_case.expected_exception.has_value()) {
+            TestCase tc;
+            tc.name = raw_case.test_case;
+            tc.expected_exception = raw_case.expected_exception;
+
+            try {
+                (void)read_case(raw_case);
+                tc.actual_exception = std::nullopt;
+            } catch (const std::exception& ex) {
+                tc.actual_exception = ex.what();
+            }
+
+            res.push_back(std::move(tc));
+        } else {
+            res.push_back(read_case(raw_case));
+        }
     }
     return res;
 }
@@ -230,6 +351,21 @@ static Diff<T> make_diff(const T& actual, const T& expected) {
 }
 
 std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
+    if (test_case.expected_exception.has_value()) {
+        const std::set<string> expected_messages{"Exception: " + *test_case.expected_exception};
+        std::set<string> actual_messages;
+        if (test_case.actual_exception.has_value()) {
+            actual_messages.insert("Exception: " + *test_case.actual_exception);
+        }
+        if (actual_messages == expected_messages) {
+            return {};
+        }
+        return Failure{
+            .invariant = make_diff(StringInvariant::top(), StringInvariant::top()),
+            .messages = make_diff(actual_messages, expected_messages),
+        };
+    }
+
     thread_local_options = {};
     ThreadLocalGuard clear_thread_local_state;
     test_case.options.verbosity_opts.print_failures = true;
@@ -256,6 +392,22 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
             }
         }
 
+        // Evaluate optional observation checks.
+        for (const auto& obs : test_case.observations) {
+            const ObservationCheckResult check =
+                result.check_observation_at_label(obs.label, obs.point, obs.constraints, obs.mode);
+            if (!check.ok) {
+                const std::string point_s = (obs.point == InvariantPoint::pre) ? "pre" : "post";
+                const std::string mode_s = (obs.mode == ObservationCheckMode::consistent) ? "consistent" : "entailed";
+                // Keep the message stable for YAML expectations; details are available via debug logging.
+                actual_messages.insert(to_string(obs.label) + ": observation " + mode_s + " failed at " + point_s);
+                if (debug && !check.message.empty()) {
+                    std::cout << "Observation check failed at " << obs.label << " (" << point_s << ", " << mode_s
+                              << "): " << check.message << "\n";
+                }
+            }
+        }
+
         if (actual_last_invariant == test_case.expected_post_invariant &&
             actual_messages == test_case.expected_messages) {
             return {};
@@ -270,6 +422,12 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
             actual_messages == test_case.expected_messages) {
             return {};
         }
+        return Failure{
+            .invariant = make_diff(StringInvariant::top(), test_case.expected_post_invariant),
+            .messages = make_diff(actual_messages, test_case.expected_messages),
+        };
+    } catch (const std::exception& ex) {
+        const std::set<string> actual_messages{std::string{"Exception: "} + ex.what()};
         return Failure{
             .invariant = make_diff(StringInvariant::top(), test_case.expected_post_invariant),
             .messages = make_diff(actual_messages, test_case.expected_messages),
