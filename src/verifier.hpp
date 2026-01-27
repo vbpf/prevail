@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <exception>
+
 #include "ir/program.hpp"
 #include "result.hpp"
 
@@ -9,9 +11,15 @@ namespace prevail {
 
 AnalysisResult analyze(const Program& prog);
 AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invariant);
-inline bool verify(const Program& prog) { return !analyze(prog).failed; }
-
 void ebpf_verifier_clear_thread_local_state();
+inline bool verify(const Program& prog) {
+    try {
+        return !analyze(prog).failed;
+    } catch (const std::exception&) {
+        ebpf_verifier_clear_thread_local_state();
+        return false;
+    }
+}
 
 struct ThreadLocalGuard {
     ThreadLocalGuard() = default;

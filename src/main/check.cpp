@@ -247,6 +247,9 @@ int main(int argc, char** argv) {
         } catch (UnmarshalError& e) {
             std::cerr << "error: " << e.what() << std::endl;
             return 1;
+        } catch (const std::exception& e) {
+            std::cerr << "error: " << e.what() << std::endl;
+            return 1;
         }
     } else if (domain == "linux") {
         // Pass the instruction sequence to the Linux kernel verifier.
