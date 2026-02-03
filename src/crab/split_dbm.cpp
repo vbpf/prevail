@@ -214,6 +214,20 @@ class SplitDBM::CoreDBM {
         return g_.succs(v).size() > 0 || g_.preds(v).size() > 0;
     }
 
+    // Get all vertices with no edges (excluding vertex 0) for garbage collection
+    [[nodiscard]] std::vector<VertId> get_disconnected_vertices() const {
+        std::vector<VertId> result;
+        for (VertId v : g_.verts()) {
+            if (v == 0) {
+                continue;
+            }
+            if (!vertex_has_edges(v)) {
+                result.push_back(v);
+            }
+        }
+        return result;
+    }
+
     // Unconditional edge update (used in assign after closure)
     void update_edge(VertId src, Weight w, VertId dest) {
         g_.update_edge(src, w, dest);
@@ -980,16 +994,11 @@ class SplitDBMJoiner {
         CoreDBM joined = CoreDBM::join(*left.core_, *right.core_, perm_x, perm_y);
 
         // 3. Garbage collect unused vertices (needs Variable mapping)
-        for (VertId v : joined.graph().verts()) {
-            if (v == 0) {
-                continue;
-            }
-            if (joined.graph().succs(v).size() == 0 && joined.graph().preds(v).size() == 0) {
-                joined.forget(v);
-                if (out_revmap[v]) {
-                    out_vmap.erase(*(out_revmap[v]));
-                    out_revmap[v] = std::nullopt;
-                }
+        for (VertId v : joined.get_disconnected_vertices()) {
+            joined.forget(v);
+            if (out_revmap[v]) {
+                out_vmap.erase(*(out_revmap[v]));
+                out_revmap[v] = std::nullopt;
             }
         }
 
