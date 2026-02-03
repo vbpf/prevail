@@ -27,6 +27,9 @@ enum class Side : bool {
     RIGHT = true   // Edge 0 → v: upper bound = weight
 };
 
+// Forward declaration for CoreDBM's static methods
+class AlignedPair;
+
 // =============================================================================
 // CoreDBM: Low-level DBM operations using (VertId, Side)
 // =============================================================================
@@ -307,147 +310,18 @@ class SplitDBM::CoreDBM {
 
     // =========================================================================
     // Static lattice operations on permuted vertices
+    // (Implementations follow AlignedPair class definition)
     // =========================================================================
 
-    // Join two CoreDBMs given permutation vectors.
-    // perm_x[i] = vertex in left that maps to vertex i in result
-    // perm_y[i] = vertex in right that maps to vertex i in result
-    static CoreDBM join(
-        const CoreDBM& left,
-        const CoreDBM& right,
-        const std::vector<VertId>& perm_x,
-        const std::vector<VertId>& perm_y
-    ) {
-        const size_t sz = perm_x.size();
-        assert(perm_x.size() == perm_y.size());
+    // Join two CoreDBMs using an aligned pair
+    static CoreDBM join(const AlignedPair& aligned);
 
-        // Build potentials for the permuted vertices
-        std::vector<Weight> pot_rx, pot_ry;
-        pot_rx.reserve(sz);
-        pot_ry.reserve(sz);
-        for (size_t i = 0; i < sz; ++i) {
-            pot_rx.push_back(left.potential_[perm_x[i]] - left.potential_[0]);
-            pot_ry.push_back(right.potential_[perm_y[i]] - right.potential_[0]);
-        }
-        pot_rx[0] = 0;
-        pot_ry[0] = 0;
+    // Widen two CoreDBMs using an aligned pair
+    static CoreDBM widen(const AlignedPair& aligned);
 
-        // Build the permuted view of x and y.
-        GraphPerm gx(perm_x, left.g_);
-        GraphPerm gy(perm_y, right.g_);
-
-        // Compute the deferred relations: bounds from x applied to relations from y
-        Graph g_ix_ry;
-        g_ix_ry.growTo(sz);
-        SubGraph gy_excl(gy, 0);
-        for (VertId s : gy_excl.verts()) {
-            for (VertId d : gy_excl.succs(s)) {
-                if (auto ws = gx.lookup(s, 0)) {
-                    if (auto wd = gx.lookup(0, d)) {
-                        g_ix_ry.add_edge(s, *ws + *wd, d);
-                    }
-                }
-            }
-        }
-
-        // Apply the deferred relations, and re-close.
-        bool is_closed;
-        Graph g_rx(GraphOps::meet(gx, g_ix_ry, is_closed));
-        if (!is_closed) {
-            GraphOps::apply_delta(g_rx,
-                                  GraphOps::close_after_meet(SubGraph(g_rx, 0), pot_func(pot_rx), gx, g_ix_ry));
-        }
-
-        // Compute the deferred relations: bounds from y applied to relations from x
-        Graph g_rx_iy;
-        g_rx_iy.growTo(sz);
-        SubGraph gx_excl(gx, 0);
-        for (VertId s : gx_excl.verts()) {
-            for (VertId d : gx_excl.succs(s)) {
-                if (auto ws = gy.lookup(s, 0)) {
-                    if (auto wd = gy.lookup(0, d)) {
-                        g_rx_iy.add_edge(s, *ws + *wd, d);
-                    }
-                }
-            }
-        }
-
-        Graph g_ry(GraphOps::meet(gy, g_rx_iy, is_closed));
-        if (!is_closed) {
-            GraphOps::apply_delta(g_ry,
-                                  GraphOps::close_after_meet(SubGraph(g_ry, 0), pot_func(pot_ry), gy, g_rx_iy));
-        }
-
-        // Syntactic join of the closed graphs
-        Graph join_g(GraphOps::join(g_rx, g_ry));
-
-        // Reapply missing independent relations
-        std::vector<VertId> lb_up, lb_down, ub_up, ub_down;
-        for (VertId v : gx_excl.verts()) {
-            if (auto wx = gx.lookup(0, v)) {
-                if (auto wy = gy.lookup(0, v)) {
-                    if (*wx < *wy) ub_up.push_back(v);
-                    if (*wy < *wx) ub_down.push_back(v);
-                }
-            }
-            if (auto wx = gx.lookup(v, 0)) {
-                if (auto wy = gy.lookup(v, 0)) {
-                    if (*wx < *wy) lb_down.push_back(v);
-                    if (*wy < *wx) lb_up.push_back(v);
-                }
-            }
-        }
-
-        for (VertId s : lb_up) {
-            Weight dx_s = gx.edge_val(s, 0);
-            Weight dy_s = gy.edge_val(s, 0);
-            for (VertId d : ub_up) {
-                if (s != d) {
-                    join_g.update_edge(s, std::max(dx_s + gx.edge_val(0, d), dy_s + gy.edge_val(0, d)), d);
-                }
-            }
-        }
-
-        for (VertId s : lb_down) {
-            Weight dx_s = gx.edge_val(s, 0);
-            Weight dy_s = gy.edge_val(s, 0);
-            for (VertId d : ub_down) {
-                if (s != d) {
-                    join_g.update_edge(s, std::max(dx_s + gx.edge_val(0, d), dy_s + gy.edge_val(0, d)), d);
-                }
-            }
-        }
-
-        return CoreDBM(std::move(join_g), std::move(pot_rx), VertSet{});
-    }
-
-    // Widen two CoreDBMs given permutation vectors.
-    static CoreDBM widen(
-        const CoreDBM& left,
-        const CoreDBM& right,
-        const std::vector<VertId>& perm_x,
-        const std::vector<VertId>& perm_y
-    ) {
-        const size_t sz = perm_x.size();
-
-        // Build potentials for the permuted vertices
-        std::vector<Weight> widen_pot;
-        widen_pot.reserve(sz);
-        for (size_t i = 0; i < sz; ++i) {
-            widen_pot.push_back(left.potential_[perm_x[i]] - left.potential_[0]);
-        }
-        widen_pot[0] = 0;
-
-        // Build the permuted view of x and y.
-        GraphPerm gx(perm_x, left.g_);
-        GraphPerm gy(perm_y, right.g_);
-
-        // Perform the widening
-        VertSet widen_unstable(left.unstable_);
-        Graph widen_g(GraphOps::widen(gx, gy, widen_unstable));
-
-        return CoreDBM(std::move(widen_g), std::move(widen_pot), std::move(widen_unstable));
-    }
+    // Meet two CoreDBMs using an aligned pair (with initial potentials)
+    // Returns nullopt if the meet is infeasible.
+    static std::optional<CoreDBM> meet(AlignedPair& aligned);
 
     // Check if left is subsumed by right (i.e., left <= right in the lattice).
     // perm[ox] = vertex in left corresponding to vertex ox in right.
@@ -487,37 +361,6 @@ class SplitDBM::CoreDBM {
             }
         }
         return true;
-    }
-
-    // Meet two CoreDBMs given permutation vectors.
-    // Returns nullopt if the meet is infeasible.
-    static std::optional<CoreDBM> meet(
-        const CoreDBM& left,
-        const CoreDBM& right,
-        const std::vector<VertId>& perm_x,
-        const std::vector<VertId>& perm_y,
-        std::vector<Weight>& meet_pi  // warm-started potentials, updated in place
-    ) {
-        // Build the permuted view of x and y.
-        GraphPerm gx(perm_x, left.g_);
-        GraphPerm gy(perm_y, right.g_);
-
-        // Compute the syntactic meet of the permuted graphs.
-        bool is_closed{};
-        Graph meet_g(GraphOps::meet(gx, gy, is_closed));
-
-        // Select valid potentials using Bellman-Ford
-        if (!GraphOps::select_potentials(meet_g, meet_pi)) {
-            return std::nullopt;  // Infeasible
-        }
-
-        if (!is_closed) {
-            const auto potential_func = pot_func(meet_pi);
-            GraphOps::apply_delta(meet_g, GraphOps::close_after_meet(SubGraph(meet_g, 0), potential_func, gx, gy));
-            GraphOps::apply_delta(meet_g, GraphOps::close_after_assign(meet_g, potential_func, 0));
-        }
-
-        return CoreDBM(std::move(meet_g), std::move(meet_pi), VertSet{});
     }
 };
 
@@ -959,88 +802,355 @@ bool SplitDBM::operator<=(const SplitDBM& o) const {
     return CoreDBM::is_subsumed_by(*core_, *o.core_, perm);
 }
 
-class SplitDBMJoiner {
-    friend class SplitDBM;
+// =============================================================================
+// AlignedPair: Two SplitDBMs viewed in a common vertex space
+// =============================================================================
+// When performing binary operations (join, widen, meet), we need to align
+// two SplitDBMs so that same-named variables occupy the same vertex index.
+// This class encapsulates that alignment.
+//
+// Terminology:
+// - "aligned vertex": index in the common space (0, 1, 2, ...)
+// - "left/right vertex": index in the respective operand's space
+// - perm_left_[aligned] = left_vertex (maps aligned -> left)
+// - perm_right_[aligned] = right_vertex (maps aligned -> right)
 
-    static SplitDBM join(const SplitDBM& left, const SplitDBM& right) {
-        using VertId = SplitDBM::VertId;
-        using VertMap = SplitDBM::VertMap;
-        using RevMap = SplitDBM::RevMap;
-        using CoreDBM = SplitDBM::CoreDBM;
+class AlignedPair {
+  public:
+    using VertId = SplitDBM::VertId;
+    using VertMap = SplitDBM::VertMap;
+    using RevMap = SplitDBM::RevMap;
+    using Weight = SplitDBM::Weight;
+    using CoreDBM = SplitDBM::CoreDBM;
 
-        if (right.is_top()) {
-            return right;
-        }
-        if (left.is_top()) {
-            return left;
-        }
+    // Create alignment from intersection of variables (for join/widen)
+    static AlignedPair make_intersection(const SplitDBM& left, const SplitDBM& right) {
+        std::vector<VertId> perm_left = {0};
+        std::vector<VertId> perm_right = {0};
+        RevMap aligned_vars = {std::nullopt};  // aligned_vars[i] = variable at aligned vertex i
 
-        // 1. SplitDBM: Build permutation from common Variables
-        std::vector<VertId> perm_x = {0};
-        std::vector<VertId> perm_y = {0};
-        VertMap out_vmap;
-        RevMap out_revmap = {std::nullopt};
-
-        for (const auto& [v, lid] : left.vert_map_) {
-            if (auto rid = try_at(right.vert_map_, v)) {
-                out_vmap.emplace(v, gsl::narrow<VertId>(perm_x.size()));
-                out_revmap.push_back(v);
-                perm_x.push_back(lid);
-                perm_y.push_back(*rid);
+        for (const auto& [var, left_vert] : left.vert_map_) {
+            if (auto right_vert = try_at(right.vert_map_, var)) {
+                perm_left.push_back(left_vert);
+                perm_right.push_back(*right_vert);
+                aligned_vars.push_back(var);
             }
         }
 
-        // 2. CoreDBM: Execute graph join
-        CoreDBM joined = CoreDBM::join(*left.core_, *right.core_, perm_x, perm_y);
-
-        // 3. Garbage collect unused vertices (needs Variable mapping)
-        for (VertId v : joined.get_disconnected_vertices()) {
-            joined.forget(v);
-            if (out_revmap[v]) {
-                out_vmap.erase(*(out_revmap[v]));
-                out_revmap[v] = std::nullopt;
-            }
-        }
-
-        // 4. SplitDBM: Wrap with Variable mapping
-        std::set<Variable> merged_min_only = left.min_only_;
-        merged_min_only.insert(right.min_only_.begin(), right.min_only_.end());
-
-        return SplitDBM(std::move(out_vmap), std::move(out_revmap),
-                        std::make_unique<CoreDBM>(std::move(joined)), std::move(merged_min_only));
+        return AlignedPair(*left.core_, *right.core_,
+                           std::move(perm_left), std::move(perm_right),
+                           std::move(aligned_vars));
     }
+
+    // Create alignment from union of variables (for meet)
+    // Also computes initial potentials since meet needs them from both operands
+    static AlignedPair make_union(const SplitDBM& left, const SplitDBM& right) {
+        constexpr VertId NOT_PRESENT = static_cast<VertId>(-1);
+
+        std::vector<VertId> perm_left = {0};
+        std::vector<VertId> perm_right = {0};
+        RevMap aligned_vars = {std::nullopt};
+        std::vector<Weight> initial_potentials = {Weight(0)};
+
+        const auto& pot_left = left.core_->potential();
+        const auto& pot_right = right.core_->potential();
+
+        // Add all variables from left
+        for (const auto& [var, left_vert] : left.vert_map_) {
+            perm_left.push_back(left_vert);
+            perm_right.push_back(NOT_PRESENT);  // May be updated below
+            aligned_vars.push_back(var);
+            initial_potentials.push_back(pot_left[left_vert] - pot_left[0]);
+        }
+
+        // Add missing variables from right, or update perm_right for common ones
+        for (const auto& [var, right_vert] : right.vert_map_) {
+            // Check if already added from left
+            bool found = false;
+            for (size_t i = 1; i < aligned_vars.size(); ++i) {
+                if (aligned_vars[i] == var) {
+                    perm_right[i] = right_vert;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                // Variable only in right
+                perm_left.push_back(NOT_PRESENT);
+                perm_right.push_back(right_vert);
+                aligned_vars.push_back(var);
+                initial_potentials.push_back(pot_right[right_vert] - pot_right[0]);
+            }
+        }
+
+        return AlignedPair(*left.core_, *right.core_,
+                           std::move(perm_left), std::move(perm_right),
+                           std::move(aligned_vars), std::move(initial_potentials));
+    }
+
+    // Accessors
+    [[nodiscard]] size_t size() const { return perm_left_.size(); }
+    [[nodiscard]] const std::vector<VertId>& left_perm() const { return perm_left_; }
+    [[nodiscard]] const std::vector<VertId>& right_perm() const { return perm_right_; }
+    [[nodiscard]] const CoreDBM& left_core() const { return left_; }
+    [[nodiscard]] const CoreDBM& right_core() const { return right_; }
+
+    // Get initial potentials (only valid for union alignment)
+    [[nodiscard]] std::vector<Weight>& initial_potentials() { return initial_potentials_; }
+
+    // Build result's variable mappings from the alignment
+    [[nodiscard]] std::pair<VertMap, RevMap> result_mappings() const {
+        VertMap vmap;
+        RevMap revmap = aligned_vars_;  // Copy: aligned vertex -> variable
+
+        for (size_t i = 1; i < aligned_vars_.size(); ++i) {
+            if (aligned_vars_[i]) {
+                vmap.emplace(*aligned_vars_[i], gsl::narrow<VertId>(i));
+            }
+        }
+        return {std::move(vmap), std::move(revmap)};
+    }
+
+  private:
+    AlignedPair(const CoreDBM& left, const CoreDBM& right,
+                std::vector<VertId> perm_left, std::vector<VertId> perm_right,
+                RevMap aligned_vars, std::vector<Weight> initial_potentials = {})
+        : left_(left), right_(right),
+          perm_left_(std::move(perm_left)), perm_right_(std::move(perm_right)),
+          aligned_vars_(std::move(aligned_vars)),
+          initial_potentials_(std::move(initial_potentials)) {}
+
+    const CoreDBM& left_;
+    const CoreDBM& right_;
+    std::vector<VertId> perm_left_;
+    std::vector<VertId> perm_right_;
+    RevMap aligned_vars_;
+    std::vector<Weight> initial_potentials_;  // Only used for union (meet)
 };
 
-void SplitDBM::operator|=(const SplitDBM& right) { *this = SplitDBMJoiner::join(*this, right); }
+// =============================================================================
+// CoreDBM static method implementations (depend on AlignedPair)
+// =============================================================================
 
-SplitDBM SplitDBM::operator|(const SplitDBM& right) const { return SplitDBMJoiner::join(*this, right); }
+SplitDBM::CoreDBM SplitDBM::CoreDBM::join(const AlignedPair& aligned) {
+    const auto& perm_x = aligned.left_perm();
+    const auto& perm_y = aligned.right_perm();
+    const auto& left = aligned.left_core();
+    const auto& right = aligned.right_core();
+    const size_t sz = aligned.size();
 
-SplitDBM SplitDBM::widen(const SplitDBM& o) const {
-    // 1. SplitDBM: Build permutation from common Variables
-    std::vector<VertId> perm_x = {0};
-    std::vector<VertId> perm_y = {0};
-    VertMap out_vmap;
-    RevMap out_revmap = {std::nullopt};
+    // Build potentials for the aligned vertices
+    std::vector<Weight> pot_left, pot_right;
+    pot_left.reserve(sz);
+    pot_right.reserve(sz);
+    for (size_t i = 0; i < sz; ++i) {
+        pot_left.push_back(left.potential_[perm_x[i]] - left.potential_[0]);
+        pot_right.push_back(right.potential_[perm_y[i]] - right.potential_[0]);
+    }
+    pot_left[0] = 0;
+    pot_right[0] = 0;
 
-    for (const auto& [v, lid] : vert_map_) {
-        if (auto rid = try_at(o.vert_map_, v)) {
-            out_vmap.emplace(v, gsl::narrow<VertId>(perm_x.size()));
-            out_revmap.push_back(v);
-            perm_x.push_back(lid);
-            perm_y.push_back(*rid);
+    // Build aligned views of the graphs
+    GraphPerm gx(perm_x, left.g_);
+    GraphPerm gy(perm_y, right.g_);
+
+    // Compute deferred relations: bounds from left applied to relations from right
+    Graph g_deferred_right;
+    g_deferred_right.growTo(sz);
+    SubGraph gy_excl(gy, 0);
+    for (VertId s : gy_excl.verts()) {
+        for (VertId d : gy_excl.succs(s)) {
+            if (auto ws = gx.lookup(s, 0)) {
+                if (auto wd = gx.lookup(0, d)) {
+                    g_deferred_right.add_edge(s, *ws + *wd, d);
+                }
+            }
         }
     }
 
-    // 2. CoreDBM: Execute graph widen
-    auto out_core = std::make_unique<CoreDBM>(
-        CoreDBM::widen(*core_, *o.core_, perm_x, perm_y)
-    );
+    // Apply deferred relations to right and re-close
+    bool is_closed;
+    Graph g_closed_left(GraphOps::meet(gx, g_deferred_right, is_closed));
+    if (!is_closed) {
+        GraphOps::apply_delta(g_closed_left,
+            GraphOps::close_after_meet(SubGraph(g_closed_left, 0), pot_func(pot_left), gx, g_deferred_right));
+    }
 
-    // 3. SplitDBM: Wrap with Variable mapping
+    // Compute deferred relations: bounds from right applied to relations from left
+    Graph g_deferred_left;
+    g_deferred_left.growTo(sz);
+    SubGraph gx_excl(gx, 0);
+    for (VertId s : gx_excl.verts()) {
+        for (VertId d : gx_excl.succs(s)) {
+            if (auto ws = gy.lookup(s, 0)) {
+                if (auto wd = gy.lookup(0, d)) {
+                    g_deferred_left.add_edge(s, *ws + *wd, d);
+                }
+            }
+        }
+    }
+
+    Graph g_closed_right(GraphOps::meet(gy, g_deferred_left, is_closed));
+    if (!is_closed) {
+        GraphOps::apply_delta(g_closed_right,
+            GraphOps::close_after_meet(SubGraph(g_closed_right, 0), pot_func(pot_right), gy, g_deferred_left));
+    }
+
+    // Syntactic join of the closed graphs
+    Graph result_g(GraphOps::join(g_closed_left, g_closed_right));
+
+    // Reapply missing independent relations
+    std::vector<VertId> lb_up, lb_down, ub_up, ub_down;
+    for (VertId v : gx_excl.verts()) {
+        if (auto wx = gx.lookup(0, v)) {
+            if (auto wy = gy.lookup(0, v)) {
+                if (*wx < *wy) ub_up.push_back(v);
+                if (*wy < *wx) ub_down.push_back(v);
+            }
+        }
+        if (auto wx = gx.lookup(v, 0)) {
+            if (auto wy = gy.lookup(v, 0)) {
+                if (*wx < *wy) lb_down.push_back(v);
+                if (*wy < *wx) lb_up.push_back(v);
+            }
+        }
+    }
+
+    for (VertId s : lb_up) {
+        Weight left_lb = gx.edge_val(s, 0);
+        Weight right_lb = gy.edge_val(s, 0);
+        for (VertId d : ub_up) {
+            if (s != d) {
+                result_g.update_edge(s, std::max(left_lb + gx.edge_val(0, d), right_lb + gy.edge_val(0, d)), d);
+            }
+        }
+    }
+
+    for (VertId s : lb_down) {
+        Weight left_lb = gx.edge_val(s, 0);
+        Weight right_lb = gy.edge_val(s, 0);
+        for (VertId d : ub_down) {
+            if (s != d) {
+                result_g.update_edge(s, std::max(left_lb + gx.edge_val(0, d), right_lb + gy.edge_val(0, d)), d);
+            }
+        }
+    }
+
+    return CoreDBM(std::move(result_g), std::move(pot_left), VertSet{});
+}
+
+SplitDBM::CoreDBM SplitDBM::CoreDBM::widen(const AlignedPair& aligned) {
+    const auto& perm_left = aligned.left_perm();
+    const auto& perm_right = aligned.right_perm();
+    const auto& left = aligned.left_core();
+    const auto& right = aligned.right_core();
+    const size_t sz = aligned.size();
+
+    // Build potentials from left (widen uses left's potentials)
+    std::vector<Weight> result_pot;
+    result_pot.reserve(sz);
+    for (size_t i = 0; i < sz; ++i) {
+        result_pot.push_back(left.potential_[perm_left[i]] - left.potential_[0]);
+    }
+    result_pot[0] = 0;
+
+    // Build aligned views
+    GraphPerm gx(perm_left, left.g_);
+    GraphPerm gy(perm_right, right.g_);
+
+    // Perform the widening
+    VertSet result_unstable(left.unstable_);
+    Graph result_g(GraphOps::widen(gx, gy, result_unstable));
+
+    return CoreDBM(std::move(result_g), std::move(result_pot), std::move(result_unstable));
+}
+
+std::optional<SplitDBM::CoreDBM> SplitDBM::CoreDBM::meet(AlignedPair& aligned) {
+    const auto& perm_left = aligned.left_perm();
+    const auto& perm_right = aligned.right_perm();
+    const auto& left = aligned.left_core();
+    const auto& right = aligned.right_core();
+
+    // Build aligned views
+    GraphPerm gx(perm_left, left.g_);
+    GraphPerm gy(perm_right, right.g_);
+
+    // Compute the syntactic meet of the aligned graphs
+    bool is_closed{};
+    Graph result_g(GraphOps::meet(gx, gy, is_closed));
+
+    // Select valid potentials using Bellman-Ford (updates initial_potentials in place)
+    auto& result_pot = aligned.initial_potentials();
+    if (!GraphOps::select_potentials(result_g, result_pot)) {
+        return std::nullopt;  // Infeasible
+    }
+
+    if (!is_closed) {
+        const auto potential_func = pot_func(result_pot);
+        GraphOps::apply_delta(result_g, GraphOps::close_after_meet(SubGraph(result_g, 0), potential_func, gx, gy));
+        GraphOps::apply_delta(result_g, GraphOps::close_after_assign(result_g, potential_func, 0));
+    }
+
+    return CoreDBM(std::move(result_g), std::move(result_pot), VertSet{});
+}
+
+// =============================================================================
+// SplitDBM join/widen/meet operations using AlignedPair
+// =============================================================================
+
+SplitDBM do_join(const SplitDBM& left, const SplitDBM& right) {
+    using CoreDBM = SplitDBM::CoreDBM;
+
+    if (right.is_top()) {
+        return right;
+    }
+    if (left.is_top()) {
+        return left;
+    }
+
+    // 1. Build alignment (intersection of variables)
+    AlignedPair aligned = AlignedPair::make_intersection(left, right);
+
+    // 2. Execute graph join
+    CoreDBM joined = CoreDBM::join(aligned);
+
+    // 3. Build result mappings and garbage collect
+    auto [out_vmap, out_revmap] = aligned.result_mappings();
+    for (SplitDBM::VertId v : joined.get_disconnected_vertices()) {
+        joined.forget(v);
+        if (out_revmap[v]) {
+            out_vmap.erase(*out_revmap[v]);
+            out_revmap[v] = std::nullopt;
+        }
+    }
+
+    // 4. Merge min_only sets
+    std::set<Variable> merged_min_only = left.min_only_;
+    merged_min_only.insert(right.min_only_.begin(), right.min_only_.end());
+
+    return SplitDBM(std::move(out_vmap), std::move(out_revmap),
+                    std::make_unique<CoreDBM>(std::move(joined)), std::move(merged_min_only));
+}
+
+void SplitDBM::operator|=(const SplitDBM& right) { *this = do_join(*this, right); }
+
+SplitDBM SplitDBM::operator|(const SplitDBM& right) const { return do_join(*this, right); }
+
+SplitDBM SplitDBM::widen(const SplitDBM& o) const {
+    // 1. Build alignment (intersection of variables)
+    AlignedPair aligned = AlignedPair::make_intersection(*this, o);
+
+    // 2. Execute graph widen
+    auto result_core = std::make_unique<CoreDBM>(CoreDBM::widen(aligned));
+
+    // 3. Build result mappings
+    auto [out_vmap, out_revmap] = aligned.result_mappings();
+
+    // 4. Merge min_only sets
     std::set<Variable> merged_min_only = min_only_;
     merged_min_only.insert(o.min_only_.begin(), o.min_only_.end());
 
-    return SplitDBM(std::move(out_vmap), std::move(out_revmap), std::move(out_core), std::move(merged_min_only));
+    return SplitDBM(std::move(out_vmap), std::move(out_revmap), std::move(result_core), std::move(merged_min_only));
 }
 
 std::optional<SplitDBM> SplitDBM::meet(const SplitDBM& o) const {
@@ -1059,55 +1169,23 @@ std::optional<SplitDBM> SplitDBM::meet(const SplitDBM& o) const {
                                       << "DBM 2\n"
                                       << o << "\n");
 
-    const auto& pot = core_->potential();
-    const auto& opot = o.core_->potential();
+    // 1. Build alignment (union of variables, with initial potentials)
+    AlignedPair aligned = AlignedPair::make_union(*this, o);
 
-    // 1. SplitDBM: Build permutation from union of Variables
-    // Meet includes variables from BOTH operands (unlike join which uses intersection)
-    VertMap meet_verts;
-    RevMap meet_rev = {std::nullopt};
-    std::vector<VertId> perm_x = {0};
-    std::vector<VertId> perm_y = {0};
-    std::vector<Weight> meet_pi = {0};
-
-    // Add variables from left operand
-    for (const auto& [v, lid] : vert_map_) {
-        VertId vv = gsl::narrow<VertId>(perm_x.size());
-        meet_verts.emplace(v, vv);
-        meet_rev.push_back(v);
-        perm_x.push_back(lid);
-        perm_y.push_back(-1);  // -1 = not in right operand (yet)
-        meet_pi.push_back(pot[lid] - pot[0]);
-    }
-
-    // Add missing variables from right operand
-    for (const auto& [v, rid] : o.vert_map_) {
-        auto it = meet_verts.find(v);
-        if (it == meet_verts.end()) {
-            // Variable only in right operand
-            VertId vv = gsl::narrow<VertId>(perm_y.size());
-            meet_verts.emplace(v, vv);
-            meet_rev.push_back(v);
-            perm_x.push_back(-1);  // Not in left operand
-            perm_y.push_back(rid);
-            meet_pi.push_back(opot[rid] - opot[0]);
-        } else {
-            // Variable in both operands
-            perm_y[it->second] = rid;
-        }
-    }
-
-    // 2. CoreDBM: Execute graph meet
-    auto meet_result = CoreDBM::meet(*core_, *o.core_, perm_x, perm_y, meet_pi);
+    // 2. Execute graph meet
+    auto meet_result = CoreDBM::meet(aligned);
     if (!meet_result) {
         return std::nullopt;  // Infeasible
     }
 
-    // 3. SplitDBM: Wrap with Variable mapping
+    // 3. Build result mappings
+    auto [out_vmap, out_revmap] = aligned.result_mappings();
+
+    // 4. Merge min_only sets
     std::set<Variable> merged_min_only = min_only_;
     merged_min_only.insert(o.min_only_.begin(), o.min_only_.end());
 
-    SplitDBM res(std::move(meet_verts), std::move(meet_rev),
+    SplitDBM res(std::move(out_vmap), std::move(out_revmap),
                  std::make_unique<CoreDBM>(std::move(*meet_result)), std::move(merged_min_only));
     CRAB_LOG("zones-split", std::cout << "Result meet:\n" << res << "\n");
     return res;

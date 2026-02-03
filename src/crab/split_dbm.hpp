@@ -42,7 +42,8 @@ namespace prevail {
 enum class ArithBinOp { ADD, SUB, MUL };
 
 class SplitDBM final {
-    friend class SplitDBMJoiner;
+    friend class AlignedPair;
+    friend SplitDBM do_join(const SplitDBM&, const SplitDBM&);
 
   public:
     using Graph = AdaptGraph;
