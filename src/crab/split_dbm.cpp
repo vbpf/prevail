@@ -202,6 +202,73 @@ class SplitDBM::CoreDBM {
         return potential_[0];
     }
 
+    // ==========================================================================
+    // Size and edge accessors
+    // ==========================================================================
+
+    [[nodiscard]] std::size_t graph_size() const { return g_.size(); }
+    [[nodiscard]] std::size_t num_edges() const { return g_.num_edges(); }
+
+    // Check if a vertex has any edges (for subsumption check permutation building)
+    [[nodiscard]] bool vertex_has_edges(VertId v) const {
+        return g_.succs(v).size() > 0 || g_.preds(v).size() > 0;
+    }
+
+    // Unconditional edge update (used in assign after closure)
+    void update_edge(VertId src, Weight w, VertId dest) {
+        g_.update_edge(src, w, dest);
+    }
+
+    // Strengthen a bound and propagate to neighbors.
+    // For LEFT (lower bound v→0): propagates to predecessors
+    // For RIGHT (upper bound 0→v): propagates to successors
+    // Returns false if infeasible, true otherwise.
+    // Note: new_bound is the EDGE weight (-lb for LEFT, ub for RIGHT)
+    bool strengthen_bound_with_propagation(VertId v, Side side, Weight new_bound) {
+        if (side == Side::LEFT) {
+            // Lower bound: edge v → 0
+            auto w = g_.lookup(v, 0);
+            if (!w || new_bound >= *w) {
+                return true;  // No existing bound or new bound is not tighter
+            }
+            g_.set_edge(v, new_bound, 0);
+            if (!repair_potential(v, 0)) {
+                return false;
+            }
+            // Propagate to predecessors: for each edge pred→v, update pred→0
+            for (const auto e : g_.e_preds(v)) {
+                if (e.vert == 0) {
+                    continue;
+                }
+                g_.update_edge(e.vert, e.val + new_bound, 0);
+                if (!repair_potential(e.vert, 0)) {
+                    return false;
+                }
+            }
+        } else {
+            // Upper bound: edge 0 → v
+            auto w = g_.lookup(0, v);
+            if (!w || new_bound >= *w) {
+                return true;  // No existing bound or new bound is not tighter
+            }
+            g_.set_edge(0, new_bound, v);
+            if (!repair_potential(0, v)) {
+                return false;
+            }
+            // Propagate to successors: for each edge v→succ, update 0→succ
+            for (const auto e : g_.e_succs(v)) {
+                if (e.vert == 0) {
+                    continue;
+                }
+                g_.update_edge(0, e.val + new_bound, e.vert);
+                if (!repair_potential(0, e.vert)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     void normalize() {
         CrabStats::count("CoreDBM.count.normalize");
         ScopedCrabStats __st__("CoreDBM.normalize");
@@ -368,6 +435,46 @@ class SplitDBM::CoreDBM {
         return CoreDBM(std::move(widen_g), std::move(widen_pot), std::move(widen_unstable));
     }
 
+    // Check if left is subsumed by right (i.e., left <= right in the lattice).
+    // perm[ox] = vertex in left corresponding to vertex ox in right.
+    // INVALID_VERT means vertex ox has no edges in right and should be skipped.
+    // Returns true if all edges in right are covered by left.
+    static bool is_subsumed_by(const CoreDBM& left, const CoreDBM& right, const std::vector<VertId>& perm) {
+        const Graph& g = left.g_;
+        const Graph& og = right.g_;
+
+        for (const VertId ox : og.verts()) {
+            if (og.succs(ox).size() == 0) {
+                continue;
+            }
+
+            const VertId x = perm[ox];
+            for (const auto edge : og.e_succs(ox)) {
+                const VertId oy = edge.vert;
+                const VertId y = perm[oy];
+                Weight ow = edge.val;
+
+                // Check direct edge
+                if (const auto w = g.lookup(x, y)) {
+                    if (*w <= ow) {
+                        continue;
+                    }
+                }
+
+                // Check via vertex 0
+                if (const auto wx = g.lookup(x, 0)) {
+                    if (const auto wy = g.lookup(0, y)) {
+                        if (*wx + *wy <= ow) {
+                            continue;
+                        }
+                    }
+                }
+                return false;
+            }
+        }
+        return true;
+    }
+
     // Meet two CoreDBMs given permutation vectors.
     // Returns nullopt if the meet is infeasible.
     static std::optional<CoreDBM> meet(
@@ -452,7 +559,7 @@ bool SplitDBM::is_top() const {
 }
 
 std::pair<std::size_t, std::size_t> SplitDBM::size() const {
-    return {core_->graph().size(), core_->graph().num_edges()};
+    return {core_->graph_size(), core_->num_edges()};
 }
 
 // =============================================================================
@@ -780,58 +887,25 @@ bool SplitDBM::add_univar_disequation(Variable x, const Number& n) {
         return true;
     }
 
-    Graph& g = core_->graph();
     VertId v = get_vert(x);
     if (new_i.lb().is_finite()) {
-        // strengthen lb
+        // strengthen lb: edge weight is -lb
         Weight lb_val;
         if (convert_NtoW_overflow(-*new_i.lb().number(), lb_val)) {
             return true;
         }
-
-        if (auto w = g.lookup(v, 0)) {
-            if (lb_val < *w) {
-                g.set_edge(v, lb_val, 0);
-                if (!repair_potential(v, 0)) {
-                    return false;
-                }
-                // Update other bounds
-                for (const auto e : g.e_preds(v)) {
-                    if (e.vert == 0) {
-                        continue;
-                    }
-                    g.update_edge(e.vert, e.val + lb_val, 0);
-                    if (!repair_potential(e.vert, 0)) {
-                        return false;
-                    }
-                }
-            }
+        if (!core_->strengthen_bound_with_propagation(v, Side::LEFT, lb_val)) {
+            return false;
         }
     }
     if (new_i.ub().is_finite() && !min_only_.contains(x)) {
-        // strengthen ub
+        // strengthen ub: edge weight is ub
         Weight ub_val;
         if (convert_NtoW_overflow(*new_i.ub().number(), ub_val)) {
             return true;
         }
-
-        if (auto w = g.lookup(0, v)) {
-            if (ub_val < *w) {
-                g.set_edge(0, ub_val, v);
-                if (!repair_potential(0, v)) {
-                    return false;
-                }
-                // Update other bounds
-                for (const auto e : g.e_succs(v)) {
-                    if (e.vert == 0) {
-                        continue;
-                    }
-                    g.update_edge(0, e.val + ub_val, e.vert);
-                    if (!repair_potential(0, e.vert)) {
-                        return false;
-                    }
-                }
-            }
+        if (!core_->strengthen_bound_with_propagation(v, Side::RIGHT, ub_val)) {
+            return false;
         }
     }
     normalize();
@@ -847,60 +921,28 @@ bool SplitDBM::operator<=(const SplitDBM& o) const {
         return false;
     }
 
-    const Graph& g = core_->graph();
-    const Graph& og = o.core_->graph();
-
     if (vert_map_.size() < o.vert_map_.size()) {
         return false;
     }
+
+    // Build permutation mapping from o's vertices to this's vertices
     constexpr VertId INVALID_VERT = std::numeric_limits<VertId>::max();
-    // Set up a mapping from o to this.
-    std::vector vert_renaming(og.size(), INVALID_VERT);
-    vert_renaming[0] = 0;
+    std::vector<VertId> perm(o.core_->graph_size(), INVALID_VERT);
+    perm[0] = 0;
     for (const auto& [v, n] : o.vert_map_) {
-        if (og.succs(n).size() == 0 && og.preds(n).size() == 0) {
+        if (!o.core_->vertex_has_edges(n)) {
             continue;
         }
 
         // We can't have this <= o if we're missing some vertex.
         if (auto y = try_at(vert_map_, v)) {
-            vert_renaming[n] = *y;
+            perm[n] = *y;
         } else {
             return false;
         }
     }
 
-    assert(g.size() > 0);
-    for (const VertId ox : og.verts()) {
-        if (og.succs(ox).size() == 0) {
-            continue;
-        }
-
-        assert(vert_renaming[ox] != INVALID_VERT);
-        const VertId x = vert_renaming[ox];
-        for (const auto edge : og.e_succs(ox)) {
-            const VertId oy = edge.vert;
-            assert(vert_renaming[oy] != INVALID_VERT);
-            const VertId y = vert_renaming[oy];
-            Weight ow = edge.val;
-
-            if (const auto w = g.lookup(x, y)) {
-                if (*w <= ow) {
-                    continue;
-                }
-            }
-
-            if (const auto wx = g.lookup(x, 0)) {
-                if (const auto wy = g.lookup(0, y)) {
-                    if (*wx + *wy <= ow) {
-                        continue;
-                    }
-                }
-            }
-            return false;
-        }
-    }
-    return true;
+    return CoreDBM::is_subsumed_by(*core_, *o.core_, perm);
 }
 
 class SplitDBMJoiner {
@@ -1215,12 +1257,11 @@ void SplitDBM::assign(Variable lhs, const LinearExpression& e) {
     }
     core_->close_after_assign_vertex(vert);
 
-    Graph& g = core_->graph();
     if (lb_w) {
-        g.update_edge(vert, *lb_w, 0);
+        core_->update_edge(vert, *lb_w, 0);
     }
     if (ub_w && !min_only_.contains(lhs)) {
-        g.update_edge(0, *ub_w, vert);
+        core_->update_edge(0, *ub_w, vert);
     }
     // Clear the old x vertex
     havoc(lhs);
