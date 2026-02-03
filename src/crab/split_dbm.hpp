@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <set>
 #include <unordered_set>
@@ -58,11 +59,12 @@ class SplitDBM final {
     using VertSet = std::unordered_set<VertId>;
     friend class VertSetWrap;
 
-    VertMap vert_map; // Mapping from variables to vertices
-    RevMap rev_map;
-    Graph g;                       // The underlying relation graph
-    std::vector<Weight> potential; // Stored potential for the vertex
-    VertSet unstable;
+    // CoreDBM: owns graph, potential, unstable (defined in split_dbm.cpp)
+    class CoreDBM;
+    std::unique_ptr<CoreDBM> core_;
+
+    VertMap vert_map_; // Mapping from variables to vertices
+    RevMap rev_map_;
     std::set<Variable> min_only_; // Variables that only track lower bounds
 
     VertId get_vert(Variable v);
@@ -133,37 +135,26 @@ class SplitDBM final {
     Bound get_lb(Variable x) const;
     Bound get_ub(Variable x) const;
 
-    SplitDBM(VertMap&& _vert_map, RevMap&& _rev_map, Graph&& _g, std::vector<Weight>&& _potential, VertSet&& _unstable,
-             std::set<Variable>&& _min_only = {})
-        : vert_map(std::move(_vert_map)), rev_map(std::move(_rev_map)), g(std::move(_g)),
-          potential(std::move(_potential)), unstable(std::move(_unstable)), min_only_(std::move(_min_only)) {
-        normalize();
-    }
+    // Private constructor for internal use (join, meet, widen, etc.)
+    SplitDBM(VertMap&& vert_map, RevMap&& rev_map, std::unique_ptr<CoreDBM> core,
+             std::set<Variable>&& min_only = {});
 
   public:
-    explicit SplitDBM() {
-        g.growTo(1); // Allocate the zero vector
-        potential.emplace_back(0);
-        rev_map.emplace_back(std::nullopt);
-    }
+    explicit SplitDBM();
+    ~SplitDBM();
 
-    SplitDBM(const SplitDBM& o) = default;
-    SplitDBM(SplitDBM&& o) = default;
+    SplitDBM(const SplitDBM& o);
+    SplitDBM(SplitDBM&& o) noexcept;
 
-    SplitDBM& operator=(const SplitDBM& o) = default;
-    SplitDBM& operator=(SplitDBM&& o) = default;
+    SplitDBM& operator=(const SplitDBM& o);
+    SplitDBM& operator=(SplitDBM&& o) noexcept;
 
-    void set_to_top() {
-        this->~SplitDBM();
-        new (this) SplitDBM();
-    }
+    void set_to_top();
 
     static SplitDBM top() { return SplitDBM(); }
 
     [[nodiscard]]
-    bool is_top() const {
-        return g.is_empty();
-    }
+    bool is_top() const;
 
     bool operator<=(const SplitDBM& o) const;
 
@@ -219,9 +210,7 @@ class SplitDBM final {
 
     // return number of vertices and edges
     [[nodiscard]]
-    std::pair<std::size_t, std::size_t> size() const {
-        return {g.size(), g.num_edges()};
-    }
+    std::pair<std::size_t, std::size_t> size() const;
 
   private:
     [[nodiscard]]
