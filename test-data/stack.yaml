@@ -765,3 +765,64 @@ post:
   - s[0...3].type=number
   - s[0...3].svalue=0
   - s[0...3].uvalue=0
+---
+# BUG: stack_numeric_size join uses may-interval instead of guaranteed minimum.
+# Branch A writes 8 bytes, Branch B writes 4 bytes.
+# After join, reading 8 bytes should FAIL because branch B only has 4 numeric bytes.
+# Currently PASSES incorrectly because join produces [4,8] and check uses upper bound.
+test-case: stack_numeric_size join must use minimum (8 bytes read after 4/8 write)
+
+pre: ["r0.type=number",
+      "r1.type=number", "r1.svalue=0", "r1.uvalue=0",
+      "r2.type=stack", "r2.stack_offset=504",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    if r0 == 0 goto <write4>
+    *(u64 *)(r2 + 0) = r1      ; branch A: write 8 bytes, stack_numeric_size = 8
+    goto <read>
+  <write4>: |
+    *(u32 *)(r2 + 0) = r1      ; branch B: write 4 bytes, stack_numeric_size = 4
+  <read>: |
+    r3 = *(u64 *)(r2 + 0)      ; read 8 bytes - should FAIL (only 4 guaranteed)
+    exit
+
+post: []
+
+messages:
+  - "4: Stack content is not numeric (valid_access(r2.offset, width=8) for read)"
+---
+# Variant: 4-byte read after 4/8 write should PASS (4 bytes always guaranteed)
+test-case: stack_numeric_size join minimum allows safe read (4 bytes read after 4/8 write)
+
+pre: ["r0.type=number",
+      "r1.type=number", "r1.svalue=0", "r1.uvalue=0",
+      "r2.type=stack", "r2.stack_offset=504",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    if r0 == 0 goto <write4>
+    *(u64 *)(r2 + 0) = r1      ; branch A: write 8 bytes
+    goto <read>
+  <write4>: |
+    *(u32 *)(r2 + 0) = r1      ; branch B: write 4 bytes
+  <read>: |
+    r3 = *(u32 *)(r2 + 0)      ; read 4 bytes - should PASS (4 bytes guaranteed on both paths)
+    exit
+
+post:
+  - r0.type=number
+  - r0.uvalue=[0, +oo]
+  - r1.type=number
+  - r1.svalue=0
+  - r1.uvalue=0
+  - r2.type=stack
+  - r2.stack_offset=504
+  - r2.stack_numeric_size=[4, 8]
+  - r2.stack_numeric_size-r0.uvalue<=7
+  - r3.type=number
+  - r10.type=stack
+  - r10.stack_offset=512
+  - s[504...507].type=number

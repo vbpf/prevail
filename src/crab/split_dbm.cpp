@@ -33,7 +33,12 @@ Bound SplitDBM::get_ub(const std::optional<VertId>& v) const {
 
 Bound SplitDBM::get_lb(const Variable x) const { return get_lb(get_vertid(x)); }
 
-Bound SplitDBM::get_ub(const Variable x) const { return get_ub(get_vertid(x)); }
+Bound SplitDBM::get_ub(const Variable x) const {
+    if (min_only_.contains(x)) {
+        return PLUS_INFINITY;
+    }
+    return get_ub(get_vertid(x));
+}
 
 Interval SplitDBM::get_interval(const Variable x) const {
     const auto& v = get_vertid(x);
@@ -294,6 +299,9 @@ bool SplitDBM::add_linear_leq(const LinearExpression& exp) {
         }
     }
     for (const auto& [var, n] : ubs) {
+        if (min_only_.contains(var)) {
+            continue;
+        }
         CRAB_LOG("zones-split", std::cout << var << "<=" << n << "\n");
         const VertId vert = get_vert(var);
         if (const auto w = g.lookup(0, vert)) {
@@ -373,7 +381,7 @@ bool SplitDBM::add_univar_disequation(Variable x, const Number& n) {
             }
         }
     }
-    if (new_i.ub().is_finite()) {
+    if (new_i.ub().is_finite() && !min_only_.contains(x)) {
         // strengthen ub
         Weight ub_val;
         if (convert_NtoW_overflow(*new_i.ub().number(), ub_val)) {
@@ -637,7 +645,11 @@ class SplitDBMJoiner {
                 }
             }
         }
-        return SplitDBM(std::move(out_vmap), std::move(out_revmap), std::move(join_g), std::move(pot_rx), {});
+        // Merge min_only sets (union)
+        std::set<Variable> merged_min_only = left.min_only_;
+        merged_min_only.insert(right.min_only_.begin(), right.min_only_.end());
+        return SplitDBM(std::move(out_vmap), std::move(out_revmap), std::move(join_g), std::move(pot_rx), {},
+                        std::move(merged_min_only));
     }
 };
 
@@ -675,8 +687,11 @@ SplitDBM SplitDBM::widen(const SplitDBM& o) const {
     VertSet widen_unstable(unstable);
     Graph widen_g(GraphOps::widen(gx, gy, widen_unstable));
 
+    // Merge min_only sets from both operands
+    std::set<Variable> merged_min_only = min_only_;
+    merged_min_only.insert(o.min_only_.begin(), o.min_only_.end());
     SplitDBM res(std::move(out_vmap), std::move(out_revmap), std::move(widen_g), std::move(widen_pot),
-                 std::move(widen_unstable));
+                 std::move(widen_unstable), std::move(merged_min_only));
     return res;
 }
 
@@ -761,7 +776,11 @@ std::optional<SplitDBM> SplitDBM::meet(const SplitDBM& o) const {
 
         GraphOps::apply_delta(meet_g, GraphOps::close_after_assign(meet_g, potential_func, 0));
     }
-    SplitDBM res(std::move(meet_verts), std::move(meet_rev), std::move(meet_g), std::move(meet_pi), VertSet());
+    // Merge min_only sets from both operands
+    std::set<Variable> merged_min_only = min_only_;
+    merged_min_only.insert(o.min_only_.begin(), o.min_only_.end());
+    SplitDBM res(std::move(meet_verts), std::move(meet_rev), std::move(meet_g), std::move(meet_pi), VertSet(),
+                 std::move(merged_min_only));
     CRAB_LOG("zones-split", std::cout << "Result meet:\n" << res << "\n");
     return res;
 }
@@ -922,7 +941,7 @@ void SplitDBM::assign(Variable lhs, const LinearExpression& e) {
     if (lb_w) {
         g.update_edge(vert, *lb_w, 0);
     }
-    if (ub_w) {
+    if (ub_w && !min_only_.contains(lhs)) {
         g.update_edge(0, *ub_w, vert);
     }
     // Clear the old x vertex
@@ -992,7 +1011,7 @@ void SplitDBM::set(const Variable x, const Interval& intv) {
     }
 
     const VertId v = get_vert(x);
-    if (intv.ub().is_finite()) {
+    if (intv.ub().is_finite() && !min_only_.contains(x)) {
         Weight ub;
         if (convert_NtoW_overflow(*intv.ub().number(), ub)) {
             normalize();

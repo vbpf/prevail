@@ -20,6 +20,7 @@
 #pragma once
 
 #include <optional>
+#include <set>
 #include <unordered_set>
 #include <utility>
 #include <variant>
@@ -62,6 +63,7 @@ class SplitDBM final {
     Graph g;                       // The underlying relation graph
     std::vector<Weight> potential; // Stored potential for the vertex
     VertSet unstable;
+    std::set<Variable> min_only_; // Variables that only track lower bounds
 
     VertId get_vert(Variable v);
     // Evaluate the potential value of a variable.
@@ -131,9 +133,10 @@ class SplitDBM final {
     Bound get_lb(Variable x) const;
     Bound get_ub(Variable x) const;
 
-    SplitDBM(VertMap&& _vert_map, RevMap&& _rev_map, Graph&& _g, std::vector<Weight>&& _potential, VertSet&& _unstable)
+    SplitDBM(VertMap&& _vert_map, RevMap&& _rev_map, Graph&& _g, std::vector<Weight>&& _potential, VertSet&& _unstable,
+             std::set<Variable>&& _min_only = {})
         : vert_map(std::move(_vert_map)), rev_map(std::move(_rev_map)), g(std::move(_g)),
-          potential(std::move(_potential)), unstable(std::move(_unstable)) {
+          potential(std::move(_potential)), unstable(std::move(_unstable)), min_only_(std::move(_min_only)) {
         normalize();
     }
 
@@ -258,6 +261,10 @@ class SplitDBM final {
     friend std::ostream& operator<<(std::ostream& o, const SplitDBM& dom);
     [[nodiscard]]
     StringInvariant to_set() const;
+
+    void set_min_only(Variable v) { min_only_.insert(v); }
+    [[nodiscard]]
+    bool is_min_only(Variable v) const { return min_only_.contains(v); }
 
   public:
     static void clear_thread_local_state();

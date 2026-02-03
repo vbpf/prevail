@@ -352,6 +352,14 @@ void EbpfDomain::initialize_packet() {
 EbpfDomain EbpfDomain::from_constraints(const std::vector<LinearConstraint>& type_constraints,
                                         const std::vector<LinearConstraint>& value_constraints) {
     EbpfDomain inv;
+
+    // Mark size variables as min-only (only lower bound is meaningful)
+    inv.rcp.values.set_min_only(variable_registry->packet_size());
+    for (int i = 0; i <= R10_STACK_POINTER; i++) {
+        inv.rcp.values.set_min_only(reg_pack(i).stack_numeric_size);
+        inv.rcp.values.set_min_only(reg_pack(i).shared_region_size);
+    }
+
     for (const auto& cst : type_constraints) {
         inv.add_type_constraint(cst);
     }
@@ -387,6 +395,14 @@ EbpfDomain EbpfDomain::setup_entry(const bool init_r1) {
     using namespace dsl_syntax;
 
     EbpfDomain inv;
+
+    // Mark size variables as min-only (only lower bound is meaningful)
+    inv.rcp.values.set_min_only(variable_registry->packet_size());
+    for (int i = 0; i <= R10_STACK_POINTER; i++) {
+        inv.rcp.values.set_min_only(reg_pack(i).stack_numeric_size);
+        inv.rcp.values.set_min_only(reg_pack(i).shared_region_size);
+    }
+
     const auto r10 = reg_pack(R10_STACK_POINTER);
     constexpr Reg r10_reg{R10_STACK_POINTER};
     inv.rcp.values.add_constraint(EBPF_TOTAL_STACK_SIZE <= r10.svalue);

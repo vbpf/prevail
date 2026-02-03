@@ -162,6 +162,12 @@ class AddBottom final {
         }
     }
 
+    void set_min_only(const Variable v) {
+        if (dom) {
+            dom->set_min_only(v);
+        }
+    }
+
     void add_constraint(const LinearConstraint& cst) {
         if (dom) {
             if (!dom->add_constraint(cst)) {
