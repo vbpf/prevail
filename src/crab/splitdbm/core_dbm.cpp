@@ -114,6 +114,10 @@ void CoreDBM::set_potential(const VertId v, const Weight& val) {
     potential_[v] = val;
 }
 
+Weight CoreDBM::potential_at(const VertId v) const {
+    return potential_[v];
+}
+
 Weight CoreDBM::potential_at_zero() const {
     return potential_[0];
 }

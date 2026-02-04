@@ -720,8 +720,7 @@ class GraphOps {
         return true;
     }
 
-    template <class G, class G1, class G2>
-    static EdgeVector close_after_meet(const G& g, const PotentialFunction& pots, const G1& l, const G2& r) {
+    static EdgeVector close_after_meet(const auto& g, const PotentialFunction& pots, const auto& l, const auto& r) {
         // We assume the syntactic meet has already been computed, and potentials have been initialized.
         // We just want to restore closure.
         assert(l.size() == r.size());
@@ -785,8 +784,7 @@ class GraphOps {
 
     // P is some vector-alike holding a valid system of potentials.
     // Don't need to clear/initialize
-    template <class G>
-    static void chrome_dijkstra(const G& g, const PotentialFunction& p, std::vector<std::vector<VertId>>& colour_succs,
+    static void chrome_dijkstra(const auto& g, const PotentialFunction& p, std::vector<std::vector<VertId>>& colour_succs,
                                 VertId src, std::vector<std::tuple<VertId, Weight>>& out) {
         const size_t sz = g.size();
         if (sz == 0) {
@@ -851,8 +849,7 @@ class GraphOps {
 
     // Run Dijkstra's algorithm, but similar to the chromatic algorithm, avoid expanding anything that _was_ stable.
     // GKG: Factor out common elements of this & the previous algorithm.
-    template <class G, class S>
-    static void dijkstra_recover(const G& g, const PotentialFunction& p, const S& is_stable, VertId src,
+    static void dijkstra_recover(const auto& g, const PotentialFunction& p, const auto& is_stable, VertId src,
                                  EdgeVector& delta) {
         const size_t sz = g.size();
         if (sz == 0) {
@@ -920,8 +917,7 @@ class GraphOps {
     }
 
   public:
-    template <class G>
-    static bool repair_potential(const G& g, std::vector<Weight>& p, VertId ii, VertId jj) {
+    static bool repair_potential(const auto& g, std::vector<Weight>& p, VertId ii, VertId jj) {
         // Ensure there's enough scratch space.
         const size_t sz = g.size();
         // assert(src < (int) sz && dest < (int) sz);
@@ -972,8 +968,7 @@ class GraphOps {
         return true;
     }
 
-    template <class G, class V>
-    static EdgeVector close_after_widen(const G& g, const PotentialFunction& p, const V& is_stable) {
+    static EdgeVector close_after_widen(const auto& g, const PotentialFunction& p, const auto& is_stable) {
         const size_t sz = g.size();
         grow_scratch(sz);
         //      assert(orig.size() == sz);

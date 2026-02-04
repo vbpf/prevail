@@ -111,6 +111,9 @@ class CoreDBM {
     // Set potential for a vertex
     void set_potential(VertId v, const Weight& val);
 
+    // Get potential at a specific vertex
+    [[nodiscard]] Weight potential_at(VertId v) const;
+
     // Get potential at vertex 0 (for computing relative potentials)
     [[nodiscard]] Weight potential_at_zero() const;
 

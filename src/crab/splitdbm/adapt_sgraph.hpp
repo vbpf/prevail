@@ -455,6 +455,7 @@ class AdaptGraph final {
     std::vector<size_t> free_widx{};
 };
 
+// Short alias used throughout the module; AdaptGraph is the only graph implementation.
 using Graph = AdaptGraph;
 
 } // namespace splitdbm
