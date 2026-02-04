@@ -30,13 +30,16 @@ src/crab/split_dbm.cpp
 src/crab/split_dbm.hpp
 src/crab/thresholds.cpp
 src/crab/thresholds.hpp
-src/crab_utils/adapt_sgraph.hpp
 src/crab_utils/debug.cpp
 src/crab_utils/debug.hpp
-src/crab_utils/graph_ops.cpp
-src/crab_utils/graph_ops.hpp
 src/crab_utils/stats.cpp
 src/crab_utils/stats.hpp
+src/crab/splitdbm/adapt_sgraph.hpp
+src/crab/splitdbm/graph_ops.cpp
+src/crab/splitdbm/graph_ops.hpp
+src/crab/splitdbm/core_dbm.cpp
+src/crab/splitdbm/core_dbm.hpp
+src/crab/splitdbm/heap.hpp
 
 # Files using BSL-1.0 license
 external/catch.hpp

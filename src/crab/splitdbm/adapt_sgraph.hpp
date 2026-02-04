@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <vector>
+
 #include <boost/container/flat_map.hpp>
 
-#include "arith/num_safeint.hpp"
+#include "crab/splitdbm/definitions.hpp"
 
-namespace prevail {
+namespace splitdbm {
 
 class TreeSMap final {
   public:
@@ -118,12 +120,12 @@ class TreeSMap final {
     }
 
     [[nodiscard]]
-    bool contains(Key k) const {
+    bool contains(const Key k) const {
         return map.count(k);
     }
 
     [[nodiscard]]
-    std::optional<Val> lookup(Key k) const {
+    std::optional<Val> lookup(const Key k) const {
         const auto v = map.find(k);
         if (v != map.end()) {
             return {v->second};
@@ -132,33 +134,16 @@ class TreeSMap final {
     }
 
     // precondition: k \in S
-    void remove(Key k) { map.erase(k); }
+    void remove(const Key k) { map.erase(k); }
 
     // precondition: k \notin S
-    void add(Key k, const Val& v) { map.insert_or_assign(k, v); }
+    void add(const Key k, const Val& v) { map.insert_or_assign(k, v); }
     void clear() { map.clear(); }
 };
 
 // Adaptive sparse-set based weighted graph implementation
 class AdaptGraph final {
   public:
-    /** DBM weights (Weight) can be represented using one of the following
-     * types:
-     *
-     * 1) basic integer type: e.g., long
-     * 2) safei64
-     * 3) Number
-     *
-     * 1) is the fastest but things can go wrong if some DBM
-     * operation overflows. 2) is slower than 1) but it checks for
-     * overflow before any DBM operation. 3) is the slowest, and it
-     * represents weights using unbounded mathematical integers so
-     * overflow is not a concern, but it might not be what you need
-     * when reasoning about programs with wraparound semantics.
-     **/
-    using Weight = Number; // previously template
-    using VertId = unsigned int;
-
     AdaptGraph() = default;
 
     AdaptGraph(AdaptGraph&& o) noexcept = default;
@@ -278,20 +263,20 @@ class AdaptGraph final {
     using NeighbourConstRange = AdjConstRange;
 
     [[nodiscard]]
-    AdjConstRange succs(VertId v) const {
+    AdjConstRange succs(const VertId v) const {
         return _succs[v].keys();
     }
     [[nodiscard]]
-    AdjConstRange preds(VertId v) const {
+    AdjConstRange preds(const VertId v) const {
         return _preds[v].keys();
     }
 
     [[nodiscard]]
-    EdgeConstRange e_succs(VertId v) const {
+    EdgeConstRange e_succs(const VertId v) const {
         return {_succs[v].values(), _ws};
     }
     [[nodiscard]]
-    EdgeConstRange e_preds(VertId v) const {
+    EdgeConstRange e_preds(const VertId v) const {
         return {_preds[v].values(), _ws};
     }
 
@@ -327,7 +312,7 @@ class AdaptGraph final {
         return v;
     }
 
-    void growTo(size_t v) {
+    void growTo(const size_t v) {
         _succs.reserve(v);
         _preds.reserve(v);
         while (size() < v) {
@@ -335,7 +320,7 @@ class AdaptGraph final {
         }
     }
 
-    void forget(VertId v) {
+    void forget(const VertId v) {
         if (is_free[v]) {
             return;
         }
@@ -377,13 +362,13 @@ class AdaptGraph final {
     }
 
     [[nodiscard]]
-    bool elem(VertId s, VertId d) const {
+    bool elem(const VertId s, const VertId d) const {
         return _succs[s].contains(d);
     }
 
-    const Weight& edge_val(VertId s, VertId d) const { return _ws[*_succs[s].lookup(d)]; }
+    const Weight& edge_val(const VertId s, const VertId d) const { return _ws[*_succs[s].lookup(d)]; }
 
-    Weight* lookup(VertId s, VertId d) {
+    Weight* lookup(const VertId s, const VertId d) {
         if (const auto idx = _succs[s].lookup(d)) {
             return &_ws[*idx];
         }
@@ -391,14 +376,14 @@ class AdaptGraph final {
     }
 
     [[nodiscard]]
-    const Weight* lookup(VertId s, VertId d) const {
+    const Weight* lookup(const VertId s, const VertId d) const {
         if (const auto idx = _succs[s].lookup(d)) {
             return &_ws[*idx];
         }
         return {};
     }
 
-    void add_edge(VertId s, Weight w, VertId d) {
+    void add_edge(const VertId s, const Weight& w, const VertId d) {
         size_t idx;
         if (!free_widx.empty()) {
             idx = free_widx.back();
@@ -414,7 +399,7 @@ class AdaptGraph final {
         edge_count++;
     }
 
-    void update_edge(VertId s, Weight w, VertId d) {
+    void update_edge(const VertId s, const Weight& w, const VertId d) {
         if (const auto idx = _succs[s].lookup(d)) {
             _ws[*idx] = std::min(_ws[*idx], w);
         } else {
@@ -422,7 +407,7 @@ class AdaptGraph final {
         }
     }
 
-    void set_edge(VertId s, Weight w, VertId d) {
+    void set_edge(const VertId s, const Weight& w, const VertId d) {
         if (const auto idx = _succs[s].lookup(d)) {
             _ws[*idx] = w;
         } else {
@@ -469,4 +454,7 @@ class AdaptGraph final {
     std::vector<VertId> free_id{};
     std::vector<size_t> free_widx{};
 };
-} // namespace prevail
+
+using Graph = AdaptGraph;
+
+} // namespace splitdbm

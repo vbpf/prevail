@@ -8,12 +8,13 @@
 #include <optional>
 #include <unordered_set>
 
-#include "crab_utils/adapt_sgraph.hpp"
-#include "crab_utils/heap.hpp"
+#include "crab/splitdbm/adapt_sgraph.hpp"
+#include "crab/splitdbm/definitions.hpp"
+#include "crab/splitdbm/heap.hpp"
 #include "crab_utils/lazy_allocator.hpp"
 #include "crab_utils/num_safety.hpp"
 
-namespace prevail {
+namespace splitdbm {
 // Graph views - for when we want to traverse some mutation
 // of the graph without actually constructing it.
 // ============
@@ -23,9 +24,7 @@ namespace prevail {
 template <class G>
 class GraphPerm {
   public:
-    using VertId = typename G::VertId;
     constexpr static VertId invalid_vert = std::numeric_limits<VertId>::max();
-    using Weight = typename G::Weight;
 
     GraphPerm(const std::vector<VertId>& _perm, G& _g) : g{_g}, perm{_perm}, inv(_g.size(), invalid_vert) {
         for (unsigned int vi = 0; vi < perm.size(); vi++) {
@@ -97,7 +96,7 @@ class GraphPerm {
       private:
         VertId after;
     };
-    using VertConstIterator = typename VertConstRange::iterator;
+    using VertConstIterator = VertConstRange::iterator;
 
     VertConstRange verts() const { return VertConstRange(gsl::narrow<VertId>(perm.size())); }
 
@@ -130,7 +129,7 @@ class GraphPerm {
     template <class ItG>
     class EAdjConstIterator final {
       public:
-        using EdgeRef = typename ItG::EdgeRef;
+        using EdgeRef = ItG::EdgeRef;
 
         EAdjConstIterator(const std::vector<VertId>& _inv, const ItG& _v) : inv(_inv), v(_v) {}
 
@@ -156,7 +155,7 @@ class GraphPerm {
     template <class RG, class It>
     class AdjList final {
       public:
-        using ItG = typename RG::iterator;
+        using ItG = RG::iterator;
 
         using iterator = It;
 
@@ -195,7 +194,7 @@ class GraphPerm {
     template <class RG, class It>
     class ConstAdjList final {
       public:
-        using ItG = typename RG::iterator;
+        using ItG = RG::iterator;
 
         using iterator = It;
 
@@ -272,11 +271,8 @@ class GraphPerm {
 template <class G>
 class SubGraph {
   public:
-    using VertId = typename G::VertId;
-    using Weight = typename G::Weight;
-
-    using GNeighbourConstRange = typename G::NeighbourConstRange;
-    using GENeighbourConstRange = typename G::ENeighbourConstRange;
+    using GNeighbourConstRange = G::NeighbourConstRange;
+    using GENeighbourConstRange = G::ENeighbourConstRange;
 
     SubGraph(G& _g, VertId _v_ex) : g(_g), v_ex(_v_ex) {}
 
@@ -328,7 +324,7 @@ class SubGraph {
 
     class VertConstIterator {
       public:
-        VertConstIterator(const typename G::VertConstIterator& _iG, VertId _v_ex) : v_ex(_v_ex), iG(_iG) {}
+        VertConstIterator(const G::VertConstIterator& _iG, VertId _v_ex) : v_ex(_v_ex), iG(_iG) {}
 
         // Skipping of v_ex is done entirely by !=.
         // So we _MUST_ test it != verts.end() before dereferencing.
@@ -345,16 +341,16 @@ class SubGraph {
         }
 
         VertId v_ex;
-        typename G::VertConstIterator iG;
+        G::VertConstIterator iG;
     };
     class VertConstRange {
       public:
-        VertConstRange(const typename G::VertConstRange& _rG, VertId _v_ex) : rG(_rG), v_ex(_v_ex) {}
+        VertConstRange(const G::VertConstRange& _rG, VertId _v_ex) : rG(_rG), v_ex(_v_ex) {}
 
         VertConstIterator begin() const { return VertConstIterator(rG.begin(), v_ex); }
         VertConstIterator end() const { return VertConstIterator(rG.end(), v_ex); }
 
-        typename G::VertConstRange rG;
+        G::VertConstRange rG;
         VertId v_ex;
     };
     VertConstRange verts() const { return VertConstRange(g.verts(), v_ex); }
@@ -382,7 +378,7 @@ class SubGraph {
     template <class It>
     class EAdjIterator {
       public:
-        using EdgeRef = typename It::EdgeRef;
+        using EdgeRef = It::EdgeRef;
 
         EAdjIterator(const It& _iG, VertId _v_ex) : iG(_iG), v_ex(_v_ex) {}
         EdgeRef operator*() const { return *iG; }
@@ -438,9 +434,6 @@ class SubGraph {
 template <class G>
 class GraphRev {
   public:
-    using VertId = typename G::VertId;
-    using Weight = typename G::Weight;
-
     explicit GraphRev(G& _g) : g(_g) {}
 
     // Check whether an edge is live
@@ -461,10 +454,10 @@ class GraphRev {
         return g.size();
     }
 
-    using NeighbourConstRange = typename G::NeighbourConstRange;
-    using ENeighbourConstRange = typename G::ENeighbourConstRange;
+    using NeighbourConstRange = G::NeighbourConstRange;
+    using ENeighbourConstRange = G::ENeighbourConstRange;
 
-    typename G::VertConstRange verts() const { return g.verts(); }
+    G::VertConstRange verts() const { return g.verts(); }
 
     NeighbourConstRange succs(VertId v) const { return g.preds(v); }
     NeighbourConstRange preds(VertId v) const { return g.succs(v); }
@@ -479,8 +472,6 @@ class GraphOps {
   public:
     // The following code assumes VertId is an integer.
     using Graph = AdaptGraph;
-    using Weight = Graph::Weight;
-    using VertId = Graph::VertId;
     using WeightVector = std::vector<Weight>;
 
     using PotentialFunction = std::function<Weight(VertId)>;
@@ -501,20 +492,20 @@ class GraphOps {
     // Scratch space needed by the graph algorithms.
     // Should really switch to some kind of arena allocator, rather
     // than having all these static structures.
-    static inline thread_local LazyAllocator<std::vector<char>> edge_marks;
+    static inline thread_local prevail::LazyAllocator<std::vector<char>> edge_marks;
 
     // Used for Bellman-Ford queueing
-    static inline thread_local LazyAllocator<std::vector<VertId>> dual_queue;
-    static inline thread_local LazyAllocator<std::vector<int>> vert_marks;
+    static inline thread_local prevail::LazyAllocator<std::vector<VertId>> dual_queue;
+    static inline thread_local prevail::LazyAllocator<std::vector<int>> vert_marks;
     static inline thread_local size_t scratch_sz;
 
     // For locality, should combine dists & dist_ts.
     // Weight must have an empty constructor, but does _not_ need a top or infty element.
     // dist_ts tells us which distances are current, and ts_idx prevents wraparound problems,
     // in the unlikely circumstance that we have more than 2^sizeof(uint) iterations.
-    static inline thread_local LazyAllocator<std::vector<Weight>> dists;
-    static inline thread_local LazyAllocator<std::vector<Weight>> dists_alt;
-    static inline thread_local LazyAllocator<std::vector<unsigned int>> dist_ts;
+    static inline thread_local prevail::LazyAllocator<std::vector<Weight>> dists;
+    static inline thread_local prevail::LazyAllocator<std::vector<Weight>> dists_alt;
+    static inline thread_local prevail::LazyAllocator<std::vector<unsigned int>> dist_ts;
     static inline thread_local unsigned int ts;
     static inline thread_local unsigned int ts_idx;
 

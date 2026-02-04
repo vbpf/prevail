@@ -23,7 +23,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ******************************************************************************************/
 #include <vector>
 
-namespace prevail {
+namespace splitdbm {
 
 // A heap implementation with support for decrease/increase key.
 class Heap {

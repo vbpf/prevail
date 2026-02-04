@@ -27,13 +27,12 @@
 
 #include <boost/container/flat_map.hpp>
 
+#include "crab/splitdbm/core_dbm.hpp"
 #include "arith/linear_constraint.hpp"
 #include "arith/num_big.hpp"
 #include "arith/num_safeint.hpp"
 #include "arith/variable.hpp"
 #include "crab/interval.hpp"
-#include "crab_utils/adapt_sgraph.hpp"
-#include "crab_utils/stats.hpp"
 #include "string_constraints.hpp"
 
 namespace prevail {
@@ -41,13 +40,12 @@ namespace prevail {
 enum class ArithBinOp { ADD, SUB, MUL };
 
 class SplitDBM final {
-    friend class AlignedPair;
     friend SplitDBM do_join(const SplitDBM&, const SplitDBM&);
 
   public:
-    using Graph = AdaptGraph;
-    using Weight = Graph::Weight;
-    using VertId = Graph::VertId;
+    using Graph = splitdbm::AdaptGraph;
+    using Weight = splitdbm::Weight;
+    using VertId = splitdbm::VertId;
     using VertMap = boost::container::flat_map<Variable, VertId>;
 
   private:
@@ -59,9 +57,7 @@ class SplitDBM final {
     using VertSet = std::unordered_set<VertId>;
     friend class VertSetWrap;
 
-    // CoreDBM: owns graph, potential, unstable (defined in split_dbm.cpp)
-    class CoreDBM;
-    std::unique_ptr<CoreDBM> core_;
+    std::unique_ptr<splitdbm::CoreDBM> core_;
 
     VertMap vert_map_; // Mapping from variables to vertices
     RevMap rev_map_;
@@ -135,7 +131,12 @@ class SplitDBM final {
     Bound get_ub(Variable x) const;
 
     // Private constructor for internal use (join, meet, widen, etc.)
-    SplitDBM(VertMap&& vert_map, RevMap&& rev_map, std::unique_ptr<CoreDBM> core);
+    SplitDBM(VertMap&& vert_map, RevMap&& rev_map, std::unique_ptr<splitdbm::CoreDBM> core);
+
+    // Build AlignedPair from intersection of variables (for join/widen)
+    static std::tuple<splitdbm::AlignedPair, RevMap> make_intersection_alignment(const SplitDBM& left, const SplitDBM& right);
+    // Build AlignedPair from union of variables (for meet)
+    static std::tuple<splitdbm::AlignedPair, RevMap> make_union_alignment(const SplitDBM& left, const SplitDBM& right);
 
   public:
     explicit SplitDBM();
