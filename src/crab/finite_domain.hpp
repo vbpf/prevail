@@ -161,9 +161,6 @@ class FiniteDomain {
     /// Forget everything we know about the value of a variable.
     void havoc(Variable v) { dom.havoc(v); }
 
-    /// Mark a variable as min-only (only track lower bounds)
-    void set_min_only(Variable v) { dom.set_min_only(v); }
-
     [[nodiscard]]
     std::pair<std::size_t, std::size_t> size() const {
         return dom.size();

@@ -79,7 +79,7 @@ code:
 
 post:
   - packet_size-r3.packet_offset<=-1
-  - packet_size=[0, 3]
+  - packet_size=0
   - meta_offset=0
   - r1.packet_offset=0
   - r1.svalue=[4098, 2147418112]
@@ -117,7 +117,7 @@ post: ["meta_offset=0",
        "r1.type=packet", "r1.packet_offset=0", "r1.svalue=[4098, 2147418112]", "r1.uvalue=[4098, 2147418112]",
        "r2.type=packet", "r2.packet_offset=packet_size",
        "r3.type=packet", "r3.packet_offset=8", "r3.svalue=[4106, 2147418120]",
-       "packet_size-r3.packet_offset<=65526", "packet_size=[0, 65534]",
+       "packet_size-r3.packet_offset<=65526", "packet_size=0",
        "r3.packet_offset-packet_size<=8", "r3.svalue=r1.svalue+8",
        "r3.uvalue=r3.svalue"]
 ---

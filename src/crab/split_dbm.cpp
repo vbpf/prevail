@@ -377,8 +377,7 @@ SplitDBM::~SplitDBM() = default;
 SplitDBM::SplitDBM(const SplitDBM& o)
     : core_(std::make_unique<CoreDBM>(*o.core_)),
       vert_map_(o.vert_map_),
-      rev_map_(o.rev_map_),
-      min_only_(o.min_only_) {}
+      rev_map_(o.rev_map_) {}
 
 SplitDBM::SplitDBM(SplitDBM&& o) noexcept = default;
 
@@ -387,19 +386,16 @@ SplitDBM& SplitDBM::operator=(const SplitDBM& o) {
         core_ = std::make_unique<CoreDBM>(*o.core_);
         vert_map_ = o.vert_map_;
         rev_map_ = o.rev_map_;
-        min_only_ = o.min_only_;
     }
     return *this;
 }
 
 SplitDBM& SplitDBM::operator=(SplitDBM&& o) noexcept = default;
 
-SplitDBM::SplitDBM(VertMap&& vert_map, RevMap&& rev_map, std::unique_ptr<CoreDBM> core,
-                   std::set<Variable>&& min_only)
+SplitDBM::SplitDBM(VertMap&& vert_map, RevMap&& rev_map, std::unique_ptr<CoreDBM> core)
     : core_(std::move(core)),
       vert_map_(std::move(vert_map)),
-      rev_map_(std::move(rev_map)),
-      min_only_(std::move(min_only)) {
+      rev_map_(std::move(rev_map)) {
     normalize();
 }
 
@@ -408,7 +404,6 @@ void SplitDBM::set_to_top() {
     vert_map_.clear();
     rev_map_.clear();
     rev_map_.emplace_back(std::nullopt);
-    min_only_.clear();
 }
 
 bool SplitDBM::is_top() const {
@@ -442,7 +437,7 @@ Bound SplitDBM::get_ub(const std::optional<VertId>& v) const {
 Bound SplitDBM::get_lb(const Variable x) const { return get_lb(get_vertid(x)); }
 
 Bound SplitDBM::get_ub(const Variable x) const {
-    if (min_only_.contains(x)) {
+    if (variable_registry->is_min_only(x)) {
         return PLUS_INFINITY;
     }
     return get_ub(get_vertid(x));
@@ -696,7 +691,7 @@ bool SplitDBM::add_linear_leq(const LinearExpression& exp) {
 
     // Apply upper bounds
     for (const auto& [var, n] : ubs) {
-        if (min_only_.contains(var)) {
+        if (variable_registry->is_min_only(var)) {
             continue;
         }
         CRAB_LOG("zones-split", std::cout << var << "<=" << n << "\n");
@@ -755,7 +750,7 @@ bool SplitDBM::add_univar_disequation(Variable x, const Number& n) {
             return false;
         }
     }
-    if (new_i.ub().is_finite() && !min_only_.contains(x)) {
+    if (new_i.ub().is_finite() && !variable_registry->is_min_only(x)) {
         // strengthen ub: edge weight is ub
         Weight ub_val;
         if (convert_NtoW_overflow(*new_i.ub().number(), ub_val)) {
@@ -1124,12 +1119,8 @@ SplitDBM do_join(const SplitDBM& left, const SplitDBM& right) {
         }
     }
 
-    // 4. Merge min_only sets
-    std::set<Variable> merged_min_only = left.min_only_;
-    merged_min_only.insert(right.min_only_.begin(), right.min_only_.end());
-
     return SplitDBM(std::move(out_vmap), std::move(out_revmap),
-                    std::make_unique<CoreDBM>(std::move(joined)), std::move(merged_min_only));
+                    std::make_unique<CoreDBM>(std::move(joined)));
 }
 
 void SplitDBM::operator|=(const SplitDBM& right) { *this = do_join(*this, right); }
@@ -1146,11 +1137,7 @@ SplitDBM SplitDBM::widen(const SplitDBM& o) const {
     // 3. Build result mappings
     auto [out_vmap, out_revmap] = aligned.result_mappings();
 
-    // 4. Merge min_only sets
-    std::set<Variable> merged_min_only = min_only_;
-    merged_min_only.insert(o.min_only_.begin(), o.min_only_.end());
-
-    return SplitDBM(std::move(out_vmap), std::move(out_revmap), std::move(result_core), std::move(merged_min_only));
+    return SplitDBM(std::move(out_vmap), std::move(out_revmap), std::move(result_core));
 }
 
 std::optional<SplitDBM> SplitDBM::meet(const SplitDBM& o) const {
@@ -1181,12 +1168,8 @@ std::optional<SplitDBM> SplitDBM::meet(const SplitDBM& o) const {
     // 3. Build result mappings
     auto [out_vmap, out_revmap] = aligned.result_mappings();
 
-    // 4. Merge min_only sets
-    std::set<Variable> merged_min_only = min_only_;
-    merged_min_only.insert(o.min_only_.begin(), o.min_only_.end());
-
     SplitDBM res(std::move(out_vmap), std::move(out_revmap),
-                 std::make_unique<CoreDBM>(std::move(*meet_result)), std::move(merged_min_only));
+                 std::make_unique<CoreDBM>(std::move(*meet_result)));
     CRAB_LOG("zones-split", std::cout << "Result meet:\n" << res << "\n");
     return res;
 }
@@ -1347,7 +1330,7 @@ void SplitDBM::assign(Variable lhs, const LinearExpression& e) {
     if (lb_w) {
         core_->update_edge(vert, *lb_w, 0);
     }
-    if (ub_w && !min_only_.contains(lhs)) {
+    if (ub_w && !variable_registry->is_min_only(lhs)) {
         core_->update_edge(0, *ub_w, vert);
     }
     // Clear the old x vertex
@@ -1393,7 +1376,7 @@ void SplitDBM::set(const Variable x, const Interval& intv) {
     }
 
     const VertId v = get_vert(x);
-    if (intv.ub().is_finite() && !min_only_.contains(x)) {
+    if (intv.ub().is_finite() && !variable_registry->is_min_only(x)) {
         Weight ub;
         if (convert_NtoW_overflow(*intv.ub().number(), ub)) {
             normalize();
@@ -1522,11 +1505,13 @@ StringInvariant SplitDBM::to_set() const {
         if (!pvar || !representatives.contains(*pvar)) {
             continue;
         }
-        if (!g.elem(0, v) && !g.elem(v, 0)) {
+        const bool has_lb = g.elem(v, 0);
+        const bool has_ub = g.elem(0, v) && !variable_registry->is_min_only(*pvar);
+        if (!has_lb && !has_ub) {
             continue;
         }
-        Interval v_out{g.elem(v, 0) ? -Number(g.edge_val(v, 0)) : MINUS_INFINITY,
-                       g.elem(0, v) ? Number(g.edge_val(0, v)) : PLUS_INFINITY};
+        Interval v_out{has_lb ? -Number(g.edge_val(v, 0)) : MINUS_INFINITY,
+                       has_ub ? Number(g.edge_val(0, v)) : PLUS_INFINITY};
         assert(!v_out.is_bottom());
 
         Variable variable = *pvar;
@@ -1544,6 +1529,9 @@ StringInvariant SplitDBM::to_set() const {
             } else {
                 elem << " in " << typeset_to_string(iterate_types(lb, ub));
             }
+        } else if (variable_registry->is_min_only(variable)) {
+            // One-sided variables: display just the lower bound
+            elem << "=" << v_out.lb();
         } else {
             elem << "=";
             if (v_out.is_singleton()) {

@@ -415,7 +415,7 @@ post:
 
   # numeric-size descriptors must remain
   - r7.stack_numeric_size=4
-  - r1.stack_numeric_size=[-24, 4]
+  - r1.stack_numeric_size=-24
 ---
 test-case: shorten numeric size from int64* to int32*
 
@@ -484,7 +484,7 @@ post:
   - r2.type=stack
   - r2.stack_offset=[496, 504]
   - r2.stack_offset-r0.uvalue<=503
-  - r2.stack_numeric_size=[8, 16]
+  - r2.stack_numeric_size=8
   - r10.type=stack
   - r10.stack_offset=512
   - s[496...511].type=number
@@ -536,7 +536,7 @@ post:
   - r10.stack_offset=512
   - s[496...503].type=stack
   - s[496...503].stack_offset=504
-  - s[496...503].stack_numeric_size=8
+  - s[496...503].stack_numeric_size=r3.stack_numeric_size
   - s[504...511].type=number
 ---
 test-case: subtract stack pointers
@@ -820,8 +820,7 @@ post:
   - r1.uvalue=0
   - r2.type=stack
   - r2.stack_offset=504
-  - r2.stack_numeric_size=[4, 8]
-  - r2.stack_numeric_size-r0.uvalue<=7
+  - r2.stack_numeric_size=4
   - r3.type=number
   - r10.type=stack
   - r10.stack_offset=512

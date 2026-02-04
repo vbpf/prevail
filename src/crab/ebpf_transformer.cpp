@@ -464,6 +464,10 @@ static void do_load_ctx(TypeToNumDomain& rcp, const Reg& target_reg, const Linea
     } else if (addr == desc->end) {
         if (width == offset_width) {
             rcp.values.assign(target.packet_offset, variable_registry->packet_size());
+            // EXPERIMENTAL: Explicit upper bound since packet_size is min_only.
+            // This preserves the relational constraint (packet_offset <= packet_size)
+            // while ensuring comparison checks have a concrete upper bound.
+            rcp.values.add_constraint(target.packet_offset < MAX_PACKET_SIZE);
         }
     } else if (addr == desc->meta) {
         if (width == offset_width) {

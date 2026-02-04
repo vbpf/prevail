@@ -21,7 +21,6 @@
 
 #include <memory>
 #include <optional>
-#include <set>
 #include <unordered_set>
 #include <utility>
 #include <variant>
@@ -66,7 +65,6 @@ class SplitDBM final {
 
     VertMap vert_map_; // Mapping from variables to vertices
     RevMap rev_map_;
-    std::set<Variable> min_only_; // Variables that only track lower bounds
 
     VertId get_vert(Variable v);
     // Evaluate the potential value of a variable.
@@ -137,8 +135,7 @@ class SplitDBM final {
     Bound get_ub(Variable x) const;
 
     // Private constructor for internal use (join, meet, widen, etc.)
-    SplitDBM(VertMap&& vert_map, RevMap&& rev_map, std::unique_ptr<CoreDBM> core,
-             std::set<Variable>&& min_only = {});
+    SplitDBM(VertMap&& vert_map, RevMap&& rev_map, std::unique_ptr<CoreDBM> core);
 
   public:
     explicit SplitDBM();
@@ -251,10 +248,6 @@ class SplitDBM final {
     friend std::ostream& operator<<(std::ostream& o, const SplitDBM& dom);
     [[nodiscard]]
     StringInvariant to_set() const;
-
-    void set_min_only(Variable v) { min_only_.insert(v); }
-    [[nodiscard]]
-    bool is_min_only(Variable v) const { return min_only_.contains(v); }
 
   public:
     static void clear_thread_local_state();
