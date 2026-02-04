@@ -354,7 +354,7 @@ EbpfDomain EbpfDomain::from_constraints(const std::vector<LinearConstraint>& typ
     EbpfDomain inv;
 
     // Mark size variables as min-only (only lower bound is meaningful)
-    inv.rcp.values.set_min_only(variable_registry->packet_size());
+    // Note: packet_size needs upper bound for comparison checks
     for (int i = 0; i <= R10_STACK_POINTER; i++) {
         inv.rcp.values.set_min_only(reg_pack(i).stack_numeric_size);
         inv.rcp.values.set_min_only(reg_pack(i).shared_region_size);
@@ -397,7 +397,7 @@ EbpfDomain EbpfDomain::setup_entry(const bool init_r1) {
     EbpfDomain inv;
 
     // Mark size variables as min-only (only lower bound is meaningful)
-    inv.rcp.values.set_min_only(variable_registry->packet_size());
+    // Note: packet_size needs upper bound for comparison checks
     for (int i = 0; i <= R10_STACK_POINTER; i++) {
         inv.rcp.values.set_min_only(reg_pack(i).stack_numeric_size);
         inv.rcp.values.set_min_only(reg_pack(i).shared_region_size);
