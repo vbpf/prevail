@@ -153,45 +153,6 @@ class GraphPerm {
     };
 
     template <class RG, class It>
-    class AdjList final {
-      public:
-        using ItG = RG::iterator;
-
-        using iterator = It;
-
-        AdjList(const std::vector<VertId>& _perm, const std::vector<VertId>& _inv, const RG& _adj)
-            : perm(_perm), inv(_inv), adj(_adj) {}
-
-        AdjList(const std::vector<VertId>& _perm, const std::vector<VertId>& _inv) : perm(_perm), inv(_inv), adj() {}
-
-        iterator begin() const {
-            if (adj) {
-                return iterator(inv, (*adj).begin());
-            }
-            return iterator(inv, ItG::empty_iterator());
-        }
-        iterator end() const {
-            if (adj) {
-                return iterator(inv, (*adj).end());
-            }
-            return iterator(inv, ItG::empty_iterator());
-        }
-
-        [[nodiscard]]
-        bool mem(unsigned int v) const {
-            if (!adj || perm[v] == invalid_vert) {
-                return false;
-            }
-            return (*adj).mem(perm[v]);
-        }
-
-      private:
-        const std::vector<VertId>& perm;
-        const std::vector<VertId>& inv;
-        std::optional<RG> adj;
-    };
-
-    template <class RG, class It>
     class ConstAdjList final {
       public:
         using ItG = RG::iterator;
