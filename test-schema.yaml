@@ -4,36 +4,99 @@
 id: https://spec.openapis.org/oas/4.0/schema/2021-08-12
 $schema: http://json-schema.org/draft-04/schema#
 description: Validation schema for prevail tests
-type: object
-required:
-  - test-case
-  - pre
-  - code
-  - post
-properties:
-  test-case:
-    type: string
-  options:
-    type: array
-    items:
-      type: string
-  pre:
-    type: array
-    items:
-      type: string
-  code:
-    type: object
-    required: [<start>]
-    patternProperties:
-      '^<a-zA-Z[a-zA-Z0-9]*>$':
+oneOf:
+  # Standard, fully-validated test case schema.
+  - type: object
+    required:
+      - test-case
+      - pre
+      - code
+      - post
+    properties:
+      test-case:
+        type: string
+      options:
         type: array
-    additionalItems: false
-  post:
-    type: array
-    items:
-      type: string
-  messages:
-    type: array
-    items:
-      type: string
-additionalProperties: false
+        items:
+          type: string
+      pre:
+        type: array
+        items:
+          type: string
+      code:
+        type: object
+        required: [<start>]
+        patternProperties:
+          '^<a-zA-Z[a-zA-Z0-9]*>$':
+            type: array
+        additionalItems: false
+      post:
+        type: array
+        items:
+          type: string
+      messages:
+        type: array
+        items:
+          type: string
+      observe:
+        type: array
+        items:
+          type: object
+          required:
+            - at
+            - constraints
+          properties:
+            at:
+              type: [string, integer]
+            point:
+              type: string
+              enum: [pre, post]
+            mode:
+              type: string
+              enum: [consistent, entailed]
+            constraints:
+              type: array
+              items:
+                type: string
+          additionalProperties: false
+    additionalProperties: false
+
+  # Exception fixtures: allow intentionally-invalid 'observe' (or other) nodes,
+  # but require an expected exception message.
+  - type: object
+    required:
+      - test-case
+      - pre
+      - code
+      - post
+      - expected-exception
+    properties:
+      test-case:
+        type: string
+      expected-exception:
+        type: string
+      options:
+        type: array
+        items:
+          type: string
+      pre:
+        type: array
+        items:
+          type: string
+      code:
+        type: object
+        required: [<start>]
+        patternProperties:
+          '^<a-zA-Z[a-zA-Z0-9]*>$':
+            type: array
+        additionalItems: false
+      post:
+        type: array
+        items:
+          type: string
+      messages:
+        type: array
+        items:
+          type: string
+      observe: {}
+    additionalProperties: false
