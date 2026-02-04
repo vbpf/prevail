@@ -471,9 +471,6 @@ class GraphRev {
 class GraphOps {
   public:
     // The following code assumes VertId is an integer.
-    using Graph = AdaptGraph;
-    using WeightVector = std::vector<Weight>;
-
     using PotentialFunction = std::function<Weight(VertId)>;
 
     using EdgeVector = std::vector<std::tuple<VertId, VertId, Weight>>;
@@ -679,7 +676,7 @@ class GraphOps {
   public:
     // Run Bellman-Ford to compute a valid model of a set of difference constraints.
     // Returns false if there is some negative cycle.
-    static bool select_potentials(const auto& g, WeightVector& potentials) {
+    static bool select_potentials(const auto& g, std::vector<Weight>& potentials) {
         const size_t sz = g.size();
         assert(potentials.size() >= sz);
         grow_scratch(sz);
@@ -963,7 +960,7 @@ class GraphOps {
 
   public:
     template <class G>
-    static bool repair_potential(const G& g, WeightVector& p, VertId ii, VertId jj) {
+    static bool repair_potential(const G& g, std::vector<Weight>& p, VertId ii, VertId jj) {
         // Ensure there's enough scratch space.
         const size_t sz = g.size();
         // assert(src < (int) sz && dest < (int) sz);
@@ -1174,4 +1171,4 @@ class GraphOps {
     }
 };
 
-} // namespace prevail
+} // namespace splitdbm

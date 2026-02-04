@@ -118,4 +118,4 @@ class Heap {
         return x;
     }
 };
-} // namespace prevail
+} // namespace splitdbm

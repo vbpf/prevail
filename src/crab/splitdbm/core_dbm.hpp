@@ -161,4 +161,4 @@ struct AlignedPair {
     std::vector<Weight> initial_potentials;
 };
 
-} // namespace prevail
+} // namespace splitdbm

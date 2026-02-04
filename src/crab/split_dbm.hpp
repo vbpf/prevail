@@ -44,17 +44,14 @@ class SplitDBM final {
 
   public:
     using Graph = splitdbm::AdaptGraph;
-    using Weight = splitdbm::Weight;
-    using VertId = splitdbm::VertId;
-    using VertMap = boost::container::flat_map<Variable, VertId>;
+    using VertMap = boost::container::flat_map<Variable, splitdbm::VertId>;
 
   private:
     using VariableVector = std::vector<Variable>;
 
     using RevMap = std::vector<std::optional<Variable>>;
     // < <x, y>, k> == x - y <= k.
-    using diffcst_t = std::pair<std::pair<Variable, Variable>, Weight>;
-    using VertSet = std::unordered_set<VertId>;
+    using diffcst_t = std::pair<std::pair<Variable, Variable>, splitdbm::Weight>;
     friend class VertSetWrap;
 
     std::unique_ptr<splitdbm::CoreDBM> core_;
@@ -62,14 +59,14 @@ class SplitDBM final {
     VertMap vert_map_; // Mapping from variables to vertices
     RevMap rev_map_;
 
-    VertId get_vert(Variable v);
+    splitdbm::VertId get_vert(Variable v);
     // Evaluate the potential value of a variable.
     [[nodiscard]]
-    Weight pot_value(Variable v) const;
+    splitdbm::Weight pot_value(Variable v) const;
 
     // Evaluate an expression under the chosen potentials
     [[nodiscard]]
-    bool eval_expression_overflow(const LinearExpression& e, Weight& out) const;
+    bool eval_expression_overflow(const LinearExpression& e, splitdbm::Weight& out) const;
 
     [[nodiscard]]
     Interval compute_residual(const LinearExpression& e, Variable pivot) const;
@@ -93,11 +90,11 @@ class SplitDBM final {
                             bool extract_upper_bounds,
                             /* foreach {v, k} \in diff_csts we have
                                the difference constraint v - k <= k */
-                            std::vector<std::pair<Variable, Weight>>& diff_csts) const;
+                            std::vector<std::pair<Variable, splitdbm::Weight>>& diff_csts) const;
 
     // Turn an assignment into a set of difference constraints.
-    void diffcsts_of_assign(const LinearExpression& exp, std::vector<std::pair<Variable, Weight>>& lb,
-                            std::vector<std::pair<Variable, Weight>>& ub) const;
+    void diffcsts_of_assign(const LinearExpression& exp, std::vector<std::pair<Variable, splitdbm::Weight>>& lb,
+                            std::vector<std::pair<Variable, splitdbm::Weight>>& ub) const;
 
     /**
      * Turn a linear inequality into a set of difference
@@ -107,9 +104,9 @@ class SplitDBM final {
                              /* difference constraints */
                              std::vector<diffcst_t>& csts,
                              /* x >= lb for each {x,lb} in lbs */
-                             std::vector<std::pair<Variable, Weight>>& lbs,
+                             std::vector<std::pair<Variable, splitdbm::Weight>>& lbs,
                              /* x <= ub for each {x,ub} in ubs */
-                             std::vector<std::pair<Variable, Weight>>& ubs) const;
+                             std::vector<std::pair<Variable, splitdbm::Weight>>& ubs) const;
 
     bool add_linear_leq(const LinearExpression& exp);
 
@@ -117,13 +114,13 @@ class SplitDBM final {
     bool add_univar_disequation(Variable x, const Number& n);
 
     // Restore potential after an edge addition
-    bool repair_potential(VertId src, VertId dest);
+    bool repair_potential(splitdbm::VertId src, splitdbm::VertId dest);
 
     void normalize();
 
-    std::optional<VertId> get_vertid(Variable x) const;
-    Bound get_lb(const std::optional<VertId>& v) const;
-    Bound get_ub(const std::optional<VertId>& v) const;
+    std::optional<splitdbm::VertId> get_vertid(Variable x) const;
+    Bound get_lb(const std::optional<splitdbm::VertId>& v) const;
+    Bound get_ub(const std::optional<splitdbm::VertId>& v) const;
 
     Interval get_interval(Variable x) const;
 

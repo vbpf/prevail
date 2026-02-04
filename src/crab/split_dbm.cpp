@@ -854,7 +854,7 @@ void SplitDBM::forget(const VariableVector& variables) {
     normalize();
 }
 
-static std::string to_string(const Variable vd, const Variable vs, const SplitDBM::Weight& w, const bool eq) {
+static std::string to_string(const Variable vd, const Variable vs, const Weight& w, const bool eq) {
     std::stringstream elem;
     if (eq) {
         if (w.operator>(0)) {
@@ -999,7 +999,7 @@ Interval SplitDBM::compute_residual(const LinearExpression& e, const Variable pi
     return residual;
 }
 
-SplitDBM::Weight SplitDBM::pot_value(const Variable v) const {
+Weight SplitDBM::pot_value(const Variable v) const {
     if (const auto y = try_at(vert_map_, v)) {
         return core_->potential()[*y];
     }
