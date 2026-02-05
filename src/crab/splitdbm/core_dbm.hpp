@@ -76,15 +76,10 @@ class CoreDBM {
     void forget(VertId v);
 
     // ==========================================================================
-    // Graph and potential access for SplitDBM's complex operations
+    // Graph access for SplitDBM's read-only operations (e.g. to_set)
     // ==========================================================================
 
     [[nodiscard]] const Graph& graph() const;
-    [[nodiscard]] Graph& graph();
-    [[nodiscard]] const std::vector<Weight>& potential() const;
-    [[nodiscard]] std::vector<Weight>& potential();
-    [[nodiscard]] const VertSet& unstable() const;
-    [[nodiscard]] VertSet& unstable();
 
     // Restore potential after an edge addition
     bool repair_potential(VertId src, VertId dest);

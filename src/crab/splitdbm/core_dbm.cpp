@@ -59,11 +59,6 @@ void CoreDBM::forget(const VertId v) {
 }
 
 const Graph& CoreDBM::graph() const { return g_; }
-Graph& CoreDBM::graph() { return g_; }
-const std::vector<Weight>& CoreDBM::potential() const { return potential_; }
-std::vector<Weight>& CoreDBM::potential() { return potential_; }
-const VertSet& CoreDBM::unstable() const { return unstable_; }
-VertSet& CoreDBM::unstable() { return unstable_; }
 
 bool CoreDBM::repair_potential(const VertId src, const VertId dest) {
     return GraphOps::repair_potential(g_, potential_, src, dest);
