@@ -414,8 +414,8 @@ struct Unmarshaller {
     }
 
     [[nodiscard]]
-    auto makeLddw(const EbpfInst inst, const int32_t next_imm, const vector<EbpfInst>& insts,
-                  const Pc pc) const -> Instruction {
+    auto makeLddw(const EbpfInst inst, const int32_t next_imm, const vector<EbpfInst>& insts, const Pc pc) const
+        -> Instruction {
         if (!info.platform->supports_group(bpf_conformance_groups_t::base64)) {
             throw InvalidInstruction{pc, inst.opcode};
         }

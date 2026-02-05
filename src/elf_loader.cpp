@@ -649,7 +649,8 @@ class ProgramReader {
                                const libbtf::btf_type_data& btf_data) const;
     void process_core_relocations(const libbtf::btf_type_data& btf_data);
 
-    int32_t compute_lddw_reloc_offset_imm(ELFIO::Elf_Sxword addend, ELFIO::Elf_Word index, std::reference_wrapper<EbpfInst> lo_inst) const;
+    int32_t compute_lddw_reloc_offset_imm(ELFIO::Elf_Sxword addend, ELFIO::Elf_Word index,
+                                          std::reference_wrapper<EbpfInst> lo_inst) const;
 
   public:
     std::vector<RawProgram> raw_programs;

@@ -3,8 +3,8 @@
 #include <cassert>
 #include <utility>
 
-#include "crab/splitdbm/graph_ops.hpp"
 #include "crab/split_dbm.hpp"
+#include "crab/splitdbm/graph_ops.hpp"
 #include "crab/var_registry.hpp"
 #include "crab_utils/debug.hpp"
 #include "crab_utils/stats.hpp"
@@ -18,16 +18,12 @@ namespace prevail {
 // SplitDBM constructors and assignment operators
 // =============================================================================
 
-SplitDBM::SplitDBM() : core_(std::make_unique<CoreDBM>()) {
-    rev_map_.emplace_back(std::nullopt);
-}
+SplitDBM::SplitDBM() : core_(std::make_unique<CoreDBM>()) { rev_map_.emplace_back(std::nullopt); }
 
 SplitDBM::~SplitDBM() = default;
 
 SplitDBM::SplitDBM(const SplitDBM& o)
-    : core_(std::make_unique<CoreDBM>(*o.core_)),
-      vert_map_(o.vert_map_),
-      rev_map_(o.rev_map_) {}
+    : core_(std::make_unique<CoreDBM>(*o.core_)), vert_map_(o.vert_map_), rev_map_(o.rev_map_) {}
 
 SplitDBM::SplitDBM(SplitDBM&& o) noexcept = default;
 
@@ -43,9 +39,7 @@ SplitDBM& SplitDBM::operator=(const SplitDBM& o) {
 SplitDBM& SplitDBM::operator=(SplitDBM&& o) noexcept = default;
 
 SplitDBM::SplitDBM(VertMap&& vert_map, RevMap&& rev_map, std::unique_ptr<CoreDBM> core)
-    : core_(std::move(core)),
-      vert_map_(std::move(vert_map)),
-      rev_map_(std::move(rev_map)) {
+    : core_(std::move(core)), vert_map_(std::move(vert_map)), rev_map_(std::move(rev_map)) {
     normalize();
 }
 
@@ -56,13 +50,9 @@ void SplitDBM::set_to_top() {
     rev_map_.emplace_back(std::nullopt);
 }
 
-bool SplitDBM::is_top() const {
-    return core_->is_top();
-}
+bool SplitDBM::is_top() const { return core_->is_top(); }
 
-std::pair<std::size_t, std::size_t> SplitDBM::size() const {
-    return {core_->graph_size(), core_->num_edges()};
-}
+std::pair<std::size_t, std::size_t> SplitDBM::size() const { return {core_->graph_size(), core_->num_edges()}; }
 
 // =============================================================================
 // End of CoreDBM and SplitDBM basics
@@ -450,7 +440,8 @@ bool SplitDBM::operator<=(const SplitDBM& o) const {
 using RevMap = std::vector<std::optional<Variable>>;
 using VertMap = boost::container::flat_map<Variable, VertId>;
 
-[[nodiscard]] std::pair<VertMap, RevMap> result_mappings(const RevMap& aligned_vars) {
+[[nodiscard]]
+std::pair<VertMap, RevMap> result_mappings(const RevMap& aligned_vars) {
     VertMap vmap;
     RevMap revmap = aligned_vars;
 
@@ -480,8 +471,8 @@ std::tuple<AlignedPair, RevMap> SplitDBM::make_intersection_alignment(const Spli
         }
     }
 
-    return std::make_tuple(AlignedPair{*left.core_, *right.core_,
-                       std::move(perm_left), std::move(perm_right)}, std::move(aligned_vars));
+    return std::make_tuple(AlignedPair{*left.core_, *right.core_, std::move(perm_left), std::move(perm_right)},
+                           std::move(aligned_vars));
 }
 
 // Build alignment from union of variables (for meet)
@@ -517,9 +508,9 @@ std::tuple<AlignedPair, RevMap> SplitDBM::make_union_alignment(const SplitDBM& l
         }
     }
 
-    return std::make_tuple(AlignedPair{*left.core_, *right.core_,
-                       std::move(perm_left), std::move(perm_right),
-                       std::move(initial_potentials)}, std::move(aligned_vars));
+    return std::make_tuple(AlignedPair{*left.core_, *right.core_, std::move(perm_left), std::move(perm_right),
+                                       std::move(initial_potentials)},
+                           std::move(aligned_vars));
 }
 
 // =============================================================================
@@ -550,8 +541,7 @@ SplitDBM do_join(const SplitDBM& left, const SplitDBM& right) {
         }
     }
 
-    return SplitDBM(std::move(out_vmap), std::move(out_revmap),
-                    std::make_unique<CoreDBM>(std::move(joined)));
+    return SplitDBM(std::move(out_vmap), std::move(out_revmap), std::make_unique<CoreDBM>(std::move(joined)));
 }
 
 void SplitDBM::operator|=(const SplitDBM& right) { *this = do_join(*this, right); }
@@ -585,14 +575,13 @@ std::optional<SplitDBM> SplitDBM::meet(const SplitDBM& o) const {
     // 2. Execute graph meet
     auto meet_result = CoreDBM::meet(aligned_pair);
     if (!meet_result) {
-        return std::nullopt;  // Infeasible
+        return std::nullopt; // Infeasible
     }
 
     // 3. Build result mappings
     auto [out_vmap, out_revmap] = result_mappings(aligned_vars);
 
-    SplitDBM res(std::move(out_vmap), std::move(out_revmap),
-                 std::make_unique<CoreDBM>(std::move(*meet_result)));
+    SplitDBM res(std::move(out_vmap), std::move(out_revmap), std::make_unique<CoreDBM>(std::move(*meet_result)));
     CRAB_LOG("zones-split", std::cout << "Result meet:\n" << res << "\n");
     return res;
 }
@@ -776,16 +765,11 @@ SplitDBM SplitDBM::narrow(const SplitDBM& o) const {
     return {*this};
 }
 
-
-bool SplitDBM::repair_potential(const VertId src, const VertId dest) {
-    return core_->repair_potential(src, dest);
-}
+bool SplitDBM::repair_potential(const VertId src, const VertId dest) { return core_->repair_potential(src, dest); }
 
 void SplitDBM::clear_thread_local_state() { GraphOps::clear_thread_local_state(); }
 
-void SplitDBM::normalize() {
-    core_->normalize();
-}
+void SplitDBM::normalize() { core_->normalize(); }
 
 void SplitDBM::set(const Variable x, const Interval& intv) {
     CrabStats::count("SplitDBM.count.assign");

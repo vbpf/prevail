@@ -27,12 +27,12 @@
 
 #include <boost/container/flat_map.hpp>
 
-#include "crab/splitdbm/core_dbm.hpp"
 #include "arith/linear_constraint.hpp"
 #include "arith/num_big.hpp"
 #include "arith/num_safeint.hpp"
 #include "arith/variable.hpp"
 #include "crab/interval.hpp"
+#include "crab/splitdbm/core_dbm.hpp"
 #include "string_constraints.hpp"
 
 namespace prevail {
@@ -131,7 +131,8 @@ class SplitDBM final {
     SplitDBM(VertMap&& vert_map, RevMap&& rev_map, std::unique_ptr<splitdbm::CoreDBM> core);
 
     // Build AlignedPair from intersection of variables (for join/widen)
-    static std::tuple<splitdbm::AlignedPair, RevMap> make_intersection_alignment(const SplitDBM& left, const SplitDBM& right);
+    static std::tuple<splitdbm::AlignedPair, RevMap> make_intersection_alignment(const SplitDBM& left,
+                                                                                 const SplitDBM& right);
     // Build AlignedPair from union of variables (for meet)
     static std::tuple<splitdbm::AlignedPair, RevMap> make_union_alignment(const SplitDBM& left, const SplitDBM& right);
 

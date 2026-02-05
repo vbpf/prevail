@@ -364,8 +364,7 @@ struct AssertionPrinterVisitor {
     }
 
     void operator()(ValidMapKeyValue const& a) {
-        _os << "within(" << a.access_reg << ":" << (a.key ? "key_size" : "value_size") << "(" << a.map_fd_reg
-            << "))";
+        _os << "within(" << a.access_reg << ":" << (a.key ? "key_size" : "value_size") << "(" << a.map_fd_reg << "))";
     }
 
     void operator()(ZeroCtxOffset const& a) {
