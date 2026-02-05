@@ -493,14 +493,11 @@ std::tuple<AlignedPair, RevMap> SplitDBM::make_union_alignment(const SplitDBM& l
     RevMap aligned_vars = {std::nullopt};
     std::vector initial_potentials = {Weight(0)};
 
-    const auto& pot_left = left.core_->potential();
-    const auto& pot_right = right.core_->potential();
-
     for (const auto& [var, left_vert] : left.vert_map_) {
         perm_left.push_back(left_vert);
         perm_right.push_back(NOT_PRESENT);
         aligned_vars.push_back(var);
-        initial_potentials.push_back(pot_left[left_vert] - pot_left[0]);
+        initial_potentials.push_back(left.core_->potential_at(left_vert) - left.core_->potential_at_zero());
     }
 
     for (const auto& [var, right_vert] : right.vert_map_) {
@@ -516,7 +513,7 @@ std::tuple<AlignedPair, RevMap> SplitDBM::make_union_alignment(const SplitDBM& l
             perm_left.push_back(NOT_PRESENT);
             perm_right.push_back(right_vert);
             aligned_vars.push_back(var);
-            initial_potentials.push_back(pot_right[right_vert] - pot_right[0]);
+            initial_potentials.push_back(right.core_->potential_at(right_vert) - right.core_->potential_at_zero());
         }
     }
 
@@ -984,7 +981,7 @@ bool SplitDBM::eval_expression_overflow(const LinearExpression& e, Weight& out) 
             out = Weight(0);
             return true;
         }
-        out += (pot_value(variable) - core_->potential()[0]) * coef;
+        out += (pot_value(variable) - core_->potential_at_zero()) * coef;
     }
     return false;
 }
@@ -1001,7 +998,7 @@ Interval SplitDBM::compute_residual(const LinearExpression& e, const Variable pi
 
 Weight SplitDBM::pot_value(const Variable v) const {
     if (const auto y = try_at(vert_map_, v)) {
-        return core_->potential()[*y];
+        return core_->potential_at(*y);
     }
     return {0};
 }
