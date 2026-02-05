@@ -37,6 +37,7 @@ src/crab_utils/stats.hpp
 src/crab/splitdbm/adapt_sgraph.hpp
 src/crab/splitdbm/graph_ops.cpp
 src/crab/splitdbm/graph_ops.hpp
+src/crab/splitdbm/graph_views.hpp
 src/crab/splitdbm/core_dbm.cpp
 src/crab/splitdbm/core_dbm.hpp
 src/crab/splitdbm/heap.hpp
