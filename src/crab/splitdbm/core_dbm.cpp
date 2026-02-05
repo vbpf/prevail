@@ -20,11 +20,6 @@ CoreDBM::CoreDBM(Graph&& g, std::vector<Weight>&& pot, VertSet&& unstable)
     normalize();
 }
 
-void CoreDBM::set_to_top() {
-    this->~CoreDBM();
-    new (this) CoreDBM();
-}
-
 bool CoreDBM::is_top() const { return g_.is_empty(); }
 
 prevail::ExtendedNumber CoreDBM::get_bound(const VertId v, const Side side) const {

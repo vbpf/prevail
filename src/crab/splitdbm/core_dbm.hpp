@@ -50,8 +50,6 @@ class CoreDBM {
     CoreDBM& operator=(const CoreDBM&) = default;
     CoreDBM& operator=(CoreDBM&&) = default;
 
-    void set_to_top();
-
     [[nodiscard]] bool is_top() const;
 
     // ==========================================================================
@@ -131,6 +129,14 @@ class CoreDBM {
     // Strengthen a bound and propagate to neighbors.
     bool strengthen_bound_with_propagation(VertId v, Side side, const Weight& new_bound);
 
+    // WARNING: Known bug — eager normalization defeats widening convergence.
+    // normalize() runs close_after_widen + close_after_assign and clears unstable_.
+    // In the original CRAB, normalization was lazy — triggered only at query points
+    // (operator<=, get_interval), not after every mutation. Widened results stayed
+    // non-normalized until needed.
+    //
+    // A proper fix requires lazy normalization (e.g., mutable on CoreDBM internals
+    // or a normalized_ flag checked by const methods). This is non-trivial.
     void normalize();
 
     // =========================================================================

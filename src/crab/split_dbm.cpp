@@ -765,8 +765,6 @@ SplitDBM SplitDBM::narrow(const SplitDBM& o) const {
     return {*this};
 }
 
-bool SplitDBM::repair_potential(const VertId src, const VertId dest) { return core_->repair_potential(src, dest); }
-
 void SplitDBM::clear_thread_local_state() { GraphOps::clear_thread_local_state(); }
 
 void SplitDBM::normalize() { core_->normalize(); }

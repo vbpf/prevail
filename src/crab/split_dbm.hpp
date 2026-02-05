@@ -113,9 +113,6 @@ class SplitDBM final {
     // x != n
     bool add_univar_disequation(Variable x, const Number& n);
 
-    // Restore potential after an edge addition
-    bool repair_potential(splitdbm::VertId src, splitdbm::VertId dest);
-
     void normalize();
 
     std::optional<splitdbm::VertId> get_vertid(Variable x) const;

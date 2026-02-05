@@ -9,9 +9,7 @@
 
 #include <optional>
 
-#include "crab/splitdbm/adapt_sgraph.hpp"
 #include "crab/splitdbm/definitions.hpp"
-#include "crab_utils/num_safety.hpp"
 
 namespace splitdbm {
 
@@ -22,7 +20,7 @@ class GraphPerm {
   public:
     constexpr static VertId invalid_vert = std::numeric_limits<VertId>::max();
 
-    GraphPerm(const std::vector<VertId>& _perm, G& _g) : g{_g}, perm{_perm}, inv(_g.size(), invalid_vert) {
+    GraphPerm(const std::vector<VertId>& _perm, const G& _g) : g{_g}, perm{_perm}, inv(_g.size(), invalid_vert) {
         for (unsigned int vi = 0; vi < perm.size(); vi++) {
             if (perm[vi] == invalid_vert) {
                 continue;
@@ -219,6 +217,7 @@ class GraphPerm {
         return ENeighbourConstRange(perm, inv, g.e_preds(perm[v]));
     }
 
+  private:
     const G& g;
     std::vector<VertId> perm;
     std::vector<VertId> inv;
@@ -273,14 +272,7 @@ class SubGraph {
         g.set_edge(s, w, d);
     }
 
-    template <class Op>
-    void update_edge(VertId s, Weight w, VertId d, Op& op) {
-        //      assert(s != v_ex && d != v_ex);
-        g.update_edge(s, w, d, op);
-    }
-
-    class VertConstIterator {
-      public:
+    struct VertConstIterator {
         VertConstIterator(const G::VertConstIterator& _iG, const VertId _v_ex) : v_ex(_v_ex), iG(_iG) {}
 
         // Skipping of v_ex is done entirely by !=.
@@ -301,8 +293,7 @@ class SubGraph {
         G::VertConstIterator iG;
     };
 
-    class VertConstRange {
-      public:
+    struct VertConstRange {
         VertConstRange(const G::VertConstRange& _rG, const VertId _v_ex) : rG(_rG), v_ex(_v_ex) {}
 
         VertConstIterator begin() const { return VertConstIterator(rG.begin(), v_ex); }
@@ -315,8 +306,7 @@ class SubGraph {
     VertConstRange verts() const { return VertConstRange(g.verts(), v_ex); }
 
     template <class It>
-    class AdjIterator {
-      public:
+    struct AdjIterator {
         AdjIterator(const It& _iG, const VertId _v_ex) : iG(_iG), v_ex(_v_ex) {}
         VertId operator*() const { return *iG; }
         AdjIterator& operator++() {
@@ -335,8 +325,7 @@ class SubGraph {
     };
 
     template <class It>
-    class EAdjIterator {
-      public:
+    struct EAdjIterator {
         using EdgeRef = It::EdgeRef;
 
         EAdjIterator(const It& _iG, const VertId _v_ex) : iG(_iG), v_ex(_v_ex) {}
@@ -383,6 +372,7 @@ class SubGraph {
     ENeighbourConstRange e_succs(VertId v) const { return ENeighbourConstRange(g.e_succs(v), v_ex); }
     ENeighbourConstRange e_preds(VertId v) const { return ENeighbourConstRange(g.e_preds(v), v_ex); }
 
+  private:
     G& g;
     VertId v_ex;
 };
@@ -409,7 +399,7 @@ class GraphRev {
 
     // Number of allocated vertices
     [[nodiscard]]
-    int size() const {
+    size_t size() const {
         return g.size();
     }
 
@@ -423,6 +413,8 @@ class GraphRev {
 
     ENeighbourConstRange e_succs(VertId v) const { return g.e_preds(v); }
     ENeighbourConstRange e_preds(VertId v) const { return g.e_succs(v); }
+
+  private:
     G& g;
 };
 

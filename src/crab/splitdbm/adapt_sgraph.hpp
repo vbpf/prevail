@@ -26,8 +26,7 @@ class TreeSMap final {
         return map.size();
     }
 
-    class KeyIterator {
-      public:
+    struct KeyIterator {
         KeyIterator() = default;
         explicit KeyIterator(const col::const_iterator& _e) : e(_e) {}
 
@@ -47,8 +46,7 @@ class TreeSMap final {
         col::const_iterator e;
     };
 
-    class KeyConstRange {
-      public:
+    struct KeyConstRange {
         using iterator = KeyIterator;
 
         explicit KeyConstRange(const col& c) : c{c} {}
@@ -69,8 +67,7 @@ class TreeSMap final {
         const col& c;
     };
 
-    class ValueRange {
-      public:
+    struct ValueRange {
         explicit ValueRange(const col& c) : c{c} {}
         [[nodiscard]]
         size_t size() const {
@@ -89,8 +86,7 @@ class TreeSMap final {
         const col& c;
     };
 
-    class ValueConstRange {
-      public:
+    struct ValueConstRange {
         explicit ValueConstRange(const col& c) : c{c} {}
         [[nodiscard]]
         size_t size() const {
@@ -442,8 +438,7 @@ class AdaptGraph final {
         return o;
     }
 
-    // Ick. This'll have another indirection on every operation.
-    // We'll see what the performance costs are like.
+  private:
     std::vector<TreeSMap> _preds{};
     std::vector<TreeSMap> _succs{};
     std::vector<Weight> _ws{};
