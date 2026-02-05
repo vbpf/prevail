@@ -37,7 +37,7 @@ class GraphPerm {
     constexpr static VertId invalid_vert = std::numeric_limits<VertId>::max();
 
     GraphPerm(const std::vector<VertId>& _perm, const G& _g) : g{_g}, perm{_perm}, inv(_g.size(), invalid_vert) {
-        for (unsigned int vi = 0; vi < perm.size(); vi++) {
+        for (VertId vi = 0; vi < perm.size(); vi++) {
             if (perm[vi] == invalid_vert) {
                 continue;
             }
@@ -189,7 +189,7 @@ class GraphPerm {
         }
 
         [[nodiscard]]
-        bool mem(const unsigned int v) const {
+        bool mem(const VertId v) const {
             if (!adj || perm[v] == invalid_vert) {
                 return false;
             }
