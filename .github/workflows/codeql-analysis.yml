@@ -66,6 +66,7 @@ jobs:
       #    uses a compiled language
       - name: Install dependencies
         run: |
+          sudo apt-get update
           sudo apt install libboost-dev libboost-filesystem-dev libboost-program-options-dev libyaml-cpp-dev
 
       - run: |
