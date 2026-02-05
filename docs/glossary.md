@@ -140,7 +140,7 @@ The top-level composite domain combining type, numeric, and memory tracking.
 
 ### FiniteDomain
 
-A numeric domain wrapping SplitDBM with arithmetic operations.
+A numeric domain wrapping ZoneDomain with finite-width arithmetic operations (overflow, bitwise ops, signed/unsigned conversions).
 
 ### NumAbsDomain
 
@@ -150,9 +150,13 @@ Numeric abstract domain tracking intervals and relational constraints.
 
 A domain construction where type information guides which numeric variables to track precisely.
 
-### SplitDBM
+### ZoneDomain
 
-Split Difference Bound Matrix - an efficient representation of DBM using a potential function and sparse graph.
+Zone abstract domain -- Variable-level interface over the Split DBM. Maps Variables to graph vertices.
+
+### splitdbm::SplitDBM
+
+Split Difference Bound Matrix -- sparse graph + potential function implementation. Operates on VertId and Side, with no concept of Variable.
 
 ### TypeDomain
 

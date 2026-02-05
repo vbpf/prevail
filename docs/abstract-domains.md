@@ -10,9 +10,10 @@ Prevail uses a composite domain structure:
 EbpfDomain
 ├── TypeToNumDomain (type-guided numeric constraints)
 │   ├── TypeDomain (pointer type tracking)
-│   └── NumAbsDomain (numeric constraints)
-│       └── FiniteDomain
-│           └── SplitDBM (Difference Bound Matrix)
+│   └── NumAbsDomain = AddBottom<FiniteDomain>
+│       └── FiniteDomain (finite-width arithmetic)
+│           └── ZoneDomain (Variable↔VertId mapping)
+│               └── splitdbm::SplitDBM (Split Difference Bound Matrix)
 └── ArrayDomain (stack memory modeling)
 ```
 
@@ -155,9 +156,9 @@ Type meet(Type a, Type b) {
 
 ## NumAbsDomain
 
-**File**: `src/crab/finite_domain.hpp`
+**File**: `src/crab/add_bottom.hpp`
 
-Wraps the SplitDBM with arithmetic operations:
+`NumAbsDomain = AddBottom<FiniteDomain>`, where `FiniteDomain` wraps `ZoneDomain` with finite-width arithmetic:
 
 ### Supported Constraints
 
@@ -199,21 +200,33 @@ void bitwise_and(Var dst, Var src1, Var src2) {
 }
 ```
 
-## SplitDBM (Split Difference Bound Matrix)
+## ZoneDomain
 
-**File**: `src/crab/split_dbm.hpp`
+**File**: `src/crab/zone_domain.hpp`
 
-The core relational numeric domain.
+A zone abstract domain backed by a Split DBM. Provides a Variable-level interface over `splitdbm::SplitDBM`, maintaining Variable-to-VertId mappings and handling variable-pair relationships (upper/lower bounds as two separate edges via `Side`).
+
+### Key Responsibilities
+
+- Maps `Variable` to graph vertices (`VertId`) via `vert_map_` / `rev_map_`
+- Translates linear expressions into difference constraints
+- Delegates graph operations (closure, join, widen, meet) to `splitdbm::SplitDBM`
+
+## splitdbm::SplitDBM (Split Difference Bound Matrix)
+
+**File**: `src/crab/splitdbm/split_dbm.hpp`
+
+The actual Split DBM implementation: a sparse weighted graph with a potential function for efficient constraint propagation. Operates on vertices and sides (edge directions relative to vertex 0). Has no concept of Variable -- only `VertId` and `Side`.
 
 ### Representation
 
-A DBM represents constraints of the form `x - y ≤ k`:
+A DBM represents constraints of the form `x - y <= k`:
 
 ```text
          x       y       z
-x   [    0,      3,      5  ]    // x - x ≤ 0, x - y ≤ 3, x - z ≤ 5
-y   [   -2,      0,      2  ]    // y - x ≤ -2, y - y ≤ 0, y - z ≤ 2
-z   [    ∞,      ∞,      0  ]    // z - x ≤ ∞, z - y ≤ ∞, z - z ≤ 0
+x   [    0,      3,      5  ]    // x - x <= 0, x - y <= 3, x - z <= 5
+y   [   -2,      0,      2  ]    // y - x <= -2, y - y <= 0, y - z <= 2
+z   [    inf,    inf,    0  ]    // z - x <= inf, z - y <= inf, z - z <= 0
 ```
 
 ### Split Representation
@@ -221,28 +234,35 @@ z   [    ∞,      ∞,      0  ]    // z - x ≤ ∞, z - y ≤ ∞, z - z ≤ 
 The name "Split" refers to the conceptual separation between interval constraints and difference constraints. While both kinds of constraints are physically stored in the DBM, the algorithms (transfer functions) work differently on each set. Importantly, the transfer functions ensure that the DBM does not contain explicit difference constraints that can be represented by intervals, since those would be redundant.
 
 The matrix is stored as:
-- **Potential function**: Maps each variable to a value (enables fast satisfiability checks)
+- **Potential function**: Maps each vertex to a value (enables fast satisfiability checks)
 - **Difference graph**: Sparse graph of non-trivial constraints
 
 This is more efficient than a full matrix for sparse constraint sets.
 
+### Side Enum
+
+Each vertex `v` has two bounds via edge direction relative to vertex 0:
+- `Side::LEFT` (edge v->0): lower bound = -weight
+- `Side::RIGHT` (edge 0->v): upper bound = weight
+
+### AlignedPair
+
+When performing binary operations (join, widen, meet), two `SplitDBM`s are aligned into a common vertex space via `AlignedPair`, which holds permutation vectors mapping each operand's vertices to aligned indices.
+
 ### Key Operations
 
 ```cpp
-// Add constraint x - y <= k
-void add_constraint(Var x, Var y, Weight k);
+// Get/set bounds for a vertex on a given side
+ExtendedNumber get_bound(VertId v, Side side) const;
+void set_bound(VertId v, Side side, const Weight& bound_value);
 
-// Check if x - y <= k is implied
-bool check_constraint(Var x, Var y, Weight k);
+// Add a difference constraint: dest - src <= k
+bool add_difference_constraint(VertId src, VertId dest, const Weight& k);
 
-// Close the graph (compute all implied constraints)
-void close();
-
-// Join: element-wise max
-SplitDBM join(const SplitDBM& a, const SplitDBM& b);
-
-// Widening: jump to infinity for unstable constraints
-SplitDBM widen(const SplitDBM& a, const SplitDBM& b);
+// Static lattice operations on aligned pairs
+static SplitDBM join(const AlignedPair& aligned);
+static SplitDBM widen(const AlignedPair& aligned);
+static optional<SplitDBM> meet(AlignedPair& aligned);
 ```
 
 ### Closure Algorithm
@@ -363,8 +383,8 @@ EbpfDomain join(EbpfDomain a, EbpfDomain b) {
 At loop heads, prevent infinite ascending chains:
 
 ```cpp
-SplitDBM widen(SplitDBM old, SplitDBM new) {
-    SplitDBM result;
+ZoneDomain widen(ZoneDomain old, ZoneDomain new) {
+    ZoneDomain result;
     
     for each constraint (x - y <= k) in new:
         if (old has x - y <= k' where k' < k) {
@@ -402,7 +422,7 @@ This is managed by a thread-local variable registry.
 
 ### Sparse Representation
 
-The SplitDBM uses sparse graph representation:
+The `splitdbm::SplitDBM` uses sparse graph representation:
 - Only non-trivial constraints stored
 - Lazy closure computation
 - Incremental updates where possible

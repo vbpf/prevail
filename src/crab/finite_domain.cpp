@@ -8,13 +8,13 @@
 #include "arith/variable.hpp"
 #include "crab/finite_domain.hpp"
 #include "crab/interval.hpp"
-#include "crab/split_dbm.hpp"
+#include "crab/zone_domain.hpp"
 #include "ir/syntax.hpp"
 #include "string_constraints.hpp"
 
 namespace prevail {
 
-using NumAbsDomain = SplitDBM;
+using NumAbsDomain = ZoneDomain;
 
 Interval FiniteDomain::eval_interval(const Variable v, const int finite_width) const {
     const Interval span = dom.eval_interval(v);

@@ -25,16 +25,17 @@ enum class Side : bool {
     RIGHT = true   // Edge 0 → v: upper bound = weight
 };
 
-// Forward declaration for CoreDBM's static methods
+// Forward declaration for SplitDBM's static methods
 struct AlignedPair;
 
 // =============================================================================
-// CoreDBM: Low-level DBM operations using (VertId, Side)
+// SplitDBM: The Split Difference Bound Matrix implementation.
 // =============================================================================
-// This class owns the graph and provides one-sided operations.
-// It has NO concept of Variable - only vertices and sides.
+// Maintains a sparse weighted graph with a potential function for efficient
+// constraint propagation. Operates on vertices and sides (edge directions
+// relative to vertex 0). Has no concept of Variable — only VertId and Side.
 
-class CoreDBM {
+class SplitDBM {
     Graph g_;
     std::vector<Weight> potential_;
     VertSet unstable_;
@@ -47,14 +48,14 @@ class CoreDBM {
     void close_after_assign_vertex(VertId v);
 
   public:
-    CoreDBM();
+    SplitDBM();
 
-    CoreDBM(Graph&& g, std::vector<Weight>&& pot, VertSet&& unstable);
+    SplitDBM(Graph&& g, std::vector<Weight>&& pot, VertSet&& unstable);
 
-    CoreDBM(const CoreDBM&) = default;
-    CoreDBM(CoreDBM&&) = default;
-    CoreDBM& operator=(const CoreDBM&) = default;
-    CoreDBM& operator=(CoreDBM&&) = default;
+    SplitDBM(const SplitDBM&) = default;
+    SplitDBM(SplitDBM&&) = default;
+    SplitDBM& operator=(const SplitDBM&) = default;
+    SplitDBM& operator=(SplitDBM&&) = default;
 
     [[nodiscard]] bool is_top() const;
 
@@ -141,7 +142,7 @@ class CoreDBM {
     // (operator<=, get_interval), not after every mutation. Widened results stayed
     // non-normalized until needed.
     //
-    // A proper fix requires lazy normalization (e.g., mutable on CoreDBM internals
+    // A proper fix requires lazy normalization (e.g., mutable on SplitDBM internals
     // or a normalized_ flag checked by const methods). This is non-trivial.
     void normalize();
 
@@ -152,23 +153,23 @@ class CoreDBM {
     // Static lattice operations on permuted vertices
     // =========================================================================
 
-    static CoreDBM join(const AlignedPair& aligned);
-    static CoreDBM widen(const AlignedPair& aligned);
-    static std::optional<CoreDBM> meet(AlignedPair& aligned);
-    static bool is_subsumed_by(const CoreDBM& left, const CoreDBM& right, const std::vector<VertId>& perm);
+    static SplitDBM join(const AlignedPair& aligned);
+    static SplitDBM widen(const AlignedPair& aligned);
+    static std::optional<SplitDBM> meet(AlignedPair& aligned);
+    static bool is_subsumed_by(const SplitDBM& left, const SplitDBM& right, const std::vector<VertId>& perm);
 };
 
 // =============================================================================
-// AlignedPair: Two CoreDBMs viewed in a common vertex space
+// AlignedPair: Two SplitDBMs viewed in a common vertex space
 // =============================================================================
 // When performing binary operations (join, widen, meet), we need to align
-// two CoreDBMs so that same-named variables occupy the same vertex index.
+// two SplitDBMs so that same-named variables occupy the same vertex index.
 
 struct AlignedPair {
     [[nodiscard]] size_t size() const { return left_perm.size(); }
 
-    const CoreDBM& left;
-    const CoreDBM& right;
+    const SplitDBM& left;
+    const SplitDBM& right;
     std::vector<VertId> left_perm;
     std::vector<VertId> right_perm;
     std::vector<Weight> initial_potentials;

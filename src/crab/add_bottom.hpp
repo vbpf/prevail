@@ -8,6 +8,8 @@
 
 namespace prevail {
 
+// AddBottom: Lifts a domain T by adding an explicit bottom element.
+// Bottom is represented as std::nullopt. Aliased as NumAbsDomain.
 class AddBottom final {
     using T = FiniteDomain;
     std::optional<T> dom{};

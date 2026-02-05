@@ -32,15 +32,15 @@
 #include "arith/num_safeint.hpp"
 #include "arith/variable.hpp"
 #include "crab/interval.hpp"
-#include "crab/splitdbm/core_dbm.hpp"
+#include "crab/splitdbm/split_dbm.hpp"
 #include "string_constraints.hpp"
 
 namespace prevail {
 
 enum class ArithBinOp { ADD, SUB, MUL };
 
-class SplitDBM final {
-    friend SplitDBM do_join(const SplitDBM&, const SplitDBM&);
+class ZoneDomain final {
+    friend ZoneDomain do_join(const ZoneDomain&, const ZoneDomain&);
 
   public:
     using Graph = splitdbm::AdaptGraph;
@@ -54,7 +54,7 @@ class SplitDBM final {
     using diffcst_t = std::pair<std::pair<Variable, Variable>, splitdbm::Weight>;
     friend class VertSetWrap;
 
-    std::unique_ptr<splitdbm::CoreDBM> core_;
+    std::unique_ptr<splitdbm::SplitDBM> core_;
 
     VertMap vert_map_; // Mapping from variables to vertices
     RevMap rev_map_;
@@ -125,43 +125,44 @@ class SplitDBM final {
     Bound get_ub(Variable x) const;
 
     // Private constructor for internal use (join, meet, widen, etc.)
-    SplitDBM(VertMap&& vert_map, RevMap&& rev_map, std::unique_ptr<splitdbm::CoreDBM> core);
+    ZoneDomain(VertMap&& vert_map, RevMap&& rev_map, std::unique_ptr<splitdbm::SplitDBM> core);
 
     // Build AlignedPair from intersection of variables (for join/widen)
-    static std::tuple<splitdbm::AlignedPair, RevMap> make_intersection_alignment(const SplitDBM& left,
-                                                                                 const SplitDBM& right);
+    static std::tuple<splitdbm::AlignedPair, RevMap> make_intersection_alignment(const ZoneDomain& left,
+                                                                                 const ZoneDomain& right);
     // Build AlignedPair from union of variables (for meet)
-    static std::tuple<splitdbm::AlignedPair, RevMap> make_union_alignment(const SplitDBM& left, const SplitDBM& right);
+    static std::tuple<splitdbm::AlignedPair, RevMap> make_union_alignment(const ZoneDomain& left,
+                                                                          const ZoneDomain& right);
 
   public:
-    explicit SplitDBM();
-    ~SplitDBM();
+    explicit ZoneDomain();
+    ~ZoneDomain();
 
-    SplitDBM(const SplitDBM& o);
-    SplitDBM(SplitDBM&& o) noexcept;
+    ZoneDomain(const ZoneDomain& o);
+    ZoneDomain(ZoneDomain&& o) noexcept;
 
-    SplitDBM& operator=(const SplitDBM& o);
-    SplitDBM& operator=(SplitDBM&& o) noexcept;
+    ZoneDomain& operator=(const ZoneDomain& o);
+    ZoneDomain& operator=(ZoneDomain&& o) noexcept;
 
     void set_to_top();
 
-    static SplitDBM top() { return SplitDBM(); }
+    static ZoneDomain top() { return ZoneDomain(); }
 
     [[nodiscard]]
     bool is_top() const;
 
-    bool operator<=(const SplitDBM& o) const;
+    bool operator<=(const ZoneDomain& o) const;
 
-    void operator|=(const SplitDBM& right);
-    SplitDBM operator|(const SplitDBM& right) const;
-
-    [[nodiscard]]
-    SplitDBM widen(const SplitDBM& o) const;
-
-    std::optional<SplitDBM> meet(const SplitDBM& o) const;
+    void operator|=(const ZoneDomain& right);
+    ZoneDomain operator|(const ZoneDomain& right) const;
 
     [[nodiscard]]
-    SplitDBM narrow(const SplitDBM& o) const;
+    ZoneDomain widen(const ZoneDomain& o) const;
+
+    std::optional<ZoneDomain> meet(const ZoneDomain& o) const;
+
+    [[nodiscard]]
+    ZoneDomain narrow(const ZoneDomain& o) const;
 
     void assign(Variable lhs, const LinearExpression& e);
 
@@ -213,13 +214,13 @@ class SplitDBM final {
         // Potential optimization: a read-only constraint check on the graph
         // (without closure) could avoid this copy, but would require a separate
         // code path that reasons about feasibility without modifying edges.
-        return !SplitDBM(*this).add_constraint(cst.negate());
+        return !ZoneDomain(*this).add_constraint(cst.negate());
     }
 
     [[nodiscard]]
     bool intersect_aux(const LinearConstraint& cst) const {
         // Same copy overhead as entail_aux — see comment above.
-        return SplitDBM(*this).add_constraint(cst);
+        return ZoneDomain(*this).add_constraint(cst);
     }
 
   public:
@@ -233,23 +234,23 @@ class SplitDBM final {
 
     /**
      * Checks logical implication between two constraints in the current abstract state.
-     * Returns true if, for all states represented by this SplitDBM, whenever 'premise' holds,
+     * Returns true if, for all states represented by this ZoneDomain, whenever 'premise' holds,
      * 'conclusion' also holds. This is implemented by adding 'premise' to the current state:
      * - If 'premise' is inconsistent with the current state, implication holds vacuously (returns true).
      * - Otherwise, checks if 'conclusion' is entailed by the state with 'premise' added.
      */
     [[nodiscard]]
     bool implies(const LinearConstraint& premise, const LinearConstraint& conclusion) const {
-        SplitDBM result(*this);
+        ZoneDomain result(*this);
         return !result.add_constraint(premise) || result.entail(conclusion);
     }
 
-    friend std::ostream& operator<<(std::ostream& o, const SplitDBM& dom);
+    friend std::ostream& operator<<(std::ostream& o, const ZoneDomain& dom);
     [[nodiscard]]
     StringInvariant to_set() const;
 
   public:
     static void clear_thread_local_state();
-}; // class SplitDBM
+}; // class ZoneDomain
 
 } // namespace prevail

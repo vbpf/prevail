@@ -8,8 +8,8 @@
 #include "arith/linear_constraint.hpp"
 #include "arith/variable.hpp"
 #include "crab/interval.hpp"
-#include "crab/split_dbm.hpp"
 #include "crab/var_registry.hpp"
+#include "crab/zone_domain.hpp"
 #include "ir/syntax.hpp"
 #include "string_constraints.hpp"
 
@@ -19,13 +19,14 @@ enum class SignedArithBinOp { SDIV, UDIV, SREM, UREM };
 enum class BitwiseBinOp { AND, OR, XOR, SHL, LSHR, ASHR };
 using BinOp = std::variant<ArithBinOp, SignedArithBinOp, BitwiseBinOp>;
 
-// TODO: this should be "finite domain ops" with reference to SplitDBM.
+// FiniteDomain: Wraps ZoneDomain with finite-width arithmetic operations
+// (overflow, bitwise ops, signed/unsigned conversions).
 class FiniteDomain {
-    SplitDBM dom;
+    ZoneDomain dom;
 
   public:
-    explicit FiniteDomain(SplitDBM&& dom) : dom{std::move(dom)} {}
-    explicit FiniteDomain(const SplitDBM& dom) : dom{dom} {}
+    explicit FiniteDomain(ZoneDomain&& dom) : dom{std::move(dom)} {}
+    explicit FiniteDomain(const ZoneDomain& dom) : dom{dom} {}
 
     explicit FiniteDomain() = default;
 
@@ -185,7 +186,7 @@ class FiniteDomain {
         return dom.to_set();
     }
 
-    static void clear_thread_local_state() { SplitDBM::clear_thread_local_state(); }
+    static void clear_thread_local_state() { ZoneDomain::clear_thread_local_state(); }
 
   private:
     std::vector<LinearConstraint> assume_signed_64bit_eq(Variable left_svalue, Variable left_uvalue,

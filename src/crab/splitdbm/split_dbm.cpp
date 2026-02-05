@@ -2,27 +2,27 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "crab/splitdbm/definitions.hpp"
-#include "crab/splitdbm/core_dbm.hpp"
+#include "crab/splitdbm/split_dbm.hpp"
 
 namespace splitdbm {
 
-PotentialFunction CoreDBM::pot_func(const std::vector<Weight>& p) {
+PotentialFunction SplitDBM::pot_func(const std::vector<Weight>& p) {
     return [&p](const VertId v) -> Weight { return p[v]; };
 }
 
-CoreDBM::CoreDBM() {
+SplitDBM::SplitDBM() {
     g_.growTo(1); // Allocate the zero vertex
     potential_.emplace_back(0);
 }
 
-CoreDBM::CoreDBM(Graph&& g, std::vector<Weight>&& pot, VertSet&& unstable)
+SplitDBM::SplitDBM(Graph&& g, std::vector<Weight>&& pot, VertSet&& unstable)
     : g_(std::move(g)), potential_(std::move(pot)), unstable_(std::move(unstable)) {
     normalize();
 }
 
-bool CoreDBM::is_top() const { return g_.is_empty(); }
+bool SplitDBM::is_top() const { return g_.is_empty(); }
 
-prevail::ExtendedNumber CoreDBM::get_bound(const VertId v, const Side side) const {
+prevail::ExtendedNumber SplitDBM::get_bound(const VertId v, const Side side) const {
     if (side == Side::LEFT) {
         return g_.elem(v, 0) ? -prevail::Number(g_.edge_val(v, 0)) : prevail::MINUS_INFINITY;
     } else {
@@ -30,7 +30,7 @@ prevail::ExtendedNumber CoreDBM::get_bound(const VertId v, const Side side) cons
     }
 }
 
-void CoreDBM::set_bound(const VertId v, const Side side, const Weight& bound_value) {
+void SplitDBM::set_bound(const VertId v, const Side side, const Weight& bound_value) {
     if (side == Side::LEFT) {
         g_.set_edge(v, -bound_value, 0);
     } else {
@@ -39,7 +39,7 @@ void CoreDBM::set_bound(const VertId v, const Side side, const Weight& bound_val
     potential_[v] = potential_[0] + bound_value;
 }
 
-VertId CoreDBM::new_vertex() {
+VertId SplitDBM::new_vertex() {
     const VertId vert = g_.new_vertex();
     if (vert >= potential_.size()) {
         potential_.emplace_back(0);
@@ -49,17 +49,17 @@ VertId CoreDBM::new_vertex() {
     return vert;
 }
 
-void CoreDBM::forget(const VertId v) {
+void SplitDBM::forget(const VertId v) {
     g_.forget(v);
 }
 
-const Graph& CoreDBM::graph() const { return g_; }
+const Graph& SplitDBM::graph() const { return g_; }
 
-bool CoreDBM::repair_potential(const VertId src, const VertId dest) {
+bool SplitDBM::repair_potential(const VertId src, const VertId dest) {
     return splitdbm::repair_potential(*scratch_, g_, potential_, src, dest);
 }
 
-bool CoreDBM::update_bound_if_tighter(const VertId v, const Side side, const Weight& new_bound) {
+bool SplitDBM::update_bound_if_tighter(const VertId v, const Side side, const Weight& new_bound) {
     if (side == Side::LEFT) {
         if (const auto w = g_.lookup(v, 0)) {
             if (*w <= -new_bound) {
@@ -79,7 +79,7 @@ bool CoreDBM::update_bound_if_tighter(const VertId v, const Side side, const Wei
     }
 }
 
-bool CoreDBM::add_difference_constraint(const VertId src, const VertId dest, const Weight& k) {
+bool SplitDBM::add_difference_constraint(const VertId src, const VertId dest, const Weight& k) {
     g_.update_edge(src, k, dest);
     if (!repair_potential(src, dest)) {
         return false;
@@ -88,19 +88,19 @@ bool CoreDBM::add_difference_constraint(const VertId src, const VertId dest, con
     return true;
 }
 
-void CoreDBM::close_after_bound_updates() {
+void SplitDBM::close_after_bound_updates() {
     apply_delta(close_after_assign(*scratch_, g_, pot_func(potential_), 0));
 }
 
-void CoreDBM::apply_delta(const EdgeVector& delta) {
+void SplitDBM::apply_delta(const EdgeVector& delta) {
     splitdbm::apply_delta(g_, delta);
 }
 
-void CoreDBM::close_after_assign_vertex(const VertId v) {
+void SplitDBM::close_after_assign_vertex(const VertId v) {
     apply_delta(close_after_assign(*scratch_, SubGraph(g_, 0), pot_func(potential_), v));
 }
 
-VertId CoreDBM::assign_vertex(const Weight& potential_value,
+VertId SplitDBM::assign_vertex(const Weight& potential_value,
                                const std::span<const std::pair<VertId, Weight>> diffs_from,
                                const std::span<const std::pair<VertId, Weight>> diffs_to,
                               const std::optional<Weight>& lb_edge, const std::optional<Weight>& ub_edge) {
@@ -127,22 +127,22 @@ VertId CoreDBM::assign_vertex(const Weight& potential_value,
     return vert;
 }
 
-Weight CoreDBM::potential_at(const VertId v) const {
+Weight SplitDBM::potential_at(const VertId v) const {
     return potential_[v];
 }
 
-Weight CoreDBM::potential_at_zero() const {
+Weight SplitDBM::potential_at_zero() const {
     return potential_[0];
 }
 
-std::size_t CoreDBM::graph_size() const { return g_.size(); }
-std::size_t CoreDBM::num_edges() const { return g_.num_edges(); }
+std::size_t SplitDBM::graph_size() const { return g_.size(); }
+std::size_t SplitDBM::num_edges() const { return g_.num_edges(); }
 
-bool CoreDBM::vertex_has_edges(const VertId v) const {
+bool SplitDBM::vertex_has_edges(const VertId v) const {
     return g_.succs(v).size() > 0 || g_.preds(v).size() > 0;
 }
 
-std::vector<VertId> CoreDBM::get_disconnected_vertices() const {
+std::vector<VertId> SplitDBM::get_disconnected_vertices() const {
     std::vector<VertId> result;
     for (VertId v : g_.verts()) {
         if (v == 0) {
@@ -155,7 +155,7 @@ std::vector<VertId> CoreDBM::get_disconnected_vertices() const {
     return result;
 }
 
-bool CoreDBM::strengthen_bound(const VertId v, const Side side, const Weight& bound_value) {
+bool SplitDBM::strengthen_bound(const VertId v, const Side side, const Weight& bound_value) {
     if (side == Side::LEFT) {
         const Weight edge_weight = -bound_value;
         const auto w = g_.lookup(v, 0);
@@ -197,7 +197,7 @@ bool CoreDBM::strengthen_bound(const VertId v, const Side side, const Weight& bo
     return true;
 }
 
-void CoreDBM::normalize() {
+void SplitDBM::normalize() {
     if (unstable_.empty()) {
         return;
     }
@@ -215,15 +215,15 @@ void CoreDBM::normalize() {
     unstable_.clear();
 }
 
-void CoreDBM::clear_thread_local_state() {
+void SplitDBM::clear_thread_local_state() {
     scratch_.clear();
 }
 
 // =============================================================================
-// CoreDBM static lattice method implementations
+// SplitDBM static lattice method implementations
 // =============================================================================
 
-bool CoreDBM::is_subsumed_by(const CoreDBM& left, const CoreDBM& right, const std::vector<VertId>& perm) {
+bool SplitDBM::is_subsumed_by(const SplitDBM& left, const SplitDBM& right, const std::vector<VertId>& perm) {
     const Graph& g = left.g_;
     const Graph& og = right.g_;
 
@@ -257,7 +257,7 @@ bool CoreDBM::is_subsumed_by(const CoreDBM& left, const CoreDBM& right, const st
     return true;
 }
 
-CoreDBM CoreDBM::join(const AlignedPair& aligned) {
+SplitDBM SplitDBM::join(const AlignedPair& aligned) {
     const auto& perm_x = aligned.left_perm;
     const auto& perm_y = aligned.right_perm;
     const auto& left = aligned.left;
@@ -361,10 +361,10 @@ CoreDBM CoreDBM::join(const AlignedPair& aligned) {
         }
     }
 
-    return CoreDBM(std::move(result_g), std::move(pot_left), VertSet{});
+    return SplitDBM(std::move(result_g), std::move(pot_left), VertSet{});
 }
 
-CoreDBM CoreDBM::widen(const AlignedPair& aligned) {
+SplitDBM SplitDBM::widen(const AlignedPair& aligned) {
     const auto& perm_left = aligned.left_perm;
     const auto& perm_right = aligned.right_perm;
     const auto& left = aligned.left;
@@ -387,10 +387,10 @@ CoreDBM CoreDBM::widen(const AlignedPair& aligned) {
     VertSet result_unstable(left.unstable_);
     Graph result_g(graph_widen(gx, gy, result_unstable));
 
-    return CoreDBM(std::move(result_g), std::move(result_pot), std::move(result_unstable));
+    return SplitDBM(std::move(result_g), std::move(result_pot), std::move(result_unstable));
 }
 
-std::optional<CoreDBM> CoreDBM::meet(AlignedPair& aligned) {
+std::optional<SplitDBM> SplitDBM::meet(AlignedPair& aligned) {
     const auto& perm_left = aligned.left_perm;
     const auto& perm_right = aligned.right_perm;
     const auto& left = aligned.left;
@@ -416,7 +416,7 @@ std::optional<CoreDBM> CoreDBM::meet(AlignedPair& aligned) {
         splitdbm::apply_delta(result_g, close_after_assign(*scratch_, result_g, potential_func, 0));
     }
 
-    return CoreDBM(std::move(result_g), std::move(result_pot), VertSet{});
+    return SplitDBM(std::move(result_g), std::move(result_pot), VertSet{});
 }
 
 } // namespace splitdbm
