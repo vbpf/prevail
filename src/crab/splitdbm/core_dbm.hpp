@@ -129,8 +129,10 @@ class CoreDBM {
     // Unconditional edge update
     void update_edge(VertId src, const Weight& w, VertId dest);
 
-    // Strengthen a bound and propagate to neighbors.
-    bool strengthen_bound_with_propagation(VertId v, Side side, const Weight& new_bound);
+    // Strengthen a bound and propagate to neighboring edges.
+    // Like update_bound_if_tighter, takes a bound value (not raw edge weight).
+    // Difference: also propagates tighter bound transitively to neighbor bounds.
+    bool strengthen_bound(VertId v, Side side, const Weight& bound_value);
 
     // WARNING: Known bug — eager normalization defeats widening convergence.
     // normalize() runs close_after_widen + close_after_assign and clears unstable_.

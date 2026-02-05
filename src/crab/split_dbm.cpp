@@ -380,22 +380,20 @@ bool SplitDBM::add_univar_disequation(Variable x, const Number& n) {
 
     VertId v = get_vert(x);
     if (new_i.lb().is_finite()) {
-        // strengthen lb: edge weight is -lb
         Weight lb_val;
-        if (convert_NtoW_overflow(-*new_i.lb().number(), lb_val)) {
+        if (convert_NtoW_overflow(*new_i.lb().number(), lb_val)) {
             return true;
         }
-        if (!core_->strengthen_bound_with_propagation(v, Side::LEFT, lb_val)) {
+        if (!core_->strengthen_bound(v, Side::LEFT, lb_val)) {
             return false;
         }
     }
     if (new_i.ub().is_finite() && !variable_registry->is_min_only(x)) {
-        // strengthen ub: edge weight is ub
         Weight ub_val;
         if (convert_NtoW_overflow(*new_i.ub().number(), ub_val)) {
             return true;
         }
-        if (!core_->strengthen_bound_with_propagation(v, Side::RIGHT, ub_val)) {
+        if (!core_->strengthen_bound(v, Side::RIGHT, ub_val)) {
             return false;
         }
     }

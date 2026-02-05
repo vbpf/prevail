@@ -136,13 +136,14 @@ void CoreDBM::update_edge(const VertId src, const Weight& w, const VertId dest) 
     g_.update_edge(src, w, dest);
 }
 
-bool CoreDBM::strengthen_bound_with_propagation(const VertId v, const Side side, const Weight& new_bound) {
+bool CoreDBM::strengthen_bound(const VertId v, const Side side, const Weight& bound_value) {
     if (side == Side::LEFT) {
+        const Weight edge_weight = -bound_value;
         const auto w = g_.lookup(v, 0);
-        if (!w || new_bound >= *w) {
+        if (!w || edge_weight >= *w) {
             return true;
         }
-        g_.set_edge(v, new_bound, 0);
+        g_.set_edge(v, edge_weight, 0);
         if (!repair_potential(v, 0)) {
             return false;
         }
@@ -150,17 +151,17 @@ bool CoreDBM::strengthen_bound_with_propagation(const VertId v, const Side side,
             if (e.vert == 0) {
                 continue;
             }
-            g_.update_edge(e.vert, e.val + new_bound, 0);
+            g_.update_edge(e.vert, e.val + edge_weight, 0);
             if (!repair_potential(e.vert, 0)) {
                 return false;
             }
         }
     } else {
         const auto w = g_.lookup(0, v);
-        if (!w || new_bound >= *w) {
+        if (!w || bound_value >= *w) {
             return true;
         }
-        g_.set_edge(0, new_bound, v);
+        g_.set_edge(0, bound_value, v);
         if (!repair_potential(0, v)) {
             return false;
         }
@@ -168,7 +169,7 @@ bool CoreDBM::strengthen_bound_with_propagation(const VertId v, const Side side,
             if (e.vert == 0) {
                 continue;
             }
-            g_.update_edge(0, e.val + new_bound, e.vert);
+            g_.update_edge(0, e.val + bound_value, e.vert);
             if (!repair_potential(0, e.vert)) {
                 return false;
             }
