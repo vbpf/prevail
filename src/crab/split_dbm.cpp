@@ -651,10 +651,6 @@ bool SplitDBM::add_constraint(const LinearConstraint& cst) {
         }
     } break;
     }
-
-    CRAB_WARN("Unhandled constraint ", cst, " by split_dbm");
-    CRAB_LOG("zones-split", std::cout << "---" << cst << "\n" << *this << "\n");
-    normalize();
     return true;
 }
 
