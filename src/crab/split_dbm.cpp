@@ -483,7 +483,9 @@ std::tuple<AlignedPair, RevMap> SplitDBM::make_union_alignment(const SplitDBM& l
     RevMap aligned_vars = {std::nullopt};
     std::vector initial_potentials = {Weight(0)};
 
+    boost::container::flat_map<Variable, size_t> var_to_index;
     for (const auto& [var, left_vert] : left.vert_map_) {
+        var_to_index.emplace(var, perm_left.size());
         perm_left.push_back(left_vert);
         perm_right.push_back(NOT_PRESENT);
         aligned_vars.push_back(var);
@@ -491,15 +493,9 @@ std::tuple<AlignedPair, RevMap> SplitDBM::make_union_alignment(const SplitDBM& l
     }
 
     for (const auto& [var, right_vert] : right.vert_map_) {
-        bool found = false;
-        for (size_t i = 1; i < aligned_vars.size(); ++i) {
-            if (aligned_vars[i] == var) {
-                perm_right[i] = right_vert;
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
+        if (const auto it = var_to_index.find(var); it != var_to_index.end()) {
+            perm_right[it->second] = right_vert;
+        } else {
             perm_left.push_back(NOT_PRESENT);
             perm_right.push_back(right_vert);
             aligned_vars.push_back(var);
