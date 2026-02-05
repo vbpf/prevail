@@ -703,36 +703,23 @@ void SplitDBM::assign(Variable lhs, const LinearExpression& e) {
         return;
     }
 
-    // Allocate a new vertex for x
-    VertId vert = core_->new_vertex();
+    std::vector<std::pair<VertId, Weight>> diffs_from, diffs_to;
+    for (const auto& [var, n] : diffs_lb) {
+        diffs_from.emplace_back(get_vert(var), -n);
+    }
+    for (const auto& [var, n] : diffs_ub) {
+        diffs_to.emplace_back(get_vert(var), n);
+    }
+
+    VertId vert = core_->assign_vertex(
+        core_->potential_at_zero() + e_val, diffs_from, diffs_to, lb_w,
+        (ub_w && !variable_registry->is_min_only(lhs)) ? ub_w : std::nullopt);
+
     assert(vert <= rev_map_.size());
     if (vert == rev_map_.size()) {
         rev_map_.push_back(lhs);
     } else {
         rev_map_[vert] = lhs;
-    }
-    core_->set_potential(vert, core_->potential_at_zero() + e_val);
-
-    {
-        EdgeVector delta;
-        for (const auto& [var, n] : diffs_lb) {
-            delta.emplace_back(vert, get_vert(var), -n);
-        }
-
-        for (const auto& [var, n] : diffs_ub) {
-            delta.emplace_back(get_vert(var), vert, n);
-        }
-
-        // apply_delta should be safe here, as x has no edges in G.
-        core_->apply_delta(delta);
-    }
-    core_->close_after_assign_vertex(vert);
-
-    if (lb_w) {
-        core_->update_edge(vert, *lb_w, 0);
-    }
-    if (ub_w && !variable_registry->is_min_only(lhs)) {
-        core_->update_edge(0, *ub_w, vert);
     }
     // Clear the old x vertex
     havoc(lhs);

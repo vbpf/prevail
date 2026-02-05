@@ -100,8 +100,31 @@ void CoreDBM::close_after_assign_vertex(const VertId v) {
     apply_delta(close_after_assign(*scratch_, SubGraph(g_, 0), pot_func(potential_), v));
 }
 
-void CoreDBM::set_potential(const VertId v, const Weight& val) {
-    potential_[v] = val;
+VertId CoreDBM::assign_vertex(const Weight& potential_value,
+                               const std::span<const std::pair<VertId, Weight>> diffs_from,
+                               const std::span<const std::pair<VertId, Weight>> diffs_to,
+                              const std::optional<Weight>& lb_edge, const std::optional<Weight>& ub_edge) {
+    const VertId vert = new_vertex();
+    potential_[vert] = potential_value;
+
+    EdgeVector delta;
+    delta.reserve(diffs_from.size() + diffs_to.size());
+    for (const auto& [dest, w] : diffs_from) {
+        delta.emplace_back(vert, dest, w);
+    }
+    for (const auto& [src, w] : diffs_to) {
+        delta.emplace_back(src, vert, w);
+    }
+    apply_delta(delta);
+    close_after_assign_vertex(vert);
+
+    if (lb_edge) {
+        g_.update_edge(vert, *lb_edge, 0);
+    }
+    if (ub_edge) {
+        g_.update_edge(0, *ub_edge, vert);
+    }
+    return vert;
 }
 
 Weight CoreDBM::potential_at(const VertId v) const {
@@ -130,10 +153,6 @@ std::vector<VertId> CoreDBM::get_disconnected_vertices() const {
         }
     }
     return result;
-}
-
-void CoreDBM::update_edge(const VertId src, const Weight& w, const VertId dest) {
-    g_.update_edge(src, w, dest);
 }
 
 bool CoreDBM::strengthen_bound(const VertId v, const Side side, const Weight& bound_value) {

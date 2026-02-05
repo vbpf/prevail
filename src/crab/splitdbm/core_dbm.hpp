@@ -43,6 +43,9 @@ class CoreDBM {
 
     static PotentialFunction pot_func(const std::vector<Weight>& p);
 
+    void apply_delta(const EdgeVector& delta);
+    void close_after_assign_vertex(VertId v);
+
   public:
     CoreDBM();
 
@@ -98,14 +101,15 @@ class CoreDBM {
     // Apply final closure after bound updates
     void close_after_bound_updates();
 
-    // Apply edges from a delta vector
-    void apply_delta(const EdgeVector& delta);
-
-    // Close after assignment to a specific vertex (excludes vertex 0 from subgraph)
-    void close_after_assign_vertex(VertId v);
-
-    // Set potential for a vertex
-    void set_potential(VertId v, const Weight& val);
+    // Assign a fresh vertex with difference constraints and optional bounds.
+    // Returns the new VertId. The caller manages Variable↔VertId mapping.
+    // diffs_from: edges new_vert → dest with given weight
+    // diffs_to: edges src → new_vert with given weight
+    // lb_edge/ub_edge are raw edge weights (lb_edge = -lower_bound, ub_edge = upper_bound).
+    VertId assign_vertex(const Weight& potential_value,
+                         std::span<const std::pair<VertId, Weight>> diffs_from,
+                         std::span<const std::pair<VertId, Weight>> diffs_to, const std::optional<Weight>& lb_edge,
+                         const std::optional<Weight>& ub_edge);
 
     // Get potential at a specific vertex
     [[nodiscard]] Weight potential_at(VertId v) const;
@@ -125,9 +129,6 @@ class CoreDBM {
 
     // Get all vertices with no edges (excluding vertex 0) for garbage collection
     [[nodiscard]] std::vector<VertId> get_disconnected_vertices() const;
-
-    // Unconditional edge update
-    void update_edge(VertId src, const Weight& w, VertId dest);
 
     // Strengthen a bound and propagate to neighboring edges.
     // Like update_bound_if_tighter, takes a bound value (not raw edge weight).
