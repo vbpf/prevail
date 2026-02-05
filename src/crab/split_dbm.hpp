@@ -209,13 +209,16 @@ class SplitDBM final {
   private:
     [[nodiscard]]
     bool entail_aux(const LinearConstraint& cst) const {
-        // copy is necessary
+        // Full copy of *this is needed because add_constraint mutates the DBM.
+        // Potential optimization: a read-only constraint check on the graph
+        // (without closure) could avoid this copy, but would require a separate
+        // code path that reasons about feasibility without modifying edges.
         return !SplitDBM(*this).add_constraint(cst.negate());
     }
 
     [[nodiscard]]
     bool intersect_aux(const LinearConstraint& cst) const {
-        // copy is necessary
+        // Same copy overhead as entail_aux — see comment above.
         return SplitDBM(*this).add_constraint(cst);
     }
 
