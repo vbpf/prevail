@@ -6,7 +6,7 @@
 
 namespace splitdbm {
 
-GraphOps::PotentialFunction CoreDBM::pot_func(const std::vector<Weight>& p) {
+PotentialFunction CoreDBM::pot_func(const std::vector<Weight>& p) {
     return [&p](const VertId v) -> Weight { return p[v]; };
 }
 
@@ -56,7 +56,7 @@ void CoreDBM::forget(const VertId v) {
 const Graph& CoreDBM::graph() const { return g_; }
 
 bool CoreDBM::repair_potential(const VertId src, const VertId dest) {
-    return GraphOps::repair_potential(g_, potential_, src, dest);
+    return splitdbm::repair_potential(*scratch_, g_, potential_, src, dest);
 }
 
 bool CoreDBM::update_bound_if_tighter(const VertId v, const Side side, const Weight& new_bound) {
@@ -84,20 +84,20 @@ bool CoreDBM::add_difference_constraint(const VertId src, const VertId dest, con
     if (!repair_potential(src, dest)) {
         return false;
     }
-    GraphOps::close_over_edge(g_, src, dest);
+    close_over_edge(g_, src, dest);
     return true;
 }
 
 void CoreDBM::close_after_bound_updates() {
-    GraphOps::apply_delta(g_, GraphOps::close_after_assign(g_, pot_func(potential_), 0));
+    apply_delta(close_after_assign(*scratch_, g_, pot_func(potential_), 0));
 }
 
-void CoreDBM::apply_delta(const GraphOps::EdgeVector& delta) {
-    GraphOps::apply_delta(g_, delta);
+void CoreDBM::apply_delta(const EdgeVector& delta) {
+    splitdbm::apply_delta(g_, delta);
 }
 
 void CoreDBM::close_after_assign_vertex(const VertId v) {
-    GraphOps::apply_delta(g_, GraphOps::close_after_assign(SubGraph(g_, 0), pot_func(potential_), v));
+    apply_delta(close_after_assign(*scratch_, SubGraph(g_, 0), pot_func(potential_), v));
 }
 
 void CoreDBM::set_potential(const VertId v, const Weight& val) {
@@ -189,10 +189,14 @@ void CoreDBM::normalize() {
     };
 
     const auto p = pot_func(potential_);
-    GraphOps::apply_delta(g_, GraphOps::close_after_widen(SubGraph(g_, 0), p, UnstableWrap(unstable_)));
-    GraphOps::apply_delta(g_, GraphOps::close_after_assign(g_, p, 0));
+    apply_delta(close_after_widen(*scratch_, SubGraph(g_, 0), p, UnstableWrap(unstable_)));
+    apply_delta(close_after_assign(*scratch_, g_, p, 0));
 
     unstable_.clear();
+}
+
+void CoreDBM::clear_thread_local_state() {
+    scratch_.clear();
 }
 
 // =============================================================================
@@ -271,10 +275,10 @@ CoreDBM CoreDBM::join(const AlignedPair& aligned) {
 
     // Apply deferred relations to right and re-close
     bool is_closed;
-    Graph g_closed_left(GraphOps::meet(gx, g_deferred_right, is_closed));
+    Graph g_closed_left(graph_meet(gx, g_deferred_right, is_closed));
     if (!is_closed) {
-        GraphOps::apply_delta(g_closed_left,
-            GraphOps::close_after_meet(SubGraph(g_closed_left, 0), pot_func(pot_left), gx, g_deferred_right));
+        splitdbm::apply_delta(g_closed_left,
+            close_after_meet(*scratch_, SubGraph(g_closed_left, 0), pot_func(pot_left), gx, g_deferred_right));
     }
 
     // Compute deferred relations: bounds from right applied to relations from left
@@ -291,14 +295,14 @@ CoreDBM CoreDBM::join(const AlignedPair& aligned) {
         }
     }
 
-    Graph g_closed_right(GraphOps::meet(gy, g_deferred_left, is_closed));
+    Graph g_closed_right(graph_meet(gy, g_deferred_left, is_closed));
     if (!is_closed) {
-        GraphOps::apply_delta(g_closed_right,
-            GraphOps::close_after_meet(SubGraph(g_closed_right, 0), pot_func(pot_right), gy, g_deferred_left));
+        splitdbm::apply_delta(g_closed_right,
+            close_after_meet(*scratch_, SubGraph(g_closed_right, 0), pot_func(pot_right), gy, g_deferred_left));
     }
 
     // Syntactic join of the closed graphs
-    Graph result_g(GraphOps::join(g_closed_left, g_closed_right));
+    Graph result_g(graph_join(g_closed_left, g_closed_right));
 
     // Reapply missing independent relations
     std::vector<VertId> lb_up, lb_down, ub_up, ub_down;
@@ -361,7 +365,7 @@ CoreDBM CoreDBM::widen(const AlignedPair& aligned) {
 
     // Perform the widening
     VertSet result_unstable(left.unstable_);
-    Graph result_g(GraphOps::widen(gx, gy, result_unstable));
+    Graph result_g(graph_widen(gx, gy, result_unstable));
 
     return CoreDBM(std::move(result_g), std::move(result_pot), std::move(result_unstable));
 }
@@ -378,18 +382,18 @@ std::optional<CoreDBM> CoreDBM::meet(AlignedPair& aligned) {
 
     // Compute the syntactic meet of the aligned graphs
     bool is_closed{};
-    Graph result_g(GraphOps::meet(gx, gy, is_closed));
+    Graph result_g(graph_meet(gx, gy, is_closed));
 
     // Select valid potentials using Bellman-Ford (updates initial_potentials in place)
     auto& result_pot = aligned.initial_potentials;
-    if (!GraphOps::select_potentials(result_g, result_pot)) {
+    if (!select_potentials(*scratch_, result_g, result_pot)) {
         return std::nullopt;  // Infeasible
     }
 
     if (!is_closed) {
         const auto potential_func = pot_func(result_pot);
-        GraphOps::apply_delta(result_g, GraphOps::close_after_meet(SubGraph(result_g, 0), potential_func, gx, gy));
-        GraphOps::apply_delta(result_g, GraphOps::close_after_assign(result_g, potential_func, 0));
+        splitdbm::apply_delta(result_g, close_after_meet(*scratch_, SubGraph(result_g, 0), potential_func, gx, gy));
+        splitdbm::apply_delta(result_g, close_after_assign(*scratch_, result_g, potential_func, 0));
     }
 
     return CoreDBM(std::move(result_g), std::move(result_pot), VertSet{});

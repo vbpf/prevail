@@ -9,6 +9,7 @@
 #include "crab/splitdbm/definitions.hpp"
 #include "crab/splitdbm/adapt_sgraph.hpp"
 #include "crab/splitdbm/graph_ops.hpp"
+#include "crab_utils/lazy_allocator.hpp"
 
 namespace splitdbm {
 
@@ -38,7 +39,9 @@ class CoreDBM {
     std::vector<Weight> potential_;
     VertSet unstable_;
 
-    static GraphOps::PotentialFunction pot_func(const std::vector<Weight>& p);
+    static inline thread_local prevail::LazyAllocator<ScratchSpace> scratch_;
+
+    static PotentialFunction pot_func(const std::vector<Weight>& p);
 
   public:
     CoreDBM();
@@ -96,7 +99,7 @@ class CoreDBM {
     void close_after_bound_updates();
 
     // Apply edges from a delta vector
-    void apply_delta(const GraphOps::EdgeVector& delta);
+    void apply_delta(const EdgeVector& delta);
 
     // Close after assignment to a specific vertex (excludes vertex 0 from subgraph)
     void close_after_assign_vertex(VertId v);
@@ -138,6 +141,9 @@ class CoreDBM {
     // A proper fix requires lazy normalization (e.g., mutable on CoreDBM internals
     // or a normalized_ flag checked by const methods). This is non-trivial.
     void normalize();
+
+    // Clear the thread-local scratch space used by graph algorithms.
+    static void clear_thread_local_state();
 
     // =========================================================================
     // Static lattice operations on permuted vertices

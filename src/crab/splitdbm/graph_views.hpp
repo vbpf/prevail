@@ -5,13 +5,29 @@
 // Graph view wrappers: present an existing graph differently without copying it.
 // Each view satisfies the same interface as AdaptGraph (verts, succs, preds,
 // e_succs, e_preds, lookup, elem, edge_val, size) so they can be used as
-// template arguments to GraphOps algorithms.
+// template arguments to graph algorithms.
 
+#include <concepts>
 #include <optional>
 
 #include "crab/splitdbm/definitions.hpp"
 
 namespace splitdbm {
+
+// ReadableGraph is a read-only graph interface required by graph algorithms.
+// All graph types (AdaptGraph, GraphPerm, SubGraph, GraphRev) satisfy this concept.
+template <typename G>
+concept ReadableGraph = requires(const G& g, VertId v, VertId u) {
+    { g.size() } -> std::convertible_to<size_t>;
+    { g.elem(v, u) } -> std::convertible_to<bool>;
+    { g.edge_val(v, u) } -> std::convertible_to<Weight>;
+    { g.lookup(v, u) } -> std::same_as<const Weight*>;
+    g.verts();
+    g.succs(v);
+    g.preds(v);
+    g.e_succs(v);
+    g.e_preds(v);
+};
 
 // Processing a graph under a (possibly incomplete) permutation of vertices.
 // We assume perm[x] is unique; otherwise, we'd have to introduce edges for induced equivalence classes.

@@ -4,7 +4,6 @@
 #include <utility>
 
 #include "crab/split_dbm.hpp"
-#include "crab/splitdbm/graph_ops.hpp"
 #include "crab/var_registry.hpp"
 #include "crab_utils/debug.hpp"
 #include "crab_utils/stats.hpp"
@@ -725,7 +724,7 @@ void SplitDBM::assign(Variable lhs, const LinearExpression& e) {
     core_->set_potential(vert, core_->potential_at_zero() + e_val);
 
     {
-        GraphOps::EdgeVector delta;
+        EdgeVector delta;
         for (const auto& [var, n] : diffs_lb) {
             delta.emplace_back(vert, get_vert(var), -n);
         }
@@ -765,7 +764,7 @@ SplitDBM SplitDBM::narrow(const SplitDBM& o) const {
     return {*this};
 }
 
-void SplitDBM::clear_thread_local_state() { GraphOps::clear_thread_local_state(); }
+void SplitDBM::clear_thread_local_state() { CoreDBM::clear_thread_local_state(); }
 
 void SplitDBM::normalize() { core_->normalize(); }
 

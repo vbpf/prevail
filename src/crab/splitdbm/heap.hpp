@@ -26,8 +26,9 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 namespace splitdbm {
 
 // A heap implementation with support for decrease/increase key.
+template <std::predicate<VertId, VertId> F>
 class Heap {
-    std::function<bool(int, int)> lt; // comparison function
+    const F lt; // comparison function
     std::vector<int> heap;            // heap of ints
     std::vector<int> indices;         // int -> index in heap
 
@@ -67,7 +68,7 @@ class Heap {
     }
 
   public:
-    explicit Heap(const std::function<bool(int, int)>& lt) : lt{lt} {}
+    explicit Heap(const F& lt) : lt{lt} {}
 
     [[nodiscard]]
     int size() const {
