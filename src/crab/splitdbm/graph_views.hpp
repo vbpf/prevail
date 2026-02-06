@@ -37,6 +37,7 @@ class GraphPerm {
     constexpr static VertId invalid_vert = std::numeric_limits<VertId>::max();
 
     GraphPerm(const std::vector<VertId>& _perm, const G& _g) : g{_g}, perm{_perm}, inv(_g.size(), invalid_vert) {
+        assert(perm.size() <= std::numeric_limits<VertId>::max());
         for (VertId vi = 0; vi < perm.size(); vi++) {
             if (perm[vi] == invalid_vert) {
                 continue;
@@ -265,10 +266,16 @@ class SubGraph {
         return g.lookup(x, y);
     }
 
-    Weight edge_val(VertId x, VertId y) const { return g.edge_val(x, y); }
+    Weight edge_val(VertId x, VertId y) const {
+        assert(x != v_ex && y != v_ex);
+        return g.edge_val(x, y);
+    }
 
     // Precondition: elem(x, y) is true.
-    Weight operator()(VertId x, VertId y) const { return g(x, y); }
+    Weight operator()(VertId x, VertId y) const {
+        assert(x != v_ex && y != v_ex);
+        return g(x, y);
+    }
 
     void clear_edges() { g.clear_edges(); }
 
@@ -379,15 +386,21 @@ class SubGraph {
     using ENeighbourConstRange = AdjList<GENeighbourConstRange, EAdjIterator<typename GENeighbourConstRange::iterator>>;
 
     NeighbourConstRange succs(VertId v) const {
-        //      assert(v != v_ex);
+        assert(v != v_ex);
         return NeighbourConstRange(g.succs(v), v_ex);
     }
     NeighbourConstRange preds(VertId v) const {
-        //      assert(v != v_ex);
+        assert(v != v_ex);
         return NeighbourConstRange(g.preds(v), v_ex);
     }
-    ENeighbourConstRange e_succs(VertId v) const { return ENeighbourConstRange(g.e_succs(v), v_ex); }
-    ENeighbourConstRange e_preds(VertId v) const { return ENeighbourConstRange(g.e_preds(v), v_ex); }
+    ENeighbourConstRange e_succs(VertId v) const {
+        assert(v != v_ex);
+        return ENeighbourConstRange(g.e_succs(v), v_ex);
+    }
+    ENeighbourConstRange e_preds(VertId v) const {
+        assert(v != v_ex);
+        return ENeighbourConstRange(g.e_preds(v), v_ex);
+    }
 
   private:
     G& g;
