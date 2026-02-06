@@ -102,7 +102,7 @@ src/
 │   ├── ebpf_domain.hpp      # Main composite domain
 │   ├── ebpf_transformer.cpp # Instruction semantics
 │   ├── ebpf_checker.cpp     # Assertion checking
-│   └── split_dbm.hpp        # Numeric domain
+│   └── zone_domain.hpp      # Numeric domain (zone abstract domain)
 ├── crab_utils/     # Domain utilities
 ├── arith/          # Arithmetic helpers
 ├── linux/          # Linux-specific platform code

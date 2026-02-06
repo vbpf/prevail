@@ -200,7 +200,7 @@ post:
   - r1.shared_region_size=16
   - r2.type=shared
   - r2.shared_offset=0
-  - r2.shared_region_size=16
+  - r2.shared_region_size=r1.shared_region_size
   - r2.svalue=r1.svalue
   - r2.uvalue=r1.uvalue
 ---
@@ -232,9 +232,9 @@ post:
   - r1.stack_offset=500
   - r1.stack_numeric_size=16
   - r2.shared_offset=0
-  - r2.shared_region_size=16
+  - r2.shared_region_size=r1.shared_region_size
   - r2.stack_offset=500
-  - r2.stack_numeric_size=16
+  - r2.stack_numeric_size=r1.stack_numeric_size
   - r2.type=r1.type
   - r2.svalue=r1.svalue
   - r2.uvalue=r1.uvalue

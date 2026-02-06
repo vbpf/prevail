@@ -56,7 +56,7 @@ post:
   - r3.svalue=4
   - r3.uvalue=4
   - meta_offset=-4
-  - packet_size=[16, 32]
+  - packet_size=16
 ---
 test-case: disallow subtraction of shared pointers
 
@@ -108,7 +108,7 @@ post:
   - r10.type=stack
   - r10.stack_offset=512
   - meta_offset=-4
-  - packet_size=[16, 32]
+  - packet_size=16
 
 ---
 test-case: allow subtraction of numeric register from valid pointer

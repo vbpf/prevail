@@ -458,7 +458,7 @@ test-case: lost implications in correlated branches
 
 pre: ["meta_offset=0", "packet_size=[36, 65534]",
       "r1.type=packet", "r1.packet_offset=54",
-      "r2.type=packet", "r2.packet_offset=packet_size"]
+      "r2.type=packet", "r2.packet_offset=[36, 65534]", "r2.packet_offset=packet_size"]
 
 code:
   <start>: |
@@ -477,7 +477,7 @@ code:
 
 post: ["meta_offset=0",
        "packet_size-r1.packet_offset<=65480",
-       "packet_size=[36, 65534]",
+       "packet_size=36",
        "r0.svalue=0", "r0.type=number", "r0.uvalue=0",
        "r1.packet_offset-packet_size<=18", "r1.packet_offset=54", "r1.type=packet",
        "r2.packet_offset=packet_size", "r2.type=packet",

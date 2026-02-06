@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <unordered_set>
 #include <utility>
@@ -31,46 +32,41 @@
 #include "arith/num_safeint.hpp"
 #include "arith/variable.hpp"
 #include "crab/interval.hpp"
-#include "crab_utils/adapt_sgraph.hpp"
-#include "crab_utils/stats.hpp"
+#include "crab/splitdbm/split_dbm.hpp"
 #include "string_constraints.hpp"
 
 namespace prevail {
 
 enum class ArithBinOp { ADD, SUB, MUL };
 
-class SplitDBM final {
-    friend class SplitDBMJoiner;
+class ZoneDomain final {
+    friend ZoneDomain do_join(const ZoneDomain&, const ZoneDomain&);
 
   public:
-    using Graph = AdaptGraph;
-    using Weight = Graph::Weight;
-    using VertId = Graph::VertId;
-    using VertMap = boost::container::flat_map<Variable, VertId>;
+    using Graph = splitdbm::AdaptGraph;
+    using VertMap = boost::container::flat_map<Variable, splitdbm::VertId>;
 
   private:
     using VariableVector = std::vector<Variable>;
 
     using RevMap = std::vector<std::optional<Variable>>;
     // < <x, y>, k> == x - y <= k.
-    using diffcst_t = std::pair<std::pair<Variable, Variable>, Weight>;
-    using VertSet = std::unordered_set<VertId>;
+    using diffcst_t = std::pair<std::pair<Variable, Variable>, splitdbm::Weight>;
     friend class VertSetWrap;
 
-    VertMap vert_map; // Mapping from variables to vertices
-    RevMap rev_map;
-    Graph g;                       // The underlying relation graph
-    std::vector<Weight> potential; // Stored potential for the vertex
-    VertSet unstable;
+    std::unique_ptr<splitdbm::SplitDBM> core_;
 
-    VertId get_vert(Variable v);
+    VertMap vert_map_; // Mapping from variables to vertices
+    RevMap rev_map_;
+
+    splitdbm::VertId get_vert(Variable v);
     // Evaluate the potential value of a variable.
     [[nodiscard]]
-    Weight pot_value(Variable v) const;
+    splitdbm::Weight pot_value(Variable v) const;
 
     // Evaluate an expression under the chosen potentials
     [[nodiscard]]
-    bool eval_expression_overflow(const LinearExpression& e, Weight& out) const;
+    bool eval_expression_overflow(const LinearExpression& e, splitdbm::Weight& out) const;
 
     [[nodiscard]]
     Interval compute_residual(const LinearExpression& e, Variable pivot) const;
@@ -94,11 +90,11 @@ class SplitDBM final {
                             bool extract_upper_bounds,
                             /* foreach {v, k} \in diff_csts we have
                                the difference constraint v - k <= k */
-                            std::vector<std::pair<Variable, Weight>>& diff_csts) const;
+                            std::vector<std::pair<Variable, splitdbm::Weight>>& diff_csts) const;
 
     // Turn an assignment into a set of difference constraints.
-    void diffcsts_of_assign(const LinearExpression& exp, std::vector<std::pair<Variable, Weight>>& lb,
-                            std::vector<std::pair<Variable, Weight>>& ub) const;
+    void diffcsts_of_assign(const LinearExpression& exp, std::vector<std::pair<Variable, splitdbm::Weight>>& lb,
+                            std::vector<std::pair<Variable, splitdbm::Weight>>& ub) const;
 
     /**
      * Turn a linear inequality into a set of difference
@@ -108,72 +104,65 @@ class SplitDBM final {
                              /* difference constraints */
                              std::vector<diffcst_t>& csts,
                              /* x >= lb for each {x,lb} in lbs */
-                             std::vector<std::pair<Variable, Weight>>& lbs,
+                             std::vector<std::pair<Variable, splitdbm::Weight>>& lbs,
                              /* x <= ub for each {x,ub} in ubs */
-                             std::vector<std::pair<Variable, Weight>>& ubs) const;
+                             std::vector<std::pair<Variable, splitdbm::Weight>>& ubs) const;
 
     bool add_linear_leq(const LinearExpression& exp);
 
     // x != n
     bool add_univar_disequation(Variable x, const Number& n);
 
-    // Restore potential after an edge addition
-    bool repair_potential(VertId src, VertId dest);
-
     void normalize();
 
-    std::optional<VertId> get_vertid(Variable x) const;
-    Bound get_lb(const std::optional<VertId>& v) const;
-    Bound get_ub(const std::optional<VertId>& v) const;
+    std::optional<splitdbm::VertId> get_vertid(Variable x) const;
+    Bound get_lb(const std::optional<splitdbm::VertId>& v) const;
+    Bound get_ub(const std::optional<splitdbm::VertId>& v) const;
 
     Interval get_interval(Variable x) const;
 
     Bound get_lb(Variable x) const;
     Bound get_ub(Variable x) const;
 
-    SplitDBM(VertMap&& _vert_map, RevMap&& _rev_map, Graph&& _g, std::vector<Weight>&& _potential, VertSet&& _unstable)
-        : vert_map(std::move(_vert_map)), rev_map(std::move(_rev_map)), g(std::move(_g)),
-          potential(std::move(_potential)), unstable(std::move(_unstable)) {
-        normalize();
-    }
+    // Private constructor for internal use (join, meet, widen, etc.)
+    ZoneDomain(VertMap&& vert_map, RevMap&& rev_map, std::unique_ptr<splitdbm::SplitDBM> core);
+
+    // Build AlignedPair from intersection of variables (for join/widen)
+    static std::tuple<splitdbm::AlignedPair, RevMap> make_intersection_alignment(const ZoneDomain& left,
+                                                                                 const ZoneDomain& right);
+    // Build AlignedPair from union of variables (for meet)
+    static std::tuple<splitdbm::AlignedPair, RevMap> make_union_alignment(const ZoneDomain& left,
+                                                                          const ZoneDomain& right);
 
   public:
-    explicit SplitDBM() {
-        g.growTo(1); // Allocate the zero vector
-        potential.emplace_back(0);
-        rev_map.emplace_back(std::nullopt);
-    }
+    explicit ZoneDomain();
+    ~ZoneDomain();
 
-    SplitDBM(const SplitDBM& o) = default;
-    SplitDBM(SplitDBM&& o) = default;
+    ZoneDomain(const ZoneDomain& o);
+    ZoneDomain(ZoneDomain&& o) noexcept;
 
-    SplitDBM& operator=(const SplitDBM& o) = default;
-    SplitDBM& operator=(SplitDBM&& o) = default;
+    ZoneDomain& operator=(const ZoneDomain& o);
+    ZoneDomain& operator=(ZoneDomain&& o) noexcept;
 
-    void set_to_top() {
-        this->~SplitDBM();
-        new (this) SplitDBM();
-    }
+    void set_to_top();
 
-    static SplitDBM top() { return SplitDBM(); }
+    static ZoneDomain top() { return ZoneDomain(); }
 
     [[nodiscard]]
-    bool is_top() const {
-        return g.is_empty();
-    }
+    bool is_top() const;
 
-    bool operator<=(const SplitDBM& o) const;
+    bool operator<=(const ZoneDomain& o) const;
 
-    void operator|=(const SplitDBM& right);
-    SplitDBM operator|(const SplitDBM& right) const;
+    void operator|=(const ZoneDomain& right);
+    ZoneDomain operator|(const ZoneDomain& right) const;
 
     [[nodiscard]]
-    SplitDBM widen(const SplitDBM& o) const;
+    ZoneDomain widen(const ZoneDomain& o) const;
 
-    std::optional<SplitDBM> meet(const SplitDBM& o) const;
+    std::optional<ZoneDomain> meet(const ZoneDomain& o) const;
 
     [[nodiscard]]
-    SplitDBM narrow(const SplitDBM& o) const;
+    ZoneDomain narrow(const ZoneDomain& o) const;
 
     void assign(Variable lhs, const LinearExpression& e);
 
@@ -216,21 +205,22 @@ class SplitDBM final {
 
     // return number of vertices and edges
     [[nodiscard]]
-    std::pair<std::size_t, std::size_t> size() const {
-        return {g.size(), g.num_edges()};
-    }
+    std::pair<std::size_t, std::size_t> size() const;
 
   private:
     [[nodiscard]]
     bool entail_aux(const LinearConstraint& cst) const {
-        // copy is necessary
-        return !SplitDBM(*this).add_constraint(cst.negate());
+        // Full copy of *this is needed because add_constraint mutates the DBM.
+        // Potential optimization: a read-only constraint check on the graph
+        // (without closure) could avoid this copy, but would require a separate
+        // code path that reasons about feasibility without modifying edges.
+        return !ZoneDomain(*this).add_constraint(cst.negate());
     }
 
     [[nodiscard]]
     bool intersect_aux(const LinearConstraint& cst) const {
-        // copy is necessary
-        return SplitDBM(*this).add_constraint(cst);
+        // Same copy overhead as entail_aux — see comment above.
+        return ZoneDomain(*this).add_constraint(cst);
     }
 
   public:
@@ -244,23 +234,23 @@ class SplitDBM final {
 
     /**
      * Checks logical implication between two constraints in the current abstract state.
-     * Returns true if, for all states represented by this SplitDBM, whenever 'premise' holds,
+     * Returns true if, for all states represented by this ZoneDomain, whenever 'premise' holds,
      * 'conclusion' also holds. This is implemented by adding 'premise' to the current state:
      * - If 'premise' is inconsistent with the current state, implication holds vacuously (returns true).
      * - Otherwise, checks if 'conclusion' is entailed by the state with 'premise' added.
      */
     [[nodiscard]]
     bool implies(const LinearConstraint& premise, const LinearConstraint& conclusion) const {
-        SplitDBM result(*this);
+        ZoneDomain result(*this);
         return !result.add_constraint(premise) || result.entail(conclusion);
     }
 
-    friend std::ostream& operator<<(std::ostream& o, const SplitDBM& dom);
+    friend std::ostream& operator<<(std::ostream& o, const ZoneDomain& dom);
     [[nodiscard]]
     StringInvariant to_set() const;
 
   public:
     static void clear_thread_local_state();
-}; // class SplitDBM
+}; // class ZoneDomain
 
 } // namespace prevail

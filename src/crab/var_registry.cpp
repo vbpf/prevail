@@ -185,6 +185,12 @@ Variable VariableRegistry::kind_var(const DataKind kind, const Variable type_var
 
 Variable VariableRegistry::meta_offset() { return make("meta_offset"); }
 Variable VariableRegistry::packet_size() { return make("packet_size"); }
+
+bool VariableRegistry::is_min_only(const Variable& v) const {
+    const auto& n = name(v);
+    return n.ends_with(".stack_numeric_size") || n.ends_with(".shared_region_size") || n == "packet_size";
+}
+
 Variable VariableRegistry::loop_counter(const std::string& label) { return make("pc[" + label + "]"); }
 
 static bool ends_with(const std::string& str, const std::string& suffix) {
