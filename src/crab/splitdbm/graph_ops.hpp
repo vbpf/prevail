@@ -26,9 +26,7 @@ enum SMarkT { V_UNSTABLE = 0, V_STABLE = 1 };
 enum QMarkT { BF_NONE = 0, BF_SCC = 1, BF_QUEUED = 2 };
 
 inline auto make_heap(const std::vector<Weight>& dists) {
-    return Heap{
-        [&dists](const int x, const int y) -> bool { return dists[x] < dists[y]; }
-    };
+    return Heap{[&dists](const int x, const int y) -> bool { return dists[x] < dists[y]; }};
 }
 
 // Scratch space needed by graph algorithms. Lazily grows on demand.
@@ -212,9 +210,8 @@ inline void close_over_edge(Graph& g, VertId ii, VertId jj) {
 namespace detail {
 
 // Compute the strongly connected components (Tarjan's algorithm).
-void strong_connect(ScratchSpace& scratch, const ReadableGraph auto& x,
-                           std::vector<VertId>& stack, int& index, VertId v,
-                           std::vector<std::vector<VertId>>& sccs) {
+void strong_connect(ScratchSpace& scratch, const ReadableGraph auto& x, std::vector<VertId>& stack, int& index,
+                    VertId v, std::vector<std::vector<VertId>>& sccs) {
     scratch.vert_marks.at(v) = (index << 1) | 1;
     scratch.dual_queue.at(v) = index;
     index++;
@@ -226,7 +223,8 @@ void strong_connect(ScratchSpace& scratch, const ReadableGraph auto& x,
             strong_connect(scratch, x, stack, index, w, sccs);
             scratch.dual_queue.at(v) = std::min(scratch.dual_queue.at(v), scratch.dual_queue.at(w));
         } else if (scratch.vert_marks.at(w) & 1) {
-            scratch.dual_queue.at(v) = std::min(scratch.dual_queue.at(v), gsl::narrow<VertId>(scratch.vert_marks.at(w) >> 1));
+            scratch.dual_queue.at(v) =
+                std::min(scratch.dual_queue.at(v), gsl::narrow<VertId>(scratch.vert_marks.at(w) >> 1));
         }
     }
 
@@ -243,8 +241,7 @@ void strong_connect(ScratchSpace& scratch, const ReadableGraph auto& x,
     }
 }
 
-void compute_sccs(ScratchSpace& scratch, const ReadableGraph auto& x,
-                          std::vector<std::vector<VertId>>& out_scc) {
+void compute_sccs(ScratchSpace& scratch, const ReadableGraph auto& x, std::vector<std::vector<VertId>>& out_scc) {
     scratch.grow(x.size());
 
     for (const VertId v : x.verts()) {
@@ -265,8 +262,8 @@ void compute_sccs(ScratchSpace& scratch, const ReadableGraph auto& x,
 
 // Chromatic Dijkstra for close_after_meet.
 void chrome_dijkstra(ScratchSpace& scratch, const ReadableGraph auto& g, const PotentialFunction& p,
-                            std::vector<std::vector<VertId>>& colour_succs,
-                            VertId src, std::vector<std::tuple<VertId, Weight>>& out) {
+                     std::vector<std::vector<VertId>>& colour_succs, VertId src,
+                     std::vector<std::tuple<VertId, Weight>>& out) {
     const size_t sz = g.size();
     if (sz == 0) {
         return;
@@ -329,7 +326,7 @@ void chrome_dijkstra(ScratchSpace& scratch, const ReadableGraph auto& g, const P
 
 // Dijkstra recovery for close_after_widen.
 void dijkstra_recover(ScratchSpace& scratch, const ReadableGraph auto& g, const PotentialFunction& p,
-                             const auto& is_stable, VertId src, EdgeVector& delta) {
+                      const auto& is_stable, VertId src, EdgeVector& delta) {
     const size_t sz = g.size();
     if (sz == 0) {
         return;
@@ -395,8 +392,8 @@ void dijkstra_recover(ScratchSpace& scratch, const ReadableGraph auto& g, const 
 
 // Forward closure for close_after_assign.
 // Assumes scratch has already been grown to g.size().
-void close_after_assign_fwd(ScratchSpace& scratch, const ReadableGraph auto& g, const PotentialFunction& p,
-                                   VertId v, std::vector<std::tuple<VertId, Weight>>& aux) {
+void close_after_assign_fwd(ScratchSpace& scratch, const ReadableGraph auto& g, const PotentialFunction& p, VertId v,
+                            std::vector<std::tuple<VertId, Weight>>& aux) {
     for (const VertId u : g.verts()) {
         scratch.vert_marks.at(u) = 0;
     }
@@ -414,8 +411,9 @@ void close_after_assign_fwd(ScratchSpace& scratch, const ReadableGraph auto& g, 
     }
 
     // Sort the immediate edges by increasing slack.
-    std::sort(adj_head, adj_tail,
-              [&scratch, &p](const VertId d1, const VertId d2) { return scratch.dists[d1] - p(d1) < scratch.dists[d2] - p(d2); });
+    std::sort(adj_head, adj_tail, [&scratch, &p](const VertId d1, const VertId d2) {
+        return scratch.dists[d1] - p(d1) < scratch.dists[d2] - p(d2);
+    });
 
     auto reach_tail = adj_tail;
     for (; adj_head < adj_tail; ++adj_head) {
@@ -460,12 +458,7 @@ bool select_potentials(ScratchSpace& scratch, const ReadableGraph auto& g, std::
     std::vector<std::vector<VertId>> sccs;
     detail::compute_sccs(scratch, g, sccs);
 
-    // Currently trusting the call-site to select reasonable initial values.
-    if constexpr (false) {
-        for (VertId v : g.verts()) {
-            potentials[v] = 0;
-        }
-    }
+    // Caller is responsible for providing reasonable initial potentials.
 
     // Run Bellman-Ford on each SCC.
     for (const std::vector<VertId>& scc : sccs) {
@@ -529,7 +522,7 @@ bool select_potentials(ScratchSpace& scratch, const ReadableGraph auto& g, std::
 }
 
 EdgeVector close_after_meet(ScratchSpace& scratch, const ReadableGraph auto& g, const PotentialFunction& pots,
-                                   const ReadableGraph auto& l, const ReadableGraph auto& r) {
+                            const ReadableGraph auto& l, const ReadableGraph auto& r) {
     assert(l.size() == r.size());
     const size_t sz = l.size();
     scratch.grow(sz);
@@ -574,7 +567,7 @@ EdgeVector close_after_meet(ScratchSpace& scratch, const ReadableGraph auto& g, 
 }
 
 EdgeVector close_after_widen(ScratchSpace& scratch, const ReadableGraph auto& g, const PotentialFunction& p,
-                                   const auto& is_stable) {
+                             const auto& is_stable) {
     const size_t sz = g.size();
     scratch.grow(sz);
 
@@ -590,8 +583,8 @@ EdgeVector close_after_widen(ScratchSpace& scratch, const ReadableGraph auto& g,
     return delta;
 }
 
-EdgeVector close_after_assign(ScratchSpace& scratch, const ReadableGraph auto& g,
-                                     const PotentialFunction& p, VertId v) {
+EdgeVector close_after_assign(ScratchSpace& scratch, const ReadableGraph auto& g, const PotentialFunction& p,
+                              VertId v) {
     scratch.grow(g.size());
     EdgeVector delta;
     {
@@ -613,8 +606,8 @@ EdgeVector close_after_assign(ScratchSpace& scratch, const ReadableGraph auto& g
     return delta;
 }
 
-bool repair_potential(ScratchSpace& scratch, const ReadableGraph auto& g, std::vector<Weight>& p,
-                             VertId ii, VertId jj) {
+bool repair_potential(ScratchSpace& scratch, const ReadableGraph auto& g, std::vector<Weight>& p, VertId ii,
+                      VertId jj) {
     const size_t sz = g.size();
     scratch.grow(sz);
 

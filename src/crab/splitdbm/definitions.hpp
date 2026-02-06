@@ -7,7 +7,6 @@
 
 #include "arith/num_big.hpp"
 
-
 namespace splitdbm {
 
 /** DBM weights (Weight) can be represented using one of the following
@@ -29,4 +28,4 @@ using Weight = prevail::Number;
 using VertId = uint16_t;
 using VertSet = std::unordered_set<VertId>;
 
-}
+} // namespace splitdbm

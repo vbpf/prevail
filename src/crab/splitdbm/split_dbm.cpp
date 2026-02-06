@@ -1,8 +1,8 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: Apache-2.0
 
-#include "crab/splitdbm/definitions.hpp"
 #include "crab/splitdbm/split_dbm.hpp"
+#include "crab/splitdbm/definitions.hpp"
 
 namespace splitdbm {
 
@@ -30,6 +30,7 @@ prevail::ExtendedNumber SplitDBM::get_bound(const VertId v, const Side side) con
     }
 }
 
+// Callers must call normalize() after set_bound() to restore closure.
 void SplitDBM::set_bound(const VertId v, const Side side, const Weight& bound_value) {
     if (side == Side::LEFT) {
         g_.set_edge(v, -bound_value, 0);
@@ -49,9 +50,7 @@ VertId SplitDBM::new_vertex() {
     return vert;
 }
 
-void SplitDBM::forget(const VertId v) {
-    g_.forget(v);
-}
+void SplitDBM::forget(const VertId v) { g_.forget(v); }
 
 const Graph& SplitDBM::graph() const { return g_; }
 
@@ -88,13 +87,9 @@ bool SplitDBM::add_difference_constraint(const VertId src, const VertId dest, co
     return true;
 }
 
-void SplitDBM::close_after_bound_updates() {
-    apply_delta(close_after_assign(*scratch_, g_, pot_func(potential_), 0));
-}
+void SplitDBM::close_after_bound_updates() { apply_delta(close_after_assign(*scratch_, g_, pot_func(potential_), 0)); }
 
-void SplitDBM::apply_delta(const EdgeVector& delta) {
-    splitdbm::apply_delta(g_, delta);
-}
+void SplitDBM::apply_delta(const EdgeVector& delta) { splitdbm::apply_delta(g_, delta); }
 
 void SplitDBM::close_after_assign_vertex(const VertId v) {
     apply_delta(close_after_assign(*scratch_, SubGraph(g_, 0), pot_func(potential_), v));
@@ -103,7 +98,7 @@ void SplitDBM::close_after_assign_vertex(const VertId v) {
 VertId SplitDBM::assign_vertex(const Weight& potential_value,
                                const std::span<const std::pair<VertId, Weight>> diffs_from,
                                const std::span<const std::pair<VertId, Weight>> diffs_to,
-                              const std::optional<Weight>& lb_edge, const std::optional<Weight>& ub_edge) {
+                               const std::optional<Weight>& lb_edge, const std::optional<Weight>& ub_edge) {
     const VertId vert = new_vertex();
     potential_[vert] = potential_value;
 
@@ -127,20 +122,14 @@ VertId SplitDBM::assign_vertex(const Weight& potential_value,
     return vert;
 }
 
-Weight SplitDBM::potential_at(const VertId v) const {
-    return potential_[v];
-}
+Weight SplitDBM::potential_at(const VertId v) const { return potential_[v]; }
 
-Weight SplitDBM::potential_at_zero() const {
-    return potential_[0];
-}
+Weight SplitDBM::potential_at_zero() const { return potential_[0]; }
 
 std::size_t SplitDBM::graph_size() const { return g_.size(); }
 std::size_t SplitDBM::num_edges() const { return g_.num_edges(); }
 
-bool SplitDBM::vertex_has_edges(const VertId v) const {
-    return g_.succs(v).size() > 0 || g_.preds(v).size() > 0;
-}
+bool SplitDBM::vertex_has_edges(const VertId v) const { return g_.succs(v).size() > 0 || g_.preds(v).size() > 0; }
 
 std::vector<VertId> SplitDBM::get_disconnected_vertices() const {
     std::vector<VertId> result;
@@ -215,9 +204,7 @@ void SplitDBM::normalize() {
     unstable_.clear();
 }
 
-void SplitDBM::clear_thread_local_state() {
-    scratch_.clear();
-}
+void SplitDBM::clear_thread_local_state() { scratch_.clear(); }
 
 // =============================================================================
 // SplitDBM static lattice method implementations
@@ -297,8 +284,8 @@ SplitDBM SplitDBM::join(const AlignedPair& aligned) {
     bool is_closed;
     Graph g_closed_left(graph_meet(gx, g_deferred_right, is_closed));
     if (!is_closed) {
-        splitdbm::apply_delta(g_closed_left,
-            close_after_meet(*scratch_, SubGraph(g_closed_left, 0), pot_func(pot_left), gx, g_deferred_right));
+        splitdbm::apply_delta(g_closed_left, close_after_meet(*scratch_, SubGraph(g_closed_left, 0), pot_func(pot_left),
+                                                              gx, g_deferred_right));
     }
 
     // Compute deferred relations: bounds from right applied to relations from left
@@ -317,8 +304,8 @@ SplitDBM SplitDBM::join(const AlignedPair& aligned) {
 
     Graph g_closed_right(graph_meet(gy, g_deferred_left, is_closed));
     if (!is_closed) {
-        splitdbm::apply_delta(g_closed_right,
-            close_after_meet(*scratch_, SubGraph(g_closed_right, 0), pot_func(pot_right), gy, g_deferred_left));
+        splitdbm::apply_delta(g_closed_right, close_after_meet(*scratch_, SubGraph(g_closed_right, 0),
+                                                               pot_func(pot_right), gy, g_deferred_left));
     }
 
     // Syntactic join of the closed graphs
@@ -329,14 +316,22 @@ SplitDBM SplitDBM::join(const AlignedPair& aligned) {
     for (VertId v : gx_excl.verts()) {
         if (auto wx = gx.lookup(0, v)) {
             if (auto wy = gy.lookup(0, v)) {
-                if (*wx < *wy) ub_up.push_back(v);
-                if (*wy < *wx) ub_down.push_back(v);
+                if (*wx < *wy) {
+                    ub_up.push_back(v);
+                }
+                if (*wy < *wx) {
+                    ub_down.push_back(v);
+                }
             }
         }
         if (auto wx = gx.lookup(v, 0)) {
             if (auto wy = gy.lookup(v, 0)) {
-                if (*wx < *wy) lb_down.push_back(v);
-                if (*wy < *wx) lb_up.push_back(v);
+                if (*wx < *wy) {
+                    lb_down.push_back(v);
+                }
+                if (*wy < *wx) {
+                    lb_up.push_back(v);
+                }
             }
         }
     }
@@ -407,7 +402,7 @@ std::optional<SplitDBM> SplitDBM::meet(AlignedPair& aligned) {
     // Select valid potentials using Bellman-Ford (updates initial_potentials in place)
     auto& result_pot = aligned.initial_potentials;
     if (!select_potentials(*scratch_, result_g, result_pot)) {
-        return std::nullopt;  // Infeasible
+        return std::nullopt; // Infeasible
     }
 
     if (!is_closed) {

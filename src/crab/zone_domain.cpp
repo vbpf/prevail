@@ -82,10 +82,7 @@ Bound ZoneDomain::get_ub(const Variable x) const {
     return get_ub(get_vertid(x));
 }
 
-Interval ZoneDomain::get_interval(const Variable x) const {
-    const auto& v = get_vertid(x);
-    return {get_lb(v), get_ub(v)};
-}
+Interval ZoneDomain::get_interval(const Variable x) const { return {get_lb(x), get_ub(x)}; }
 
 static std::optional<VertId> try_at(const ZoneDomain::VertMap& map, const Variable v) {
     const auto it = map.find(v);

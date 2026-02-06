@@ -41,6 +41,7 @@ class GraphPerm {
             if (perm[vi] == invalid_vert) {
                 continue;
             }
+            assert(perm[vi] < g.size());
             assert(inv[perm[vi]] == invalid_vert);
             inv[perm[vi]] = vi;
         }
@@ -48,14 +49,14 @@ class GraphPerm {
 
     // Check whether an edge is live
     bool elem(const VertId x, const VertId y) const {
-        if (perm[x] > g.size() || perm[y] > g.size()) {
+        if (perm[x] >= g.size() || perm[y] >= g.size()) {
             return false;
         }
         return g.elem(perm[x], perm[y]);
     }
 
     const Weight* lookup(const VertId x, const VertId y) const {
-        if (perm[x] > g.size() || perm[y] > g.size()) {
+        if (perm[x] >= g.size() || perm[y] >= g.size()) {
             return nullptr;
         }
         return g.lookup(perm[x], perm[y]);
@@ -279,12 +280,12 @@ class SubGraph {
 
     // Assumption: (x, y) not in mtx
     void add_edge(VertId x, Weight wt, VertId y) {
-        //      assert(x != v_ex && y != v_ex);
+        assert(x != v_ex && y != v_ex);
         g.add_edge(x, wt, y);
     }
 
     void set_edge(VertId s, Weight w, VertId d) {
-        //      assert(s != v_ex && d != v_ex);
+        assert(s != v_ex && d != v_ex);
         g.set_edge(s, w, d);
     }
 

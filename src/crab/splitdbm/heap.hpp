@@ -21,16 +21,19 @@ LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ******************************************************************************************/
+#include <concepts>
 #include <vector>
+
+#include "crab/splitdbm/definitions.hpp"
 
 namespace splitdbm {
 
 // A heap implementation with support for decrease/increase key.
 template <std::predicate<VertId, VertId> F>
 class Heap {
-    const F lt; // comparison function
-    std::vector<int> heap;            // heap of ints
-    std::vector<int> indices;         // int -> index in heap
+    const F lt;               // comparison function
+    std::vector<int> heap;    // heap of ints
+    std::vector<int> indices; // int -> index in heap
 
     // Index "traversal" functions
     static int left(const int i) { return i * 2 + 1; }
