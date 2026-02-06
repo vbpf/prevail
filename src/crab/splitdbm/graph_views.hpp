@@ -64,13 +64,13 @@ class GraphPerm {
 
     // Precondition: elem(x, y) is true.
     Weight edge_val(const VertId x, const VertId y) const {
-        //      assert(perm[x] < g.size() && perm[y] < g.size());
+        assert(perm[x] < g.size() && perm[y] < g.size());
         return g.edge_val(perm[x], perm[y]);
     }
 
     // Precondition: elem(x, y) is true.
     Weight operator()(const VertId x, const VertId y) const {
-        //      assert(perm[x] < g.size() && perm[y] < g.size());
+        assert(perm[x] < g.size() && perm[y] < g.size());
         return g(perm[x], perm[y]);
     }
 
