@@ -96,9 +96,12 @@ endif ()
 
 include(cmake/SetupBoostHeaders.cmake)
 
+# Escape regex metacharacters in prevail_source_dir for use in list(FILTER ... REGEX ...)
+string(REGEX REPLACE "([][+.*()^$?|\\\\])" "\\\\\\1" prevail_source_dir_escaped "${prevail_source_dir}")
+
 file(GLOB_RECURSE prevail_LIB_SRC CONFIGURE_DEPENDS "${prevail_source_dir}/src/*.cpp")
-list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${prevail_source_dir}/src/main/.*")
-list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${prevail_source_dir}/src/test/.*")
+list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${prevail_source_dir_escaped}/src/main/.*")
+list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${prevail_source_dir_escaped}/src/test/.*")
 
 add_library(prevail ${prevail_LIB_SRC})
 # 1. Standard library include paths
