@@ -91,7 +91,7 @@ add_compile_definitions(BOOST_PROCESS_USE_STD_FS)
 
 if (prevail_ENABLE_TESTS)
   # Let bpf_conformance manage its own Boost (including NuGet libs on MSVC)
-  add_subdirectory("${prevail_source_dir}/external/bpf_conformance/src")
+  add_subdirectory("${prevail_source_dir}/external/bpf_conformance/src" "${CMAKE_CURRENT_BINARY_DIR}/bpf_conformance")
 endif ()
 
 include(cmake/SetupBoostHeaders.cmake)
@@ -159,8 +159,8 @@ target_compile_options(prevail PRIVATE
   "$<$<BOOL:${ENABLE_ASAN}>:${SANITIZE_FLAGS}>"
 )
 
-add_subdirectory("${prevail_source_dir}/external/bpf_conformance/external/elfio")
-add_subdirectory("${prevail_source_dir}/external/libbtf")
+add_subdirectory("${prevail_source_dir}/external/bpf_conformance/external/elfio" "${CMAKE_CURRENT_BINARY_DIR}/elfio")
+add_subdirectory("${prevail_source_dir}/external/libbtf" "${CMAKE_CURRENT_BINARY_DIR}/libbtf")
 target_include_directories(libbtf INTERFACE
   $<BUILD_INTERFACE:${prevail_source_dir}/external/libbtf/libbtf>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/libbtf>
