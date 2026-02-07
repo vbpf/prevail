@@ -11,13 +11,18 @@ endif ()
 
 project(prevail VERSION 0.1.0)
 
+# NOTE: Do not use CMAKE_SOURCE_DIR in this project.
+# When prevail is consumed via add_subdirectory()/FetchContent, CMAKE_SOURCE_DIR refers to
+# the top-level superproject, not prevail's root.
+set(prevail_source_dir "${PROJECT_SOURCE_DIR}")
+
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
 include(FetchContent)
 
 if (IS_DIRECTORY "${PROJECT_SOURCE_DIR}/.git" AND NOT CMAKE_CROSSCOMPILING)
-  file(COPY "${CMAKE_SOURCE_DIR}/scripts/pre-commit" "${CMAKE_SOURCE_DIR}/scripts/commit-msg" DESTINATION "${PROJECT_SOURCE_DIR}/.git/hooks")
+  file(COPY "${prevail_source_dir}/scripts/pre-commit" "${prevail_source_dir}/scripts/commit-msg" DESTINATION "${PROJECT_SOURCE_DIR}/.git/hooks")
   option(prevail_ENABLE_TESTS "Build tests" ON)
 else ()
   option(prevail_ENABLE_TESTS "Build tests" OFF)
@@ -86,19 +91,22 @@ add_compile_definitions(BOOST_PROCESS_USE_STD_FS)
 
 if (prevail_ENABLE_TESTS)
   # Let bpf_conformance manage its own Boost (including NuGet libs on MSVC)
-  add_subdirectory("${CMAKE_SOURCE_DIR}/external/bpf_conformance/src")
+  add_subdirectory("${prevail_source_dir}/external/bpf_conformance/src" "${CMAKE_CURRENT_BINARY_DIR}/bpf_conformance")
 endif ()
 
 include(cmake/SetupBoostHeaders.cmake)
 
-file(GLOB_RECURSE prevail_LIB_SRC CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/*.cpp")
-list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${CMAKE_SOURCE_DIR}/src/main/.*")
-list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${CMAKE_SOURCE_DIR}/src/test/.*")
+# Escape regex metacharacters in prevail_source_dir for use in list(FILTER ... REGEX ...)
+string(REGEX REPLACE "([][+.*()^$?|\\\\])" "\\\\\\1" prevail_source_dir_escaped "${prevail_source_dir}")
+
+file(GLOB_RECURSE prevail_LIB_SRC CONFIGURE_DEPENDS "${prevail_source_dir}/src/*.cpp")
+list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${prevail_source_dir_escaped}/src/main/.*")
+list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${prevail_source_dir_escaped}/src/test/.*")
 
 add_library(prevail ${prevail_LIB_SRC})
 # 1. Standard library include paths
 target_include_directories(prevail PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+  $<BUILD_INTERFACE:${prevail_source_dir}/src>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
@@ -106,16 +114,16 @@ target_include_directories(prevail PUBLIC
 # This allows #include <bpf_conformance/bpf_conformance.h> to work locally
 set(BPF_CONFORMANCE_SHIM "${CMAKE_CURRENT_BINARY_DIR}/shim")
 file(MAKE_DIRECTORY "${BPF_CONFORMANCE_SHIM}/bpf_conformance")
-file(COPY "${CMAKE_SOURCE_DIR}/external/bpf_conformance/include/bpf_conformance.h"
+file(COPY "${prevail_source_dir}/external/bpf_conformance/include/bpf_conformance.h"
   DESTINATION "${BPF_CONFORMANCE_SHIM}/bpf_conformance")
 
 # 3. Consolidated Target Include Directories (Interface)
 # We use SYSTEM to suppress warnings from external headers
 target_include_directories(prevail SYSTEM PUBLIC
   # Local build tree paths
-  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/external>
-  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/external/bpf_conformance/external/elfio>
-  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/external/libbtf>
+  $<BUILD_INTERFACE:${prevail_source_dir}/external>
+  $<BUILD_INTERFACE:${prevail_source_dir}/external/bpf_conformance/external/elfio>
+  $<BUILD_INTERFACE:${prevail_source_dir}/external/libbtf>
   $<BUILD_INTERFACE:${BPF_CONFORMANCE_SHIM}>
   $<BUILD_INTERFACE:${Boost_INCLUDE_DIR}>
 
@@ -126,20 +134,20 @@ target_include_directories(prevail SYSTEM PUBLIC
 
 # 4. Installation Directives
 # Ensure bpf_conformance is reachable via <bpf_conformance/...>
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/external/bpf_conformance/include/"
+install(DIRECTORY "${prevail_source_dir}/external/bpf_conformance/include/"
   DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/bpf_conformance"
   FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
 )
 
 # Ensure elfio is reachable via <elfio/...>
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/external/bpf_conformance/external/elfio/elfio/"
+install(DIRECTORY "${prevail_source_dir}/external/bpf_conformance/external/elfio/elfio/"
   DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/elfio"
   FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
 )
 
 # Ensure libbtf is reachable via <libbtf/...>
 # Note: Use the nested libbtf/ directory to match the include namespace
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/external/libbtf/libbtf/"
+install(DIRECTORY "${prevail_source_dir}/external/libbtf/libbtf/"
   DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libbtf"
   FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
 )
@@ -154,10 +162,10 @@ target_compile_options(prevail PRIVATE
   "$<$<BOOL:${ENABLE_ASAN}>:${SANITIZE_FLAGS}>"
 )
 
-add_subdirectory("${CMAKE_SOURCE_DIR}/external/bpf_conformance/external/elfio")
-add_subdirectory("${CMAKE_SOURCE_DIR}/external/libbtf")
+add_subdirectory("${prevail_source_dir}/external/bpf_conformance/external/elfio" "${CMAKE_CURRENT_BINARY_DIR}/elfio")
+add_subdirectory("${prevail_source_dir}/external/libbtf" "${CMAKE_CURRENT_BINARY_DIR}/libbtf")
 target_include_directories(libbtf INTERFACE
-  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/external/libbtf/libbtf>
+  $<BUILD_INTERFACE:${prevail_source_dir}/external/libbtf/libbtf>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/libbtf>
 )
 
@@ -177,10 +185,10 @@ set_target_properties(prevail PROPERTIES
   CXX_VISIBILITY_PRESET hidden
   VISIBILITY_INLINES_HIDDEN YES)
 
-set(prevail_binary_dir "${CMAKE_SOURCE_DIR}/bin" CACHE INTERNAL "")
+set(prevail_binary_dir "${prevail_source_dir}/bin" CACHE INTERNAL "")
 
 # Main executables
-add_executable(check "${CMAKE_SOURCE_DIR}/src/main/check.cpp" "${CMAKE_SOURCE_DIR}/src/main/linux_verifier.cpp")
+add_executable(check "${prevail_source_dir}/src/main/check.cpp" "${prevail_source_dir}/src/main/linux_verifier.cpp")
 target_link_libraries(check PRIVATE prevail ${CMAKE_DL_LIBS})
 if (CMAKE_CONFIGURATION_TYPES)
   set_target_properties(check PROPERTIES
@@ -205,14 +213,14 @@ if (prevail_ENABLE_TESTS)
   set(THREADS_PREFER_PTHREAD_FLAG ON)
   find_package(Threads REQUIRED)
 
-  add_executable(conformance_check "${CMAKE_SOURCE_DIR}/src/test/conformance_check.cpp")
+  add_executable(conformance_check "${prevail_source_dir}/src/test/conformance_check.cpp")
 
-  add_executable(run_yaml "${CMAKE_SOURCE_DIR}/src/test/run_yaml.cpp")
+  add_executable(run_yaml "${prevail_source_dir}/src/test/run_yaml.cpp")
 
-  file(GLOB prevail_TEST_SRC CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/test/test_*.cpp")
+  file(GLOB prevail_TEST_SRC CONFIGURE_DEPENDS "${prevail_source_dir}/src/test/test_*.cpp")
   add_executable(tests ${prevail_TEST_SRC})
 
-  add_library(ebpf_yaml_lib STATIC "${CMAKE_SOURCE_DIR}/src/test/ebpf_yaml.cpp")
+  add_library(ebpf_yaml_lib STATIC "${prevail_source_dir}/src/test/ebpf_yaml.cpp")
   target_link_libraries(ebpf_yaml_lib PRIVATE prevail bpf_conformance yaml-cpp::yaml-cpp)
 
   target_link_libraries(run_yaml PRIVATE prevail ebpf_yaml_lib)
@@ -256,7 +264,7 @@ install(TARGETS prevail libbtf GSL
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/src/"
+install(DIRECTORY "${prevail_source_dir}/src/"
   DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/prevail"
   FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h"
   PATTERN "main/*" EXCLUDE
@@ -283,7 +291,7 @@ write_basic_package_version_file(
 )
 
 configure_package_config_file(
-  "${CMAKE_SOURCE_DIR}/cmake/prevailConfig.cmake.in"
+  "${prevail_source_dir}/cmake/prevailConfig.cmake.in"
   "${CMAKE_CURRENT_BINARY_DIR}/prevailConfig.cmake"
   INSTALL_DESTINATION "${prevail_config_dir}"
 )
