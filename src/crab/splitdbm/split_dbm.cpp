@@ -191,14 +191,16 @@ void SplitDBM::normalize() {
         return;
     }
 
-    struct UnstableWrap {
-        const VertSet& vs;
-        explicit UnstableWrap(const VertSet& s) : vs(s) {}
-        bool operator[](const VertId v) const { return vs.contains(v); }
+    // close_after_widen expects an is_stable predicate: returns true iff v is stable.
+    // Vertices in unstable_ are NOT stable, so we negate the membership test.
+    struct IsStable {
+        const VertSet& unstable;
+        explicit IsStable(const VertSet& s) : unstable(s) {}
+        bool operator[](const VertId v) const { return !unstable.contains(v); }
     };
 
     const auto p = pot_func(potential_);
-    apply_delta(close_after_widen(*scratch_, SubGraph(g_, 0), p, UnstableWrap(unstable_)));
+    apply_delta(close_after_widen(*scratch_, SubGraph(g_, 0), p, IsStable(unstable_)));
     apply_delta(close_after_assign(*scratch_, g_, p, 0));
 
     unstable_.clear();

@@ -4,6 +4,7 @@
 
 #include "arith/dsl_syntax.hpp"
 #include "crab/ebpf_domain.hpp"
+#include "crab/splitdbm/split_dbm.hpp"
 
 using namespace prevail;
 
@@ -355,4 +356,67 @@ TEST_CASE("join preserves multi-register per-type field", "[join][lattice]") {
                  {r6_type == T_NUM, r7_type == T_STACK}, {r7.stack_offset == 128},
                  {r6_type >= T_NUM, r6_type <= T_PACKET, r7_type >= T_NUM, r7_type <= T_STACK},
                  {r6.packet_offset == 4, r7.stack_offset == 128});
+}
+
+// 22) SplitDBM widen closure
+TEST_CASE("close_after_widen recovers transitive edge through unstable vertex", "[widen][splitdbm]") {
+    using namespace splitdbm;
+
+    // Vertices: 0 (special zero vertex), 1, 2, 3.
+    //
+    // Left (closed) graph:
+    //   Bounds: 0->v: 100, v->0: 0 for v in {1,2,3}
+    //   Relations: 1->2: 5, 2->3: 5, 1->3: 10 (closure of 1->2->3)
+    //
+    // Right graph (same, except 1->3 is LOOSER: 12 instead of 10):
+    //   Relations: 1->2: 5, 2->3: 5, 1->3: 12
+    //
+    // Widening keeps edges where right <= left, using left's weight:
+    //   1->2: 5 (kept), 2->3: 5 (kept), 1->3: DROPPED (12 > 10)
+    //
+    // Vertex 1 becomes unstable (lost outgoing edge 1->3).
+    //
+    // close_after_widen should run Dijkstra recovery from unstable vertex 1
+    // and discover the transitive path 1->2->3 = 5+5 = 10, adding edge 1->3: 10.
+
+    auto make_graph = [](Weight w13) {
+        Graph g;
+        g.growTo(4);
+        g.add_edge(0, Weight(100), 1);
+        g.add_edge(1, Weight(0), 0);
+        g.add_edge(0, Weight(100), 2);
+        g.add_edge(2, Weight(0), 0);
+        g.add_edge(0, Weight(100), 3);
+        g.add_edge(3, Weight(0), 0);
+        g.add_edge(1, Weight(5), 2);
+        g.add_edge(2, Weight(5), 3);
+        g.add_edge(1, w13, 3);
+        return g;
+    };
+
+    std::vector<Weight> pot = {Weight(0), Weight(0), Weight(5), Weight(10)};
+
+    SplitDBM left(make_graph(Weight(10)), std::vector<Weight>(pot), VertSet{});
+    SplitDBM right(make_graph(Weight(12)), std::vector<Weight>(pot), VertSet{});
+
+    AlignedPair aligned{
+        .left = left,
+        .right = right,
+        .left_perm = {0, 1, 2, 3},
+        .right_perm = {0, 1, 2, 3},
+        .initial_potentials = std::vector<Weight>(pot),
+    };
+
+    SplitDBM result = SplitDBM::widen(aligned);
+    const Graph& rg = result.graph();
+
+    REQUIRE(rg.elem(1, 2));
+    CHECK(rg.edge_val(1, 2) == Weight(5));
+
+    REQUIRE(rg.elem(2, 3));
+    CHECK(rg.edge_val(2, 3) == Weight(5));
+
+    // The transitive edge 1->3 should be recovered via path 1->2->3 = 5+5 = 10.
+    REQUIRE(rg.elem(1, 3));
+    CHECK(rg.edge_val(1, 3) == Weight(10));
 }
