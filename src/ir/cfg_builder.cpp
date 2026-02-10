@@ -192,7 +192,7 @@ static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const 
                 if (!macro_labels.contains(next_macro_label)) {
                     macro_labels.insert(next_macro_label);
                 }
-                seen_labels.insert(macro_label);
+                seen_labels.insert(next_macro_label);
             }
         }
     }
