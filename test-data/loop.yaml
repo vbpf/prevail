@@ -420,3 +420,108 @@ messages:
   - "1:3: Code becomes unreachable (assume r0 > 10)"
   - "2:3: Code becomes unreachable (assume r0 <= 0)"
   - "2 (counter): Loop counter is too large (pc[2] < 100000)"
+
+---
+test-case: while loop with 32-bit truncation, variable bound
+options: ["termination"]
+
+pre: ["r1.type=number", "r1.svalue=[1, 100]", "r1.uvalue=r1.svalue"]
+
+code:
+  <start>: |
+    r0 = 0
+  <loop>: |
+    r2 = r0
+    w2 = r2
+    if r1 > r2 goto <body>
+    goto <out>
+  <body>: |
+    r0 += 1
+    goto <loop>
+  <out>: |
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=[1, 100]
+  - r0.uvalue=r0.svalue
+  - r1.type=number
+  - r1.svalue=r0.svalue
+  - r1.uvalue=r0.svalue
+  - r2.type=number
+  - r2.svalue=r0.svalue
+  - r2.uvalue=r0.svalue
+  - pc[1]=[2, 101]
+  - pc[1]=r0.svalue+1
+
+messages: []
+
+---
+test-case: while loop with 8-bit AND truncation, variable bound
+options: ["termination"]
+
+pre: ["r1.type=number", "r1.svalue=[1, 100]", "r1.uvalue=r1.svalue"]
+
+code:
+  <start>: |
+    r0 = 0
+  <loop>: |
+    r2 = r0
+    r2 &= 255
+    if r1 > r2 goto <body>
+    goto <out>
+  <body>: |
+    r0 += 1
+    goto <loop>
+  <out>: |
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=[1, 100]
+  - r0.uvalue=r0.svalue
+  - r1.type=number
+  - r1.svalue=r0.svalue
+  - r1.uvalue=r0.svalue
+  - r2.type=number
+  - r2.svalue=r0.svalue
+  - r2.uvalue=r0.svalue
+  - pc[1]=[2, 101]
+  - pc[1]=r0.svalue+1
+
+messages: []
+
+---
+test-case: while loop with 16-bit AND truncation, variable bound
+options: ["termination"]
+
+pre: ["r1.type=number", "r1.svalue=[1, 100]", "r1.uvalue=r1.svalue"]
+
+code:
+  <start>: |
+    r0 = 0
+  <loop>: |
+    r2 = r0
+    r2 &= 0xffff
+    if r1 > r2 goto <body>
+    goto <out>
+  <body>: |
+    r0 += 1
+    goto <loop>
+  <out>: |
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=[1, 100]
+  - r0.uvalue=r0.svalue
+  - r1.type=number
+  - r1.svalue=r0.svalue
+  - r1.uvalue=r0.svalue
+  - r2.type=number
+  - r2.svalue=r0.svalue
+  - r2.uvalue=r0.svalue
+  - pc[1]=[2, 101]
+  - pc[1]=r0.svalue+1
+
+messages: []
