@@ -14,7 +14,5 @@ Debug/*
 Release/*
 build/
 build-wsl/
-cmake-build-debug/
-cmake-build-release/
-cmake-build-sanitize/
+cmake-build-*/
 coverage/
