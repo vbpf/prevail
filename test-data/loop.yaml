@@ -492,6 +492,39 @@ post:
 messages: []
 
 ---
+test-case: while loop with 8-bit AND truncation, bound exceeds mask
+options: ["termination"]
+
+pre: ["r1.type=number", "r1.svalue=[1, 300]", "r1.uvalue=r1.svalue"]
+
+code:
+  <start>: |
+    r0 = 0
+  <loop>: |
+    r2 = r0
+    r2 &= 255
+    if r1 > r2 goto <body>
+    goto <out>
+  <body>: |
+    r0 += 1
+    goto <loop>
+  <out>: |
+    exit
+
+post:
+  - r0.type=number
+  - r1.type=number
+  - r1.svalue=[1, 255]
+  - r1.uvalue=r1.svalue
+  - r2.type=number
+  - r2.svalue=r1.svalue
+  - r2.uvalue=r1.svalue
+  - pc[1]=[1, +oo]
+
+messages:
+  - "1 (counter): Loop counter is too large (pc[1] < 100000)"
+
+---
 test-case: while loop with 16-bit AND truncation, variable bound
 options: ["termination"]
 

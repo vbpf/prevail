@@ -950,8 +950,11 @@ void FiniteDomain::bitwise_and(const Variable lhss, const Variable lhsu, const V
 }
 void FiniteDomain::bitwise_and(const Variable lhss, const Variable lhsu, const Number& op2) {
     // Skip when the AND is provably a no-op: the mask is (2^n - 1) and both svalue and uvalue
-    // already fit within [0, mask] with matching intervals. This preserves relational constraints
-    // in the SplitDBM that would otherwise be destroyed by the internal havoc().
+    // already fit within [0, mask] with matching intervals.
+    // Soundness: for any v in [0, 2^n - 1], v & (2^n - 1) = v, so the operation is an identity.
+    // The s/u equality guard ensures no new cross-domain information would be established.
+    // Skipping preserves relational constraints in the SplitDBM that would otherwise be
+    // destroyed by the internal havoc().
     if (op2 > 0 && (op2 & (op2 + 1)) == 0) {
         const auto mask_interval = Interval{Number{0}, op2};
         const auto sinterval = eval_interval(lhss);
