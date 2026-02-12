@@ -82,6 +82,13 @@ class EbpfDomain final {
 
     StringInvariant to_set() const;
 
+    /// Check if a register may be a stack pointer and return its stack offset if known.
+    /// Used by failure slicing to detect stack accesses through derived pointers.
+    /// @return The concrete stack offset if the register is definitely a stack pointer with a known offset,
+    ///         std::nullopt otherwise.
+    [[nodiscard]]
+    std::optional<int64_t> get_stack_offset(const Reg& reg) const;
+
   private:
     // private generic domain functions
     void add_value_constraint(const LinearConstraint& cst);
