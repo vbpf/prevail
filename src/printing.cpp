@@ -719,4 +719,369 @@ std::ostream& operator<<(std::ostream& os, const btf_line_info_t& line_info) {
     os << "; " << line_info.source_line << "\n";
     return os;
 }
+
+void print_invariants_filtered(std::ostream& os, const Program& prog, const bool simplify, const AnalysisResult& result,
+                               const std::set<Label>& filter, const bool compact,
+                               const std::map<Label, RelevantState>* relevance) {
+    DetailedPrinter printer{os, prog};
+    const auto basic_blocks = BasicBlock::collect_basic_blocks(prog.cfg(), simplify);
+
+    // Build a mapping from each label in a basic block to the block's first label.
+    // Needed to look up post-invariants for mid-block predecessor labels at join points.
+    std::map<Label, Label> label_to_block_leader;
+    for (const BasicBlock& bb : basic_blocks) {
+        for (const Label& label : bb) {
+            label_to_block_leader.insert({label, bb.first_label()});
+        }
+    }
+
+    // Helper to look up the post-invariant for a predecessor label.
+    // Mid-block labels don't have direct invariant entries, so we map
+    // through the block leader to find the containing block's post-state.
+    // Note: when simplify=true, the block leader's post represents the
+    // entire collapsed block, which is correct for the last instruction
+    // but approximate for mid-block predecessors. Failure slicing defaults
+    // to simplify=false, so this approximation is rarely triggered.
+    auto get_parent_post_invariant = [&](const Label& parent) -> const EbpfDomain* {
+        const auto leader_it = label_to_block_leader.find(parent);
+        const Label& lookup_label = (leader_it != label_to_block_leader.end()) ? leader_it->second : parent;
+        const auto inv_it = result.invariants.find(lookup_label);
+        if (inv_it != result.invariants.end() && !inv_it->second.post.is_bottom()) {
+            return &inv_it->second.post;
+        }
+        return nullptr;
+    };
+
+    for (const BasicBlock& bb : basic_blocks) {
+        // Check if any label in this basic block is in the filter
+        bool bb_has_filtered_label = false;
+        for (const Label& label : bb) {
+            if (filter.contains(label)) {
+                bb_has_filtered_label = true;
+                break;
+            }
+        }
+        if (!bb_has_filtered_label) {
+            continue;
+        }
+
+        // Find the first filtered label in this block to use as the block header
+        Label first_filtered_label = bb.first_label();
+        for (const Label& label : bb) {
+            if (filter.contains(label)) {
+                first_filtered_label = label;
+                break;
+            }
+        }
+
+        // Use bb.first_label() for reachability check: if the block's entry is unreachable,
+        // skip the entire block. The filtered label's pre-invariant is printed below.
+        if (result.invariants.at(bb.first_label()).pre.is_bottom()) {
+            continue;
+        }
+
+        // Print pre-invariant for first filtered label in block (unless compact)
+        if (!compact) {
+            // Set invariant filter if we have relevance info for this label
+            const auto* label_relevance =
+                relevance ? (relevance->contains(first_filtered_label) ? &relevance->at(first_filtered_label) : nullptr)
+                          : nullptr;
+            os << invariant_filter(label_relevance);
+            os << "\nPre-invariant : " << result.invariants.at(first_filtered_label).pre << "\n";
+            os << invariant_filter(nullptr); // Clear filter
+        }
+
+        // Print the jump and block header anchored to the basic block entry label
+        // for correct CFG structure representation.
+        printer.print_jump("from", bb.first_label());
+        os << bb.first_label() << ":\n";
+
+        // R3: Show per-predecessor invariants at join points.
+        // When multiple predecessors exist and at least 2 are in the slice,
+        // show what each incoming edge contributed to help diagnose lost correlations.
+        if (!compact && relevance) {
+            const auto parents = prog.cfg().parents_of(bb.first_label());
+            std::vector<Label> in_slice_parents;
+            for (const auto& parent : parents) {
+                if (filter.contains(parent)) {
+                    in_slice_parents.push_back(parent);
+                }
+            }
+            if (in_slice_parents.size() >= 2) {
+                // Build the union of relevant registers from this label and all in-slice parents
+                RelevantState join_relevance;
+                if (relevance->contains(first_filtered_label)) {
+                    const auto& fl = relevance->at(first_filtered_label);
+                    join_relevance.registers.insert(fl.registers.begin(), fl.registers.end());
+                    join_relevance.stack_offsets.insert(fl.stack_offsets.begin(), fl.stack_offsets.end());
+                }
+                for (const auto& parent : in_slice_parents) {
+                    if (relevance->contains(parent)) {
+                        const auto& pr = relevance->at(parent);
+                        join_relevance.registers.insert(pr.registers.begin(), pr.registers.end());
+                        join_relevance.stack_offsets.insert(pr.stack_offsets.begin(), pr.stack_offsets.end());
+                    }
+                }
+
+                os << "  --- join point: per-predecessor state ---\n";
+                for (const auto& parent : in_slice_parents) {
+                    const auto* post = get_parent_post_invariant(parent);
+                    if (post) {
+                        os << invariant_filter(&join_relevance);
+                        os << "  from " << parent << ": " << *post << "\n";
+                        os << invariant_filter(nullptr);
+                    }
+                }
+                os << "  --- end join point ---\n";
+            }
+        }
+
+        if (first_filtered_label != bb.first_label()) {
+            // Indicate that some labels/instructions were skipped due to filtering.
+            os << "  ... skipped ...\n";
+        }
+
+        Label last_label = bb.first_label();
+        Label prev_filtered_label = bb.first_label();
+        bool has_prev_filtered = false;
+        for (const Label& label : bb) {
+            if (!filter.contains(label)) {
+                continue;
+            }
+
+            // If there was a gap since the previous filtered label in this block,
+            // close the previous label's output and show a skip indicator.
+            if (has_prev_filtered && prev_filtered_label != label) {
+                // Print post-invariant and goto for the previous filtered label
+                if (!compact) {
+                    const auto& prev_current = result.invariants.at(prev_filtered_label);
+                    if (!prev_current.post.is_bottom()) {
+                        const auto* prev_label_relevance =
+                            relevance ? (relevance->contains(prev_filtered_label) ? &relevance->at(prev_filtered_label)
+                                                                                  : nullptr)
+                                      : nullptr;
+                        os << invariant_filter(prev_label_relevance);
+                        printer.print_jump("goto", prev_filtered_label);
+                        os << "\nPost-invariant : " << prev_current.post << "\n";
+                        os << invariant_filter(nullptr);
+                    }
+                }
+                // Check if there are skipped labels between prev and current
+                bool has_gap = false;
+                for (const Label& mid : bb) {
+                    if (mid <= prev_filtered_label) {
+                        continue;
+                    }
+                    if (mid >= label) {
+                        break;
+                    }
+                    has_gap = true;
+                    break;
+                }
+                if (has_gap) {
+                    os << "  ... skipped ...\n";
+                }
+                // Print pre-invariant for this label
+                if (!compact) {
+                    const auto* label_rel =
+                        relevance ? (relevance->contains(label) ? &relevance->at(label) : nullptr) : nullptr;
+                    os << invariant_filter(label_rel);
+                    os << "\nPre-invariant : " << result.invariants.at(label).pre << "\n";
+                    os << invariant_filter(nullptr);
+                    printer.print_jump("from", label);
+                }
+            }
+
+            printer.print_line_info(label);
+
+            // Print assertions, filtered by relevance if provided
+            const auto* label_relevance =
+                relevance ? (relevance->contains(label) ? &relevance->at(label) : nullptr) : nullptr;
+            for (const auto& assertion : prog.assertions_at(label)) {
+                // If we have relevance info, only print assertions involving relevant registers.
+                // Assertions with no register deps (e.g., ValidCall, BoundedLoopCount) are always
+                // printed to avoid hiding the failing assertion from the slice output.
+                if (label_relevance) {
+                    auto assertion_regs = extract_assertion_registers(assertion);
+                    if (!assertion_regs.empty()) {
+                        bool is_relevant = false;
+                        for (const auto& reg : assertion_regs) {
+                            if (label_relevance->registers.contains(reg)) {
+                                is_relevant = true;
+                                break;
+                            }
+                        }
+                        if (!is_relevant) {
+                            continue; // Skip this assertion
+                        }
+                    }
+                }
+                os << "  assert " << assertion << ";\n";
+            }
+            os << "  " << prog.instruction_at(label) << ";\n";
+
+            last_label = label;
+            prev_filtered_label = label;
+            has_prev_filtered = true;
+
+            const auto& current = result.invariants.at(label);
+            if (current.error) {
+                os << "\nVerification error:\n";
+                print_error(os, *current.error);
+                os << "\n";
+            }
+        }
+
+        // Print post-invariant (unless compact)
+        if (!compact) {
+            const auto& current = result.invariants.at(last_label);
+            if (!current.post.is_bottom()) {
+                // Set invariant filter for post-invariant
+                const auto* label_relevance =
+                    relevance ? (relevance->contains(last_label) ? &relevance->at(last_label) : nullptr) : nullptr;
+                os << invariant_filter(label_relevance);
+                printer.print_jump("goto", last_label);
+                os << "\nPost-invariant : " << current.post << "\n";
+                os << invariant_filter(nullptr); // Clear filter
+            }
+        }
+    }
+    os << "\n";
+}
+
+void print_failure_slices(std::ostream& os, const Program& prog, const bool simplify, const AnalysisResult& result,
+                          const std::vector<FailureSlice>& slices, const bool compact) {
+    if (slices.empty()) {
+        os << "No verification failures found.\n";
+        return;
+    }
+
+    for (size_t i = 0; i < slices.size(); ++i) {
+        const auto& slice = slices[i];
+
+        os << "=== Failure Slice " << (i + 1) << " of " << slices.size() << " ===\n\n";
+
+        // Print error summary
+        os << "[ERROR] " << slice.error.what() << "\n";
+        os << "[LOCATION] " << slice.failing_label << "\n";
+
+        // Print relevant registers at failure point
+        const auto it = slice.relevance.find(slice.failing_label);
+        if (it != slice.relevance.end()) {
+            os << "[RELEVANT REGISTERS] ";
+            bool first = true;
+            for (const auto& reg : it->second.registers) {
+                if (!first) {
+                    os << ", ";
+                }
+                os << "r" << static_cast<int>(reg.v);
+                first = false;
+            }
+            if (!it->second.stack_offsets.empty()) {
+                for (const auto& offset : it->second.stack_offsets) {
+                    if (!first) {
+                        os << ", ";
+                    }
+                    os << "stack[" << offset << "]";
+                    first = false;
+                }
+            }
+            os << "\n";
+        }
+
+        os << "[SLICE SIZE] " << slice.relevance.size() << " program points\n\n";
+
+        // Print a compact control-flow summary showing the branch-path skeleton
+        // through the slice. Lists labels in order with Assume/Jmp annotations.
+        // At join points (labels with ≥2 in-slice predecessors), the converging
+        // predecessors are grouped as {pred1 | pred2} → join_label.
+        {
+            os << "[CONTROL FLOW] ";
+            // Collect and sort impacted labels
+            auto labels = slice.impacted_labels();
+
+            // Build a map: join_label → set of in-slice predecessors
+            // Also collect which labels are convergence predecessors (to skip them in linear output)
+            std::map<Label, std::vector<Label>> join_predecessors;
+            for (const auto& lbl : labels) {
+                const auto& parents = prog.cfg().parents_of(lbl);
+                std::vector<Label> in_slice_parents;
+                for (const auto& p : parents) {
+                    if (labels.contains(p)) {
+                        in_slice_parents.push_back(p);
+                    }
+                }
+                if (in_slice_parents.size() >= 2) {
+                    join_predecessors[lbl] = in_slice_parents;
+                }
+            }
+            // Labels consumed by a {..|..} group are skipped in linear output,
+            // unless they are themselves join points (nested joins).
+            std::set<Label> convergence_members;
+            for (const auto& [join_lbl, preds] : join_predecessors) {
+                for (const auto& p : preds) {
+                    if (!join_predecessors.contains(p)) {
+                        convergence_members.insert(p);
+                    }
+                }
+            }
+
+            // Helper to annotate a label with its instruction type
+            auto annotate_label = [&](const Label& lbl) {
+                os << lbl;
+                const auto& ins = prog.instruction_at(lbl);
+                if (const auto* assume = std::get_if<Assume>(&ins)) {
+                    os << " (assume " << assume->cond.left << " " << assume->cond.op << " " << assume->cond.right
+                       << ")";
+                } else if (const auto* jmp = std::get_if<Jmp>(&ins)) {
+                    if (jmp->cond) {
+                        os << " (if " << jmp->cond->left << " " << jmp->cond->op << " " << jmp->cond->right << ")";
+                    }
+                }
+            };
+
+            bool first_cf = true;
+            for (const auto& lbl : labels) {
+                // Skip labels that are part of a convergence group (printed with their join)
+                if (convergence_members.contains(lbl)) {
+                    continue;
+                }
+
+                if (!first_cf) {
+                    os << ", ";
+                }
+                first_cf = false;
+
+                // If this label is a join point, print {pred1 | pred2} → lbl
+                if (join_predecessors.contains(lbl)) {
+                    os << "{";
+                    bool first_pred = true;
+                    for (const auto& pred : join_predecessors.at(lbl)) {
+                        if (!first_pred) {
+                            os << " | ";
+                        }
+                        first_pred = false;
+                        annotate_label(pred);
+                    }
+                    os << "} -> ";
+                }
+
+                annotate_label(lbl);
+            }
+            if (labels.contains(slice.failing_label)) {
+                os << " FAIL";
+            }
+            os << "\n\n";
+        }
+
+        // Print the filtered CFG with assertion filtering based on relevance
+        os << "[CAUSAL TRACE]\n";
+        print_invariants_filtered(os, prog, simplify, result, slice.impacted_labels(), compact, &slice.relevance);
+
+        if (i + 1 < slices.size()) {
+            os << "\n";
+        }
+    }
+}
+
 } // namespace prevail

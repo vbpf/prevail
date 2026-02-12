@@ -13,6 +13,7 @@
 #include "ir/parse.hpp"
 #include "ir/unmarshal.hpp"
 #include "platform.hpp"
+#include "result.hpp"
 #include "string_constraints.hpp"
 
 using std::regex;
@@ -482,12 +483,21 @@ std::ostream& operator<<(std::ostream& o, const StringInvariant& inv) {
     if (inv.is_bottom()) {
         return o << "_|_";
     }
+
+    // Check for invariant filter
+    const RelevantState* filter = get_invariant_filter(o);
+
     // Intervals
     bool first = true;
     o << "[";
     auto& set = inv.maybe_inv.value();
     std::string lastbase;
     for (const auto& item : set) {
+        // Skip items that don't involve relevant registers (if filter is set)
+        if (filter && !filter->is_relevant_constraint(item)) {
+            continue;
+        }
+
         if (first) {
             first = false;
         } else {

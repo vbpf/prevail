@@ -64,6 +64,18 @@ class InterleavedFwdFixpointIterator final {
 
     void transform_to_post(const Label& label, EbpfDomain pre) {
         const auto& ins = _prog.instruction_at(label);
+
+        // Dependency extraction intentionally runs on the pre-state *before*
+        // ebpf_domain_transform mutates it, because extract_instruction_deps
+        // needs the unmodified domain to resolve stack offsets.  We use .at()
+        // (result.invariants.at(label).deps) because the entry was already
+        // created during initialization.  This must also run before assertion
+        // checks so that failing instructions still have deps recorded —
+        // compute_failure_slices seeds its backward worklist from them.
+        if (thread_local_options.verbosity_opts.collect_instruction_deps) {
+            result.invariants.at(label).deps = extract_instruction_deps(ins, pre);
+        }
+
         if (!std::holds_alternative<IncrementLoopCounter>(ins)) {
             if (has_error(label)) {
                 return;

@@ -28,6 +28,7 @@ struct Imm {
 struct Reg {
     uint8_t v{};
     constexpr bool operator==(const Reg&) const = default;
+    constexpr auto operator<=>(const Reg&) const = default;
 };
 
 using Value = std::variant<Imm, Reg>;

@@ -13,6 +13,7 @@ This documentation provides a comprehensive guide to understanding the Prevail e
 | [Control Flow Graph](cfg.md) | CFG construction and weak topological ordering |
 | [Memory Model](memory-model.md) | Stack, packet, context, and shared memory handling |
 | [Type System](type-system.md) | Type domains and type-guided verification |
+| [Failure Slicing](failure-slicing.md) | Minimal diagnostic slices for verification failures |
 | [Building](building.md) | Build instructions for all platforms |
 | [Testing](testing.md) | Test infrastructure and conformance testing |
 | [Glossary](glossary.md) | Terminology and definitions |
