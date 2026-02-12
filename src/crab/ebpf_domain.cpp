@@ -34,6 +34,19 @@ std::optional<int64_t> EbpfDomain::get_stack_offset(const Reg& reg) const {
     return std::nullopt;
 }
 
+std::optional<int64_t> EbpfDomain::get_stack_offset(const Reg& reg) const {
+    // Only return an offset when the register is *definitely* a stack pointer,
+    // not just possibly one. This ensures we don't misclassify memory deps.
+    if (rcp.types.get_type(reg) != T_STACK) {
+        return std::nullopt;
+    }
+    const auto offset = rcp.values.eval_interval(reg_pack(reg).stack_offset);
+    if (const auto singleton = offset.singleton()) {
+        return singleton->cast_to<int64_t>();
+    }
+    return std::nullopt;
+}
+
 EbpfDomain EbpfDomain::top() {
     EbpfDomain abs;
     abs.set_to_top();
