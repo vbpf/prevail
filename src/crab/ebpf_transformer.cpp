@@ -41,6 +41,7 @@ class EbpfTransformer final {
     void operator()(const CallLocal&);
 
     void operator()(const Callx&);
+    void operator()(const CallBtf&);
 
     void operator()(const Exit&);
 
@@ -51,6 +52,7 @@ class EbpfTransformer final {
     void operator()(const LoadMapFd&);
 
     void operator()(const LoadMapAddress&);
+    void operator()(const LoadPseudo&);
 
     void operator()(const Mem&);
 
@@ -257,6 +259,10 @@ void EbpfTransformer::operator()(const Assume& s) {
 
 void EbpfTransformer::operator()(const Undefined& a) {}
 
+void EbpfTransformer::operator()(const CallBtf&) {}
+
+void EbpfTransformer::operator()(const LoadPseudo&) {}
+
 // Simple truncation function usable with swap_endianness().
 template <class T>
 constexpr T truncate(T x) noexcept {
@@ -450,7 +456,7 @@ static void do_load_ctx(TypeToNumDomain& rcp, const Reg& target_reg, const Linea
         return;
     }
 
-    const Number addr = *maybe_addr;
+    const Number& addr = *maybe_addr;
 
     // We use offsets for packet data, data_end, and meta during verification,
     // but at runtime they will be 64-bit pointers.  We can use the offset values
@@ -635,6 +641,16 @@ void EbpfTransformer::operator()(const Mem& b) {
     if (const auto preg = std::get_if<Reg>(&b.value)) {
         if (b.is_load) {
             do_load(b, *preg);
+            if (b.is_signed) {
+                Bin::Op op{};
+                switch (b.access.width) {
+                case 1: op = Bin::Op::MOVSX8; break;
+                case 2: op = Bin::Op::MOVSX16; break;
+                case 4: op = Bin::Op::MOVSX32; break;
+                default: CRAB_ERROR("unexpected MEMSX width", b.access.width);
+                }
+                (*this)(Bin{.op = op, .dst = *preg, .v = *preg, .is64 = true, .lddw = false});
+            }
         } else {
             const auto data_reg = reg_pack(*preg);
             do_mem_store(b, data_reg.svalue, data_reg.uvalue, *preg);

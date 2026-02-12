@@ -5,7 +5,6 @@
 #include <utility>
 #include <vector>
 
-#include "cfg/cfg.hpp"
 #include "ir/syntax.hpp"
 #include "platform.hpp"
 
@@ -47,6 +46,7 @@ class AssertExtractor {
 
     vector<Assertion> operator()(const LoadMapFd&) const { return {}; }
     vector<Assertion> operator()(const LoadMapAddress&) const { return {}; }
+    vector<Assertion> operator()(const LoadPseudo&) const { return {}; }
 
     /// Packet access implicitly uses R6, so verify that R6 still has a pointer to the context.
     vector<Assertion> operator()(const Packet&) const { return zero_offset_ctx({6}, false); }
@@ -118,6 +118,8 @@ class AssertExtractor {
         res.emplace_back(FuncConstraint{callx.func});
         return res;
     }
+
+    vector<Assertion> operator()(const CallBtf&) const { return {}; }
 
     [[nodiscard]]
     vector<Assertion> explicate(const Condition& cond) const {

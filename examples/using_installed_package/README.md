@@ -44,7 +44,7 @@ build\Release\install_test.exe
 ### CMakeLists.txt
 
 ```cmake
-find_package(prevail 0.1.0 REQUIRED)
+find_package(prevail 0.1.1 REQUIRED)
 
 add_executable(myapp main.cpp)
 target_link_libraries(myapp PRIVATE prevail::prevail)

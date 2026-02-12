@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # This will fail if prevail wasn't installed correctly
-find_package(prevail 0.1.0 REQUIRED)
+find_package(prevail 0.1.1 REQUIRED)
 
 add_executable(install_test main.cpp)
 target_link_libraries(install_test PRIVATE prevail::prevail)

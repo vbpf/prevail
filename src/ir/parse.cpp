@@ -36,7 +36,7 @@ namespace prevail {
 
 #define PAREN(x) LPAREN x RPAREN
 #define STAR R"_(\s*\*\s*)_"
-#define DEREF STAR PAREN("u(\\d+)" STAR)
+#define DEREF STAR PAREN("([us])(\\d+)" STAR)
 
 #define IN R"_(\s*in\s*)_"
 #define TYPE_SET R"_(\s*\{\s*([^}]*)\s*\}\s*)_"
@@ -62,6 +62,11 @@ namespace prevail {
 
 // Match map_fd fd
 #define MAP_FD_PROGRAMS R"_(\s*map_fd_programs\s+(\d+)\s*)_"
+
+#define RE_VARIABLE_ADDR R"_(\s*variable_addr\(([-+]?(?:0x)?[0-9a-f]+)\)\s*)_"
+#define RE_CODE_ADDR R"_(\s*code_addr\(([-+]?(?:0x)?[0-9a-f]+)\)\s*)_"
+#define RE_MAP_BY_IDX R"_(\s*map_by_idx\(([-+]?(?:0x)?[0-9a-f]+)\)\s*)_"
+#define RE_MAP_VALUE_BY_IDX R"_(\s*mva\(map_by_idx\(([-+]?(?:0x)?[0-9a-f]+)\)\)\s*\+\s*([-+]?(?:0x)?[0-9a-f]+)\s*)_"
 
 static const std::map<std::string, Bin::Op> str_to_binop = {
     {"", Bin::Op::MOV},        {"+", Bin::Op::ADD},   {"-", Bin::Op::SUB},     {"*", Bin::Op::MUL},
@@ -133,8 +138,8 @@ static Value reg_or_imm(const std::string& s) {
     }
 }
 
-static Deref deref(const std::string& width, const std::string& basereg, const std::string& sign,
-                   const std::string& _offset) {
+static Deref deref(const std::string& /*is_signed*/, const std::string& width, const std::string& basereg,
+                   const std::string& sign, const std::string& _offset) {
     const int offset = to_int(_offset);
     return Deref{
         .width = str_to_width.at(width),
@@ -164,6 +169,9 @@ Instruction parse_instruction(const std::string& line, const std::map<std::strin
     if (regex_match(text, m, regex("callx " REG))) {
         return Callx{reg(m[1])};
     }
+    if (regex_match(text, m, regex("call_btf " FUNC))) {
+        return CallBtf{.btf_id = to_int(m[1])};
+    }
     if (regex_match(text, m, regex(WREG OPASSIGN WREG))) {
         const std::string r = m[1];
         return Bin{.op = str_to_binop.at(m[2]), .dst = reg(r), .v = reg(m[3]), .is64 = is64_reg(r), .lddw = false};
@@ -183,6 +191,18 @@ Instruction parse_instruction(const std::string& line, const std::map<std::strin
     if (regex_match(text, m, regex(WREG ASSIGN MAP_FD))) {
         return LoadMapFd{.dst = reg(m[1]), .mapfd = to_int(m[2])};
     }
+    if (regex_match(text, m, regex(WREG ASSIGN RE_VARIABLE_ADDR))) {
+        return LoadPseudo{reg(m[1]), PseudoAddress{PseudoAddress::Kind::VARIABLE_ADDR, to_int(m[2]), 0}};
+    }
+    if (regex_match(text, m, regex(WREG ASSIGN RE_CODE_ADDR))) {
+        return LoadPseudo{reg(m[1]), PseudoAddress{PseudoAddress::Kind::CODE_ADDR, to_int(m[2]), 0}};
+    }
+    if (regex_match(text, m, regex(WREG ASSIGN RE_MAP_BY_IDX))) {
+        return LoadPseudo{reg(m[1]), PseudoAddress{PseudoAddress::Kind::MAP_BY_IDX, to_int(m[2]), 0}};
+    }
+    if (regex_match(text, m, regex(WREG ASSIGN RE_MAP_VALUE_BY_IDX))) {
+        return LoadPseudo{reg(m[1]), PseudoAddress{PseudoAddress::Kind::MAP_VALUE_BY_IDX, to_int(m[2]), to_int(m[3])}};
+    }
     if (regex_match(text, m, regex(WREG OPASSIGN IMM LONGLONG))) {
         const std::string r = m[1];
         const bool lddw = !m[4].str().empty();
@@ -190,28 +210,29 @@ Instruction parse_instruction(const std::string& line, const std::map<std::strin
     }
     if (regex_match(text, m, regex(REG ASSIGN DEREF PAREN(REG PLUSMINUS IMM)))) {
         return Mem{
-            .access = deref(m[2], m[3], m[4], m[5]),
+            .access = deref(m[2], m[3], m[4], m[5], m[6]),
             .value = reg(m[1]),
             .is_load = true,
+            .is_signed = m[2] == "s",
         };
     }
     if (regex_match(text, m, regex(DEREF PAREN(REG PLUSMINUS IMM) ASSIGN REG_OR_IMM))) {
         return Mem{
-            .access = deref(m[1], m[2], m[3], m[4]),
-            .value = reg_or_imm(m[5]),
+            .access = deref(m[1], m[2], m[3], m[4], m[5]),
+            .value = reg_or_imm(m[6]),
             .is_load = false,
         };
     }
     if (regex_match(text, m, regex("lock " DEREF PAREN(REG PLUSMINUS IMM) " " ATOMICOP " " REG "( fetch)?"))) {
-        const Atomic::Op op = str_to_atomicop.at(m[5]);
+        const Atomic::Op op = str_to_atomicop.at(m[6]);
         return Atomic{.op = op,
-                      .fetch = m[7].matched || op == Atomic::Op::XCHG || op == Atomic::Op::CMPXCHG,
-                      .access = deref(m[1], m[2], m[3], m[4]),
-                      .valreg = reg(m[6])};
+                      .fetch = m[8].matched || op == Atomic::Op::XCHG || op == Atomic::Op::CMPXCHG,
+                      .access = deref(m[1], m[2], m[3], m[4], m[5]),
+                      .valreg = reg(m[7])};
     }
     if (regex_match(text, m, regex("r0 = " DEREF "skb\\[(.*)\\]"))) {
-        const auto width = str_to_width.at(m[1]);
-        const std::string access = m[2].str();
+        const auto width = str_to_width.at(m[2]);
+        const std::string access = m[3].str();
         if (regex_match(access, m, regex(REG))) {
             return Packet{.width = width, .offset = 0, .regoffset = reg(m[1])};
         }

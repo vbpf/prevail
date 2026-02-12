@@ -514,7 +514,7 @@ ConformanceTestResult run_conformance_test_case(const std::vector<std::byte>& me
     std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, {});
     if (auto prog = std::get_if<std::string>(&prog_or_error)) {
         std::cerr << "unmarshaling error at " << *prog << "\n";
-        return {};
+        return ConformanceTestResult{.success = false, .r0_value = Interval::top(), .error_reason = *prog};
     }
 
     const InstructionSeq& inst_seq = std::get<InstructionSeq>(prog_or_error);
@@ -531,9 +531,9 @@ ConformanceTestResult run_conformance_test_case(const std::vector<std::byte>& me
         const Program prog = Program::from_sequence(inst_seq, info, options);
         const AnalysisResult result = analyze(prog, pre_invariant);
         return ConformanceTestResult{.success = !result.failed, .r0_value = result.exit_value};
-    } catch (const std::exception&) {
+    } catch (const std::exception& ex) {
         // Catch exceptions thrown in ebpf_domain.cpp.
-        return {};
+        return ConformanceTestResult{.success = false, .r0_value = Interval::top(), .error_reason = ex.what()};
     }
 }
 

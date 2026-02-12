@@ -71,7 +71,11 @@ int main(int argc, char** argv) {
     const auto& result = run_conformance_test_case(base16_decode(memory_string), base16_decode(program_string), debug);
     if (!result.success) {
         // Write failure reason to stdout since the bpf conformance library does not look at stderr.
-        std::cout << "Verification failed\n";
+        if (!result.error_reason.empty()) {
+            std::cout << result.error_reason << "\n";
+        } else {
+            std::cout << "Verification failed\n";
+        }
         return 1;
     }
     if (result.r0_value.is_top()) {
