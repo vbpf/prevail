@@ -396,6 +396,37 @@ val = *(u64 *)data;  // Verifier directly tracks the pointer comparison
 
 ---
 
+### 4.13 Non-Numeric Stack Content
+
+**Symptom**: `Stack content is not numeric (valid_access(r<N>.offset, width=W) for read)`
+
+**Cause**: A helper function requires its argument to point to a stack buffer containing only numeric (non-pointer) data, but the verifier cannot prove that all bytes in the buffer are numeric. This typically happens when:
+- The stack buffer was never initialized before being passed to a helper
+- Only part of the buffer was written, leaving some bytes uninitialized
+- A pointer was previously stored in the buffer region
+
+**Example**:
+
+```text
+Pre-invariant:[
+    r1.type=stack, r1.stack_offset=3584,
+    r2.type=stack, r2.stack_offset=4088, r3.svalue=8]
+Stack: Numbers -> {}
+   5: r0 = bpf_ringbuf_output:?(r1, r2, r3, r4)
+Error: 5: Stack content is not numeric (valid_access(r2.offset, width=r3) for read)
+```
+
+**Key diagnostic**: Check `Stack: Numbers -> {...}` in the pre-invariant. If the byte range being read is not listed, those bytes are not proven numeric.
+
+**Fix**: Initialize all bytes of the stack buffer with numeric data before passing to the helper:
+
+```c
+__builtin_memset(buf, 0, sizeof(buf));
+// Now pass buf to helper
+```
+
+---
+
 ## 5. LLM Reasoning Protocol
 
 When diagnosing a Prevail verification failure:

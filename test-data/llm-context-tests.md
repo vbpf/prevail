@@ -81,7 +81,7 @@ Skip any test marked as SLOW unless specifically requested.
 ./bin/check ebpf-samples/build/ringbuf_uninit.o .text -v
 ```
 **Expected error**: `Stack content is not numeric (valid_access(r2.offset, width=r3) for read)`
-**Pattern**: 4.9 variant - stack buffer not initialized with numeric data before helper call
+**Pattern**: 4.13 - Non-Numeric Stack Content
 **Key invariant**: `Stack: Numbers -> {}` - no stack bytes marked as numeric
 **Fix**: Initialize stack buffer before passing to helper
 
@@ -511,7 +511,8 @@ When validated with an LLM using `docs/llm-context.md`, the LLM should correctly
 | 4.6 - Type Mismatch | 7, 12, 17, 19 |
 | 4.7 - Infinite Loop / Termination | 9, 10 |
 | 4.8 - Division by Zero | 8 |
-| 4.9 - Map Key/Value Non-Numeric | 3, 4, 15, 21 |
+| 4.9 - Map Key/Value Non-Numeric | 4, 15, 21 |
+| 4.13 - Non-Numeric Stack Content | 3 |
 | 4.10 - Context Field Bounds Violation | 5 |
 | 4.11 - Lost Correlations | 6, 11, 14, 18, 20, 22–26, 28–39 |
 | 4.12 - Stale Pointer After Reallocation | 16 |
