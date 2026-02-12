@@ -147,6 +147,9 @@ Verbosity:
                               into a single basic block. Default: enabled
           --line-info         Print line information
           --print-btf-types   Print BTF types
+          --failure-slice     Print minimal failure diagnostic (causal trace)
+          --failure-slice-depth N
+                              Maximum backward traversal steps (default: 200)
   -v                          Print invariants and first failure
   -f                          Print first failure
 
