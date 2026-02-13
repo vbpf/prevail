@@ -294,6 +294,13 @@ InstructionDeps extract_instruction_deps(const Instruction& ins, const EbpfDomai
                 deps.regs_written.insert(Reg{0});
             } else if constexpr (std::is_same_v<T, Exit>) {
                 deps.regs_read.insert(Reg{0}); // Return value
+                if (!v.stack_frame_prefix.empty()) {
+                    // Subprogram return restores callee-saved registers and frame pointer.
+                    for (uint8_t i = R6; i <= R9; ++i) {
+                        deps.regs_written.insert(Reg{i});
+                    }
+                    deps.regs_written.insert(Reg{R10_STACK_POINTER});
+                }
             } else if constexpr (std::is_same_v<T, Jmp>) {
                 if (v.cond) {
                     deps.regs_read.insert(v.cond->left);
