@@ -438,6 +438,9 @@ struct Unmarshaller {
                 .dst = Reg{inst.dst},
                 .addr = PseudoAddress{.kind = PseudoAddress::Kind::CODE_ADDR, .imm = inst.imm, .next_imm = next_imm}};
         case 5:
+            if (next.imm != 0) {
+                throw InvalidInstruction(pc, "lddw uses reserved fields");
+            }
             return LoadPseudo{
                 .dst = Reg{inst.dst},
                 .addr = PseudoAddress{.kind = PseudoAddress::Kind::MAP_BY_IDX, .imm = inst.imm, .next_imm = next_imm}};
