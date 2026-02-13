@@ -5,7 +5,6 @@
 #include <utility>
 #include <vector>
 
-#include "cfg/cfg.hpp"
 #include "ir/syntax.hpp"
 #include "platform.hpp"
 
@@ -47,6 +46,11 @@ class AssertExtractor {
 
     vector<Assertion> operator()(const LoadMapFd&) const { return {}; }
     vector<Assertion> operator()(const LoadMapAddress&) const { return {}; }
+    // Rejected before assertion extraction by cfg_builder::check_instruction_feature_support.
+    vector<Assertion> operator()(const LoadPseudo&) const {
+        assert(false && "LoadPseudo should be rejected before assertion extraction");
+        return {};
+    }
 
     /// Packet access implicitly uses R6, so verify that R6 still has a pointer to the context.
     vector<Assertion> operator()(const Packet&) const { return zero_offset_ctx({6}, false); }
@@ -117,6 +121,12 @@ class AssertExtractor {
         res.emplace_back(TypeConstraint{callx.func, TypeGroup::number});
         res.emplace_back(FuncConstraint{callx.func});
         return res;
+    }
+
+    // Rejected before assertion extraction by cfg_builder::check_instruction_feature_support.
+    vector<Assertion> operator()(const CallBtf&) const {
+        assert(false && "CallBtf should be rejected before assertion extraction");
+        return {};
     }
 
     [[nodiscard]]

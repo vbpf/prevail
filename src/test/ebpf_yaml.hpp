@@ -51,6 +51,7 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug = false
 struct ConformanceTestResult {
     bool success{};
     Interval r0_value = Interval::top();
+    std::string error_reason{};
 };
 
 ConformanceTestResult run_conformance_test_case(const std::vector<std::byte>& memory_bytes,

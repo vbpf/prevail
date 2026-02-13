@@ -9,7 +9,7 @@ if (NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
   set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 endif ()
 
-project(prevail VERSION 0.1.0)
+project(prevail VERSION 0.1.1)
 
 # NOTE: Do not use CMAKE_SOURCE_DIR in this project.
 # When prevail is consumed via add_subdirectory()/FetchContent, CMAKE_SOURCE_DIR refers to

@@ -329,25 +329,34 @@ ElfGlobalData parse_btf_section(const parse_params_t& parse_params, const ELFIO:
         return {};
     }
 
-    const libbtf::btf_type_data btf_data(vector_of<std::byte>(*btf_section));
+    std::optional<libbtf::btf_type_data> btf_data;
+    try {
+        btf_data.emplace(vector_of<std::byte>(*btf_section));
+    } catch (const std::exception& e) {
+        throw UnmarshalError(std::string("Unsupported or invalid BTF data: ") + e.what());
+    }
     if (parse_params.options.verbosity_opts.dump_btf_types_json) {
-        dump_btf_types(btf_data, parse_params.path);
+        dump_btf_types(*btf_data, parse_params.path);
     }
 
     ElfGlobalData global;
     MapOffsets map_offsets;
 
     // Parse BTF-defined maps from the .maps DATASEC
-    for (const auto& map : parse_btf_map_section(btf_data)) {
-        map_offsets.emplace(map.name, global.map_descriptors.size());
-        global.map_descriptors.push_back(EbpfMapDescriptor{
-            .original_fd = gsl::narrow<int>(map.type_id), // Temporary: stores BTF type ID
-            .type = map.map_type,
-            .key_size = map.key_size,
-            .value_size = map.value_size,
-            .max_entries = map.max_entries,
-            .inner_map_fd = map.inner_map_type_id == 0 ? DEFAULT_MAP_FD : gsl::narrow<int>(map.inner_map_type_id),
-        });
+    try {
+        for (const auto& map : parse_btf_map_section(*btf_data)) {
+            map_offsets.emplace(map.name, global.map_descriptors.size());
+            global.map_descriptors.push_back(EbpfMapDescriptor{
+                .original_fd = gsl::narrow<int>(map.type_id), // Temporary: stores BTF type ID
+                .type = map.map_type,
+                .key_size = map.key_size,
+                .value_size = map.value_size,
+                .max_entries = map.max_entries,
+                .inner_map_fd = map.inner_map_type_id == 0 ? DEFAULT_MAP_FD : gsl::narrow<int>(map.inner_map_type_id),
+            });
+        }
+    } catch (const std::exception& e) {
+        throw UnmarshalError(std::string("Unsupported or invalid BTF map metadata: ") + e.what());
     }
 
     // Remap BTF type IDs to pseudo file descriptors
@@ -1097,7 +1106,11 @@ void ProgramReader::read_programs() {
     }
 
     if (const auto btf_sec = reader.sections[".BTF"]) {
-        process_core_relocations({vector_of<std::byte>(*btf_sec)});
+        try {
+            process_core_relocations({vector_of<std::byte>(*btf_sec)});
+        } catch (const std::exception& e) {
+            throw UnmarshalError(std::string("Unsupported or invalid CO-RE/BTF relocation data: ") + e.what());
+        }
     }
 
     if (!unresolved_symbol_errors.empty()) {
@@ -1110,7 +1123,11 @@ void ProgramReader::read_programs() {
     if (parse_params.options.verbosity_opts.print_line_info) {
         if (const auto btf_sec = reader.sections[".BTF"]) {
             if (const auto btf_ext = reader.sections[".BTF.ext"]) {
-                update_line_info(raw_programs, btf_sec, btf_ext);
+                try {
+                    update_line_info(raw_programs, btf_sec, btf_ext);
+                } catch (const std::exception& e) {
+                    throw UnmarshalError(std::string("Unsupported or invalid BTF line info: ") + e.what());
+                }
             }
         }
     }
@@ -1154,25 +1171,31 @@ EbpfMapDescriptor* find_map_descriptor(const int map_fd) {
 std::vector<RawProgram> read_elf(std::istream& input_stream, const std::string& path,
                                  const std::string& desired_section, const std::string& desired_program,
                                  const ebpf_verifier_options_t& options, const ebpf_platform_t* platform) {
-    std::vector<RawProgram> res;
-    parse_params_t params{path, options, platform, desired_section};
-    auto reader = load_elf(input_stream, path);
-    auto symbols = read_and_validate_symbol_section(reader, path);
-    auto global = extract_global_data(params, reader, symbols);
-    ProgramReader program_reader{params, reader, symbols, global};
-    program_reader.read_programs();
+    try {
+        std::vector<RawProgram> res;
+        parse_params_t params{path, options, platform, desired_section};
+        auto reader = load_elf(input_stream, path);
+        auto symbols = read_and_validate_symbol_section(reader, path);
+        auto global = extract_global_data(params, reader, symbols);
+        ProgramReader program_reader{params, reader, symbols, global};
+        program_reader.read_programs();
 
-    // Return the desired_program, or raw_programs
-    if (desired_program.empty()) {
-        return std::move(program_reader.raw_programs);
-    }
-    for (RawProgram& cur : program_reader.raw_programs) {
-        if (cur.function_name == desired_program) {
-            res.emplace_back(std::move(cur));
-            return res;
+        // Return the desired_program, or raw_programs
+        if (desired_program.empty()) {
+            return std::move(program_reader.raw_programs);
         }
+        for (RawProgram& cur : program_reader.raw_programs) {
+            if (cur.function_name == desired_program) {
+                res.emplace_back(std::move(cur));
+                return res;
+            }
+        }
+        return std::move(program_reader.raw_programs);
+    } catch (const UnmarshalError&) {
+        throw;
+    } catch (const std::exception& e) {
+        throw UnmarshalError(std::string("Unsupported or invalid ELF/BTF data: ") + e.what());
     }
-    return std::move(program_reader.raw_programs);
 }
 
 std::vector<RawProgram> read_elf(const std::string& path, const std::string& desired_section,

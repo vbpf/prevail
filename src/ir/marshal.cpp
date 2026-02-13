@@ -113,6 +113,17 @@ struct MarshalVisitor {
         return makeLddw(b.dst, INST_LD_MODE_MAP_VALUE, b.mapfd, b.offset);
     }
 
+    vector<EbpfInst> operator()(LoadPseudo const& b) const {
+        uint8_t src{};
+        switch (b.addr.kind) {
+        case PseudoAddress::Kind::VARIABLE_ADDR: src = INST_LD_MODE_VARIABLE_ADDR; break;
+        case PseudoAddress::Kind::CODE_ADDR: src = INST_LD_MODE_CODE_ADDR; break;
+        case PseudoAddress::Kind::MAP_BY_IDX: src = INST_LD_MODE_MAP_BY_IDX; break;
+        case PseudoAddress::Kind::MAP_VALUE_BY_IDX: src = INST_LD_MODE_MAP_VALUE_BY_IDX; break;
+        }
+        return makeLddw(b.dst, src, b.addr.imm, b.addr.next_imm);
+    }
+
     vector<EbpfInst> operator()(Bin const& b) const {
         if (b.lddw) {
             const auto pimm = std::get_if<Imm>(&b.v);
@@ -204,6 +215,14 @@ struct MarshalVisitor {
                          .offset = 0}};
     }
 
+    vector<EbpfInst> operator()(CallBtf const& b) const {
+        return {EbpfInst{.opcode = gsl::narrow<uint8_t>(INST_OP_CALL),
+                         .dst = 0,
+                         .src = INST_CALL_BTF_HELPER,
+                         .offset = 0,
+                         .imm = b.btf_id}};
+    }
+
     vector<EbpfInst> operator()(Exit const& b) const {
         return {EbpfInst{.opcode = INST_OP_EXIT, .dst = 0, .src = 0, .offset = 0, .imm = 0}};
     }
@@ -237,8 +256,12 @@ struct MarshalVisitor {
 
     vector<EbpfInst> operator()(Mem const& b) const {
         const Deref access = b.access;
+        if (b.is_signed && (!b.is_load || access.width == 8)) {
+            throw std::runtime_error(std::string("Invalid MEMSX form: ") + to_string(b));
+        }
         EbpfInst res{
-            .opcode = gsl::narrow<uint8_t>(INST_MODE_MEM | width_to_opcode(access.width)),
+            .opcode =
+                gsl::narrow<uint8_t>((b.is_signed ? INST_MODE_MEMSX : INST_MODE_MEM) | width_to_opcode(access.width)),
             .dst = 0,
             .src = 0,
             .offset = gsl::narrow<int16_t>(access.offset),
@@ -247,10 +270,13 @@ struct MarshalVisitor {
             if (!std::holds_alternative<Reg>(b.value)) {
                 throw std::runtime_error(std::string("LD IMM: ") + to_string(b));
             }
-            res.opcode |= INST_CLS_LD | 0x1;
+            res.opcode |= INST_CLS_LDX;
             res.dst = gsl::narrow<uint8_t>(std::get<Reg>(b.value).v);
             res.src = access.basereg.v;
         } else {
+            if (b.is_signed) {
+                throw std::runtime_error(std::string("ST MEMSX: ") + to_string(b));
+            }
             res.opcode |= INST_CLS_ST;
             res.dst = access.basereg.v;
             if (const auto preg = std::get_if<Reg>(&b.value)) {
@@ -311,6 +337,9 @@ int size(const Instruction& inst) {
         return 2;
     }
     if (std::holds_alternative<LoadMapAddress>(inst)) {
+        return 2;
+    }
+    if (std::holds_alternative<LoadPseudo>(inst)) {
         return 2;
     }
     return 1;

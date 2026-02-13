@@ -314,7 +314,9 @@ std::ostream& operator<<(std::ostream& os, const Condition::Op op) {
     return os;
 }
 
-static string size(const int w) { return string("u") + std::to_string(w * 8); }
+static string size(const int w, const bool is_signed = false) {
+    return string(is_signed ? "s" : "u") + std::to_string(w * 8);
+}
 
 // ReSharper disable CppMemberFunctionMayBeConst
 struct AssertionPrinterVisitor {
@@ -405,6 +407,18 @@ struct CommandPrinterVisitor {
 
     void operator()(LoadMapAddress const& b) { os_ << b.dst << " = map_val(" << b.mapfd << ") + " << b.offset; }
 
+    void operator()(LoadPseudo const& b) {
+        os_ << b.dst << " = ";
+        switch (b.addr.kind) {
+        case PseudoAddress::Kind::VARIABLE_ADDR: os_ << "variable_addr(" << b.addr.imm << ")"; break;
+        case PseudoAddress::Kind::CODE_ADDR: os_ << "code_addr(" << b.addr.imm << ")"; break;
+        case PseudoAddress::Kind::MAP_BY_IDX: os_ << "map_by_idx(" << b.addr.imm << ")"; break;
+        case PseudoAddress::Kind::MAP_VALUE_BY_IDX:
+            os_ << "mva(map_by_idx(" << b.addr.imm << ")) + " << b.addr.next_imm;
+            break;
+        }
+    }
+
     // llvm-objdump uses "w<number>" for 32-bit operations and "r<number>" for 64-bit operations.
     // We use the same convention here for consistency.
     static std::string reg_name(Reg const& a, const bool is64) { return ((is64) ? "r" : "w") + std::to_string(a.v); }
@@ -467,6 +481,8 @@ struct CommandPrinterVisitor {
 
     void operator()(Callx const& callx) { os_ << "callx " << callx.func; }
 
+    void operator()(CallBtf const& call) { os_ << "call_btf " << call.btf_id; }
+
     void operator()(Exit const& b) { os_ << "exit"; }
 
     void operator()(Jmp const& b) {
@@ -525,7 +541,14 @@ struct CommandPrinterVisitor {
         if (b.is_load) {
             os_ << b.value << " = ";
         }
-        print(b.access);
+        if (b.is_load && b.is_signed) {
+            const string sign = b.access.offset < 0 ? " - " : " + ";
+            const int offset = std::abs(b.access.offset);
+            os_ << "*(" << size(b.access.width, true) << " *)";
+            os_ << "(" << b.access.basereg << sign << offset << ")";
+        } else {
+            print(b.access);
+        }
         if (!b.is_load) {
             os_ << " = " << b.value;
         }

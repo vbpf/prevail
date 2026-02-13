@@ -44,11 +44,10 @@ static const EbpfInstructionTemplate instruction_template[] = {
     {{0x18, DST, 0, 0, IMM}, bpf_conformance_groups_t::base64},
     {{0x18, DST, 1, 0, IMM}, bpf_conformance_groups_t::base64},
     {{0x18, DST, 2, 0, IMM}, bpf_conformance_groups_t::base64},
-    // TODO(issue #533): add support for LDDW with src_reg > 2.
-    // {{0x18, DST, 3, 0, IMM}, bpf_conformance_groups_t::base64},
-    // {{0x18, DST, 4, 0, IMM}, bpf_conformance_groups_t::base64},
-    // {{0x18, DST, 5, 0, IMM}, bpf_conformance_groups_t::base64},
-    // {{0x18, DST, 6, 0, IMM}, bpf_conformance_groups_t::base64},
+    {{0x18, DST, 3, 0, IMM}, bpf_conformance_groups_t::base64},
+    {{0x18, DST, 4, 0, IMM}, bpf_conformance_groups_t::base64},
+    {{0x18, DST, 5, 0, IMM}, bpf_conformance_groups_t::base64},
+    {{0x18, DST, 6, 0, IMM}, bpf_conformance_groups_t::base64},
     {{0x1c, DST, SRC, 0, 0}, bpf_conformance_groups_t::base32},
     {{0x1d, DST, SRC, JMP_OFFSET, 0}, bpf_conformance_groups_t::base64},
     {{0x1e, DST, SRC, JMP_OFFSET, 0}, bpf_conformance_groups_t::base32},
@@ -123,13 +122,15 @@ static const EbpfInstructionTemplate instruction_template[] = {
     {{0x7d, DST, SRC, JMP_OFFSET, 0}, bpf_conformance_groups_t::base64},
     {{0x7e, DST, SRC, JMP_OFFSET, 0}, bpf_conformance_groups_t::base32},
     {{0x7f, DST, SRC, 0, 0}, bpf_conformance_groups_t::base64},
+    {{0x81, DST, SRC, MEM_OFFSET, 0}, bpf_conformance_groups_t::base64},
     {{0x84, DST, 0, 0, 0}, bpf_conformance_groups_t::base32},
     {{0x85, 0, 0, 0, HELPER_ID}, bpf_conformance_groups_t::base32},
     {{0x85, 0, 1, 0, JMP_OFFSET}, bpf_conformance_groups_t::base32},
-    // TODO(issue #590): Add support for calling a helper function by BTF ID.
-    // {{0x85, 0, 2, 0, IMM}, bpf_conformance_groups_t::base32},
+    {{0x85, 0, 2, 0, IMM}, bpf_conformance_groups_t::base32},
     {{0x87, DST, 0, 0, 0}, bpf_conformance_groups_t::base64},
+    {{0x89, DST, SRC, MEM_OFFSET, 0}, bpf_conformance_groups_t::base64},
     {{0x8d, DST, 0, 0, 0}, bpf_conformance_groups_t::callx},
+    {{0x91, DST, SRC, MEM_OFFSET, 0}, bpf_conformance_groups_t::base64},
     {{0x94, DST, 0, 0, IMM}, bpf_conformance_groups_t::divmul32},
     {{0x94, DST, 0, 1, IMM}, bpf_conformance_groups_t::divmul32},
     {{0x95, 0, 0, 0, 0}, bpf_conformance_groups_t::base32},
@@ -435,10 +436,8 @@ TEST_CASE("disasm_marshal", "[disasm][marshal]") {
             compare_marshal_unmarshal(Call{func});
         }
 
-        // Test callx without support.
-        std::ostringstream oss;
-        oss << "0: bad instruction op 0x" << std::hex << INST_OP_CALLX << std::endl;
-        check_unmarshal_fail(EbpfInst{.opcode = INST_OP_CALLX}, oss.str());
+        // Test callx without support: decode still succeeds.
+        check_unmarshal_succeed(EbpfInst{.opcode = INST_OP_CALLX});
 
         // Test callx with support.  Note that callx puts the register number in 'dst' not 'src'.
         ebpf_platform_t platform = g_ebpf_platform_linux;
@@ -774,12 +773,21 @@ TEST_CASE("fail unmarshal bad instructions", "[disasm][marshal]") {
 
 TEST_CASE("check unmarshal conformance groups", "[disasm][marshal]") {
     for (const auto& current : instruction_template) {
-        // Try unmarshaling without support.
+        // Try unmarshaling without support. Decoding should still succeed; rejection happens later.
         ebpf_platform_t platform = g_ebpf_platform_linux;
         platform.supported_conformance_groups &= ~current.groups;
-        std::ostringstream oss;
-        oss << "0: bad instruction op 0x" << std::hex << static_cast<int>(current.inst.opcode) << std::endl;
-        check_unmarshal_fail(current.inst, oss.str(), platform);
+        EbpfInst without_support = current.inst;
+        if (without_support.offset == JMP_OFFSET) {
+            without_support.offset = 1;
+        }
+        if (without_support.imm == JMP_OFFSET) {
+            without_support.imm = 1;
+        }
+        if (without_support.opcode == INST_OP_LDDW_IMM) {
+            check_unmarshal_succeed(without_support, EbpfInst{}, platform);
+        } else {
+            check_unmarshal_succeed(without_support, platform);
+        }
 
         // Try unmarshaling with support.
         platform.supported_conformance_groups |= current.groups;
@@ -805,13 +813,11 @@ TEST_CASE("check unmarshal legacy opcodes", "[disasm][marshal]") {
         compare_unmarshal_marshal(EbpfInst{.opcode = opcode}, EbpfInst{.opcode = opcode});
     }
 
-    // Disable legacy packet instruction support.
+    // Disable legacy packet instruction support. Decoding should still succeed.
     ebpf_platform_t platform = g_ebpf_platform_linux;
     platform.supported_conformance_groups &= ~bpf_conformance_groups_t::packet;
     for (const uint8_t opcode : supported_legacy_opcodes) {
-        std::ostringstream oss;
-        oss << "0: bad instruction op 0x" << std::hex << static_cast<int>(opcode) << std::endl;
-        check_unmarshal_fail(EbpfInst{.opcode = opcode}, oss.str(), platform);
+        check_unmarshal_succeed(EbpfInst{.opcode = opcode}, platform);
     }
 }
 
@@ -831,4 +837,22 @@ TEST_CASE("unmarshal 64bit immediate", "[disasm][marshal]") {
     // TODO(issue #533): add support for LDDW with src_reg > 1.
     check_unmarshal_fail(EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .src = 1}, EbpfInst{.imm = 1},
                          "0: lddw uses reserved fields\n");
+
+    compare_unmarshal_marshal(EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 3, .imm = 7}, EbpfInst{},
+                              EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 3, .imm = 7},
+                              EbpfInst{});
+    compare_unmarshal_marshal(EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 4, .imm = 7}, EbpfInst{},
+                              EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 4, .imm = 7},
+                              EbpfInst{});
+    compare_unmarshal_marshal(EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 5, .imm = 7}, EbpfInst{},
+                              EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 5, .imm = 7},
+                              EbpfInst{});
+    compare_unmarshal_marshal(
+        EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 6, .imm = 7}, EbpfInst{.imm = 11},
+        EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 6, .imm = 7}, EbpfInst{.imm = 11});
+}
+
+TEST_CASE("unmarshal call-btf-id", "[disasm][marshal]") {
+    compare_unmarshal_marshal(EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 17},
+                              EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 17});
 }

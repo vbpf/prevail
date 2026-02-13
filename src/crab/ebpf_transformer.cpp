@@ -4,6 +4,7 @@
 // This file is eBPF-specific, not derived from CRAB.
 
 #include <bitset>
+#include <cassert>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -41,6 +42,7 @@ class EbpfTransformer final {
     void operator()(const CallLocal&);
 
     void operator()(const Callx&);
+    void operator()(const CallBtf&);
 
     void operator()(const Exit&);
 
@@ -51,6 +53,7 @@ class EbpfTransformer final {
     void operator()(const LoadMapFd&);
 
     void operator()(const LoadMapAddress&);
+    void operator()(const LoadPseudo&);
 
     void operator()(const Mem&);
 
@@ -257,6 +260,16 @@ void EbpfTransformer::operator()(const Assume& s) {
 
 void EbpfTransformer::operator()(const Undefined& a) {}
 
+// Rejected before abstract interpretation by cfg_builder::check_instruction_feature_support.
+void EbpfTransformer::operator()(const CallBtf&) {
+    assert(false && "CallBtf should be rejected before abstract transformation");
+}
+
+// Rejected before abstract interpretation by cfg_builder::check_instruction_feature_support.
+void EbpfTransformer::operator()(const LoadPseudo&) {
+    assert(false && "LoadPseudo should be rejected before abstract transformation");
+}
+
 // Simple truncation function usable with swap_endianness().
 template <class T>
 constexpr T truncate(T x) noexcept {
@@ -450,7 +463,7 @@ static void do_load_ctx(TypeToNumDomain& rcp, const Reg& target_reg, const Linea
         return;
     }
 
-    const Number addr = *maybe_addr;
+    const Number& addr = *maybe_addr;
 
     // We use offsets for packet data, data_end, and meta during verification,
     // but at runtime they will be 64-bit pointers.  We can use the offset values
@@ -488,7 +501,8 @@ static void do_load_ctx(TypeToNumDomain& rcp, const Reg& target_reg, const Linea
     }
 }
 
-static void do_load_packet_or_shared(TypeToNumDomain& rcp, const Reg& target_reg, const int width) {
+static void do_load_packet_or_shared(TypeToNumDomain& rcp, const Reg& target_reg, const int width,
+                                     const bool is_signed) {
     if (rcp.values.is_bottom()) {
         return;
     }
@@ -497,8 +511,11 @@ static void do_load_packet_or_shared(TypeToNumDomain& rcp, const Reg& target_reg
     rcp.havoc_register(target_reg);
     rcp.assign_type(target_reg, T_NUM);
 
-    // A 1 or 2 byte copy results in a limited range of values that may be used as array indices.
-    if (width == 1 || width == 2) {
+    // Small copies can be range-limited and useful for later arithmetic.
+    if (is_signed && (width == 1 || width == 2 || width == 4)) {
+        rcp.values.set(target.svalue, Interval::signed_int(width * 8));
+        rcp.values.set(target.uvalue, Interval::unsigned_int(width * 8));
+    } else if (width == 1 || width == 2) {
         const Interval full = Interval::unsigned_int(width * 8);
         rcp.values.set(target.svalue, full);
         rcp.values.set(target.uvalue, full);
@@ -535,12 +552,12 @@ void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
         }
         case T_PACKET: {
             LinearExpression addr = mem_reg.packet_offset + offset;
-            do_load_packet_or_shared(rcp, target_reg, width);
+            do_load_packet_or_shared(rcp, target_reg, width, b.is_signed);
             break;
         }
         case T_SHARED: {
             LinearExpression addr = mem_reg.shared_offset + offset;
-            do_load_packet_or_shared(rcp, target_reg, width);
+            do_load_packet_or_shared(rcp, target_reg, width, b.is_signed);
             break;
         }
         }
@@ -635,6 +652,18 @@ void EbpfTransformer::operator()(const Mem& b) {
     if (const auto preg = std::get_if<Reg>(&b.value)) {
         if (b.is_load) {
             do_load(b, *preg);
+            if (b.is_signed) {
+                Bin::Op op{};
+                // MEMSX decode only allows widths 1/2/4. Programmatic Mem construction paths
+                // (for example from Atomic lowering) do not set is_signed=true.
+                switch (b.access.width) {
+                case 1: op = Bin::Op::MOVSX8; break;
+                case 2: op = Bin::Op::MOVSX16; break;
+                case 4: op = Bin::Op::MOVSX32; break;
+                default: CRAB_ERROR("unexpected MEMSX width", b.access.width);
+                }
+                (*this)(Bin{.op = op, .dst = *preg, .v = *preg, .is64 = true, .lddw = false});
+            }
         } else {
             const auto data_reg = reg_pack(*preg);
             do_mem_store(b, data_reg.svalue, data_reg.uvalue, *preg);

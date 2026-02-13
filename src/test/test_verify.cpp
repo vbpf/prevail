@@ -35,8 +35,72 @@ FAIL_LOAD_ELF("invalid", "badsymsize.o", "xdp_redirect_map")
     }
 
 // Some intentional unmarshal failures
-FAIL_UNMARSHAL("build", "wronghelper.o", "xdp")
 FAIL_UNMARSHAL("invalid", "invalid-lddw.o", ".text")
+
+TEST_CASE("unsupported forms are rejected after unmarshal", "[unmarshal]") {
+    constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
+    ebpf_platform_t platform = g_ebpf_platform_linux;
+    ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
+
+    SECTION("call helper by BTF id") {
+        RawProgram raw_prog{
+            "", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1}, exit}, info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
+                            Catch::Matchers::ContainsSubstring("not implemented: call helper by BTF id") &&
+                                Catch::Matchers::ContainsSubstring("(at 0)"));
+    }
+
+    SECTION("lddw variable_addr pseudo") {
+        RawProgram raw_prog{
+            "",  "", 0, "", {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 1, .src = 3, .imm = 7}, EbpfInst{}, exit},
+            info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
+                            Catch::Matchers::ContainsSubstring("not implemented: lddw variable_addr pseudo") &&
+                                Catch::Matchers::ContainsSubstring("(at 0)"));
+    }
+
+    SECTION("helper id not usable on platform") {
+        RawProgram raw_prog{"", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .imm = 0x7fff}, exit}, info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
+                            Catch::Matchers::ContainsSubstring("rejected: helper function is unavailable on this platform") &&
+                                Catch::Matchers::ContainsSubstring("(at 0)"));
+    }
+
+    SECTION("be64 requires base64 conformance group") {
+        ebpf_platform_t p = g_ebpf_platform_linux;
+        p.supported_conformance_groups &= ~bpf_conformance_groups_t::base64;
+        ProgramInfo pinfo{.platform = &p, .type = p.get_program_type("unspec", "unspec")};
+        RawProgram raw_prog{"",
+                            "",
+                            0,
+                            "",
+                            {EbpfInst{.opcode = static_cast<uint8_t>(INST_CLS_ALU | INST_ALU_OP_END | INST_END_BE),
+                                      .dst = 1,
+                                      .imm = 64},
+                             exit},
+                            pinfo};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), pinfo, {}),
+                            Catch::Matchers::ContainsSubstring("rejected: requires conformance group base64") &&
+                                Catch::Matchers::ContainsSubstring("(at 0)"));
+    }
+
+    SECTION("call btf cannot use register-call opcode form") {
+        RawProgram raw_prog{
+            "",  "", 0, "", {EbpfInst{.opcode = INST_OP_CALLX, .dst = 0, .src = INST_CALL_BTF_HELPER, .imm = 1}, exit},
+            info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<std::string>(prog_or_error));
+        REQUIRE_THAT(std::get<std::string>(prog_or_error), Catch::Matchers::ContainsSubstring("bad instruction"));
+    }
+}
 
 // Verify a program in a section that may have multiple programs in it.
 #define VERIFY_PROGRAM(dirname, filename, section_name, program_name, _options, platform, should_pass, count) \
@@ -119,15 +183,17 @@ FAIL_UNMARSHAL("invalid", "invalid-lddw.o", ".text")
         VERIFY_SECTION(project, filename, section, {}, &g_ebpf_platform_linux, false);                             \
     }
 
-#define TEST_LEGACY(dirname, filename, sectionname)                                                      \
-    TEST_CASE("Fail unmarshalling: " dirname "/" filename " " sectionname, "[unmarshal]") {              \
-        ebpf_platform_t platform = g_ebpf_platform_linux;                                                \
-        platform.supported_conformance_groups &= ~bpf_conformance_groups_t::packet;                      \
-        auto raw_progs = read_elf("ebpf-samples/" dirname "/" filename, sectionname, "", {}, &platform); \
-        REQUIRE(raw_progs.size() == 1);                                                                  \
-        RawProgram raw_prog = raw_progs.back();                                                          \
-        std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, {});               \
-        REQUIRE(std::holds_alternative<std::string>(prog_or_error));                                     \
+#define TEST_LEGACY(dirname, filename, sectionname)                                                             \
+    TEST_CASE("Unsupported instructions: " dirname "/" filename " " sectionname, "[unmarshal]") {               \
+        ebpf_platform_t platform = g_ebpf_platform_linux;                                                       \
+        platform.supported_conformance_groups &= ~bpf_conformance_groups_t::packet;                             \
+        auto raw_progs = read_elf("ebpf-samples/" dirname "/" filename, sectionname, "", {}, &platform);        \
+        REQUIRE(raw_progs.size() == 1);                                                                         \
+        RawProgram raw_prog = raw_progs.back();                                                                 \
+        std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, {});                      \
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));                                         \
+        REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), raw_prog.info, {}), \
+                            Catch::Matchers::ContainsSubstring("rejected: requires conformance group packet")); \
     }
 
 #define TEST_SECTION_LEGACY(dirname, filename, sectionname) \

@@ -12,6 +12,7 @@
 #include "config.hpp"
 #include "ir/program.hpp"
 #include "ir/syntax.hpp"
+#include "platform.hpp"
 
 using std::optional;
 using std::set;
@@ -127,6 +128,135 @@ static bool has_fall(const Instruction& ins) {
     return true;
 }
 
+enum class RejectKind {
+    NotImplemented,
+    Capability,
+};
+
+struct RejectionReason {
+    RejectKind kind{};
+    std::string detail;
+};
+
+static bool supports(const ebpf_platform_t& platform, const bpf_conformance_groups_t group) {
+    return platform.supports_group(group);
+}
+
+static bool un_requires_base64(const Un& un) {
+    switch (un.op) {
+    case Un::Op::BE64:
+    case Un::Op::LE64:
+    case Un::Op::SWAP64: return true;
+    default: return false;
+    }
+}
+
+static std::optional<RejectionReason> check_instruction_feature_support(const Instruction& ins,
+                                                                        const ebpf_platform_t& platform) {
+    auto reject_not_implemented = [](std::string detail) {
+        return RejectionReason{.kind = RejectKind::NotImplemented, .detail = std::move(detail)};
+    };
+    auto reject_capability = [](std::string detail) {
+        return RejectionReason{.kind = RejectKind::Capability, .detail = std::move(detail)};
+    };
+
+    if (std::holds_alternative<CallBtf>(ins)) {
+        return reject_not_implemented("call helper by BTF id");
+    }
+    if (const auto p = std::get_if<Call>(&ins)) {
+        if (!p->is_supported) {
+            return reject_capability(p->unsupported_reason);
+        }
+    }
+    if (std::holds_alternative<Callx>(ins) && !supports(platform, bpf_conformance_groups_t::callx)) {
+        return reject_capability("requires conformance group callx");
+    }
+    if ((std::holds_alternative<Call>(ins) || std::holds_alternative<CallLocal>(ins) ||
+         std::holds_alternative<Callx>(ins) || std::holds_alternative<Exit>(ins)) &&
+        !supports(platform, bpf_conformance_groups_t::base32)) {
+        return reject_capability("requires conformance group base32");
+    }
+    if (const auto p = std::get_if<Bin>(&ins)) {
+        if (!supports(platform, p->is64 ? bpf_conformance_groups_t::base64 : bpf_conformance_groups_t::base32)) {
+            return reject_capability(p->is64 ? "requires conformance group base64"
+                                             : "requires conformance group base32");
+        }
+        if ((p->op == Bin::Op::MUL || p->op == Bin::Op::UDIV || p->op == Bin::Op::UMOD || p->op == Bin::Op::SDIV ||
+             p->op == Bin::Op::SMOD) &&
+            !supports(platform, p->is64 ? bpf_conformance_groups_t::divmul64 : bpf_conformance_groups_t::divmul32)) {
+            return reject_capability(p->is64 ? "requires conformance group divmul64"
+                                             : "requires conformance group divmul32");
+        }
+    }
+    if (const auto p = std::get_if<Un>(&ins)) {
+        const bool need_base64 = p->is64 || un_requires_base64(*p);
+        if (!supports(platform, need_base64 ? bpf_conformance_groups_t::base64 : bpf_conformance_groups_t::base32)) {
+            return reject_capability(need_base64 ? "requires conformance group base64"
+                                                 : "requires conformance group base32");
+        }
+    }
+    if (const auto p = std::get_if<Jmp>(&ins)) {
+        if (!supports(platform,
+                      p->cond ? (p->cond->is64 ? bpf_conformance_groups_t::base64 : bpf_conformance_groups_t::base32)
+                              : bpf_conformance_groups_t::base32)) {
+            return reject_capability((p->cond && p->cond->is64) ? "requires conformance group base64"
+                                                                : "requires conformance group base32");
+        }
+    }
+    if (const auto p = std::get_if<LoadPseudo>(&ins)) {
+        if (!supports(platform, bpf_conformance_groups_t::base64)) {
+            return reject_capability("requires conformance group base64");
+        }
+        switch (p->addr.kind) {
+        case PseudoAddress::Kind::VARIABLE_ADDR: return reject_not_implemented("lddw variable_addr pseudo");
+        case PseudoAddress::Kind::CODE_ADDR: return reject_not_implemented("lddw code_addr pseudo");
+        case PseudoAddress::Kind::MAP_BY_IDX: return reject_not_implemented("lddw map_by_idx pseudo");
+        case PseudoAddress::Kind::MAP_VALUE_BY_IDX: return reject_not_implemented("lddw map_value_by_idx pseudo");
+        default: return reject_not_implemented("lddw unknown pseudo");
+        }
+    }
+    if ((std::holds_alternative<LoadMapFd>(ins) || std::holds_alternative<LoadMapAddress>(ins)) &&
+        !supports(platform, bpf_conformance_groups_t::base64)) {
+        return reject_capability("requires conformance group base64");
+    }
+    if (const auto p = std::get_if<Mem>(&ins)) {
+        if (!supports(platform,
+                      (p->access.width == 8) ? bpf_conformance_groups_t::base64 : bpf_conformance_groups_t::base32)) {
+            return reject_capability((p->access.width == 8) ? "requires conformance group base64"
+                                                            : "requires conformance group base32");
+        }
+        if (p->is_signed && !supports(platform, bpf_conformance_groups_t::base64)) {
+            return reject_capability("requires conformance group base64");
+        }
+    }
+    if (std::holds_alternative<Packet>(ins) && !supports(platform, bpf_conformance_groups_t::packet)) {
+        return reject_capability("requires conformance group packet");
+    }
+    if (const auto p = std::get_if<Atomic>(&ins)) {
+        const auto group =
+            (p->access.width == 8) ? bpf_conformance_groups_t::atomic64 : bpf_conformance_groups_t::atomic32;
+        if (!supports(platform, group)) {
+            return reject_capability((group == bpf_conformance_groups_t::atomic64)
+                                         ? "requires conformance group atomic64"
+                                         : "requires conformance group atomic32");
+        }
+    }
+    return {};
+}
+
+// Validate instruction-level feature support before CFG construction.
+// This is the user-facing rejection point for unsupported or unavailable features.
+static void validate_instruction_feature_support(const InstructionSeq& insts, const ebpf_platform_t& platform) {
+    for (const auto& [label, inst, _] : insts) {
+        if (const auto reason = check_instruction_feature_support(inst, platform)) {
+            if (reason->kind == RejectKind::NotImplemented) {
+                throw InvalidControlFlow{"not implemented: " + reason->detail + " (at " + to_string(label) + ")"};
+            }
+            throw InvalidControlFlow{"rejected: " + reason->detail + " (at " + to_string(label) + ")"};
+        }
+    }
+}
+
 /// Update a control-flow graph to inline function macros.
 static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const Label& entry_label) {
     bool first = true;
@@ -218,16 +348,19 @@ static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const 
 /// Convert an instruction sequence to a control-flow graph (CFG).
 static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const bool must_have_exit) {
     CfgBuilder builder;
+    assert(thread_local_program_info->platform != nullptr && "platform must be set before CFG construction");
 
     // First, add all instructions to the CFG without connecting
     for (const auto& [label, inst, _] : insts) {
+        assert(!check_instruction_feature_support(inst, *thread_local_program_info->platform).has_value() &&
+               "instruction support must be validated before CFG construction");
         if (std::holds_alternative<Undefined>(inst)) {
             continue;
         }
         builder.insert(label, inst);
     }
 
-    if (insts.size() == 0) {
+    if (insts.empty()) {
         throw InvalidControlFlow{"empty instruction sequence"};
     } else {
         const auto& [label, inst, _0] = insts[0];
@@ -241,6 +374,7 @@ static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const bool
         if (std::holds_alternative<Undefined>(inst)) {
             continue;
         }
+        assert(!std::holds_alternative<CallBtf>(inst) && "CallBtf must be rejected before CFG edge construction");
 
         Label fallthrough{builder.prog.cfg().exit_label()};
         if (i + 1 < insts.size()) {
@@ -291,6 +425,8 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
                                const ebpf_verifier_options_t& options) {
     thread_local_program_info.set(info);
     thread_local_options = options;
+    assert(info.platform != nullptr && "platform must be set before instruction feature validation");
+    validate_instruction_feature_support(inst_seq, *info.platform);
 
     // Convert the instruction sequence to a deterministic control-flow graph.
     CfgBuilder builder = instruction_seq_to_cfg(inst_seq, options.cfg_opts.must_have_exit);
@@ -380,6 +516,8 @@ static std::string instype(Instruction ins) {
         return "call_mem";
     } else if (std::holds_alternative<Callx>(ins)) {
         return "callx";
+    } else if (std::holds_alternative<CallBtf>(ins)) {
+        return "call_mem";
     } else if (const auto pimm = std::get_if<Mem>(&ins)) {
         return pimm->is_load ? "load" : "store";
     } else if (std::holds_alternative<Atomic>(ins)) {
@@ -399,6 +537,8 @@ static std::string instype(Instruction ins) {
     } else if (std::holds_alternative<LoadMapFd>(ins)) {
         return "assign";
     } else if (std::holds_alternative<LoadMapAddress>(ins)) {
+        return "assign";
+    } else if (std::holds_alternative<LoadPseudo>(ins)) {
         return "assign";
     } else if (std::holds_alternative<Assume>(ins)) {
         return "assume";

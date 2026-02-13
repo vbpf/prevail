@@ -100,6 +100,26 @@ struct LoadMapAddress {
     constexpr bool operator==(const LoadMapAddress&) const = default;
 };
 
+/// Addressing payload for LDDW pseudo forms.
+struct PseudoAddress {
+    enum class Kind {
+        VARIABLE_ADDR,    // src=3
+        CODE_ADDR,        // src=4
+        MAP_BY_IDX,       // src=5
+        MAP_VALUE_BY_IDX, // src=6
+    } kind{};
+    int32_t imm{};
+    int32_t next_imm{};
+    constexpr bool operator==(const PseudoAddress&) const = default;
+};
+
+/// This instruction is encoded similarly to LDDW pseudo forms.
+struct LoadPseudo {
+    Reg dst;
+    PseudoAddress addr;
+    constexpr bool operator==(const LoadPseudo&) const = default;
+};
+
 struct Condition {
     enum class Op {
         EQ,
@@ -159,10 +179,14 @@ struct ArgPair {
 
 struct Call {
     int32_t func{};
+    // Equality intentionally matches only functional identity (helper id).
+    // Metadata such as is_supported/unsupported_reason is diagnostic-only.
     constexpr bool operator==(const Call& other) const { return func == other.func; }
 
     // TODO: move name and signature information somewhere else
     std::string name;
+    bool is_supported{true};
+    std::string unsupported_reason;
     bool is_map_lookup{};
     bool reallocate_packet{};
     std::vector<ArgSingle> singles;
@@ -188,6 +212,12 @@ struct Callx {
     constexpr bool operator==(const Callx&) const = default;
 };
 
+/// Call helper by BTF ID (CALL src=2).
+struct CallBtf {
+    int32_t btf_id{};
+    constexpr bool operator==(const CallBtf&) const = default;
+};
+
 struct Deref {
     int32_t width{};
     Reg basereg;
@@ -200,6 +230,7 @@ struct Mem {
     Deref access;
     Value value;
     bool is_load{};
+    bool is_signed{};
     constexpr bool operator==(const Mem&) const = default;
 };
 
@@ -256,8 +287,8 @@ struct IncrementLoopCounter {
     bool operator==(const IncrementLoopCounter&) const = default;
 };
 
-using Instruction = std::variant<Undefined, Bin, Un, LoadMapFd, Call, CallLocal, Callx, Exit, Jmp, Mem, Packet, Atomic,
-                                 Assume, IncrementLoopCounter, LoadMapAddress>;
+using Instruction = std::variant<Undefined, Bin, Un, LoadMapFd, LoadMapAddress, LoadPseudo, Call, CallLocal, Callx,
+                                 CallBtf, Exit, Jmp, Mem, Packet, Atomic, Assume, IncrementLoopCounter>;
 
 using LabeledInstruction = std::tuple<Label, Instruction, std::optional<btf_line_info_t>>;
 using InstructionSeq = std::vector<LabeledInstruction>;
