@@ -424,10 +424,16 @@ struct Unmarshaller {
         }
         case INST_LD_MODE_MAP_VALUE: return LoadMapAddress{.dst = Reg{inst.dst}, .mapfd = inst.imm, .offset = next_imm};
         case 3:
+            if (next.imm != 0) {
+                throw InvalidInstruction(pc, "lddw uses reserved fields");
+            }
             return LoadPseudo{.dst = Reg{inst.dst},
                               .addr = PseudoAddress{
                                   .kind = PseudoAddress::Kind::VARIABLE_ADDR, .imm = inst.imm, .next_imm = next_imm}};
         case 4:
+            if (next.imm != 0) {
+                throw InvalidInstruction(pc, "lddw uses reserved fields");
+            }
             return LoadPseudo{
                 .dst = Reg{inst.dst},
                 .addr = PseudoAddress{.kind = PseudoAddress::Kind::CODE_ADDR, .imm = inst.imm, .next_imm = next_imm}};
@@ -625,8 +631,13 @@ struct Unmarshaller {
                 throw InvalidInstruction(pc, make_opcode_message("nonzero dst for register", inst.opcode));
             }
             if (!info.platform->is_helper_usable(inst.imm)) {
+                std::string name = std::to_string(inst.imm);
+                try {
+                    name = info.platform->get_helper_prototype(inst.imm).name;
+                } catch (const std::exception&) {
+                }
                 return Call{.func = inst.imm,
-                            .name = std::to_string(inst.imm),
+                            .name = std::move(name),
                             .is_supported = false,
                             .unsupported_reason = "helper function is unavailable on this platform"};
             }

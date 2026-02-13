@@ -1,4 +1,4 @@
-# eBPF Language Feature Support Matrix
+#eBPF Language Feature Support Matrix
 
 ## Scope
 
@@ -39,9 +39,10 @@ It is a support matrix, not a roadmap:
 | Endianness and bswap ops | Supported | `INST_ALU_OP_END` handling |
 | Jumps and conditional branches (`JMP`/`JMP32`) | Supported | `makeJmp` |
 | `JA32` immediate-offset form | Supported | `INST_OP_JA32` path |
-| `CALL` helper by static ID (`src=0`) | Supported (capability-gated) | implemented; helper availability/prototype validated by platform tables |
-| `CALL` local subprogram (`src=1`) | Supported | local call graph expansion in CFG builder |
-| `CALLX` register-based call | Supported (capability-gated) | implemented; requires `callx` conformance group |
+| `CALL` helper by static ID (`src=0`) | Supported (capability-gated) | implemented;
+helper availability / prototype validated by platform tables | | `CALL` local subprogram(`src = 1`) | Supported
+    | local call graph expansion in CFG builder | | `CALLX` register - based call |
+    Supported(capability - gated) | implemented; requires `callx` conformance group |
 | `CALL src=2` (helper by BTF ID) | Not implemented | recognized as `CallBtf`, then rejected with explicit NIY diagnostic |
 | `EXIT` | Supported | implemented |
 
@@ -61,8 +62,8 @@ It is a support matrix, not a roadmap:
 
 | Feature | Status | Notes / Evidence |
 |---|---|---|
-| Atomic add/or/and/xor (32/64) | Supported (capability-gated) | implemented; requires `atomic32` / `atomic64` groups |
-| Atomic xchg/cmpxchg (32/64) | Partial | implemented; known precision limitations in conformance expectations |
+| Atomic add/or/and/xor (32/64) | Supported (capability-gated) | implemented;
+requires `atomic32` / `atomic64` groups | | Atomic xchg / cmpxchg(32 / 64) | Partial | implemented; known precision limitations in conformance expectations |
 
 ### 4) Call model and helper typing
 
@@ -97,6 +98,6 @@ It is a support matrix, not a roadmap:
 - Linux kernel releases: https://www.kernel.org/releases.html
 - RFC 9669 (BPF ISA): https://www.rfc-editor.org/rfc/rfc9669.html
 - Linux verifier doc: https://www.kernel.org/doc/html/latest/bpf/verifier.html
-- eBPF-for-Windows ISA support matrix: https://raw.githubusercontent.com/microsoft/ebpf-for-windows/main/docs/isa-support.rst
+- eBPF-for-Windows ISA support matrix: https://github.com/microsoft/ebpf-for-windows/blob/main/docs/isa-support.rst
 - eBPF-for-Windows README: https://github.com/microsoft/ebpf-for-windows
 - iovisor/uBPF README: https://github.com/iovisor/ubpf

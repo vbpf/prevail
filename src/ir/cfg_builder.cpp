@@ -212,6 +212,7 @@ static std::optional<RejectionReason> check_instruction_feature_support(const In
         case PseudoAddress::Kind::CODE_ADDR: return reject_not_implemented("lddw code_addr pseudo");
         case PseudoAddress::Kind::MAP_BY_IDX: return reject_not_implemented("lddw map_by_idx pseudo");
         case PseudoAddress::Kind::MAP_VALUE_BY_IDX: return reject_not_implemented("lddw map_value_by_idx pseudo");
+        default: return reject_not_implemented("lddw unknown pseudo");
         }
     }
     if ((std::holds_alternative<LoadMapFd>(ins) || std::holds_alternative<LoadMapAddress>(ins)) &&
@@ -334,6 +335,7 @@ static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const 
 /// Convert an instruction sequence to a control-flow graph (CFG).
 static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const bool must_have_exit) {
     CfgBuilder builder;
+    assert(thread_local_program_info->platform != nullptr && "platform must be set before CFG construction");
     const auto& platform = *thread_local_program_info->platform;
 
     // First, add all instructions to the CFG without connecting

@@ -259,8 +259,10 @@ void EbpfTransformer::operator()(const Assume& s) {
 
 void EbpfTransformer::operator()(const Undefined& a) {}
 
+// Rejected during CFG feature checks; transformer should not receive this.
 void EbpfTransformer::operator()(const CallBtf&) {}
 
+// Rejected during CFG feature checks; transformer should not receive this.
 void EbpfTransformer::operator()(const LoadPseudo&) {}
 
 // Simple truncation function usable with swap_endianness().

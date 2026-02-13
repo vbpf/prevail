@@ -179,6 +179,8 @@ struct ArgPair {
 
 struct Call {
     int32_t func{};
+    // Equality intentionally matches only functional identity (helper id).
+    // Metadata such as is_supported/unsupported_reason is diagnostic-only.
     constexpr bool operator==(const Call& other) const { return func == other.func; }
 
     // TODO: move name and signature information somewhere else
