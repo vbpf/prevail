@@ -93,6 +93,10 @@ enum {
     INST_LD_MODE_IMM = 0x0,       // 64-bit immediate value
     INST_LD_MODE_MAP_FD = 0x1,    // Load map fd
     INST_LD_MODE_MAP_VALUE = 0x2, // Load map value
+    INST_LD_MODE_VARIABLE_ADDR = 0x3,
+    INST_LD_MODE_CODE_ADDR = 0x4,
+    INST_LD_MODE_MAP_BY_IDX = 0x5,
+    INST_LD_MODE_MAP_VALUE_BY_IDX = 0x6,
 };
 
 enum {

@@ -322,6 +322,10 @@ struct Unmarshaller {
             if (inst.imm != 0) {
                 throw InvalidInstruction(pc, make_opcode_message("nonzero imm for", inst.opcode));
             }
+            if (inst.src == R10_STACK_POINTER &&
+                (inst.offset + opcode_to_width(inst.opcode) > 0 || inst.offset < -EBPF_TOTAL_STACK_SIZE)) {
+                note("Stack access out of bounds");
+            }
             return Mem{
                 .access =
                     Deref{
@@ -395,9 +399,6 @@ struct Unmarshaller {
         if (next.opcode != 0 || next.dst != 0 || next.src != 0 || next.offset != 0) {
             throw InvalidInstruction(pc, "invalid lddw");
         }
-        if (inst.src > 6) {
-            throw InvalidInstruction(pc, make_opcode_message("bad instruction", inst.opcode));
-        }
         if (inst.offset != 0) {
             throw InvalidInstruction(pc, make_opcode_message("nonzero offset for", inst.opcode));
         }
@@ -423,28 +424,28 @@ struct Unmarshaller {
             return LoadMapFd{.dst = Reg{inst.dst}, .mapfd = inst.imm};
         }
         case INST_LD_MODE_MAP_VALUE: return LoadMapAddress{.dst = Reg{inst.dst}, .mapfd = inst.imm, .offset = next_imm};
-        case 3:
+        case INST_LD_MODE_VARIABLE_ADDR:
             if (next.imm != 0) {
                 throw InvalidInstruction(pc, "lddw uses reserved fields");
             }
             return LoadPseudo{.dst = Reg{inst.dst},
                               .addr = PseudoAddress{
                                   .kind = PseudoAddress::Kind::VARIABLE_ADDR, .imm = inst.imm, .next_imm = next_imm}};
-        case 4:
+        case INST_LD_MODE_CODE_ADDR:
             if (next.imm != 0) {
                 throw InvalidInstruction(pc, "lddw uses reserved fields");
             }
             return LoadPseudo{
                 .dst = Reg{inst.dst},
                 .addr = PseudoAddress{.kind = PseudoAddress::Kind::CODE_ADDR, .imm = inst.imm, .next_imm = next_imm}};
-        case 5:
+        case INST_LD_MODE_MAP_BY_IDX:
             if (next.imm != 0) {
                 throw InvalidInstruction(pc, "lddw uses reserved fields");
             }
             return LoadPseudo{
                 .dst = Reg{inst.dst},
                 .addr = PseudoAddress{.kind = PseudoAddress::Kind::MAP_BY_IDX, .imm = inst.imm, .next_imm = next_imm}};
-        case 6:
+        case INST_LD_MODE_MAP_VALUE_BY_IDX:
             return LoadPseudo{.dst = Reg{inst.dst},
                               .addr = PseudoAddress{.kind = PseudoAddress::Kind::MAP_VALUE_BY_IDX,
                                                     .imm = inst.imm,

@@ -4,6 +4,7 @@
 // This file is eBPF-specific, not derived from CRAB.
 
 #include <bitset>
+#include <cassert>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -260,10 +261,14 @@ void EbpfTransformer::operator()(const Assume& s) {
 void EbpfTransformer::operator()(const Undefined& a) {}
 
 // Rejected during CFG feature checks; transformer should not receive this.
-void EbpfTransformer::operator()(const CallBtf&) {}
+void EbpfTransformer::operator()(const CallBtf&) {
+    assert(false && "CallBtf should be rejected before abstract transformation");
+}
 
 // Rejected during CFG feature checks; transformer should not receive this.
-void EbpfTransformer::operator()(const LoadPseudo&) {}
+void EbpfTransformer::operator()(const LoadPseudo&) {
+    assert(false && "LoadPseudo should be rejected before abstract transformation");
+}
 
 // Simple truncation function usable with swap_endianness().
 template <class T>
@@ -496,7 +501,8 @@ static void do_load_ctx(TypeToNumDomain& rcp, const Reg& target_reg, const Linea
     }
 }
 
-static void do_load_packet_or_shared(TypeToNumDomain& rcp, const Reg& target_reg, const int width) {
+static void do_load_packet_or_shared(TypeToNumDomain& rcp, const Reg& target_reg, const int width,
+                                     const bool is_signed) {
     if (rcp.values.is_bottom()) {
         return;
     }
@@ -505,8 +511,11 @@ static void do_load_packet_or_shared(TypeToNumDomain& rcp, const Reg& target_reg
     rcp.havoc_register(target_reg);
     rcp.assign_type(target_reg, T_NUM);
 
-    // A 1 or 2 byte copy results in a limited range of values that may be used as array indices.
-    if (width == 1 || width == 2) {
+    // Small copies can be range-limited and useful for later arithmetic.
+    if (is_signed && (width == 1 || width == 2 || width == 4)) {
+        rcp.values.set(target.svalue, Interval::signed_int(width * 8));
+        rcp.values.set(target.uvalue, Interval::unsigned_int(width * 8));
+    } else if (width == 1 || width == 2) {
         const Interval full = Interval::unsigned_int(width * 8);
         rcp.values.set(target.svalue, full);
         rcp.values.set(target.uvalue, full);
@@ -543,12 +552,12 @@ void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
         }
         case T_PACKET: {
             LinearExpression addr = mem_reg.packet_offset + offset;
-            do_load_packet_or_shared(rcp, target_reg, width);
+            do_load_packet_or_shared(rcp, target_reg, width, b.is_signed);
             break;
         }
         case T_SHARED: {
             LinearExpression addr = mem_reg.shared_offset + offset;
-            do_load_packet_or_shared(rcp, target_reg, width);
+            do_load_packet_or_shared(rcp, target_reg, width, b.is_signed);
             break;
         }
         }

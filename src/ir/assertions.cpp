@@ -47,7 +47,10 @@ class AssertExtractor {
     vector<Assertion> operator()(const LoadMapFd&) const { return {}; }
     vector<Assertion> operator()(const LoadMapAddress&) const { return {}; }
     // Rejected during CFG feature checks; assertion extraction should not receive this.
-    vector<Assertion> operator()(const LoadPseudo&) const { return {}; }
+    vector<Assertion> operator()(const LoadPseudo&) const {
+        assert(false && "LoadPseudo should be rejected before assertion extraction");
+        return {};
+    }
 
     /// Packet access implicitly uses R6, so verify that R6 still has a pointer to the context.
     vector<Assertion> operator()(const Packet&) const { return zero_offset_ctx({6}, false); }
@@ -121,7 +124,10 @@ class AssertExtractor {
     }
 
     // Rejected during CFG feature checks; assertion extraction should not receive this.
-    vector<Assertion> operator()(const CallBtf&) const { return {}; }
+    vector<Assertion> operator()(const CallBtf&) const {
+        assert(false && "CallBtf should be rejected before assertion extraction");
+        return {};
+    }
 
     [[nodiscard]]
     vector<Assertion> explicate(const Condition& cond) const {
