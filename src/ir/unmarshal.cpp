@@ -446,6 +446,8 @@ struct Unmarshaller {
                 .dst = Reg{inst.dst},
                 .addr = PseudoAddress{.kind = PseudoAddress::Kind::MAP_BY_IDX, .imm = inst.imm, .next_imm = next_imm}};
         case INST_LD_MODE_MAP_VALUE_BY_IDX:
+            // map_value_by_idx carries the value offset in next_imm (same encoding role as map_value),
+            // so next.imm is not reserved in this mode.
             return LoadPseudo{.dst = Reg{inst.dst},
                               .addr = PseudoAddress{.kind = PseudoAddress::Kind::MAP_VALUE_BY_IDX,
                                                     .imm = inst.imm,

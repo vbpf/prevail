@@ -654,6 +654,8 @@ void EbpfTransformer::operator()(const Mem& b) {
             do_load(b, *preg);
             if (b.is_signed) {
                 Bin::Op op{};
+                // MEMSX decode only allows widths 1/2/4. Programmatic Mem construction paths
+                // (for example from Atomic lowering) do not set is_signed=true.
                 switch (b.access.width) {
                 case 1: op = Bin::Op::MOVSX8; break;
                 case 2: op = Bin::Op::MOVSX16; break;

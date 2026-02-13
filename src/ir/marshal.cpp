@@ -116,10 +116,10 @@ struct MarshalVisitor {
     vector<EbpfInst> operator()(LoadPseudo const& b) const {
         uint8_t src{};
         switch (b.addr.kind) {
-        case PseudoAddress::Kind::VARIABLE_ADDR: src = 3; break;
-        case PseudoAddress::Kind::CODE_ADDR: src = 4; break;
-        case PseudoAddress::Kind::MAP_BY_IDX: src = 5; break;
-        case PseudoAddress::Kind::MAP_VALUE_BY_IDX: src = 6; break;
+        case PseudoAddress::Kind::VARIABLE_ADDR: src = INST_LD_MODE_VARIABLE_ADDR; break;
+        case PseudoAddress::Kind::CODE_ADDR: src = INST_LD_MODE_CODE_ADDR; break;
+        case PseudoAddress::Kind::MAP_BY_IDX: src = INST_LD_MODE_MAP_BY_IDX; break;
+        case PseudoAddress::Kind::MAP_VALUE_BY_IDX: src = INST_LD_MODE_MAP_VALUE_BY_IDX; break;
         }
         return makeLddw(b.dst, src, b.addr.imm, b.addr.next_imm);
     }
