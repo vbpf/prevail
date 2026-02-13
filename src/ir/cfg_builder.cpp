@@ -517,7 +517,7 @@ static std::string instype(Instruction ins) {
     } else if (std::holds_alternative<Callx>(ins)) {
         return "callx";
     } else if (std::holds_alternative<CallBtf>(ins)) {
-        return "call_mem";
+        return "call_btf";
     } else if (const auto pimm = std::get_if<Mem>(&ins)) {
         return pimm->is_load ? "load" : "store";
     } else if (std::holds_alternative<Atomic>(ins)) {

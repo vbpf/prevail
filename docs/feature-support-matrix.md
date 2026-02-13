@@ -63,7 +63,7 @@ Capability and configuration checks are described in `Notes / Evidence`; they do
 | Feature | Status | Notes / Evidence |
 |---|---|---|
 | Atomic add/or/and/xor (32/64) | Supported | `src/ir/unmarshal.cpp`: `getAtomicOp`, `makeMemOp`; `src/ir/cfg_builder.cpp`: `check_instruction_feature_support` |
-| Atomic xchg / cmpxchg (32/64) | Partial | `src/ir/unmarshal.cpp`: `getAtomicOp`; `src/crab/ebpf_transformer.cpp` atomic handling |
+| Atomic xchg / cmpxchg (32/64) | Partial | `src/ir/unmarshal.cpp`: `getAtomicOp`; `src/crab/ebpf_transformer.cpp` atomic handling; CMPXCHG uses havoc instead of modeling the comparison (see comment at `ebpf_transformer.cpp:748`) |
 
 ### Call Model and Helper Typing
 
