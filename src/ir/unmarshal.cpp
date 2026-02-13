@@ -608,14 +608,18 @@ struct Unmarshaller {
             if (inst.src == INST_CALL_LOCAL) {
                 return makeCallLocal(inst, insts, pc);
             }
+            if (inst.opcode & INST_SRC_REG) {
+                // Register-call opcode form is reserved for callx and must not be used for src-based call modes.
+                if (inst.src != 0) {
+                    throw InvalidInstruction(pc, inst.opcode);
+                }
+                return makeCallx(inst, pc);
+            }
             if (inst.src == INST_CALL_BTF_HELPER) {
                 if (inst.dst != 0) {
                     throw InvalidInstruction(pc, make_opcode_message("nonzero dst for register", inst.opcode));
                 }
                 return CallBtf{.btf_id = inst.imm};
-            }
-            if (inst.opcode & INST_SRC_REG) {
-                return makeCallx(inst, pc);
             }
             if (inst.dst != 0) {
                 throw InvalidInstruction(pc, make_opcode_message("nonzero dst for register", inst.opcode));

@@ -142,6 +142,15 @@ static bool supports(const ebpf_platform_t& platform, const bpf_conformance_grou
     return platform.supports_group(group);
 }
 
+static bool un_requires_base64(const Un& un) {
+    switch (un.op) {
+    case Un::Op::BE64:
+    case Un::Op::LE64:
+    case Un::Op::SWAP64: return true;
+    default: return false;
+    }
+}
+
 static std::optional<RejectionReason> check_instruction_feature_support(const Instruction& ins,
                                                                         const ebpf_platform_t& platform) {
     auto reject_not_implemented = [](std::string detail) {
@@ -180,9 +189,10 @@ static std::optional<RejectionReason> check_instruction_feature_support(const In
         }
     }
     if (const auto p = std::get_if<Un>(&ins)) {
-        if (!supports(platform, p->is64 ? bpf_conformance_groups_t::base64 : bpf_conformance_groups_t::base32)) {
-            return reject_capability(p->is64 ? "requires conformance group base64"
-                                             : "requires conformance group base32");
+        const bool need_base64 = p->is64 || un_requires_base64(*p);
+        if (!supports(platform, need_base64 ? bpf_conformance_groups_t::base64 : bpf_conformance_groups_t::base32)) {
+            return reject_capability(need_base64 ? "requires conformance group base64"
+                                                 : "requires conformance group base32");
         }
     }
     if (const auto p = std::get_if<Jmp>(&ins)) {

@@ -68,6 +68,34 @@ TEST_CASE("unsupported forms are rejected after unmarshal", "[unmarshal]") {
         REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
                             "rejected: helper function is unavailable on this platform");
     }
+
+    SECTION("be64 requires base64 conformance group") {
+        ebpf_platform_t p = g_ebpf_platform_linux;
+        p.supported_conformance_groups &= ~bpf_conformance_groups_t::base64;
+        ProgramInfo pinfo{.platform = &p, .type = p.get_program_type("unspec", "unspec")};
+        RawProgram raw_prog{"",
+                            "",
+                            0,
+                            "",
+                            {EbpfInst{.opcode = static_cast<uint8_t>(INST_CLS_ALU | INST_ALU_OP_END | INST_END_BE),
+                                      .dst = 1,
+                                      .imm = 64},
+                             exit},
+                            pinfo};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), pinfo, {}),
+                            "rejected: requires conformance group base64");
+    }
+
+    SECTION("call btf cannot use register-call opcode form") {
+        RawProgram raw_prog{
+            "",  "", 0, "", {EbpfInst{.opcode = INST_OP_CALLX, .dst = 0, .src = INST_CALL_BTF_HELPER, .imm = 1}, exit},
+            info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<std::string>(prog_or_error));
+        REQUIRE_THAT(std::get<std::string>(prog_or_error), Catch::Matchers::ContainsSubstring("bad instruction"));
+    }
 }
 
 // Verify a program in a section that may have multiple programs in it.
