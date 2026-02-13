@@ -248,12 +248,11 @@ static std::optional<RejectionReason> check_instruction_feature_support(const In
 // This is the user-facing rejection point for unsupported or unavailable features.
 static void validate_instruction_feature_support(const InstructionSeq& insts, const ebpf_platform_t& platform) {
     for (const auto& [label, inst, _] : insts) {
-        (void)label;
         if (const auto reason = check_instruction_feature_support(inst, platform)) {
             if (reason->kind == RejectKind::NotImplemented) {
-                throw InvalidControlFlow{"not implemented: " + reason->detail};
+                throw InvalidControlFlow{"not implemented: " + reason->detail + " (at " + to_string(label) + ")"};
             }
-            throw InvalidControlFlow{"rejected: " + reason->detail};
+            throw InvalidControlFlow{"rejected: " + reason->detail + " (at " + to_string(label) + ")"};
         }
     }
 }

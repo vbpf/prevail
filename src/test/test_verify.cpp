@@ -48,7 +48,8 @@ TEST_CASE("unsupported forms are rejected after unmarshal", "[unmarshal]") {
         auto prog_or_error = unmarshal(raw_prog, {});
         REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
         REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
-                            "not implemented: call helper by BTF id");
+                            Catch::Matchers::ContainsSubstring("not implemented: call helper by BTF id") &&
+                                Catch::Matchers::ContainsSubstring("(at 0)"));
     }
 
     SECTION("lddw variable_addr pseudo") {
@@ -58,7 +59,8 @@ TEST_CASE("unsupported forms are rejected after unmarshal", "[unmarshal]") {
         auto prog_or_error = unmarshal(raw_prog, {});
         REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
         REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
-                            "not implemented: lddw variable_addr pseudo");
+                            Catch::Matchers::ContainsSubstring("not implemented: lddw variable_addr pseudo") &&
+                                Catch::Matchers::ContainsSubstring("(at 0)"));
     }
 
     SECTION("helper id not usable on platform") {
@@ -66,7 +68,8 @@ TEST_CASE("unsupported forms are rejected after unmarshal", "[unmarshal]") {
         auto prog_or_error = unmarshal(raw_prog, {});
         REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
         REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
-                            "rejected: helper function is unavailable on this platform");
+                            Catch::Matchers::ContainsSubstring("rejected: helper function is unavailable on this platform") &&
+                                Catch::Matchers::ContainsSubstring("(at 0)"));
     }
 
     SECTION("be64 requires base64 conformance group") {
@@ -85,7 +88,8 @@ TEST_CASE("unsupported forms are rejected after unmarshal", "[unmarshal]") {
         auto prog_or_error = unmarshal(raw_prog, {});
         REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
         REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), pinfo, {}),
-                            "rejected: requires conformance group base64");
+                            Catch::Matchers::ContainsSubstring("rejected: requires conformance group base64") &&
+                                Catch::Matchers::ContainsSubstring("(at 0)"));
     }
 
     SECTION("call btf cannot use register-call opcode form") {
