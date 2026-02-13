@@ -244,6 +244,20 @@ static std::optional<RejectionReason> check_instruction_feature_support(const In
     return {};
 }
 
+// Validate instruction-level feature support before CFG construction.
+// This is the user-facing rejection point for unsupported or unavailable features.
+static void validate_instruction_feature_support(const InstructionSeq& insts, const ebpf_platform_t& platform) {
+    for (const auto& [label, inst, _] : insts) {
+        (void)label;
+        if (const auto reason = check_instruction_feature_support(inst, platform)) {
+            if (reason->kind == RejectKind::NotImplemented) {
+                throw InvalidControlFlow{"not implemented: " + reason->detail};
+            }
+            throw InvalidControlFlow{"rejected: " + reason->detail};
+        }
+    }
+}
+
 /// Update a control-flow graph to inline function macros.
 static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const Label& entry_label) {
     bool first = true;
@@ -336,16 +350,11 @@ static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const 
 static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const bool must_have_exit) {
     CfgBuilder builder;
     assert(thread_local_program_info->platform != nullptr && "platform must be set before CFG construction");
-    const auto& platform = *thread_local_program_info->platform;
 
     // First, add all instructions to the CFG without connecting
     for (const auto& [label, inst, _] : insts) {
-        if (const auto reason = check_instruction_feature_support(inst, platform)) {
-            if (reason->kind == RejectKind::NotImplemented) {
-                throw InvalidControlFlow{"not implemented: " + reason->detail};
-            }
-            throw InvalidControlFlow{"rejected: " + reason->detail};
-        }
+        assert(!check_instruction_feature_support(inst, *thread_local_program_info->platform).has_value() &&
+               "instruction support must be validated before CFG construction");
         if (std::holds_alternative<Undefined>(inst)) {
             continue;
         }
@@ -417,6 +426,8 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
                                const ebpf_verifier_options_t& options) {
     thread_local_program_info.set(info);
     thread_local_options = options;
+    assert(info.platform != nullptr && "platform must be set before instruction feature validation");
+    validate_instruction_feature_support(inst_seq, *info.platform);
 
     // Convert the instruction sequence to a deterministic control-flow graph.
     CfgBuilder builder = instruction_seq_to_cfg(inst_seq, options.cfg_opts.must_have_exit);

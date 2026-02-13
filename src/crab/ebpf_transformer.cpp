@@ -260,12 +260,12 @@ void EbpfTransformer::operator()(const Assume& s) {
 
 void EbpfTransformer::operator()(const Undefined& a) {}
 
-// Rejected during CFG feature checks; transformer should not receive this.
+// Rejected before abstract interpretation by cfg_builder::check_instruction_feature_support.
 void EbpfTransformer::operator()(const CallBtf&) {
     assert(false && "CallBtf should be rejected before abstract transformation");
 }
 
-// Rejected during CFG feature checks; transformer should not receive this.
+// Rejected before abstract interpretation by cfg_builder::check_instruction_feature_support.
 void EbpfTransformer::operator()(const LoadPseudo&) {
     assert(false && "LoadPseudo should be rejected before abstract transformation");
 }

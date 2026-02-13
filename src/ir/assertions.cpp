@@ -46,7 +46,7 @@ class AssertExtractor {
 
     vector<Assertion> operator()(const LoadMapFd&) const { return {}; }
     vector<Assertion> operator()(const LoadMapAddress&) const { return {}; }
-    // Rejected during CFG feature checks; assertion extraction should not receive this.
+    // Rejected before assertion extraction by cfg_builder::check_instruction_feature_support.
     vector<Assertion> operator()(const LoadPseudo&) const {
         assert(false && "LoadPseudo should be rejected before assertion extraction");
         return {};
@@ -123,7 +123,7 @@ class AssertExtractor {
         return res;
     }
 
-    // Rejected during CFG feature checks; assertion extraction should not receive this.
+    // Rejected before assertion extraction by cfg_builder::check_instruction_feature_support.
     vector<Assertion> operator()(const CallBtf&) const {
         assert(false && "CallBtf should be rejected before assertion extraction");
         return {};
