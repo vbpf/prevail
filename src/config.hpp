@@ -25,6 +25,12 @@ struct verbosity_options_t {
 
     /// Print the BTF types in JSON format.
     bool dump_btf_types_json = false;
+
+    /// Collect instruction dependencies for failure slice computation.
+    /// When true, the forward analysis annotates each instruction with
+    /// the registers and stack offsets it reads/writes, enabling efficient
+    /// backward slicing for failure diagnostics.
+    bool collect_instruction_deps = false;
 };
 
 struct ebpf_verifier_options_t {

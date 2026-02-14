@@ -115,10 +115,10 @@ int main(int argc, char** argv) {
         ->expected(0, gsl::narrow<int>(conformance_groups.size()))
         ->check(CLI::IsMember(get_conformance_group_names()));
 
-    app.add_flag("--simplify,!--no-simplify", ebpf_verifier_options.verbosity_opts.simplify,
-                 "Simplify the display of the CFG by merging chains of instructions into a single basic block. "
-                 "Default: enabled")
-        ->group("Verbosity");
+    auto* simplify_opt = app.add_flag("--simplify,!--no-simplify", ebpf_verifier_options.verbosity_opts.simplify,
+                                      "Simplify the display of the CFG by merging chains of instructions into a "
+                                      "single basic block. Default: enabled (disabled with --failure-slice)")
+                             ->group("Verbosity");
     app.add_flag("--line-info", ebpf_verifier_options.verbosity_opts.print_line_info, "Print line information")
         ->group("Verbosity");
     app.add_flag("--print-btf-types", ebpf_verifier_options.verbosity_opts.dump_btf_types_json, "Print BTF types")
@@ -127,6 +127,16 @@ int main(int argc, char** argv) {
     app.add_flag("-v", ebpf_verifier_options.verbosity_opts.print_invariants, "Print invariants and first failure")
         ->group("Verbosity");
     app.add_flag("-f", ebpf_verifier_options.verbosity_opts.print_failures, "Print first failure")->group("Verbosity");
+
+    bool failure_slice = false;
+    app.add_flag("--failure-slice", failure_slice,
+                 "Print minimal failure slices showing only instructions that contributed to errors")
+        ->group("Verbosity");
+
+    size_t failure_slice_depth = 200;
+    app.add_option("--failure-slice-depth", failure_slice_depth,
+                   "Maximum backward steps for failure slicing (default: 200)")
+        ->group("Verbosity");
 
     std::string asmfile;
     app.add_option("--asm", asmfile, "Print disassembly to FILE")->group("CFG output")->type_name("FILE");
@@ -218,6 +228,15 @@ int main(int argc, char** argv) {
     if (domain == "zoneCrab" || domain == "cfg") {
         // Convert the instruction sequence to a control-flow graph.
         try {
+            // Enable dependency collection if failure slice is requested.
+            // Also disable simplification by default so each instruction is shown individually,
+            // unless the user explicitly specified --simplify.
+            if (failure_slice) {
+                ebpf_verifier_options.verbosity_opts.collect_instruction_deps = true;
+                if (simplify_opt->count() == 0) {
+                    ebpf_verifier_options.verbosity_opts.simplify = false;
+                }
+            }
             const auto verbosity = ebpf_verifier_options.verbosity_opts;
             const Program prog = Program::from_sequence(inst_seq, raw_prog.info, ebpf_verifier_options);
             if (domain == "cfg") {
@@ -235,6 +254,16 @@ int main(int argc, char** argv) {
                 if (auto verification_error = result.find_first_error()) {
                     print_error(std::cout, *verification_error);
                 }
+            }
+            if (failure_slice && result.failed) {
+                // Compute only the first failure slice by default for concise output
+                AnalysisResult::SliceParams slice_params;
+                slice_params.max_steps = failure_slice_depth;
+                slice_params.max_slices = 1;
+                auto slices = result.compute_failure_slices(prog, slice_params);
+                print_failure_slices(std::cout, prog, verbosity.simplify, result, slices);
+            } else if (failure_slice && !result.failed) {
+                std::cout << "Program passed verification; no failure slices to display.\n";
             }
 
             const bool pass = !result.failed;
