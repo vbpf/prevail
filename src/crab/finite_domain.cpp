@@ -949,6 +949,24 @@ void FiniteDomain::bitwise_and(const Variable lhss, const Variable lhsu, const V
     apply_unsigned(BitwiseBinOp::AND, lhss, lhsu, lhsu, op2, finite_width);
 }
 void FiniteDomain::bitwise_and(const Variable lhss, const Variable lhsu, const Number& op2) {
+    // Skip when the AND is provably a no-op: the mask is (2^n - 1) and both svalue and uvalue
+    // already fit within [0, mask] with matching intervals.
+    // Soundness: for any v in [0, 2^n - 1], v & (2^n - 1) = v, so the operation is an identity.
+    // The entailment guard ensures the svalue==uvalue relational constraint already exists in the
+    // SplitDBM; without it, skipping would lose the chance to re-establish the relation via
+    // apply_unsigned's internal assign(svalue, uvalue).
+    // Skipping preserves relational constraints in the SplitDBM that would otherwise be
+    // destroyed by the internal havoc().
+    if (op2 > 0 && (op2 & (op2 + 1)) == 0) {
+        using namespace dsl_syntax;
+        const auto mask_interval = Interval{Number{0}, op2};
+        const auto sinterval = eval_interval(lhss);
+        const auto uinterval = eval_interval(lhsu);
+        if (sinterval <= mask_interval && uinterval <= mask_interval && sinterval == uinterval &&
+            dom.entail(eq(lhss, lhsu))) {
+            return;
+        }
+    }
     // Use finite width 64 to make the svalue be set as well as the uvalue.
     apply_unsigned(BitwiseBinOp::AND, lhss, lhsu, lhsu, op2, 64);
 }

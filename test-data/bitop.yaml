@@ -77,6 +77,58 @@ code:
 
 post: ["r1.type=number", "r1.svalue=0", "r1.uvalue=0"]
 ---
+test-case: AND with 0xFF preserves relations when value fits
+
+pre: ["r1.type=number", "r1.svalue=[0, 100]", "r1.uvalue=r1.svalue",
+      "r2.type=number", "r2.svalue=r1.svalue", "r2.uvalue=r1.svalue"]
+
+code:
+  <start>: |
+    r1 &= 255
+
+post: ["r1.type=number", "r1.svalue=[0, 100]", "r1.uvalue=r1.svalue",
+       "r2.type=number", "r2.svalue=r1.svalue", "r2.uvalue=r1.svalue"]
+
+---
+test-case: AND with 0xFFFF preserves relations when value fits
+
+pre: ["r1.type=number", "r1.svalue=[0, 100]", "r1.uvalue=r1.svalue",
+      "r2.type=number", "r2.svalue=r1.svalue", "r2.uvalue=r1.svalue"]
+
+code:
+  <start>: |
+    r1 &= 0xffff
+
+post: ["r1.type=number", "r1.svalue=[0, 100]", "r1.uvalue=r1.svalue",
+       "r2.type=number", "r2.svalue=r1.svalue", "r2.uvalue=r1.svalue"]
+
+---
+test-case: AND with 0xFF destroys relations when value may not fit
+
+pre: ["r1.type=number", "r1.svalue=[0, 300]", "r1.uvalue=r1.svalue",
+      "r2.type=number", "r2.svalue=r1.svalue", "r2.uvalue=r1.svalue"]
+
+code:
+  <start>: |
+    r1 &= 255
+
+post: ["r1.type=number", "r1.svalue=[0, 255]", "r1.uvalue=r1.svalue",
+       "r2.type=number", "r2.svalue=[0, 300]", "r2.uvalue=r2.svalue"]
+
+---
+test-case: AND with 0xFF reconciles when svalue and uvalue differ
+
+pre: ["r1.type=number", "r1.svalue=[0, 100]", "r1.uvalue=[0, 200]",
+      "r2.type=number", "r2.svalue=r1.svalue", "r2.uvalue=r1.svalue"]
+
+code:
+  <start>: |
+    r1 &= 255
+
+post: ["r1.type=number", "r1.svalue=[0, 200]", "r1.uvalue=r1.svalue",
+       "r2.type=number", "r2.svalue=[0, 100]", "r2.uvalue=r2.svalue"]
+
+---
 test-case: Bitwise 2 AND 1 == 0
 
 pre: ["r1.type=number", "r1.svalue=2", "r1.uvalue=2"]
