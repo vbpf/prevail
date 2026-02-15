@@ -54,8 +54,8 @@ Capability and configuration checks are described in `Notes / Evidence`; they do
 | LDDW map value pseudo (`src=2`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_MAP_VALUE`, `LoadMapAddress`); `src/elf_loader.cpp`: `try_reloc` |
 | LDDW variable address pseudo (`src=3`) | Not implemented | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_VARIABLE_ADDR`, `LoadPseudo`); `src/ir/cfg_builder.cpp`: `check_instruction_feature_support` |
 | LDDW code address pseudo (`src=4`) | Not implemented | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_CODE_ADDR`, `LoadPseudo`); `src/ir/cfg_builder.cpp`: `check_instruction_feature_support` |
-| LDDW map-by-index pseudo (`src=5`) | Not implemented | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_MAP_BY_IDX`, `LoadPseudo`); `src/ir/cfg_builder.cpp`: `check_instruction_feature_support` |
-| LDDW map-value-by-index pseudo (`src=6`) | Not implemented | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_MAP_VALUE_BY_IDX`, `LoadPseudo`); `src/ir/cfg_builder.cpp`: `check_instruction_feature_support` |
+| LDDW map-by-index pseudo (`src=5`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw`; `src/ir/cfg_builder.cpp`: `resolve_map_by_index` converts to `LoadMapFd` |
+| LDDW map-value-by-index pseudo (`src=6`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw`; `src/ir/cfg_builder.cpp`: `resolve_map_by_index` converts to `LoadMapAddress` |
 | MEMSX sign-extending loads (`LDXSB/LDXSH/LDXSW`) | Supported | `src/ir/unmarshal.cpp`: `makeMemOp` (`INST_MODE_MEMSX`); `src/crab/ebpf_transformer.cpp`: `operator()(const Mem&)`, `do_load_packet_or_shared` |
 
 ### Atomics

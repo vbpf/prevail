@@ -376,7 +376,7 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
     ebpf_context_descriptor_t context_descriptor{64, 0, 4, -1};
     EbpfProgramType program_type = make_program_type(test_case.name, &context_descriptor);
 
-    ProgramInfo info{&g_platform_test, {}, program_type};
+    ProgramInfo info{&g_platform_test, {test_map_descriptor}, program_type};
     thread_local_options = test_case.options;
     try {
         const Program prog = Program::from_sequence(test_case.instruction_seq, info, test_case.options);

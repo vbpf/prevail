@@ -24,3 +24,39 @@ post:
   - r1.type=map_fd
   - r1.svalue=[1, 2147418112]
   - r1.uvalue=r1.svalue
+---
+test-case: load_map_fd_by_index
+pre: []
+code:
+  <start>: |
+    r1 = map_by_idx(0)
+
+post:
+  - r1.map_fd=0
+  - r1.type=map_fd
+  - r1.svalue=[1, 2147418112]
+  - r1.uvalue=r1.svalue
+---
+test-case: load_map_value_by_index
+pre: []
+code:
+  <start>: |
+    r2 = mva(map_by_idx(0)) + 0
+
+post:
+  - r2.shared_offset=0
+  - r2.shared_region_size=4
+  - r2.svalue=[1, 2147418112]
+  - r2.type=shared
+  - r2.uvalue=r2.svalue
+---
+test-case: load_map_by_index_out_of_range
+pre: []
+code:
+  <start>: |
+    r1 = map_by_idx(99)
+
+post: []
+
+messages:
+  - "invalid map index 99 (have 1 maps)"

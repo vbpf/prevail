@@ -210,8 +210,8 @@ static std::optional<RejectionReason> check_instruction_feature_support(const In
         switch (p->addr.kind) {
         case PseudoAddress::Kind::VARIABLE_ADDR: return reject_not_implemented("lddw variable_addr pseudo");
         case PseudoAddress::Kind::CODE_ADDR: return reject_not_implemented("lddw code_addr pseudo");
-        case PseudoAddress::Kind::MAP_BY_IDX: return reject_not_implemented("lddw map_by_idx pseudo");
-        case PseudoAddress::Kind::MAP_VALUE_BY_IDX: return reject_not_implemented("lddw map_value_by_idx pseudo");
+        case PseudoAddress::Kind::MAP_BY_IDX:
+        case PseudoAddress::Kind::MAP_VALUE_BY_IDX: break; // Resolved during CFG construction.
         default: return reject_not_implemented("lddw unknown pseudo");
         }
     }
@@ -345,6 +345,21 @@ static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const 
     }
 }
 
+/// Resolve a LoadPseudo with map-by-index addressing to the concrete LoadMapFd or LoadMapAddress instruction.
+static Instruction resolve_map_by_index(const LoadPseudo& pseudo) {
+    const auto& descriptors = thread_local_program_info->map_descriptors;
+    if (pseudo.addr.imm < 0 || static_cast<size_t>(pseudo.addr.imm) >= descriptors.size()) {
+        throw InvalidControlFlow{"invalid map index " + std::to_string(pseudo.addr.imm) + " (have " +
+                                 std::to_string(descriptors.size()) + " maps)"};
+    }
+    const auto map_idx = static_cast<size_t>(pseudo.addr.imm);
+    const int mapfd = descriptors.at(map_idx).original_fd;
+    if (pseudo.addr.kind == PseudoAddress::Kind::MAP_BY_IDX) {
+        return LoadMapFd{.dst = pseudo.dst, .mapfd = mapfd};
+    }
+    return LoadMapAddress{.dst = pseudo.dst, .mapfd = mapfd, .offset = pseudo.addr.next_imm};
+}
+
 /// Convert an instruction sequence to a control-flow graph (CFG).
 static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const bool must_have_exit) {
     CfgBuilder builder;
@@ -357,7 +372,11 @@ static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const bool
         if (std::holds_alternative<Undefined>(inst)) {
             continue;
         }
-        builder.insert(label, inst);
+        if (const auto* pseudo = std::get_if<LoadPseudo>(&inst)) {
+            builder.insert(label, resolve_map_by_index(*pseudo));
+        } else {
+            builder.insert(label, inst);
+        }
     }
 
     if (insts.empty()) {
