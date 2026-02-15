@@ -354,10 +354,12 @@ static Instruction resolve_map_by_index(const LoadPseudo& pseudo) {
     }
     const auto map_idx = static_cast<size_t>(pseudo.addr.imm);
     const int mapfd = descriptors.at(map_idx).original_fd;
-    if (pseudo.addr.kind == PseudoAddress::Kind::MAP_BY_IDX) {
-        return LoadMapFd{.dst = pseudo.dst, .mapfd = mapfd};
+    switch (pseudo.addr.kind) {
+    case PseudoAddress::Kind::MAP_BY_IDX: return LoadMapFd{.dst = pseudo.dst, .mapfd = mapfd};
+    case PseudoAddress::Kind::MAP_VALUE_BY_IDX:
+        return LoadMapAddress{.dst = pseudo.dst, .mapfd = mapfd, .offset = pseudo.addr.next_imm};
+    default: CRAB_ERROR("Invalid address kind: ", static_cast<int>(pseudo.addr.kind));
     }
-    return LoadMapAddress{.dst = pseudo.dst, .mapfd = mapfd, .offset = pseudo.addr.next_imm};
 }
 
 /// Convert an instruction sequence to a control-flow graph (CFG).
@@ -581,7 +583,7 @@ std::map<std::string, int> collect_stats(const Program& prog) {
     }
     for (const auto& label : prog.labels()) {
         res["instructions"]++;
-        const auto cmd = prog.instruction_at(label);
+        const auto& cmd = prog.instruction_at(label);
         if (const auto pins = std::get_if<LoadMapFd>(&cmd)) {
             if (pins->mapfd == -1) {
                 res["map_in_map"] = 1;
