@@ -67,9 +67,10 @@ TEST_CASE("unsupported forms are rejected after unmarshal", "[unmarshal]") {
         RawProgram raw_prog{"", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .imm = 0x7fff}, exit}, info};
         auto prog_or_error = unmarshal(raw_prog, {});
         REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
-                            Catch::Matchers::ContainsSubstring("rejected: helper function is unavailable on this platform") &&
-                                Catch::Matchers::ContainsSubstring("(at 0)"));
+        REQUIRE_THROWS_WITH(
+            Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
+            Catch::Matchers::ContainsSubstring("rejected: helper function is unavailable on this platform") &&
+                Catch::Matchers::ContainsSubstring("(at 0)"));
     }
 
     SECTION("be64 requires base64 conformance group") {
