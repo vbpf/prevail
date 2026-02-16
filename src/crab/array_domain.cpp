@@ -38,6 +38,7 @@ struct Cell final {
     auto operator<=>(const Cell&) const = default;
 
     // Return true if [o, o + sz) definitely overlaps with the cell.
+    // Offsets are bounded by EBPF_TOTAL_STACK_SIZE (4096), so wraparound cannot occur.
     [[nodiscard]]
     bool overlap(const offset_t o, const unsigned sz) const {
         return offset < o + sz && o < offset + size;
