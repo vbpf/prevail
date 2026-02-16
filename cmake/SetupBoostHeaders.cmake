@@ -46,32 +46,32 @@ if (NOT TARGET Boost::headers)
           message(FATAL_ERROR "Could not locate Boost headers under ${_pkgroot}")
         endif ()
       endif ()
-      set(BOOST_HEADERS_DIR "${_boost_inc}" CACHE PATH "Path to Boost headers")
-    endif ()
-
-    add_library(Boost::headers INTERFACE IMPORTED)
-    target_include_directories(Boost::headers INTERFACE "${BOOST_HEADERS_DIR}")
-
-    if (EXISTS "${BOOST_HEADERS_DIR}/boost/version.hpp")
-      file(STRINGS "${BOOST_HEADERS_DIR}/boost/version.hpp" _ver_line REGEX "#define BOOST_LIB_VERSION")
-      string(REGEX REPLACE ".*\"([0-9_]+)\".*" "\\1" _boost_ver "${_ver_line}")
-      message(STATUS "Boost headers: ${_boost_ver} at ${BOOST_HEADERS_DIR}")
+      set(BOOST_HEADERS_DIR "${_boost_inc}" CACHE PATH "Path to Boost headers" FORCE)
     endif ()
   else()
     # Non-MSVC platforms (Linux/macOS): headers-only Boost
-    find_path(BOOST_HEADERS_DIR
-      NAMES boost/version.hpp
-      PATHS /opt/homebrew/include /usr/local/include /usr/include
-    )
-    
-    if (NOT BOOST_HEADERS_DIR)
-      message(FATAL_ERROR "Boost headers not found. Please install boost (e.g., 'brew install boost' or 'apt install libboost-dev').")
+    if (NOT DEFINED BOOST_HEADERS_DIR OR NOT EXISTS "${BOOST_HEADERS_DIR}/boost/version.hpp")
+      find_path(BOOST_HEADERS_DIR
+        NAMES boost/version.hpp
+        PATHS /opt/homebrew/include /usr/local/include /usr/include
+      )
     endif()
 
-    add_library(Boost::headers INTERFACE IMPORTED)
-    target_include_directories(Boost::headers INTERFACE "${BOOST_HEADERS_DIR}")
+    if (NOT BOOST_HEADERS_DIR OR NOT EXISTS "${BOOST_HEADERS_DIR}/boost/version.hpp")
+      message(FATAL_ERROR "Boost headers not found. Please install boost (e.g., 'brew install boost' or 'apt install libboost-dev').")
+    endif()
+  endif ()
 
-    # Polyfill the variable expected by CMakeLists.txt
-    set(Boost_INCLUDE_DIR "${BOOST_HEADERS_DIR}")
+  # Consolidate target creation and variable assignment for all platforms
+  add_library(Boost::headers INTERFACE IMPORTED)
+  target_include_directories(Boost::headers INTERFACE "${BOOST_HEADERS_DIR}")
+
+  # Polyfill the variable expected by CMakeLists.txt's target_include_directories
+  set(Boost_INCLUDE_DIR "${BOOST_HEADERS_DIR}")
+
+  if (EXISTS "${BOOST_HEADERS_DIR}/boost/version.hpp")
+    file(STRINGS "${BOOST_HEADERS_DIR}/boost/version.hpp" _ver_line REGEX "#define BOOST_LIB_VERSION")
+    string(REGEX REPLACE ".*\"([0-9_]+)\".*" "\\1" _boost_ver "${_ver_line}")
+    message(STATUS "Boost headers: ${_boost_ver} at ${BOOST_HEADERS_DIR}")
   endif ()
 endif ()
