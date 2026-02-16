@@ -3,9 +3,9 @@
 #
 # SetupBoostHeaders.cmake
 #
-# Ensures Boost::headers is defined (MSVC only).
+# Ensures Boost::headers is defined.
 # Uses an existing BOOST_HEADERS_DIR if defined,
-# otherwise searches typical NuGet layouts and installs headers if missing.
+# otherwise searches typical NuGet layouts (MSVC) or system paths (non-MSVC).
 
 function(find_boost_headers_dir OUTVAR PKGROOT)
   file(GLOB _candidates
@@ -24,32 +24,50 @@ function(find_boost_headers_dir OUTVAR PKGROOT)
   set(${OUTVAR} "${_found}" PARENT_SCOPE)
 endfunction()
 
-if (MSVC AND NOT TARGET Boost::headers)
-  set(_pkgroot "${CMAKE_BINARY_DIR}/packages")
+if (NOT TARGET Boost::headers)
+  if (MSVC)
+    set(_pkgroot "${CMAKE_BINARY_DIR}/packages")
 
-  if (NOT DEFINED BOOST_HEADERS_DIR OR NOT EXISTS "${BOOST_HEADERS_DIR}/boost/version.hpp")
-    find_boost_headers_dir(_boost_inc "${_pkgroot}")
-    if (_boost_inc STREQUAL "")
-      find_program(NUGET nuget REQUIRED)
-      set(BOOST_VERSION "1.87.0")
-      file(MAKE_DIRECTORY "${_pkgroot}")
-      execute_process(
-        COMMAND "${NUGET}" install boost -Version ${BOOST_VERSION} -ExcludeVersion -OutputDirectory "${_pkgroot}"
-        RESULT_VARIABLE _res
-      )
-      if (NOT _res EQUAL 0)
-        message(FATAL_ERROR "NuGet Boost headers install failed (exit ${_res}).")
-      endif ()
+    if (NOT DEFINED BOOST_HEADERS_DIR OR NOT EXISTS "${BOOST_HEADERS_DIR}/boost/version.hpp")
       find_boost_headers_dir(_boost_inc "${_pkgroot}")
       if (_boost_inc STREQUAL "")
-        message(FATAL_ERROR "Could not locate Boost headers under ${_pkgroot}")
+        find_program(NUGET nuget REQUIRED)
+        set(BOOST_VERSION "1.87.0")
+        file(MAKE_DIRECTORY "${_pkgroot}")
+        execute_process(
+          COMMAND "${NUGET}" install boost -Version ${BOOST_VERSION} -ExcludeVersion -OutputDirectory "${_pkgroot}"
+          RESULT_VARIABLE _res
+        )
+        if (NOT _res EQUAL 0)
+          message(FATAL_ERROR "NuGet Boost headers install failed (exit ${_res}).")
+        endif ()
+        find_boost_headers_dir(_boost_inc "${_pkgroot}")
+        if (_boost_inc STREQUAL "")
+          message(FATAL_ERROR "Could not locate Boost headers under ${_pkgroot}")
+        endif ()
       endif ()
+      set(BOOST_HEADERS_DIR "${_boost_inc}" CACHE PATH "Path to Boost headers" FORCE)
     endif ()
-    set(BOOST_HEADERS_DIR "${_boost_inc}" CACHE PATH "Path to Boost headers")
+  else()
+    # Non-MSVC platforms (Linux/macOS): headers-only Boost
+    if (NOT DEFINED BOOST_HEADERS_DIR OR NOT EXISTS "${BOOST_HEADERS_DIR}/boost/version.hpp")
+      find_path(BOOST_HEADERS_DIR
+        NAMES boost/version.hpp
+        PATHS /opt/homebrew/include /usr/local/include /usr/include
+      )
+    endif()
+
+    if (NOT BOOST_HEADERS_DIR OR NOT EXISTS "${BOOST_HEADERS_DIR}/boost/version.hpp")
+      message(FATAL_ERROR "Boost headers not found. Please install boost (e.g., 'brew install boost' or 'apt install libboost-dev').")
+    endif()
   endif ()
 
+  # Consolidate target creation and variable assignment for all platforms
   add_library(Boost::headers INTERFACE IMPORTED)
   target_include_directories(Boost::headers INTERFACE "${BOOST_HEADERS_DIR}")
+
+  # Polyfill the variable expected by CMakeLists.txt's target_include_directories
+  set(Boost_INCLUDE_DIR "${BOOST_HEADERS_DIR}")
 
   if (EXISTS "${BOOST_HEADERS_DIR}/boost/version.hpp")
     file(STRINGS "${BOOST_HEADERS_DIR}/boost/version.hpp" _ver_line REGEX "#define BOOST_LIB_VERSION")
