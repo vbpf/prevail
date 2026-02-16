@@ -1,5 +1,6 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
+#include <algorithm>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -13,7 +14,6 @@
 #include "crab/type_encoding.hpp"
 #include "crab/var_registry.hpp"
 #include "ir/syntax.hpp"
-#include "linux/gpl/spec_type_descriptors.hpp"
 #include "platform.hpp"
 #include "spec/function_prototypes.hpp"
 #include "verifier.hpp"
@@ -32,9 +32,45 @@ std::ostream& operator<<(std::ostream& o, const Interval& interval) {
     }
     return o;
 }
-std::ostream& operator<<(std::ostream& o, const Number& z) { return o << z._n.str(); }
+static std::string int128_to_string(Int128 n) {
+    if (n == 0) {
+        return "0";
+    }
+    bool negative = false;
+    if (n < 0) {
+        negative = true;
+        // Handle kInt128Min: negate via unsigned to avoid overflow.
+        if (n == kInt128Min) {
+            // kInt128Min == -170141183460469231731687303715884105728
+            // Build the string for the absolute value via unsigned arithmetic.
+            auto u = static_cast<UInt128>(n);
+            // Two's complement: UInt128(kInt128Min) is the correct magnitude.
+            std::string result;
+            while (u != 0) {
+                result += static_cast<char>('0' + static_cast<int>(u % 10));
+                u /= 10;
+            }
+            result += '-';
+            std::ranges::reverse(result);
+            return result;
+        }
+        n = -n;
+    }
+    std::string result;
+    while (n > 0) {
+        result += static_cast<char>('0' + static_cast<int>(n % 10));
+        n /= 10;
+    }
+    if (negative) {
+        result += '-';
+    }
+    std::ranges::reverse(result);
+    return result;
+}
 
-std::string Number::to_string() const { return _n.str(); }
+std::ostream& operator<<(std::ostream& o, const Number& z) { return o << z.to_string(); }
+
+std::string Number::to_string() const { return int128_to_string(_n); }
 
 std::string Interval::to_string() const {
     std::ostringstream s;
@@ -352,7 +388,7 @@ struct AssertionPrinterVisitor {
     }
 
     void operator()(const BoundedLoopCount& a) {
-        _os << variable_registry->loop_counter(to_string(a.name)) << " < " << a.limit;
+        _os << variable_registry->loop_counter(to_string(a.name)) << " < " << BoundedLoopCount::limit;
     }
 
     void operator()(ValidSize const& a) {
@@ -654,7 +690,7 @@ void print(const InstructionSeq& insts, std::ostream& out, const std::optional<c
                     throw std::runtime_error(string("Cannot find label ") + to_string(jmp->target));
                 }
                 const Pc target_pc = pc_of_label.at(jmp->target);
-                visitor(*jmp, target_pc - static_cast<int>(pc) - 1);
+                visitor(*jmp, gsl::narrow<int>(target_pc) - static_cast<int>(pc) - 1);
             } else {
                 std::visit(visitor, ins);
             }
