@@ -197,14 +197,7 @@ Cell offset_map_t::mk_cell(const offset_t o, const unsigned size) {
 // Return all cells that might overlap with (o, size).
 std::vector<Cell> offset_map_t::get_overlap_cells(const offset_t o, const unsigned size) {
     std::vector<Cell> out;
-
-    bool added = false;
-    auto maybe_c = get_cell(o, size);
-    if (!maybe_c) {
-        maybe_c = Cell(o, size);
-        insert_cell(*maybe_c);
-        added = true;
-    }
+    const Cell query_cell(o, size);
 
     // Search backwards: cells at offsets <= o that might extend into [o, o+size).
     // We cannot break early: a bucket with small cells may not overlap while an
@@ -213,12 +206,8 @@ std::vector<Cell> offset_map_t::get_overlap_cells(const offset_t o, const unsign
     for (auto it = _map.upper_bound(o); it != _map.begin();) {
         --it;
         for (const Cell& x : it->second) {
-            if (x.overlap(o, size)) {
-                if (x != *maybe_c) {
-                    if (std::ranges::find(out, x) == out.end()) {
-                        out.push_back(x);
-                    }
-                }
+            if (x.overlap(o, size) && x != query_cell) {
+                out.push_back(x);
             }
         }
     }
@@ -226,13 +215,12 @@ std::vector<Cell> offset_map_t::get_overlap_cells(const offset_t o, const unsign
     // Search forwards: cells at offsets > o that start within [o, o+size).
     // Early break is safe here: if no cell at offset k overlaps, then k >= o + size,
     // and all subsequent offsets are even larger, so they cannot overlap either.
+    // No duplicates: backward and forward scans visit disjoint key ranges.
     for (auto it = _map.upper_bound(o); it != _map.end(); ++it) {
         bool any_overlap = false;
         for (const Cell& x : it->second) {
             if (x.overlap(o, size)) {
-                if (std::ranges::find(out, x) == out.end()) {
-                    out.push_back(x);
-                }
+                out.push_back(x);
                 any_overlap = true;
             }
         }
@@ -241,9 +229,6 @@ std::vector<Cell> offset_map_t::get_overlap_cells(const offset_t o, const unsign
         }
     }
 
-    if (added) {
-        remove_cell(*maybe_c);
-    }
     return out;
 }
 
