@@ -208,10 +208,6 @@ void SplitDBM::normalize() {
 
 void SplitDBM::clear_thread_local_state() { scratch_.clear(); }
 
-// =============================================================================
-// SplitDBM static lattice method implementations
-// =============================================================================
-
 bool SplitDBM::is_subsumed_by(const SplitDBM& left, const SplitDBM& right, const std::vector<VertId>& perm) {
     const Graph& g = left.g_;
     const Graph& og = right.g_;

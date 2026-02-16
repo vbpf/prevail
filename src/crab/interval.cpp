@@ -1,5 +1,8 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: Apache-2.0
+#include <algorithm>
+#include <cassert>
+
 #include "crab/interval.hpp"
 
 namespace prevail {
@@ -214,8 +217,8 @@ Interval Interval::urem(const Interval& x) const {
                 if (*divisor == 0) {
                     return Interval{*dividend};
                 }
-                uint64_t dividend_val = dividend->cast_to<uint64_t>();
-                uint64_t divisor_val = divisor->cast_to<uint64_t>();
+                const uint64_t dividend_val = dividend->cast_to<uint64_t>();
+                const uint64_t divisor_val = divisor->cast_to<uint64_t>();
                 return Interval{dividend_val % divisor_val};
             }
         }
@@ -265,8 +268,8 @@ Interval Interval::bitwise_and(const Interval& x) const {
     if (is_bottom() || x.is_bottom()) {
         return bottom();
     }
-    assert(is_top() || (lb() >= 0));
-    assert(x.is_top() || (x.lb() >= 0));
+    assert(is_top() || lb() >= 0);
+    assert(x.is_top() || x.lb() >= 0);
 
     if (*this == Interval{0} || x == Interval{0}) {
         return Interval{0};

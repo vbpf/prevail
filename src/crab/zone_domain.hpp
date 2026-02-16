@@ -29,7 +29,6 @@
 
 #include "arith/linear_constraint.hpp"
 #include "arith/num_big.hpp"
-#include "arith/num_safeint.hpp"
 #include "arith/variable.hpp"
 #include "crab/interval.hpp"
 #include "crab/splitdbm/split_dbm.hpp"
@@ -66,7 +65,7 @@ class ZoneDomain final {
 
     // Evaluate an expression under the chosen potentials
     [[nodiscard]]
-    bool eval_expression_overflow(const LinearExpression& e, splitdbm::Weight& out) const;
+    splitdbm::Weight eval_expression(const LinearExpression& e) const;
 
     [[nodiscard]]
     Interval compute_residual(const LinearExpression& e, Variable pivot) const;

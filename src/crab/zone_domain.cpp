@@ -5,30 +5,25 @@
 
 #include "crab/var_registry.hpp"
 #include "crab/zone_domain.hpp"
-#include "crab_utils/debug.hpp"
-#include "crab_utils/stats.hpp"
 #include "string_constraints.hpp"
 #include "type_encoding.hpp"
 
 using namespace splitdbm;
 
 namespace prevail {
-// =============================================================================
-// ZoneDomain constructors and assignment operators
-// =============================================================================
 
-ZoneDomain::ZoneDomain() : core_(std::make_unique<splitdbm::SplitDBM>()) { rev_map_.emplace_back(std::nullopt); }
+ZoneDomain::ZoneDomain() : core_(std::make_unique<SplitDBM>()) { rev_map_.emplace_back(std::nullopt); }
 
 ZoneDomain::~ZoneDomain() = default;
 
 ZoneDomain::ZoneDomain(const ZoneDomain& o)
-    : core_(std::make_unique<splitdbm::SplitDBM>(*o.core_)), vert_map_(o.vert_map_), rev_map_(o.rev_map_) {}
+    : core_(std::make_unique<SplitDBM>(*o.core_)), vert_map_(o.vert_map_), rev_map_(o.rev_map_) {}
 
 ZoneDomain::ZoneDomain(ZoneDomain&& o) noexcept = default;
 
 ZoneDomain& ZoneDomain::operator=(const ZoneDomain& o) {
     if (this != &o) {
-        core_ = std::make_unique<splitdbm::SplitDBM>(*o.core_);
+        core_ = std::make_unique<SplitDBM>(*o.core_);
         vert_map_ = o.vert_map_;
         rev_map_ = o.rev_map_;
     }
@@ -37,13 +32,13 @@ ZoneDomain& ZoneDomain::operator=(const ZoneDomain& o) {
 
 ZoneDomain& ZoneDomain::operator=(ZoneDomain&& o) noexcept = default;
 
-ZoneDomain::ZoneDomain(VertMap&& vert_map, RevMap&& rev_map, std::unique_ptr<splitdbm::SplitDBM> core)
+ZoneDomain::ZoneDomain(VertMap&& vert_map, RevMap&& rev_map, std::unique_ptr<SplitDBM> core)
     : core_(std::move(core)), vert_map_(std::move(vert_map)), rev_map_(std::move(rev_map)) {
     normalize();
 }
 
 void ZoneDomain::set_to_top() {
-    core_ = std::make_unique<splitdbm::SplitDBM>();
+    core_ = std::make_unique<SplitDBM>();
     vert_map_.clear();
     rev_map_.clear();
     rev_map_.emplace_back(std::nullopt);
@@ -52,10 +47,6 @@ void ZoneDomain::set_to_top() {
 bool ZoneDomain::is_top() const { return core_->is_top(); }
 
 std::pair<std::size_t, std::size_t> ZoneDomain::size() const { return {core_->graph_size(), core_->num_edges()}; }
-
-// =============================================================================
-// End of splitdbm::SplitDBM and prevail::ZoneDomain basics
-// =============================================================================
 
 std::optional<VertId> ZoneDomain::get_vertid(const Variable x) const {
     const auto it = vert_map_.find(x);
@@ -112,26 +103,6 @@ VertId ZoneDomain::get_vert(Variable v) {
     return vert;
 }
 
-/**
- * Helper to translate from Number to DBM Weight (graph weights).  Number
- * used to be the template parameter of the DBM-based abstract domain to
- * represent a number. Number might not fit into Weight type.
- **/
-[[maybe_unused]]
-static bool convert_NtoW_overflow(const Number& n, SafeI64& out) {
-    if (n.fits<int64_t>()) {
-        out = n;
-        return false;
-    }
-    return true;
-}
-
-[[maybe_unused]]
-static bool convert_NtoW_overflow(const Number& n, Number& out) {
-    out = n;
-    return false;
-}
-
 void ZoneDomain::diffcsts_of_assign(const LinearExpression& exp, std::vector<std::pair<Variable, Weight>>& lb,
                                     std::vector<std::pair<Variable, Weight>>& ub) const {
     diffcsts_of_assign(exp, true, ub);
@@ -149,16 +120,10 @@ void ZoneDomain::diffcsts_of_assign(const LinearExpression& exp,
     std::optional<Variable> unbounded_var;
     std::vector<std::pair<Variable, Weight>> terms;
 
-    Weight residual;
-    if (convert_NtoW_overflow(exp.constant_term(), residual)) {
-        return;
-    }
+    Weight residual = exp.constant_term();
 
     for (const auto& [y, n] : exp.variable_terms()) {
-        Weight coeff;
-        if (convert_NtoW_overflow(n, coeff)) {
-            continue;
-        }
+        const Weight coeff = n;
 
         if (coeff < Weight(0)) {
             // Can't do anything with negative coefficients.
@@ -167,11 +132,7 @@ void ZoneDomain::diffcsts_of_assign(const LinearExpression& exp,
             if (y_val.is_infinite()) {
                 return;
             }
-            Weight ymax;
-            if (convert_NtoW_overflow(*y_val.number(), ymax)) {
-                continue;
-            }
-            // was before the condition
+            const Weight ymax = *y_val.number();
             residual += ymax * coeff;
         } else {
             auto y_val = extract_upper_bounds ? get_ub(y) : get_lb(y);
@@ -182,10 +143,7 @@ void ZoneDomain::diffcsts_of_assign(const LinearExpression& exp,
                 }
                 unbounded_var = y;
             } else {
-                Weight ymax;
-                if (convert_NtoW_overflow(*y_val.number(), ymax)) {
-                    continue;
-                }
+                const Weight ymax = *y_val.number();
                 residual += ymax * coeff;
                 terms.emplace_back(y, ymax);
             }
@@ -210,19 +168,7 @@ void ZoneDomain::diffcsts_of_lin_leq(const LinearExpression& exp,
                                      std::vector<std::pair<Variable, Weight>>& lbs,
                                      /* x <= ub for each {x,ub} in ubs */
                                      std::vector<std::pair<Variable, Weight>>& ubs) const {
-    Weight exp_ub;
-    if (convert_NtoW_overflow(exp.constant_term(), exp_ub)) {
-        return;
-    }
-    exp_ub = -exp_ub;
-
-    // temporary hack
-    Weight _tmp;
-    if (convert_NtoW_overflow(exp.constant_term() - 1, _tmp)) {
-        // We don't like MIN either because the code will compute
-        // minus MIN, and it will silently overflow.
-        return;
-    }
+    Weight exp_ub = -Weight{exp.constant_term()};
 
     Weight unbounded_lbcoeff;
     Weight unbounded_ubcoeff;
@@ -231,10 +177,7 @@ void ZoneDomain::diffcsts_of_lin_leq(const LinearExpression& exp,
 
     std::vector<std::pair<std::pair<Weight, Variable>, Weight>> pos_terms, neg_terms;
     for (const auto& [y, n] : exp.variable_terms()) {
-        Weight coeff;
-        if (convert_NtoW_overflow(n, coeff)) {
-            continue;
-        }
+        const Weight coeff = n;
         if (coeff > Weight(0)) {
             auto y_lb = get_lb(y);
             if (y_lb.is_infinite()) {
@@ -244,10 +187,7 @@ void ZoneDomain::diffcsts_of_lin_leq(const LinearExpression& exp,
                 unbounded_lbvar = y;
                 unbounded_lbcoeff = coeff;
             } else {
-                Weight ymin;
-                if (convert_NtoW_overflow(*y_lb.number(), ymin)) {
-                    continue;
-                }
+                const Weight ymin = *y_lb.number();
                 exp_ub -= ymin * coeff;
                 pos_terms.push_back({{coeff, y}, ymin});
             }
@@ -260,10 +200,7 @@ void ZoneDomain::diffcsts_of_lin_leq(const LinearExpression& exp,
                 unbounded_ubvar = y;
                 unbounded_ubcoeff = -coeff;
             } else {
-                Weight ymax;
-                if (convert_NtoW_overflow(*y_ub.number(), ymax)) {
-                    continue;
-                }
+                const Weight ymax = *y_ub.number();
                 exp_ub -= ymax * coeff;
                 neg_terms.push_back({{-coeff, y}, ymax});
             }
@@ -318,7 +255,6 @@ bool ZoneDomain::add_linear_leq(const LinearExpression& exp) {
 
     // Apply lower bounds
     for (const auto& [var, n] : lbs) {
-        CRAB_LOG("zones-split", std::cout << var << ">=" << n << "\n");
         const VertId vert = get_vert(var);
         if (!core_->update_bound_if_tighter(vert, Side::LEFT, n)) {
             return false;
@@ -330,7 +266,6 @@ bool ZoneDomain::add_linear_leq(const LinearExpression& exp) {
         if (variable_registry->is_min_only(var)) {
             continue;
         }
-        CRAB_LOG("zones-split", std::cout << var << "<=" << n << "\n");
         const VertId vert = get_vert(var);
         if (!core_->update_bound_if_tighter(vert, Side::RIGHT, n)) {
             return false;
@@ -339,7 +274,6 @@ bool ZoneDomain::add_linear_leq(const LinearExpression& exp) {
 
     // Apply difference constraints
     for (const auto& [diff, k] : csts) {
-        CRAB_LOG("zones-split", std::cout << diff.first << "-" << diff.second << "<=" << k << "\n");
         const VertId src = get_vert(diff.second);
         const VertId dest = get_vert(diff.first);
         if (!core_->add_difference_constraint(src, dest, k)) {
@@ -366,8 +300,8 @@ static Interval trim_interval(const Interval& i, const Number& n) {
 }
 
 bool ZoneDomain::add_univar_disequation(Variable x, const Number& n) {
-    Interval i = get_interval(x);
-    Interval new_i = trim_interval(i, n);
+    const Interval i = get_interval(x);
+    const Interval new_i = trim_interval(i, n);
     if (new_i.is_bottom()) {
         return false;
     }
@@ -375,22 +309,14 @@ bool ZoneDomain::add_univar_disequation(Variable x, const Number& n) {
         return true;
     }
 
-    VertId v = get_vert(x);
+    const VertId v = get_vert(x);
     if (new_i.lb().is_finite()) {
-        Weight lb_val;
-        if (convert_NtoW_overflow(*new_i.lb().number(), lb_val)) {
-            return true;
-        }
-        if (!core_->strengthen_bound(v, Side::LEFT, lb_val)) {
+        if (!core_->strengthen_bound(v, Side::LEFT, Weight{*new_i.lb().number()})) {
             return false;
         }
     }
     if (new_i.ub().is_finite() && !variable_registry->is_min_only(x)) {
-        Weight ub_val;
-        if (convert_NtoW_overflow(*new_i.ub().number(), ub_val)) {
-            return true;
-        }
-        if (!core_->strengthen_bound(v, Side::RIGHT, ub_val)) {
+        if (!core_->strengthen_bound(v, Side::RIGHT, Weight{*new_i.ub().number()})) {
             return false;
         }
     }
@@ -413,7 +339,7 @@ bool ZoneDomain::operator<=(const ZoneDomain& o) const {
 
     // Build permutation mapping from o's vertices to this's vertices
     constexpr VertId INVALID_VERT = std::numeric_limits<VertId>::max();
-    std::vector<VertId> perm(o.core_->graph_size(), INVALID_VERT);
+    std::vector perm(o.core_->graph_size(), INVALID_VERT);
     perm[0] = 0;
     for (const auto& [v, n] : o.vert_map_) {
         if (!o.core_->vertex_has_edges(n)) {
@@ -428,7 +354,7 @@ bool ZoneDomain::operator<=(const ZoneDomain& o) const {
         }
     }
 
-    return splitdbm::SplitDBM::is_subsumed_by(*core_, *o.core_, perm);
+    return SplitDBM::is_subsumed_by(*core_, *o.core_, perm);
 }
 
 using RevMap = std::vector<std::optional<Variable>>;
@@ -446,10 +372,6 @@ std::pair<VertMap, RevMap> result_mappings(const RevMap& aligned_vars) {
     }
     return {std::move(vmap), std::move(revmap)};
 }
-
-// =============================================================================
-// Helpers for building AlignedPair from ZoneDomain operands
-// =============================================================================
 
 // Build alignment from intersection of variables (for join/widen)
 std::tuple<AlignedPair, RevMap> ZoneDomain::make_intersection_alignment(const ZoneDomain& left,
@@ -504,10 +426,6 @@ std::tuple<AlignedPair, RevMap> ZoneDomain::make_union_alignment(const ZoneDomai
                            std::move(aligned_vars));
 }
 
-// =============================================================================
-// ZoneDomain join/widen/meet operations using AlignedPair
-// =============================================================================
-
 ZoneDomain do_join(const ZoneDomain& left, const ZoneDomain& right) {
     if (right.is_top()) {
         return right;
@@ -520,7 +438,7 @@ ZoneDomain do_join(const ZoneDomain& left, const ZoneDomain& right) {
     auto [aligned_pair, aligned_vars] = ZoneDomain::make_intersection_alignment(left, right);
 
     // 2. Execute graph join
-    splitdbm::SplitDBM joined = splitdbm::SplitDBM::join(aligned_pair);
+    SplitDBM joined = SplitDBM::join(aligned_pair);
 
     // 3. Build result mappings and garbage collect
     auto [out_vmap, out_revmap] = result_mappings(std::move(aligned_vars));
@@ -532,8 +450,7 @@ ZoneDomain do_join(const ZoneDomain& left, const ZoneDomain& right) {
         }
     }
 
-    return ZoneDomain(std::move(out_vmap), std::move(out_revmap),
-                      std::make_unique<splitdbm::SplitDBM>(std::move(joined)));
+    return ZoneDomain(std::move(out_vmap), std::move(out_revmap), std::make_unique<SplitDBM>(std::move(joined)));
 }
 
 void ZoneDomain::operator|=(const ZoneDomain& right) { *this = do_join(*this, right); }
@@ -545,7 +462,7 @@ ZoneDomain ZoneDomain::widen(const ZoneDomain& o) const {
     auto [aligned_pair, aligned_vars] = make_intersection_alignment(*this, o);
 
     // 2. Execute graph widen
-    auto result_core = std::make_unique<splitdbm::SplitDBM>(splitdbm::SplitDBM::widen(aligned_pair));
+    auto result_core = std::make_unique<SplitDBM>(SplitDBM::widen(aligned_pair));
 
     // 3. Build result mappings
     auto [out_vmap, out_revmap] = result_mappings(aligned_vars);
@@ -565,7 +482,7 @@ std::optional<ZoneDomain> ZoneDomain::meet(const ZoneDomain& o) const {
     auto [aligned_pair, aligned_vars] = make_union_alignment(*this, o);
 
     // 2. Execute graph meet
-    auto meet_result = splitdbm::SplitDBM::meet(aligned_pair);
+    auto meet_result = SplitDBM::meet(aligned_pair);
     if (!meet_result) {
         return std::nullopt; // Infeasible
     }
@@ -573,10 +490,7 @@ std::optional<ZoneDomain> ZoneDomain::meet(const ZoneDomain& o) const {
     // 3. Build result mappings
     auto [out_vmap, out_revmap] = result_mappings(aligned_vars);
 
-    ZoneDomain res(std::move(out_vmap), std::move(out_revmap),
-                   std::make_unique<splitdbm::SplitDBM>(std::move(*meet_result)));
-    CRAB_LOG("zones-split", std::cout << "Result meet:\n" << res << "\n");
-    return res;
+    return ZoneDomain(std::move(out_vmap), std::move(out_revmap), std::make_unique<SplitDBM>(std::move(*meet_result)));
 }
 
 void ZoneDomain::havoc(const Variable v) {
@@ -588,11 +502,8 @@ void ZoneDomain::havoc(const Variable v) {
     }
 }
 
-// return false if becomes bottom
+// return false if it becomes bottom
 bool ZoneDomain::add_constraint(const LinearConstraint& cst) {
-    CrabStats::count("ZoneDomain.count.add_constraints");
-    ScopedCrabStats __st__("ZoneDomain.add_constraints");
-
     if (cst.is_tautology()) {
         return true;
     }
@@ -608,8 +519,6 @@ bool ZoneDomain::add_constraint(const LinearConstraint& cst) {
         if (!add_linear_leq(cst.expression())) {
             return false;
         }
-        //  g.check_adjs();
-        CRAB_LOG("zones-split", std::cout << "--- " << cst << "\n" << *this << "\n");
         break;
     }
     case ConstraintKind::LESS_THAN_ZERO: {
@@ -619,17 +528,13 @@ bool ZoneDomain::add_constraint(const LinearConstraint& cst) {
         if (!add_linear_leq(nc.expression())) {
             return false;
         }
-        CRAB_LOG("zones-split", std::cout << "--- " << cst << "\n" << *this << "\n");
         break;
     }
     case ConstraintKind::EQUALS_ZERO: {
         const LinearExpression& exp = cst.expression();
         if (!add_linear_leq(exp) || !add_linear_leq(exp.negate())) {
-            CRAB_LOG("zones-split", std::cout << " ~~> _|_" << "\n");
             return false;
         }
-        // g.check_adjs();
-        CRAB_LOG("zones-split", std::cout << "--- " << cst << "\n" << *this << "\n");
         break;
     }
     case ConstraintKind::NOT_ZERO: {
@@ -649,34 +554,14 @@ bool ZoneDomain::add_constraint(const LinearConstraint& cst) {
 }
 
 void ZoneDomain::assign(Variable lhs, const LinearExpression& e) {
-    CrabStats::count("ZoneDomain.count.assign");
-    ScopedCrabStats __st__("ZoneDomain.assign");
-
-    CRAB_LOG("zones-split", std::cout << "Before assign: " << *this << "\n");
-    CRAB_LOG("zones-split", std::cout << lhs << ":=" << e << "\n");
-
-    Interval value_interval = eval_interval(e);
+    const Interval value_interval = eval_interval(e);
 
     std::optional<Weight> lb_w, ub_w;
     if (value_interval.lb().is_finite()) {
-        Weight tmp;
-        if (convert_NtoW_overflow(-*value_interval.lb().number(), tmp)) {
-            havoc(lhs);
-            CRAB_LOG("zones-split", std::cout << "---" << lhs << ":=" << e << "\n" << *this << "\n");
-            normalize();
-            return;
-        }
-        lb_w = tmp;
+        lb_w = Weight{-*value_interval.lb().number()};
     }
     if (value_interval.ub().is_finite()) {
-        Weight tmp;
-        if (convert_NtoW_overflow(*value_interval.ub().number(), tmp)) {
-            havoc(lhs);
-            CRAB_LOG("zones-split", std::cout << "---" << lhs << ":=" << e << "\n" << *this << "\n");
-            normalize();
-            return;
-        }
-        ub_w = tmp;
+        ub_w = Weight{*value_interval.ub().number()};
     }
 
     // JN: it seems that we can only do this if
@@ -697,11 +582,7 @@ void ZoneDomain::assign(Variable lhs, const LinearExpression& e) {
         return;
     }
 
-    Weight e_val;
-    if (eval_expression_overflow(e, e_val)) {
-        havoc(lhs);
-        return;
-    }
+    const Weight e_val = eval_expression(e);
 
     std::vector<std::pair<VertId, Weight>> diffs_from, diffs_to;
     for (const auto& [var, n] : diffs_lb) {
@@ -725,13 +606,9 @@ void ZoneDomain::assign(Variable lhs, const LinearExpression& e) {
     vert_map_.emplace(lhs, vert);
 
     normalize();
-    CRAB_LOG("zones-split", std::cout << "---" << lhs << ":=" << e << "\n" << *this << "\n");
 }
 
 ZoneDomain ZoneDomain::narrow(const ZoneDomain& o) const {
-    CrabStats::count("ZoneDomain.count.narrowing");
-    ScopedCrabStats __st__("ZoneDomain.narrowing");
-
     if (is_top()) {
         return o;
     }
@@ -740,13 +617,11 @@ ZoneDomain ZoneDomain::narrow(const ZoneDomain& o) const {
     return {*this};
 }
 
-void ZoneDomain::clear_thread_local_state() { splitdbm::SplitDBM::clear_thread_local_state(); }
+void ZoneDomain::clear_thread_local_state() { SplitDBM::clear_thread_local_state(); }
 
 void ZoneDomain::normalize() { core_->normalize(); }
 
 void ZoneDomain::set(const Variable x, const Interval& intv) {
-    CrabStats::count("ZoneDomain.count.assign");
-    ScopedCrabStats __st__("ZoneDomain.assign");
     assert(!intv.is_bottom());
 
     havoc(x);
@@ -757,20 +632,10 @@ void ZoneDomain::set(const Variable x, const Interval& intv) {
 
     const VertId v = get_vert(x);
     if (intv.ub().is_finite() && !variable_registry->is_min_only(x)) {
-        Weight ub;
-        if (convert_NtoW_overflow(*intv.ub().number(), ub)) {
-            normalize();
-            return;
-        }
-        core_->set_bound(v, Side::RIGHT, ub);
+        core_->set_bound(v, Side::RIGHT, Weight{*intv.ub().number()});
     }
     if (intv.lb().is_finite()) {
-        Weight lb;
-        if (convert_NtoW_overflow(*intv.lb().number(), lb)) {
-            normalize();
-            return;
-        }
-        core_->set_bound(v, Side::LEFT, lb);
+        core_->set_bound(v, Side::LEFT, Weight{*intv.lb().number()});
     }
     normalize();
 }
@@ -928,19 +793,12 @@ StringInvariant ZoneDomain::to_set() const {
 
 std::ostream& operator<<(std::ostream& o, const ZoneDomain& dom) { return o << dom.to_set(); }
 
-bool ZoneDomain::eval_expression_overflow(const LinearExpression& e, Weight& out) const {
-    [[maybe_unused]]
-    const bool overflow = convert_NtoW_overflow(e.constant_term(), out);
-    assert(!overflow);
+Weight ZoneDomain::eval_expression(const LinearExpression& e) const {
+    Weight res = e.constant_term();
     for (const auto& [variable, coefficient] : e.variable_terms()) {
-        Weight coef;
-        if (convert_NtoW_overflow(coefficient, coef)) {
-            out = Weight(0);
-            return true;
-        }
-        out += (pot_value(variable) - core_->potential_at_zero()) * coef;
+        res += (pot_value(variable) - core_->potential_at_zero()) * Weight{coefficient};
     }
-    return false;
+    return res;
 }
 
 Interval ZoneDomain::compute_residual(const LinearExpression& e, const Variable pivot) const {

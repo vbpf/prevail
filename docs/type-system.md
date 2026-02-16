@@ -52,7 +52,7 @@ Type join(Type a, Type b) {
     if (a == b) return a;
     if (a == T_BOTTOM) return b;
     if (b == T_BOTTOM) return a;
-    return T_TOP;  // Different types → unknown
+    return T_TOP;  // Different types -> unknown
 }
 ```
 
@@ -347,8 +347,8 @@ struct TypeConstraint {
     TypeGroup expected;  // Set of acceptable types
     
     // Examples:
-    // - "must be pointer" → {CTX, STACK, PACKET, SHARED, MAP}
-    // - "must be numeric" → {NUM}
+    // - "must be pointer" -> {CTX, STACK, PACKET, SHARED, MAP}
+    // - "must be numeric" -> {NUM}
 };
 ```
 

@@ -7,7 +7,7 @@ This document describes the high-level architecture of the Prevail eBPF verifier
 The verification process follows a linear pipeline:
 
 ```
-ELF Binary → Unmarshal → Build CFG → Abstract Interpretation → Result
+ELF Binary -> Unmarshal -> Build CFG -> Abstract Interpretation -> Result
 ```
 
 ### Stage 1: ELF Loading and Unmarshalling

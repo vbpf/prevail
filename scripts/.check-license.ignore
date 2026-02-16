@@ -32,8 +32,6 @@ src/crab/thresholds.cpp
 src/crab/thresholds.hpp
 src/crab_utils/debug.cpp
 src/crab_utils/debug.hpp
-src/crab_utils/stats.cpp
-src/crab_utils/stats.hpp
 src/crab/splitdbm/adapt_sgraph.hpp
 src/crab/splitdbm/graph_ops.cpp
 src/crab/splitdbm/graph_ops.hpp

@@ -46,15 +46,15 @@ while (x < 1000000) {
 **Widening** (`∇`) accelerates convergence by jumping to a stable approximation:
 
 ```
-[0,0] → [0,1] → [0,2] → ... 
+[0,0] -> [0,1] -> [0,2] -> ...
        widening kicks in
-[0,0] → [0,1] → [0,+∞]  // Stable after widening
+[0,0] -> [0,1] -> [0,+oo]  // Stable after widening
 ```
 
 **Narrowing** (`Δ`) recovers precision after widening:
 
 ```
-[0,+∞] ∩ (x < 1000000) → [0,999999]  // Narrowing refines
+[0,+oo] ∩ (x < 1000000) -> [0,999999]  // Narrowing refines
 ```
 
 ### Iteration Strategy
@@ -87,7 +87,7 @@ Consider this CFG:
     ┌─────────────────────┐
     │                     │
     ▼                     │
-1 → 2 → 3 → 4 → 5 → 6 ────┘
+1 -> 2 -> 3 -> 4 -> 5 -> 6 ────┘
         ▲       │
         └───────┘
 ```

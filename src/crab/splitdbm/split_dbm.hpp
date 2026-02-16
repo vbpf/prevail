@@ -6,8 +6,8 @@
 #include <vector>
 
 #include "arith/num_extended.hpp"
-#include "crab/splitdbm/definitions.hpp"
 #include "crab/splitdbm/adapt_sgraph.hpp"
+#include "crab/splitdbm/definitions.hpp"
 #include "crab/splitdbm/graph_ops.hpp"
 #include "crab_utils/lazy_allocator.hpp"
 
@@ -17,12 +17,12 @@ namespace splitdbm {
 // Side enum: Indicates edge direction relative to vertex 0
 // =============================================================================
 // In a DBM graph, each vertex v has TWO bounds via edge direction:
-// - Edge v → 0 (LEFT side): weight w means v >= -w (lower bound)
-// - Edge 0 → v (RIGHT side): weight w means v <= w (upper bound)
+// - Edge v -> 0 (LEFT side): weight w means v >= -w (lower bound)
+// - Edge 0 -> v (RIGHT side): weight w means v <= w (upper bound)
 
 enum class Side : bool {
-    LEFT = false,  // Edge v → 0: lower bound = -weight
-    RIGHT = true   // Edge 0 → v: upper bound = weight
+    LEFT = false, // Edge v -> 0: lower bound = -weight
+    RIGHT = true  // Edge 0 -> v: upper bound = weight
 };
 
 // Forward declaration for SplitDBM's static methods
@@ -57,20 +57,22 @@ class SplitDBM {
     SplitDBM& operator=(const SplitDBM&) = default;
     SplitDBM& operator=(SplitDBM&&) = default;
 
-    [[nodiscard]] bool is_top() const;
+    [[nodiscard]]
+    bool is_top() const;
 
     // ==========================================================================
     // Core one-sided bound operations - the primitive API
     // ==========================================================================
 
     // Get the bound value for vertex v on the given side.
-    // LEFT (v→0): returns lower bound (-edge_weight), or MINUS_INFINITY if no edge
-    // RIGHT (0→v): returns upper bound (edge_weight), or PLUS_INFINITY if no edge
-    [[nodiscard]] prevail::ExtendedNumber get_bound(VertId v, Side side) const;
+    // LEFT (v->0): returns lower bound (-edge_weight), or MINUS_INFINITY if no edge
+    // RIGHT (0->v): returns upper bound (edge_weight), or PLUS_INFINITY if no edge
+    [[nodiscard]]
+    prevail::ExtendedNumber get_bound(VertId v, Side side) const;
 
     // Set the bound value for vertex v on the given side.
-    // LEFT: sets edge v→0 with weight = -bound_value
-    // RIGHT: sets edge 0→v with weight = bound_value
+    // LEFT: sets edge v->0 with weight = -bound_value
+    // RIGHT: sets edge 0->v with weight = bound_value
     void set_bound(VertId v, Side side, const Weight& bound_value);
 
     // ==========================================================================
@@ -84,7 +86,8 @@ class SplitDBM {
     // Graph access for SplitDBM's read-only operations (e.g. to_set)
     // ==========================================================================
 
-    [[nodiscard]] const Graph& graph() const;
+    [[nodiscard]]
+    const Graph& graph() const;
 
     // Restore potential after an edge addition
     bool repair_potential(VertId src, VertId dest);
@@ -103,33 +106,38 @@ class SplitDBM {
     void close_after_bound_updates();
 
     // Assign a fresh vertex with difference constraints and optional bounds.
-    // Returns the new VertId. The caller manages Variable↔VertId mapping.
-    // diffs_from: edges new_vert → dest with given weight
-    // diffs_to: edges src → new_vert with given weight
+    // Returns the new VertId. The caller manages Variable<->VertId mapping.
+    // diffs_from: edges new_vert -> dest with given weight
+    // diffs_to: edges src -> new_vert with given weight
     // lb_edge/ub_edge are raw edge weights (lb_edge = -lower_bound, ub_edge = upper_bound).
-    VertId assign_vertex(const Weight& potential_value,
-                         std::span<const std::pair<VertId, Weight>> diffs_from,
+    VertId assign_vertex(const Weight& potential_value, std::span<const std::pair<VertId, Weight>> diffs_from,
                          std::span<const std::pair<VertId, Weight>> diffs_to, const std::optional<Weight>& lb_edge,
                          const std::optional<Weight>& ub_edge);
 
     // Get potential at a specific vertex
-    [[nodiscard]] Weight potential_at(VertId v) const;
+    [[nodiscard]]
+    Weight potential_at(VertId v) const;
 
     // Get potential at vertex 0 (for computing relative potentials)
-    [[nodiscard]] Weight potential_at_zero() const;
+    [[nodiscard]]
+    Weight potential_at_zero() const;
 
     // ==========================================================================
     // Size and edge accessors
     // ==========================================================================
 
-    [[nodiscard]] std::size_t graph_size() const;
-    [[nodiscard]] std::size_t num_edges() const;
+    [[nodiscard]]
+    std::size_t graph_size() const;
+    [[nodiscard]]
+    std::size_t num_edges() const;
 
     // Check if a vertex has any edges
-    [[nodiscard]] bool vertex_has_edges(VertId v) const;
+    [[nodiscard]]
+    bool vertex_has_edges(VertId v) const;
 
     // Get all vertices with no edges (excluding vertex 0) for garbage collection
-    [[nodiscard]] std::vector<VertId> get_disconnected_vertices() const;
+    [[nodiscard]]
+    std::vector<VertId> get_disconnected_vertices() const;
 
     // Strengthen a bound and propagate to neighboring edges.
     // Like update_bound_if_tighter, takes a bound value (not raw edge weight).
@@ -166,7 +174,10 @@ class SplitDBM {
 // two SplitDBMs so that same-named variables occupy the same vertex index.
 
 struct AlignedPair {
-    [[nodiscard]] size_t size() const { return left_perm.size(); }
+    [[nodiscard]]
+    size_t size() const {
+        return left_perm.size();
+    }
 
     const SplitDBM& left;
     const SplitDBM& right;
