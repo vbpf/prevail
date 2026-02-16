@@ -311,16 +311,17 @@ class Number final {
         return Number{_n & value_mask};
     }
 
-    // Width is the number of bits including sign. Valid range: [1, 65] for eBPF (up to 64-bit values).
+    // Width is the number of bits including sign. Valid range: [1, 64] for eBPF;
+    // max_uint(64) calls max_int(65), which is the practical maximum.
     static Number max_uint(const int width) { return max_int(width + 1); }
 
     static Number max_int(const int width) {
-        assert(width >= 1 && width <= 128);
+        assert(width >= 1 && width <= 65);
         return Number{(static_cast<Int128>(1) << (width - 1)) - 1};
     }
 
     static Number min_int(const int width) {
-        assert(width >= 1 && width <= 128);
+        assert(width >= 1 && width <= 65);
         return Number{-(static_cast<Int128>(1) << (width - 1))};
     }
 
