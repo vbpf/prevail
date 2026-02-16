@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <cassert>
 #include <climits>
 #include <cstdint>
 #include <functional>
@@ -18,6 +19,11 @@
 #include "crab_utils/num_safety.hpp"
 
 namespace prevail {
+
+// Number is an abstract-interpretation value for eBPF verification.
+// All inputs and outputs are ≤64-bit; i128 is used as intermediate
+// representation to hold results of widening arithmetic (e.g. add two
+// int64 values) without overflow, not as general 128-bit integer support.
 
 // --- Int128 type aliases ---
 #ifdef __GNUC__
@@ -110,7 +116,7 @@ inline Int128 checked_neg(const Int128 a) {
     return -a;
 }
 
-// Count leading zeros for 128-bit value. Assumes n > 0.
+// Count leading zeros for a 128-bit value. Returns 128 when n == 0.
 inline int clz128(const UInt128 n) {
     const auto hi = static_cast<uint64_t>(n >> 64);
     const auto lo = static_cast<uint64_t>(n);
@@ -139,8 +145,9 @@ inline int clz128(const UInt128 n) {
     return 128;
 }
 
-// Parse a decimal string into Int128.
-inline Int128 parse_int128(const std::string& s) {
+// Parse a decimal string into Int128. Only decimal digits are accepted;
+// hex/octal prefixes are not supported.
+inline Int128 parse_decimal_int128(const std::string& s) {
     if (s.empty()) {
         CRAB_ERROR("Number: empty string");
     }
@@ -155,22 +162,29 @@ inline Int128 parse_int128(const std::string& s) {
     if (i >= s.size()) {
         CRAB_ERROR("Number: invalid string '", s, "'");
     }
-    Int128 result = 0;
+    // Accumulate in unsigned to avoid signed overflow UB.
+    UInt128 result = 0;
     for (; i < s.size(); i++) {
         const char c = s[i];
         if (c < '0' || c > '9') {
             CRAB_ERROR("Number: invalid character in string '", s, "'");
         }
-        const Int128 prev = result;
-        result = result * 10 + (c - '0');
+        const UInt128 prev = result;
+        result = result * 10 + static_cast<UInt128>(c - '0');
         if (result / 10 != prev) {
             CRAB_ERROR("Number: overflow parsing string '", s, "'");
         }
     }
     if (negative) {
-        result = -result;
+        if (result > static_cast<UInt128>(kInt128Max) + 1) {
+            CRAB_ERROR("Number: overflow parsing string '", s, "'");
+        }
+        return -static_cast<Int128>(result - 1) - 1;
     }
-    return result;
+    if (result > static_cast<UInt128>(kInt128Max)) {
+        CRAB_ERROR("Number: overflow parsing string '", s, "'");
+    }
+    return static_cast<Int128>(result);
 }
 
 class Number final {
@@ -181,7 +195,7 @@ class Number final {
     constexpr Number(const Int128 n) : _n{n} {}
     constexpr Number(std::integral auto n) : _n{static_cast<Int128>(n)} {}
     constexpr Number(is_enum auto n) : _n{static_cast<Int128>(static_cast<std::underlying_type_t<decltype(n)>>(n))} {}
-    explicit Number(const std::string& s) : _n{parse_int128(s)} {}
+    explicit Number(const std::string& s) : _n{parse_decimal_int128(s)} {}
 
     template <std::integral T>
     T narrow() const {
@@ -270,11 +284,13 @@ class Number final {
         return static_cast<T>(static_cast<U>(static_cast<UInt128>(_n) & mask));
     }
 
+    // Width must be in [0, 64]; 0 means no truncation.
     [[nodiscard]]
     Number sign_extend(const int width) const {
         if (width == 0) {
             return *this;
         }
+        assert(width > 0 && width <= 64);
         const Int128 mask = (static_cast<Int128>(1) << width) - 1;
         const Int128 sign_bit = static_cast<Int128>(1) << (width - 1);
         const Int128 truncated = _n & mask;
@@ -284,20 +300,29 @@ class Number final {
         return Number{truncated};
     }
 
+    // Width must be in [0, 64]; 0 means no truncation.
     [[nodiscard]]
     Number zero_extend(const int width) const {
         if (width == 0) {
             return *this;
         }
+        assert(width > 0 && width <= 64);
         const Int128 value_mask = (static_cast<Int128>(1) << width) - 1;
         return Number{_n & value_mask};
     }
 
+    // Width is the number of bits including sign. Valid range: [1, 65] for eBPF (up to 64-bit values).
     static Number max_uint(const int width) { return max_int(width + 1); }
 
-    static Number max_int(const int width) { return Number{(static_cast<Int128>(1) << (width - 1)) - 1}; }
+    static Number max_int(const int width) {
+        assert(width >= 1 && width <= 128);
+        return Number{(static_cast<Int128>(1) << (width - 1)) - 1};
+    }
 
-    static Number min_int(const int width) { return Number{-(static_cast<Int128>(1) << (width - 1))}; }
+    static Number min_int(const int width) {
+        assert(width >= 1 && width <= 128);
+        return Number{-(static_cast<Int128>(1) << (width - 1))};
+    }
 
     Number operator+(const Number& x) const { return Number{checked_add(_n, x._n)}; }
 
@@ -389,6 +414,7 @@ class Number final {
         return Number{_n << shift};
     }
 
+    // Right shift of signed integers is arithmetic (sign-extending) in C++20.
     Number operator>>(const Number& x) const {
         if (x._n < 0 || x._n > 127) {
             CRAB_ERROR("Shift amount must be in [0, 127], got ", x);
@@ -397,14 +423,17 @@ class Number final {
         return Number{_n >> shift};
     }
 
+    // Return a number with all bits set up to the highest set bit.
+    // Precondition: _n >= 0 (callers guard this via lb() >= 0).
     [[nodiscard]]
     Number fill_ones() const {
+        assert(_n >= 0);
         if (_n == 0) {
             return Number{0};
         }
-        // For negative numbers, use the unsigned representation.
         const auto u = static_cast<UInt128>(_n);
         const int bits = 128 - clz128(u);
+        assert(bits > 0 && bits <= 127);
         return Number{(static_cast<Int128>(1) << bits) - 1};
     }
 
