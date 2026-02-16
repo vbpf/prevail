@@ -193,10 +193,17 @@ void ZoneDomain::diffcsts_of_lin_leq(const LinearExpression& exp,
             }
         } else {
             auto y_ub = get_interval(y).ub();
-            assert(!y_ub.is_infinite());
-            const Weight ymax = *y_ub.number();
-            exp_ub -= ymax * coeff;
-            neg_terms.push_back({{-coeff, y}, ymax});
+            if (y_ub.is_infinite()) {
+                if (unbounded_ubvar) {
+                    return;
+                }
+                unbounded_ubvar = y;
+                unbounded_ubcoeff = -coeff;
+            } else {
+                const Weight ymax = *y_ub.number();
+                exp_ub -= ymax * coeff;
+                neg_terms.push_back({{-coeff, y}, ymax});
+            }
         }
     }
 
@@ -303,12 +310,12 @@ bool ZoneDomain::add_univar_disequation(Variable x, const Number& n) {
     }
 
     const VertId v = get_vert(x);
-    assert(new_i.lb().is_finite());
-    if (!core_->strengthen_bound(v, Side::LEFT, Weight{*new_i.lb().number()})) {
-        return false;
+    if (new_i.lb().is_finite()) {
+        if (!core_->strengthen_bound(v, Side::LEFT, Weight{*new_i.lb().number()})) {
+            return false;
+        }
     }
-    assert(new_i.ub().is_finite());
-    if (!variable_registry->is_min_only(x)) {
+    if (new_i.ub().is_finite() && !variable_registry->is_min_only(x)) {
         if (!core_->strengthen_bound(v, Side::RIGHT, Weight{*new_i.ub().number()})) {
             return false;
         }
