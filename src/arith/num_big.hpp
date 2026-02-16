@@ -407,6 +407,9 @@ class Number final {
 
     Number operator^(const Number& x) const { return Number{_n ^ x._n}; }
 
+    // Shifts are well-defined for signed integers in C++20. No checked helper
+    // needed: the shift amount is validated below, and the result is permitted
+    // to wrap (used for bit-mask construction in fill_ones and eBPF shift ops).
     Number operator<<(const Number& x) const {
         if (x._n < 0 || x._n > 127) {
             CRAB_ERROR("Shift amount must be in [0, 127], got ", x);
