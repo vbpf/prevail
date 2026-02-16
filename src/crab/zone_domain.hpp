@@ -29,7 +29,6 @@
 
 #include "arith/linear_constraint.hpp"
 #include "arith/num_big.hpp"
-#include "arith/num_safeint.hpp"
 #include "arith/variable.hpp"
 #include "crab/interval.hpp"
 #include "crab/splitdbm/split_dbm.hpp"

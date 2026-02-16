@@ -5,30 +5,25 @@
 
 #include "crab/var_registry.hpp"
 #include "crab/zone_domain.hpp"
-#include "crab_utils/debug.hpp"
-#include "crab_utils/stats.hpp"
 #include "string_constraints.hpp"
 #include "type_encoding.hpp"
 
 using namespace splitdbm;
 
 namespace prevail {
-// =============================================================================
-// ZoneDomain constructors and assignment operators
-// =============================================================================
 
-ZoneDomain::ZoneDomain() : core_(std::make_unique<splitdbm::SplitDBM>()) { rev_map_.emplace_back(std::nullopt); }
+ZoneDomain::ZoneDomain() : core_(std::make_unique<SplitDBM>()) { rev_map_.emplace_back(std::nullopt); }
 
 ZoneDomain::~ZoneDomain() = default;
 
 ZoneDomain::ZoneDomain(const ZoneDomain& o)
-    : core_(std::make_unique<splitdbm::SplitDBM>(*o.core_)), vert_map_(o.vert_map_), rev_map_(o.rev_map_) {}
+    : core_(std::make_unique<SplitDBM>(*o.core_)), vert_map_(o.vert_map_), rev_map_(o.rev_map_) {}
 
 ZoneDomain::ZoneDomain(ZoneDomain&& o) noexcept = default;
 
 ZoneDomain& ZoneDomain::operator=(const ZoneDomain& o) {
     if (this != &o) {
-        core_ = std::make_unique<splitdbm::SplitDBM>(*o.core_);
+        core_ = std::make_unique<SplitDBM>(*o.core_);
         vert_map_ = o.vert_map_;
         rev_map_ = o.rev_map_;
     }
@@ -37,13 +32,13 @@ ZoneDomain& ZoneDomain::operator=(const ZoneDomain& o) {
 
 ZoneDomain& ZoneDomain::operator=(ZoneDomain&& o) noexcept = default;
 
-ZoneDomain::ZoneDomain(VertMap&& vert_map, RevMap&& rev_map, std::unique_ptr<splitdbm::SplitDBM> core)
+ZoneDomain::ZoneDomain(VertMap&& vert_map, RevMap&& rev_map, std::unique_ptr<SplitDBM> core)
     : core_(std::move(core)), vert_map_(std::move(vert_map)), rev_map_(std::move(rev_map)) {
     normalize();
 }
 
 void ZoneDomain::set_to_top() {
-    core_ = std::make_unique<splitdbm::SplitDBM>();
+    core_ = std::make_unique<SplitDBM>();
     vert_map_.clear();
     rev_map_.clear();
     rev_map_.emplace_back(std::nullopt);
@@ -52,10 +47,6 @@ void ZoneDomain::set_to_top() {
 bool ZoneDomain::is_top() const { return core_->is_top(); }
 
 std::pair<std::size_t, std::size_t> ZoneDomain::size() const { return {core_->graph_size(), core_->num_edges()}; }
-
-// =============================================================================
-// End of splitdbm::SplitDBM and prevail::ZoneDomain basics
-// =============================================================================
 
 std::optional<VertId> ZoneDomain::get_vertid(const Variable x) const {
     const auto it = vert_map_.find(x);
@@ -112,21 +103,8 @@ VertId ZoneDomain::get_vert(Variable v) {
     return vert;
 }
 
-/**
- * Helper to translate from Number to DBM Weight (graph weights).  Number
- * used to be the template parameter of the DBM-based abstract domain to
- * represent a number. Number might not fit into Weight type.
- **/
-[[maybe_unused]]
-static bool convert_NtoW_overflow(const Number& n, SafeI64& out) {
-    if (n.fits<int64_t>()) {
-        out = n;
-        return false;
-    }
-    return true;
-}
-
-[[maybe_unused]]
+// Translate from Number to DBM Weight (graph weights). Since Weight = Number,
+// this is a simple assignment that never overflows.
 static bool convert_NtoW_overflow(const Number& n, Number& out) {
     out = n;
     return false;
@@ -318,7 +296,6 @@ bool ZoneDomain::add_linear_leq(const LinearExpression& exp) {
 
     // Apply lower bounds
     for (const auto& [var, n] : lbs) {
-        CRAB_LOG("zones-split", std::cout << var << ">=" << n << "\n");
         const VertId vert = get_vert(var);
         if (!core_->update_bound_if_tighter(vert, Side::LEFT, n)) {
             return false;
@@ -330,7 +307,6 @@ bool ZoneDomain::add_linear_leq(const LinearExpression& exp) {
         if (variable_registry->is_min_only(var)) {
             continue;
         }
-        CRAB_LOG("zones-split", std::cout << var << "<=" << n << "\n");
         const VertId vert = get_vert(var);
         if (!core_->update_bound_if_tighter(vert, Side::RIGHT, n)) {
             return false;
@@ -339,7 +315,6 @@ bool ZoneDomain::add_linear_leq(const LinearExpression& exp) {
 
     // Apply difference constraints
     for (const auto& [diff, k] : csts) {
-        CRAB_LOG("zones-split", std::cout << diff.first << "-" << diff.second << "<=" << k << "\n");
         const VertId src = get_vert(diff.second);
         const VertId dest = get_vert(diff.first);
         if (!core_->add_difference_constraint(src, dest, k)) {
@@ -428,7 +403,7 @@ bool ZoneDomain::operator<=(const ZoneDomain& o) const {
         }
     }
 
-    return splitdbm::SplitDBM::is_subsumed_by(*core_, *o.core_, perm);
+    return SplitDBM::is_subsumed_by(*core_, *o.core_, perm);
 }
 
 using RevMap = std::vector<std::optional<Variable>>;
@@ -446,10 +421,6 @@ std::pair<VertMap, RevMap> result_mappings(const RevMap& aligned_vars) {
     }
     return {std::move(vmap), std::move(revmap)};
 }
-
-// =============================================================================
-// Helpers for building AlignedPair from ZoneDomain operands
-// =============================================================================
 
 // Build alignment from intersection of variables (for join/widen)
 std::tuple<AlignedPair, RevMap> ZoneDomain::make_intersection_alignment(const ZoneDomain& left,
@@ -504,10 +475,6 @@ std::tuple<AlignedPair, RevMap> ZoneDomain::make_union_alignment(const ZoneDomai
                            std::move(aligned_vars));
 }
 
-// =============================================================================
-// ZoneDomain join/widen/meet operations using AlignedPair
-// =============================================================================
-
 ZoneDomain do_join(const ZoneDomain& left, const ZoneDomain& right) {
     if (right.is_top()) {
         return right;
@@ -520,7 +487,7 @@ ZoneDomain do_join(const ZoneDomain& left, const ZoneDomain& right) {
     auto [aligned_pair, aligned_vars] = ZoneDomain::make_intersection_alignment(left, right);
 
     // 2. Execute graph join
-    splitdbm::SplitDBM joined = splitdbm::SplitDBM::join(aligned_pair);
+    SplitDBM joined = SplitDBM::join(aligned_pair);
 
     // 3. Build result mappings and garbage collect
     auto [out_vmap, out_revmap] = result_mappings(std::move(aligned_vars));
@@ -532,8 +499,7 @@ ZoneDomain do_join(const ZoneDomain& left, const ZoneDomain& right) {
         }
     }
 
-    return ZoneDomain(std::move(out_vmap), std::move(out_revmap),
-                      std::make_unique<splitdbm::SplitDBM>(std::move(joined)));
+    return ZoneDomain(std::move(out_vmap), std::move(out_revmap), std::make_unique<SplitDBM>(std::move(joined)));
 }
 
 void ZoneDomain::operator|=(const ZoneDomain& right) { *this = do_join(*this, right); }
@@ -545,7 +511,7 @@ ZoneDomain ZoneDomain::widen(const ZoneDomain& o) const {
     auto [aligned_pair, aligned_vars] = make_intersection_alignment(*this, o);
 
     // 2. Execute graph widen
-    auto result_core = std::make_unique<splitdbm::SplitDBM>(splitdbm::SplitDBM::widen(aligned_pair));
+    auto result_core = std::make_unique<SplitDBM>(SplitDBM::widen(aligned_pair));
 
     // 3. Build result mappings
     auto [out_vmap, out_revmap] = result_mappings(aligned_vars);
@@ -565,7 +531,7 @@ std::optional<ZoneDomain> ZoneDomain::meet(const ZoneDomain& o) const {
     auto [aligned_pair, aligned_vars] = make_union_alignment(*this, o);
 
     // 2. Execute graph meet
-    auto meet_result = splitdbm::SplitDBM::meet(aligned_pair);
+    auto meet_result = SplitDBM::meet(aligned_pair);
     if (!meet_result) {
         return std::nullopt; // Infeasible
     }
@@ -573,10 +539,7 @@ std::optional<ZoneDomain> ZoneDomain::meet(const ZoneDomain& o) const {
     // 3. Build result mappings
     auto [out_vmap, out_revmap] = result_mappings(aligned_vars);
 
-    ZoneDomain res(std::move(out_vmap), std::move(out_revmap),
-                   std::make_unique<splitdbm::SplitDBM>(std::move(*meet_result)));
-    CRAB_LOG("zones-split", std::cout << "Result meet:\n" << res << "\n");
-    return res;
+    return ZoneDomain(std::move(out_vmap), std::move(out_revmap), std::make_unique<SplitDBM>(std::move(*meet_result)));
 }
 
 void ZoneDomain::havoc(const Variable v) {
@@ -588,11 +551,8 @@ void ZoneDomain::havoc(const Variable v) {
     }
 }
 
-// return false if becomes bottom
+// return false if it becomes bottom
 bool ZoneDomain::add_constraint(const LinearConstraint& cst) {
-    CrabStats::count("ZoneDomain.count.add_constraints");
-    ScopedCrabStats __st__("ZoneDomain.add_constraints");
-
     if (cst.is_tautology()) {
         return true;
     }
@@ -608,8 +568,6 @@ bool ZoneDomain::add_constraint(const LinearConstraint& cst) {
         if (!add_linear_leq(cst.expression())) {
             return false;
         }
-        //  g.check_adjs();
-        CRAB_LOG("zones-split", std::cout << "--- " << cst << "\n" << *this << "\n");
         break;
     }
     case ConstraintKind::LESS_THAN_ZERO: {
@@ -619,17 +577,13 @@ bool ZoneDomain::add_constraint(const LinearConstraint& cst) {
         if (!add_linear_leq(nc.expression())) {
             return false;
         }
-        CRAB_LOG("zones-split", std::cout << "--- " << cst << "\n" << *this << "\n");
         break;
     }
     case ConstraintKind::EQUALS_ZERO: {
         const LinearExpression& exp = cst.expression();
         if (!add_linear_leq(exp) || !add_linear_leq(exp.negate())) {
-            CRAB_LOG("zones-split", std::cout << " ~~> _|_" << "\n");
             return false;
         }
-        // g.check_adjs();
-        CRAB_LOG("zones-split", std::cout << "--- " << cst << "\n" << *this << "\n");
         break;
     }
     case ConstraintKind::NOT_ZERO: {
@@ -649,12 +603,6 @@ bool ZoneDomain::add_constraint(const LinearConstraint& cst) {
 }
 
 void ZoneDomain::assign(Variable lhs, const LinearExpression& e) {
-    CrabStats::count("ZoneDomain.count.assign");
-    ScopedCrabStats __st__("ZoneDomain.assign");
-
-    CRAB_LOG("zones-split", std::cout << "Before assign: " << *this << "\n");
-    CRAB_LOG("zones-split", std::cout << lhs << ":=" << e << "\n");
-
     Interval value_interval = eval_interval(e);
 
     std::optional<Weight> lb_w, ub_w;
@@ -662,7 +610,6 @@ void ZoneDomain::assign(Variable lhs, const LinearExpression& e) {
         Weight tmp;
         if (convert_NtoW_overflow(-*value_interval.lb().number(), tmp)) {
             havoc(lhs);
-            CRAB_LOG("zones-split", std::cout << "---" << lhs << ":=" << e << "\n" << *this << "\n");
             normalize();
             return;
         }
@@ -672,7 +619,6 @@ void ZoneDomain::assign(Variable lhs, const LinearExpression& e) {
         Weight tmp;
         if (convert_NtoW_overflow(*value_interval.ub().number(), tmp)) {
             havoc(lhs);
-            CRAB_LOG("zones-split", std::cout << "---" << lhs << ":=" << e << "\n" << *this << "\n");
             normalize();
             return;
         }
@@ -725,13 +671,9 @@ void ZoneDomain::assign(Variable lhs, const LinearExpression& e) {
     vert_map_.emplace(lhs, vert);
 
     normalize();
-    CRAB_LOG("zones-split", std::cout << "---" << lhs << ":=" << e << "\n" << *this << "\n");
 }
 
 ZoneDomain ZoneDomain::narrow(const ZoneDomain& o) const {
-    CrabStats::count("ZoneDomain.count.narrowing");
-    ScopedCrabStats __st__("ZoneDomain.narrowing");
-
     if (is_top()) {
         return o;
     }
@@ -740,13 +682,11 @@ ZoneDomain ZoneDomain::narrow(const ZoneDomain& o) const {
     return {*this};
 }
 
-void ZoneDomain::clear_thread_local_state() { splitdbm::SplitDBM::clear_thread_local_state(); }
+void ZoneDomain::clear_thread_local_state() { SplitDBM::clear_thread_local_state(); }
 
 void ZoneDomain::normalize() { core_->normalize(); }
 
 void ZoneDomain::set(const Variable x, const Interval& intv) {
-    CrabStats::count("ZoneDomain.count.assign");
-    ScopedCrabStats __st__("ZoneDomain.assign");
     assert(!intv.is_bottom());
 
     havoc(x);

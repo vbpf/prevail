@@ -436,7 +436,7 @@ class Number final {
         const auto u = static_cast<UInt128>(_n);
         const int bits = 128 - clz128(u);
         assert(bits > 0 && bits <= 64);
-        return Number{(static_cast<Int128>(1) << bits) - 1};
+        return Number{static_cast<Int128>((static_cast<UInt128>(1) << bits) - 1)};
     }
 
     friend std::ostream& operator<<(std::ostream& o, const Number& z);
