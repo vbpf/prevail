@@ -294,7 +294,7 @@ class Number final {
         const Int128 mask = (static_cast<Int128>(1) << width) - 1;
         const Int128 sign_bit = static_cast<Int128>(1) << (width - 1);
         const Int128 truncated = _n & mask;
-        if (truncated & sign_bit) {
+        if ((truncated & sign_bit) != 0) {
             return Number{truncated - (static_cast<Int128>(1) << width)};
         }
         return Number{truncated};
@@ -426,6 +426,7 @@ class Number final {
 
     // Return a number with all bits set up to the highest set bit.
     // Precondition: _n >= 0 (callers guard this via lb() >= 0).
+    // In practice _n fits in 64 bits, so bits <= 64.
     [[nodiscard]]
     Number fill_ones() const {
         assert(_n >= 0);
@@ -434,7 +435,7 @@ class Number final {
         }
         const auto u = static_cast<UInt128>(_n);
         const int bits = 128 - clz128(u);
-        assert(bits > 0 && bits <= 127);
+        assert(bits > 0 && bits <= 64);
         return Number{(static_cast<Int128>(1) << bits) - 1};
     }
 
