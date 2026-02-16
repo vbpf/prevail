@@ -23,7 +23,6 @@ static void ebpf_verifier_clear_before_analysis() {
 }
 
 void ebpf_verifier_clear_thread_local_state() {
-    CrabStats::clear_thread_local_state();
     thread_local_program_info.clear();
     clear_thread_local_state();
     ZoneDomain::clear_thread_local_state();

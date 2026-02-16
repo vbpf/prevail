@@ -12,7 +12,6 @@
 
 #include "arith/num_big.hpp"
 #include "arith/num_extended.hpp"
-#include "crab_utils/stats.hpp"
 
 namespace prevail {
 
