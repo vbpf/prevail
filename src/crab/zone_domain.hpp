@@ -65,7 +65,7 @@ class ZoneDomain final {
 
     // Evaluate an expression under the chosen potentials
     [[nodiscard]]
-    bool eval_expression_overflow(const LinearExpression& e, splitdbm::Weight& out) const;
+    splitdbm::Weight eval_expression(const LinearExpression& e) const;
 
     [[nodiscard]]
     Interval compute_residual(const LinearExpression& e, Variable pivot) const;
