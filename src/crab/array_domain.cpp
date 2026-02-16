@@ -60,6 +60,10 @@ static bool symbolic_overlap(const Cell& c, const Interval& range) {
 
 std::ostream& operator<<(std::ostream& o, const Cell& c) { return o << "cell(" << c.offset << "," << c.size << ")"; }
 
+static Variable cell_var(const DataKind kind, const Cell& c) {
+    return variable_registry->cell_var(kind, c.offset, c.size);
+}
+
 // Map offsets to cells.
 // std::map/std::set are used deliberately: empirically, the median collection holds ~3 cells,
 // overlap queries hit <5% of the time, and the entire offset map is <1% of verifier runtime.
@@ -219,7 +223,9 @@ std::vector<Cell> offset_map_t::get_overlap_cells(const offset_t o, const unsign
         }
     }
 
-    // Search forwards: cells at offsets > o that start within [o, o+size)
+    // Search forwards: cells at offsets > o that start within [o, o+size).
+    // Early break is safe here: if no cell at offset k overlaps, then k >= o + size,
+    // and all subsequent offsets are even larger, so they cannot overlap either.
     for (auto it = _map.upper_bound(o); it != _map.end(); ++it) {
         bool any_overlap = false;
         for (const Cell& x : it->second) {
@@ -286,8 +292,8 @@ void ArrayDomain::split_cell(NumAbsDomain& inv, const DataKind kind, const int c
     // Create a new cell for that range.
     offset_map_t& offset_map = lookup_array_map(kind);
     const Cell new_cell = offset_map.mk_cell(offset_t{gsl::narrow_cast<Index>(cell_start_index)}, len);
-    inv.assign(variable_registry->cell_var(DataKind::svalues, new_cell.offset, new_cell.size), svalue);
-    inv.assign(variable_registry->cell_var(DataKind::uvalues, new_cell.offset, new_cell.size), uvalue);
+    inv.assign(cell_var(DataKind::svalues, new_cell), svalue);
+    inv.assign(cell_var(DataKind::uvalues, new_cell), uvalue);
 }
 
 // Prepare to havoc bytes in the middle of a cell by potentially splitting the cell if it is numeric,
@@ -318,7 +324,7 @@ void ArrayDomain::split_number_var(NumAbsDomain& inv, DataKind kind, const Inter
             continue;
         }
 
-        if (!inv.eval_interval(variable_registry->cell_var(kind, c.offset, c.size)).is_singleton()) {
+        if (!inv.eval_interval(cell_var(kind, c)).is_singleton()) {
             // We can only split cells with a singleton value.
             continue;
         }
@@ -357,13 +363,13 @@ static std::optional<std::pair<offset_t, unsigned>> kill_and_find_var(NumAbsDoma
     if (!cells.empty()) {
         // Forget the scalars from the numerical domain
         for (const auto& c : cells) {
-            inv.havoc(variable_registry->cell_var(kind, c.offset, c.size));
+            inv.havoc(cell_var(kind, c));
 
             // Forget signed and unsigned values together.
             if (kind == DataKind::svalues) {
-                inv.havoc(variable_registry->cell_var(DataKind::uvalues, c.offset, c.size));
+                inv.havoc(cell_var(DataKind::uvalues, c));
             } else if (kind == DataKind::uvalues) {
-                inv.havoc(variable_registry->cell_var(DataKind::svalues, c.offset, c.size));
+                inv.havoc(cell_var(DataKind::svalues, c));
             }
         }
         // Remove the cells. If needed again they will be re-created.
@@ -448,7 +454,7 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, const
         const offset_t o(k);
         const unsigned size = to_unsigned(width);
         if (const auto cell = lookup_array_map(kind).get_cell(o, size)) {
-            return variable_registry->cell_var(kind, cell->offset, cell->size);
+            return cell_var(kind, *cell);
         }
         if (kind == DataKind::svalues || kind == DataKind::uvalues) {
             // Copy bytes into result_buffer, taking into account that the
@@ -515,7 +521,7 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, const
             const Cell c = offset_map.mk_cell(o, size);
             // Here it's ok to do assignment (instead of expand) because c is not a summarized variable.
             // Otherwise, it would be unsound.
-            return variable_registry->cell_var(kind, c.offset, c.size);
+            return cell_var(kind, c);
         }
         CRAB_WARN("Ignored read from cell ", kind, "[", o, "...", o + size - 1, "]", " because it overlaps with ",
                   cells.size(), " cells");
@@ -545,14 +551,14 @@ std::optional<LinearExpression> ArrayDomain::load_type(const Interval& i, int wi
         offset_t o(k);
         unsigned size = to_unsigned(width);
         if (auto cell = lookup_array_map(DataKind::types).get_cell(o, size)) {
-            return variable_registry->cell_var(DataKind::types, cell->offset, cell->size);
+            return cell_var(DataKind::types, *cell);
         }
         std::vector<Cell> cells = offset_map.get_overlap_cells(o, size);
         if (cells.empty()) {
             Cell c = offset_map.mk_cell(o, size);
             // Here it's ok to do assignment (instead of expand) because c is not a summarized variable.
             // Otherwise, it would be unsound.
-            return variable_registry->cell_var(DataKind::types, c.offset, c.size);
+            return cell_var(DataKind::types, c);
         }
         CRAB_WARN("Ignored read from cell ", DataKind::types, "[", o, "...", o + size - 1, "]",
                   " because it overlaps with ", cells.size(), " cells");
@@ -597,7 +603,7 @@ std::optional<Variable> ArrayDomain::store(NumAbsDomain& inv, const DataKind kin
         // perform strong update
         auto [offset, size] = *maybe_cell;
         const Cell c = lookup_array_map(kind).mk_cell(offset, size);
-        Variable v = variable_registry->cell_var(kind, c.offset, c.size);
+        Variable v = cell_var(kind, c);
         return v;
     }
     return {};
@@ -615,7 +621,7 @@ std::optional<Variable> ArrayDomain::store_type(TypeDomain& inv, const Interval&
             num_bytes.havoc(offset, size);
         }
         const Cell c = lookup_array_map(kind).mk_cell(offset, size);
-        Variable v = variable_registry->cell_var(kind, c.offset, c.size);
+        Variable v = cell_var(kind, c);
         return v;
     } else {
         using namespace dsl_syntax;
