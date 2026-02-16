@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-package:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-2025]
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # 1. Install Dependencies
+      - name: Install dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt install -y cmake ninja-build g++ libboost-dev libboost-filesystem-dev libboost-program-options-dev
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install cmake ninja boost
+
+      - name: Cache Boost packages (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v5
+        with:
+          path: ${{ github.workspace }}\build\packages
+          key: boost-${{ runner.os }}
+
+      # 2. Configure CMake
+      - name: Configure CMake (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: >
+          cmake -S . -B build -G Ninja
+          -D CMAKE_BUILD_TYPE=Release
+          -D prevail_ENABLE_TESTS=OFF
+
+      - name: Configure CMake (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: >
+          cmake -S . -B build -G "Visual Studio 17 2022"
+          -D prevail_ENABLE_TESTS=OFF
+
+      # 3. Build
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      # 4. Package Artifacts
+      - name: Package (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cp bin/check prevail
+          tar -czvf prevail-${{ runner.os }}-${{ runner.arch }}.tar.gz prevail README.md LICENSE.txt LICENSE-Apache-2.0.txt
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Copy-Item bin\check.exe prevail.exe
+          Compress-Archive -Path prevail.exe, README.md, LICENSE.txt, LICENSE-Apache-2.0.txt -DestinationPath prevail-${{ runner.os }}-${{ runner.arch }}.zip
+
+      # 5. Upload to GitHub Release
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            prevail-*-*.tar.gz
+            prevail-*-*.zip
