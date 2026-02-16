@@ -47,6 +47,7 @@ struct Cell final {
 };
 
 static Interval cell_to_interval(const offset_t o, const unsigned size) {
+    assert(o <= EBPF_TOTAL_STACK_SIZE && "offset out of bounds");
     const Number lb{gsl::narrow<int>(o)};
     return {lb, lb + size - 1};
 }
