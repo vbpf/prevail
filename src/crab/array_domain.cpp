@@ -41,6 +41,7 @@ struct Cell final {
     // Offsets are bounded by EBPF_TOTAL_STACK_SIZE (4096), so wraparound cannot occur.
     [[nodiscard]]
     bool overlap(const offset_t o, const unsigned sz) const {
+        assert(sz > 0 && "overlap query with zero width");
         return offset < o + sz && o < offset + size;
     }
 };
@@ -151,18 +152,9 @@ std::vector<Cell> offset_map_t::get_overlap_cells_symbolic_offset(const Interval
         // This is an over-approximation because [offset, offset+size) can overlap
         // with the largest cell, but it doesn't necessarily overlap with smaller cells.
         // For efficiency, we assume it overlaps with all.
-        Cell largest_cell;
-        for (const Cell& c : o_cells) {
-            if (largest_cell.size == 0) {
-                largest_cell = c;
-            } else {
-                assert(c.offset == largest_cell.offset);
-                if (largest_cell < c) {
-                    largest_cell = c;
-                }
-            }
-        }
-        if (largest_cell.size != 0) {
+        if (!o_cells.empty()) {
+            // Cells are sorted by (offset, size); last element has the largest size.
+            const Cell& largest_cell = *o_cells.rbegin();
             if (symbolic_overlap(largest_cell, range)) {
                 for (const auto& c : o_cells) {
                     out.push_back(c);
@@ -209,22 +201,20 @@ std::vector<Cell> offset_map_t::get_overlap_cells(const offset_t o, const unsign
         added = true;
     }
 
-    // Search backwards: cells at offsets <= o that might extend into [o, o+size)
+    // Search backwards: cells at offsets <= o that might extend into [o, o+size).
+    // We cannot break early: a bucket with small cells may not overlap while an
+    // earlier bucket with larger cells does (e.g., Cell(48,8) overlaps [54,56)
+    // but Cell(50,2) does not). The map is tiny (~3 entries) so this is fine.
     for (auto it = _map.upper_bound(o); it != _map.begin();) {
         --it;
-        bool any_overlap = false;
         for (const Cell& x : it->second) {
             if (x.overlap(o, size)) {
-                any_overlap = true;
                 if (x != *maybe_c) {
                     if (std::ranges::find(out, x) == out.end()) {
                         out.push_back(x);
                     }
                 }
             }
-        }
-        if (!any_overlap) {
-            break;
         }
     }
 
