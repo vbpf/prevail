@@ -170,7 +170,7 @@ WTO provides an efficient iteration order for fixpoint computation.
 Consider this CFG with nested loops:
 
 ```
-1 → 2 → 3 → 4 → 5 → 6 → exit
+1 -> 2 -> 3 -> 4 -> 5 -> 6 -> exit
     ↑   ↓   ↑       │
     └───┘   └───────┘
 ```
@@ -364,7 +364,7 @@ std::vector<Label> reverse_postorder() {
 
 **CFG**:
 ```
-entry → 0 → 1 → 2 ─→ 2:5 → 5 → exit
+entry -> 0 -> 1 -> 2 ─-> 2:5 -> 5 -> exit
                ↑ ←─ 4 ← 3
                └────────┘
                   (loop)

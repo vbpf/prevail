@@ -1,5 +1,5 @@
-#include "platform.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
+#include "platform.hpp"
 
 namespace prevail {
 // Unsupported or partially supported return types
@@ -1874,7 +1874,8 @@ static constexpr EbpfHelperPrototype bpf_task_storage_delete_proto = {
 };
 
 static constexpr EbpfHelperPrototype bpf_get_current_task_btf_proto = {
-    .name = "get_current_task_btf", .return_type = EBPF_RETURN_TYPE_PTR_TO_BTF_ID,
+    .name = "get_current_task_btf",
+    .return_type = EBPF_RETURN_TYPE_PTR_TO_BTF_ID,
     // .ret_btf_id = &bpf_get_current_btf_ids[0],
 };
 
