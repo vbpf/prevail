@@ -1,9 +1,6 @@
 [submodule "ebpf-samples"]
 	path = ebpf-samples
 	url = https://github.com/vbpf/ebpf-samples.git
-[submodule "external/radix_tree"]
-	path = external/radix_tree
-	url = https://github.com/elazarg/radix_tree_20
 [submodule "external/bpf_conformance"]
 	path = external/bpf_conformance
 	url = https://github.com/Alan-Jowett/bpf_conformance.git

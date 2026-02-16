@@ -825,3 +825,49 @@ post:
   - r10.type=stack
   - r10.stack_offset=512
   - s[504...507].type=number
+---
+# Regression test for backward scan early-break bug in get_overlap_cells.
+# See REGRESSION.md for details.
+#
+# Sequence: write 8 bytes at offset 48, then 2 bytes at offset 50 (kills the
+# 8-byte cell), then 8 bytes at offset 48 again, then 2 bytes at offset 54.
+# The write at [54,56) overlaps [48,56) and must kill Cell(48,8).
+# With the bug, the backward scan breaks early at offset 50 (empty bucket)
+# and never reaches offset 48, leaving a stale Cell(48,8) with value 99.
+# The observation checks that r0 is NOT known to be 99 after the load.
+test-case: get_overlap_cells backward scan must not break early
+
+options: ["!big_endian"]
+
+pre: ["r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    r1 = 99
+    *(u64 *)(r10 - 464) = r1   ; Cell(48,8) = 99, covers [48,56)
+    r1 = 7
+    *(u16 *)(r10 - 462) = r1   ; overlap-kills Cell(48,8), creates Cell(50,2)
+    r1 = 99
+    *(u64 *)(r10 - 464) = r1   ; overlap-kills Cell(50,2), creates Cell(48,8) = 99
+    r1 = 0
+    *(u16 *)(r10 - 458) = r1   ; [54,56) overlaps [48,56): must kill Cell(48,8)
+    r0 = *(u64 *)(r10 - 464)   ; load [48,56): should be unknown, not 99
+    exit
+
+post:
+  - r0.type=number
+  - r1.type=number
+  - r1.svalue=0
+  - r1.uvalue=0
+  - r10.type=stack
+  - r10.stack_offset=512
+  - s[48...55].type=number
+  - s[54...55].svalue=0
+  - s[54...55].uvalue=0
+
+observe:
+  - at: exit
+    point: post
+    mode: consistent
+    constraints:
+      - r0.svalue=0
