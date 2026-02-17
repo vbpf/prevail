@@ -8,6 +8,7 @@
 #include <map>
 #include <ranges>
 #include <set>
+#include <span>
 #include <sstream>
 #include <stdexcept>
 #include <variant>
@@ -488,14 +489,24 @@ StringInvariant stack_contents_invariant(const std::vector<std::byte>& memory_by
     return StringInvariant(std::move(more));
 }
 
-ConformanceTestResult run_conformance_test_case(const std::vector<std::byte>& memory_bytes,
-                                                const std::vector<std::byte>& program_bytes, bool debug) {
+// Helper to convert uint8_t memory to stack invariant
+static StringInvariant stack_contents_invariant(const std::vector<uint8_t>& memory_bytes) {
+    std::vector<std::byte> bytes(memory_bytes.size());
+    std::transform(memory_bytes.begin(), memory_bytes.end(), bytes.begin(),
+                   [](uint8_t b) { return static_cast<std::byte>(b); });
+    return stack_contents_invariant(bytes);
+}
+
+ConformanceTestResult run_conformance_test_case(const std::vector<uint8_t>& memory_bytes,
+                                                std::span<const EbpfInst> instructions, bool debug) {
     ebpf_context_descriptor_t context_descriptor{64, -1, -1, -1};
     EbpfProgramType program_type = make_program_type("conformance_check", &context_descriptor);
 
     ProgramInfo info{&g_platform_test, {}, program_type};
 
-    auto insts = vector_of<EbpfInst>(program_bytes);
+    // Copy instructions into a local vector for RawProgram.
+    std::vector<EbpfInst> insts(instructions.begin(), instructions.end());
+
     StringInvariant pre_invariant = StringInvariant::top();
 
     if (!memory_bytes.empty()) {

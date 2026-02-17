@@ -197,21 +197,24 @@ exit
 
 ### Running Conformance
 
+Conformance tests use test files from `external/bpf_conformance/tests/` and verify
+that the expected return value is within the verifier's computed range (soundness check).
+
 ```bash
-# Via Catch2
+# Run all conformance tests
 ./bin/tests "[conformance]"
 
-# Via conformance_check directly
-./bin/conformance_check external/bpf_conformance/tests/add.data
+# Run a specific conformance test
+./bin/tests "conformance_check add.data"
 ```
 
 ### Expected Failures
 
-Some tests are known to fail due to semantic differences:
+Some tests are expected to fail verification (the program is rejected by the verifier):
 
 ```cpp
 // In test_conformance.cpp
-TEST_CONFORMANCE_FAIL("problematic.data", "expected error message")
+TEST_CONFORMANCE_VERIFICATION_FAILED("mem-len.data")
 ```
 
 ## Writing Tests

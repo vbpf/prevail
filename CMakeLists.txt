@@ -87,12 +87,11 @@ if (prevail_ENABLE_TESTS)
   include(cmake/SetupYAMLCPP.cmake)
 endif ()
 
-add_compile_definitions(BOOST_PROCESS_USE_STD_FS)
+# Add elfio before bpf_conformance_core so it can detect and use it
+add_subdirectory("${prevail_source_dir}/external/bpf_conformance/external/elfio" "${CMAKE_CURRENT_BINARY_DIR}/elfio")
 
-if (prevail_ENABLE_TESTS)
-  # Let bpf_conformance manage its own Boost (including NuGet libs on MSVC)
-  add_subdirectory("${prevail_source_dir}/external/bpf_conformance/src" "${CMAKE_CURRENT_BINARY_DIR}/bpf_conformance")
-endif ()
+# Use only the core library from bpf_conformance (pure C++20, no Boost dependency)
+add_subdirectory("${prevail_source_dir}/external/bpf_conformance/lib" "${CMAKE_CURRENT_BINARY_DIR}/bpf_conformance_core")
 
 include(cmake/SetupBoostHeaders.cmake)
 
@@ -110,32 +109,25 @@ target_include_directories(prevail PUBLIC
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-# 2. Setup the bpf_conformance shim for local development
-# This allows #include <bpf_conformance/bpf_conformance.h> to work locally
-set(BPF_CONFORMANCE_SHIM "${CMAKE_CURRENT_BINARY_DIR}/shim")
-file(MAKE_DIRECTORY "${BPF_CONFORMANCE_SHIM}/bpf_conformance")
-file(COPY "${prevail_source_dir}/external/bpf_conformance/include/bpf_conformance.h"
-  DESTINATION "${BPF_CONFORMANCE_SHIM}/bpf_conformance")
-
-# 3. Consolidated Target Include Directories (Interface)
+# 2. Consolidated Target Include Directories (Interface)
 # We use SYSTEM to suppress warnings from external headers
 target_include_directories(prevail SYSTEM PUBLIC
   # Local build tree paths
   $<BUILD_INTERFACE:${prevail_source_dir}/external>
   $<BUILD_INTERFACE:${prevail_source_dir}/external/bpf_conformance/external/elfio>
+  $<BUILD_INTERFACE:${prevail_source_dir}/external/bpf_conformance/lib/include>
   $<BUILD_INTERFACE:${prevail_source_dir}/external/libbtf>
-  $<BUILD_INTERFACE:${BPF_CONFORMANCE_SHIM}>
   $<BUILD_INTERFACE:${Boost_INCLUDE_DIR}>
 
   # Install tree paths
-  # All dependencies (bpf_conformance, elfio, libbtf, prevail) are rooted in include/
+  # All dependencies (bpf_conformance_core, elfio, libbtf, prevail) are rooted in include/
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-# 4. Installation Directives
-# Ensure bpf_conformance is reachable via <bpf_conformance/...>
-install(DIRECTORY "${prevail_source_dir}/external/bpf_conformance/include/"
-  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/bpf_conformance"
+# 3. Installation Directives
+# Ensure bpf_conformance_core is reachable via <bpf_conformance_core/...>
+install(DIRECTORY "${prevail_source_dir}/external/bpf_conformance/lib/include/"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
   FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
 )
 
@@ -162,7 +154,6 @@ target_compile_options(prevail PRIVATE
   "$<$<BOOL:${ENABLE_ASAN}>:${SANITIZE_FLAGS}>"
 )
 
-add_subdirectory("${prevail_source_dir}/external/bpf_conformance/external/elfio" "${CMAKE_CURRENT_BINARY_DIR}/elfio")
 add_subdirectory("${prevail_source_dir}/external/libbtf" "${CMAKE_CURRENT_BINARY_DIR}/libbtf")
 target_include_directories(libbtf INTERFACE
   $<BUILD_INTERFACE:${prevail_source_dir}/external/libbtf/libbtf>
@@ -213,40 +204,28 @@ if (prevail_ENABLE_TESTS)
   set(THREADS_PREFER_PTHREAD_FLAG ON)
   find_package(Threads REQUIRED)
 
-  add_executable(conformance_check "${prevail_source_dir}/src/test/conformance_check.cpp")
-
   add_executable(run_yaml "${prevail_source_dir}/src/test/run_yaml.cpp")
 
   file(GLOB prevail_TEST_SRC CONFIGURE_DEPENDS "${prevail_source_dir}/src/test/test_*.cpp")
   add_executable(tests ${prevail_TEST_SRC})
 
   add_library(ebpf_yaml_lib STATIC "${prevail_source_dir}/src/test/ebpf_yaml.cpp")
-  target_link_libraries(ebpf_yaml_lib PRIVATE prevail bpf_conformance yaml-cpp::yaml-cpp)
+  target_link_libraries(ebpf_yaml_lib PRIVATE prevail bpf_conformance_core yaml-cpp::yaml-cpp)
 
   target_link_libraries(run_yaml PRIVATE prevail ebpf_yaml_lib)
 
-  target_compile_definitions(conformance_check PRIVATE BOOST_PROCESS_USE_STD_FS)
-  target_link_libraries(conformance_check PRIVATE prevail ebpf_yaml_lib)
-
-  target_link_libraries(tests PRIVATE prevail ebpf_yaml_lib Catch2::Catch2WithMain Threads::Threads yaml-cpp::yaml-cpp)
+  target_link_libraries(tests PRIVATE prevail ebpf_yaml_lib bpf_conformance_core Catch2::Catch2WithMain Threads::Threads yaml-cpp::yaml-cpp)
 
   if (CMAKE_CONFIGURATION_TYPES)
-    set_target_properties(tests run_yaml conformance_check PROPERTIES
+    set_target_properties(tests run_yaml PROPERTIES
       RUNTIME_OUTPUT_DIRECTORY_DEBUG "${prevail_binary_dir}"
       RUNTIME_OUTPUT_DIRECTORY_RELEASE "${prevail_binary_dir}"
       RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${prevail_binary_dir}"
     )
   else ()
-    set_target_properties(tests run_yaml conformance_check PROPERTIES
+    set_target_properties(tests run_yaml PROPERTIES
       RUNTIME_OUTPUT_DIRECTORY ${prevail_binary_dir})
   endif ()
-
-  # conformance tests use the conformance_check binary; ensure it's built first,
-  # and pass its path via a define
-  add_dependencies(tests conformance_check)
-  target_compile_definitions(tests PRIVATE
-    CONFORMANCE_CHECK_PATH="$<TARGET_FILE:conformance_check>"
-  )
 endif ()
 
 # Installation

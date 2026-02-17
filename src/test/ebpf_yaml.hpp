@@ -4,6 +4,7 @@
 #include <functional>
 #include <optional>
 #include <set>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -54,8 +55,9 @@ struct ConformanceTestResult {
     std::string error_reason{};
 };
 
-ConformanceTestResult run_conformance_test_case(const std::vector<std::byte>& memory_bytes,
-                                                const std::vector<std::byte>& program_bytes, bool debug);
+// Run verification on BPF instructions with optional input memory
+ConformanceTestResult run_conformance_test_case(const std::vector<uint8_t>& memory_bytes,
+                                                std::span<const EbpfInst> instructions, bool debug);
 
 bool run_yaml(const std::string& path);
 } // namespace prevail
