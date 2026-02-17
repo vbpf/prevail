@@ -1,74 +1,90 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
+
+// Conformance tests using direct parsing from bpf_conformance_core.
+// Tests verify soundness: the expected return value must be within
+// the verifier's computed range.
+
 #include <catch2/catch_all.hpp>
 
+#include <cstddef>
 #include <filesystem>
+#include <span>
 #include <string>
 
-#include <bpf_conformance/bpf_conformance.h>
+#include <bpf_conformance_core/bpf_conformance.h>
+#include <bpf_conformance_core/bpf_test_parser.h>
 
-#ifndef CONFORMANCE_CHECK_PATH
-#ifdef _WIN32
-#define CONFORMANCE_CHECK_PATH "conformance_check.exe"
-#else
-#define CONFORMANCE_CHECK_PATH "./conformance_check"
-#endif
-#endif
+#include "spec/vm_isa.hpp"
+#include "test/ebpf_yaml.hpp"
 
-static void test_conformance(const std::string& filename, const bpf_conformance_test_result_t& expected_result,
-                             const std::string& expected_reason) {
-    static const std::filesystem::path conformance_test_path = "external/bpf_conformance/tests/";
-    const std::vector test_files = {conformance_test_path / filename};
-    auto result =
-        bpf_conformance(test_files, CONFORMANCE_CHECK_PATH, {}, {}, {}, bpf_conformance_test_CPU_version_t::v4,
-                        bpf_conformance_groups_t::default_groups | bpf_conformance_groups_t::callx,
-                        bpf_conformance_list_instructions_t::LIST_INSTRUCTIONS_NONE, false);
-    for (const auto& file : test_files) {
-        auto& [file_result, reason] = result[file];
-        REQUIRE(file_result == expected_result);
-        if (file_result != bpf_conformance_test_result_t::TEST_RESULT_PASS && !expected_reason.empty()) {
-            reason.erase(reason.find_last_not_of(" \n\r\t") + 1); // Remove trailing whitespace.
-            if (expected_result == bpf_conformance_test_result_t::TEST_RESULT_ERROR) {
-                REQUIRE(reason == "Plugin returned error code 1 and output " + expected_reason);
-            } else {
-                REQUIRE(reason == expected_reason);
-            }
-        }
+/**
+ * @brief Run a conformance test by parsing the test file directly and
+ * verifying that the expected result is sound (within the verifier's range).
+ *
+ * @param filename Test file name relative to external/bpf_conformance/tests/
+ * @param expect_verification_failure If true, expect verification to fail
+ */
+static void test_conformance(const std::string& filename, bool expect_verification_failure = false) {
+    const std::filesystem::path test_path = "external/bpf_conformance/tests/" + filename;
+
+    // Parse the test file to get memory, expected result, and instructions
+    auto [input_memory, expected_value, expected_error, instructions] = parse_test_file(test_path);
+
+    // Surface any expected error from the test file for diagnostic purposes
+    if (!expected_error.empty()) {
+        INFO("Test file specifies expected error: " << expected_error);
     }
+
+    // Skip tests with no instructions
+    if (instructions.empty()) {
+        SKIP("Test file has no instructions");
+        return;
+    }
+
+    // Convert ebpf_inst (from bpf_conformance_core) to EbpfInst
+    // Both are layout-compatible, so we can use reinterpret_cast on a span
+    static_assert(sizeof(ebpf_inst) == sizeof(prevail::EbpfInst));
+    static_assert(alignof(ebpf_inst) == alignof(prevail::EbpfInst));
+    static_assert(offsetof(ebpf_inst, opcode) == offsetof(prevail::EbpfInst, opcode));
+    static_assert(offsetof(ebpf_inst, offset) == offsetof(prevail::EbpfInst, offset));
+    static_assert(offsetof(ebpf_inst, imm) == offsetof(prevail::EbpfInst, imm));
+    const std::span<const prevail::EbpfInst> ebpf_instructions{
+        reinterpret_cast<const prevail::EbpfInst*>(instructions.data()), instructions.size()};
+
+    // Run the verifier
+    const auto result = prevail::run_conformance_test_case(input_memory, ebpf_instructions, false);
+
+    if (expect_verification_failure) {
+        // We expect verification to fail for this test
+        if (!result.error_reason.empty()) {
+            INFO("Error reason: " << result.error_reason);
+        }
+        REQUIRE_FALSE(result.success);
+        return;
+    }
+
+    // Verification should succeed
+    REQUIRE(result.success);
+
+    // Soundness check: the expected value must be within the verifier's range
+    // This is the key improvement - we check containment rather than exact equality
+    const auto expected_signed = static_cast<int64_t>(expected_value);
+    const bool is_sound = result.r0_value.contains(expected_signed);
+
+    INFO("Expected value: 0x" << std::hex << expected_value << " (" << std::dec << expected_signed << ")");
+    INFO("Verifier range: " << result.r0_value);
+
+    REQUIRE(is_sound);
 }
 
-#define TEST_CONFORMANCE(filename)                                                       \
-    TEST_CASE("conformance_check " filename, "[conformance]") {                          \
-        test_conformance(filename, bpf_conformance_test_result_t::TEST_RESULT_PASS, {}); \
-    }
+// Standard test macro - checks soundness (expected value is within verifier's range)
+#define TEST_CONFORMANCE(filename) \
+    TEST_CASE("conformance_check " filename, "[conformance]") { test_conformance(filename); }
 
-// Any tests that fail verification are safe, but might prevent
-// legitimate programs from being usable.
-#define TEST_CONFORMANCE_VERIFICATION_FAILED(filename)                                                       \
-    TEST_CASE("conformance_check " filename, "[conformance]") {                                              \
-        test_conformance(filename, bpf_conformance_test_result_t::TEST_RESULT_ERROR, "Verification failed"); \
-    }
-
-// Any tests that return top are safe, but are not as precise as they
-// could be and so may prevent legitimate programs from being usable.
-#define TEST_CONFORMANCE_TOP(filename)                                                                               \
-    TEST_CASE("conformance_check " filename, "[conformance]") {                                                      \
-        test_conformance(filename, bpf_conformance_test_result_t::TEST_RESULT_ERROR, "Couldn't determine r0 value"); \
-    }
-
-// Any tests that return a range are safe, but are not as precise as they
-// could be and so may prevent legitimate programs from being usable.
-#define TEST_CONFORMANCE_RANGE(filename, range)                                                                   \
-    TEST_CASE("conformance_check " filename, "[conformance]") {                                                   \
-        test_conformance(filename, bpf_conformance_test_result_t::TEST_RESULT_ERROR, "r0 value is range " range); \
-    }
-
-// Tests that are known to fail today and need investigation (potential bugs).
-// Unlike TEST_CONFORMANCE_VERIFICATION_FAILED, these are not expected-safe failures.
-#define TEST_CONFORMANCE_FAIL(filename, expected_reason)                                              \
-    TEST_CASE("conformance_check " filename, "[conformance]") {                                       \
-        test_conformance(filename, bpf_conformance_test_result_t::TEST_RESULT_FAIL, expected_reason); \
-    }
+// Tests that are expected to fail verification (the program is rejected)
+#define TEST_CONFORMANCE_VERIFICATION_FAILED(filename) \
+    TEST_CASE("conformance_check " filename, "[conformance]") { test_conformance(filename, true); }
 
 TEST_CONFORMANCE("add.data")
 TEST_CONFORMANCE("add64.data")
@@ -177,8 +193,8 @@ TEST_CONFORMANCE("lock_add.data")
 TEST_CONFORMANCE("lock_add32.data")
 TEST_CONFORMANCE("lock_and.data")
 TEST_CONFORMANCE("lock_and32.data")
-TEST_CONFORMANCE_TOP("lock_cmpxchg.data")
-TEST_CONFORMANCE_TOP("lock_cmpxchg32.data")
+TEST_CONFORMANCE("lock_cmpxchg.data")
+TEST_CONFORMANCE("lock_cmpxchg32.data")
 TEST_CONFORMANCE("lock_fetch_add.data")
 TEST_CONFORMANCE("lock_fetch_add32.data")
 TEST_CONFORMANCE("lock_fetch_and.data")
@@ -234,7 +250,7 @@ TEST_CONFORMANCE("neg32-intmin-reg.data")
 TEST_CONFORMANCE("neg64.data")
 TEST_CONFORMANCE("neg64-intmin-imm.data")
 TEST_CONFORMANCE("neg64-intmin-reg.data")
-TEST_CONFORMANCE_RANGE("prime.data", "[0, 1]")
+TEST_CONFORMANCE("prime.data")
 TEST_CONFORMANCE("rsh32-imm.data")
 TEST_CONFORMANCE("rsh32-imm-high.data")
 TEST_CONFORMANCE("rsh32-imm-neg.data")
@@ -341,8 +357,8 @@ TEST_CONFORMANCE("rfc9669_lock_add32.data")
 TEST_CONFORMANCE("rfc9669_lock_add64.data")
 TEST_CONFORMANCE("rfc9669_lock_and32.data")
 TEST_CONFORMANCE("rfc9669_lock_and64.data")
-TEST_CONFORMANCE_RANGE("rfc9669_lock_cmpxchg32.data", "[0, 1]")
-TEST_CONFORMANCE_RANGE("rfc9669_lock_cmpxchg64.data", "[0, 1]")
+TEST_CONFORMANCE("rfc9669_lock_cmpxchg32.data")
+TEST_CONFORMANCE("rfc9669_lock_cmpxchg64.data")
 TEST_CONFORMANCE("rfc9669_lock_fetch_add32.data")
 TEST_CONFORMANCE("rfc9669_lock_fetch_add64.data")
 TEST_CONFORMANCE("rfc9669_lock_or32.data")

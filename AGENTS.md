@@ -12,7 +12,7 @@
 - **Primary deliverables:**
   - `check`: command-line verifier for eBPF object files.
   - `tests`: Catch2-based regression suite.
-  - `run_yaml` / `conformance_check`: tooling around the verifier and conformance data.
+  - `run_yaml`: YAML test case runner.
 - **Third-party code:** resides under `external/` and is treated as vendored dependencies. Do not edit these unless explicitly asked.
 
 ## Repository map

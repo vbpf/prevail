@@ -121,7 +121,6 @@ After building, you'll find these executables in `bin/`:
 | `check` | Main verifier CLI tool |
 | `tests` | Catch2 test runner |
 | `run_yaml` | YAML test case runner |
-| `conformance_check` | BPF conformance checker |
 
 ## Running Tests
 
