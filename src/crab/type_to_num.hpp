@@ -224,7 +224,7 @@ struct TypeToNumDomain {
     std::vector<TypeEncoding> iterate_types(const Reg& reg) const { return types.iterate_types(reg); }
     void havoc_type(const Reg& r) { types.havoc_type(r); }
     void havoc_type(const Variable& v) { types.havoc_type(v); }
-    void assume_eq(const Variable v1, const Variable v2) { types.assume_eq(v1, v2); }
+    void assume_eq_types(const Variable v1, const Variable v2) { types.assume_eq(v1, v2); }
     void remove_type(const Variable v, const TypeEncoding te) { types.remove_type(v, te); }
 
     void havoc_offsets(const Reg& reg);

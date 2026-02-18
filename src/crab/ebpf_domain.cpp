@@ -24,10 +24,10 @@ StringInvariant EbpfDomain::to_set() const { return state.to_set() + stack.to_se
 std::optional<int64_t> EbpfDomain::get_stack_offset(const Reg& reg) const {
     // Only return an offset when the register is *definitely* a stack pointer,
     // not just possibly one. This ensures we don't misclassify memory deps.
-    if (rcp.types.get_type(reg) != T_STACK) {
+    if (state.get_type(reg) != T_STACK) {
         return std::nullopt;
     }
-    const auto offset = rcp.values.eval_interval(reg_pack(reg).stack_offset);
+    const auto offset = state.values.eval_interval(reg_pack(reg).stack_offset);
     if (const auto singleton = offset.singleton()) {
         return singleton->cast_to<int64_t>();
     }
@@ -382,7 +382,7 @@ EbpfDomain EbpfDomain::from_constraints(const std::set<std::string>& constraints
     auto [type_equalities, type_restrictions, value_constraints] =
         parse_linear_constraints(constraints, numeric_ranges);
     for (const auto& [v1, v2] : type_equalities) {
-        inv.state.assume_eq(v1, v2);
+        inv.state.assume_eq_types(v1, v2);
     }
     for (const auto& [var, ts] : type_restrictions) {
         inv.state.types.restrict_to(var, ts);
