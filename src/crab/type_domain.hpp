@@ -2,14 +2,12 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-// This file is eBPF-specific, not derived from CRAB.
-#include <map>
+#include <memory>
 #include <optional>
 #include <vector>
 
 #include "arith/linear_constraint.hpp"
 #include "arith/variable.hpp"
-#include "crab/dsu.hpp"
 #include "crab/type_encoding.hpp"
 #include "ir/syntax.hpp"
 #include "string_constraints.hpp"
@@ -18,82 +16,6 @@ namespace prevail {
 
 Variable reg_type(const Reg& lhs);
 
-/// Bidirectional map between Variables and DSU element IDs.
-///
-/// Maintains a partial bijection: every live Variable maps to exactly one ID
-/// and vice versa. Orphaned IDs (from detach) have no Variable but still
-/// occupy a slot in id_to_var.
-class VarIdMap {
-    std::map<Variable, size_t> var_to_id_;
-    std::vector<std::optional<Variable>> id_to_var_;
-
-  public:
-    VarIdMap() = default;
-
-    /// Look up the DSU element ID for a variable, or nullopt if absent.
-    [[nodiscard]]
-    std::optional<size_t> find_id(Variable v) const {
-        if (const auto it = var_to_id_.find(v); it != var_to_id_.end()) {
-            return it->second;
-        }
-        return std::nullopt;
-    }
-
-    /// Look up the variable for a DSU element ID, or nullopt if orphaned.
-    [[nodiscard]]
-    std::optional<Variable> find_var(size_t id) const {
-        if (id < id_to_var_.size()) {
-            return id_to_var_[id];
-        }
-        return std::nullopt;
-    }
-
-    /// Whether a variable is present.
-    [[nodiscard]]
-    bool contains(Variable v) const {
-        return var_to_id_.contains(v);
-    }
-
-    /// Insert or overwrite a bidirectional mapping. Grows id_to_var if needed.
-    void insert(Variable v, size_t id) {
-        var_to_id_[v] = id;
-        while (id_to_var_.size() <= id) {
-            id_to_var_.push_back(std::nullopt);
-        }
-        id_to_var_[id] = v;
-    }
-
-    /// Orphan an ID: remove its variable mapping (if any), but keep the slot.
-    void orphan(size_t id) {
-        if (id < id_to_var_.size()) {
-            if (const auto& var = id_to_var_[id]) {
-                var_to_id_.erase(*var);
-            }
-            id_to_var_[id] = std::nullopt;
-        }
-    }
-
-    /// Orphan the old ID for a variable (if any) without removing the variable
-    /// from var_to_id. Used by detach, which immediately re-inserts.
-    void orphan_var(Variable v) {
-        if (const auto it = var_to_id_.find(v); it != var_to_id_.end()) {
-            id_to_var_[it->second] = std::nullopt;
-        }
-    }
-
-    /// Number of ID slots (including orphaned).
-    [[nodiscard]]
-    size_t id_capacity() const {
-        return id_to_var_.size();
-    }
-
-    /// Iterate over all live (Variable, ID) pairs.
-    [[nodiscard]]
-    const std::map<Variable, size_t>& vars() const {
-        return var_to_id_;
-    }
-};
-
 /// Type abstract domain based on disjoint-set with TypeSet annotations.
 ///
 /// Tracks must-equality between type variables (partition into equivalence
@@ -101,7 +23,7 @@ class VarIdMap {
 ///
 /// ## Representation
 ///
-/// - Bottom = nullopt (state_ has no value). Unique representation.
+/// - Bottom = nullptr (state_ is empty). Unique representation.
 /// - Top = default State (sentinels only, no variables). Unique representation.
 /// - Non-trivial = State with variables registered in the DSU.
 ///   The representation is NOT unique: DSU element IDs depend on insertion
@@ -117,7 +39,7 @@ class VarIdMap {
 /// lattice works: for TypeSet, the empty set is the strongest constraint;
 /// for TypeDomain, having no registered variables means no constraints.
 ///
-/// ## Invariants (when state_ has value, i.e., not bottom)
+/// ## Invariants (when state_ is non-null, i.e., not bottom)
 ///
 /// 1. Sentinels: IDs 0..7 exist. class_types[type_to_bit(te)] = {te}.
 /// 2. Singleton-merging: any class with singleton TypeSet {te} has the same
@@ -126,16 +48,18 @@ class VarIdMap {
 /// 3. class_types[dsu.find(id)] is the TypeSet for id's equivalence class.
 ///    class_types at non-representative indices may be stale.
 /// 4. var_ids maintains a partial bijection between live Variables and DSU IDs.
+///    Same pattern as ZoneDomain's VertMap/RevMap (Variable <-> VertId).
 /// 5. class_types.size() == var_ids.id_capacity() == dsu.size().
 /// 6. No representative has an empty TypeSet (empty -> bottom).
 class TypeDomain {
   public:
     TypeDomain();
+    ~TypeDomain();
 
-    TypeDomain(const TypeDomain& other) = default;
-    TypeDomain(TypeDomain&& other) noexcept = default;
-    TypeDomain& operator=(const TypeDomain& other) = default;
-    TypeDomain& operator=(TypeDomain&& other) noexcept = default;
+    TypeDomain(const TypeDomain& other);
+    TypeDomain(TypeDomain&& other) noexcept;
+    TypeDomain& operator=(const TypeDomain& other);
+    TypeDomain& operator=(TypeDomain&& other) noexcept;
 
     // Lattice operations
     void operator|=(const TypeDomain& other);
@@ -149,7 +73,7 @@ class TypeDomain {
     static TypeDomain top() { return TypeDomain{}; }
     [[nodiscard]]
     bool is_bottom() const {
-        return !state_.has_value();
+        return !state_;
     }
     [[nodiscard]]
     TypeDomain widen(const TypeDomain& other) const {
@@ -167,7 +91,6 @@ class TypeDomain {
     // Constraint handling (== and != only; order comparisons are not meaningful)
     void add_constraint(const LinearConstraint& cst);
 
-    // Type set restriction (direct, non-convex)
     void restrict_to(Variable v, TypeSet mask);
 
     /// Remove a single type from a variable's set.
@@ -219,7 +142,7 @@ class TypeDomain {
     [[nodiscard]]
     bool is_initialized(const Reg& r) const;
     [[nodiscard]]
-    bool is_initialized(const LinearExpression& v) const;
+    bool is_initialized(const LinearExpression& expr) const;
 
     [[nodiscard]]
     bool same_type(const Reg& a, const Reg& b) const;
@@ -236,27 +159,13 @@ class TypeDomain {
     friend std::ostream& operator<<(std::ostream& o, const TypeDomain& dom);
 
   private:
-    /// Internal state. Present = live domain, absent = bottom.
-    struct State {
-        DisjointSetUnion dsu;
-        VarIdMap var_ids;
-        std::vector<TypeSet> class_types;
+    struct State;
+    std::unique_ptr<State> state_;
 
-        State();
-    };
-    std::optional<State> state_{State{}};
+    void set_to_bottom();
 
-    void set_to_bottom() { state_.reset(); }
-
-    // Internal helpers (all require state_ to have value)
-    void merge_if_singleton(size_t id);
-    size_t ensure_var(Variable v);
-    void detach(Variable v);
     [[nodiscard]]
     TypeSet get_typeset(Variable v) const;
-    void restrict_var(Variable v, TypeSet mask);
-    void unify(Variable v1, Variable v2);
-    void assign_from_expr(Variable lhs, const LinearExpression& expr);
     [[nodiscard]]
     TypeDomain join(const TypeDomain& other) const;
 };
