@@ -153,7 +153,7 @@ inline void close_over_edge(Graph& g, VertId ii, VertId jj) {
     Weight c = g_excl.edge_val(ii, jj);
 
     std::vector<std::pair<VertId, Weight>> src_dec;
-    for (const auto edge : g_excl.e_preds(ii)) {
+    for (const auto& edge : g_excl.e_preds(ii)) {
         VertId se = edge.vert;
         Weight wt_sij = edge.val + c;
 
@@ -172,7 +172,7 @@ inline void close_over_edge(Graph& g, VertId ii, VertId jj) {
     }
 
     std::vector<std::pair<VertId, Weight>> dest_dec;
-    for (const auto edge : g_excl.e_succs(jj)) {
+    for (const auto& edge : g_excl.e_succs(jj)) {
         VertId de = edge.vert;
         Weight wt_ijd = edge.val + c;
         if (de != ii) {
