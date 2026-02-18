@@ -152,6 +152,8 @@ class TypeDomain {
     std::vector<TypeSet> class_types; // indexed by DSU element, valid at representative
     bool is_bottom_ = false;
 
+    void set_to_bottom() { is_bottom_ = true; }
+
     // Internal helpers
     void init_sentinels();
     void merge_if_singleton(size_t id);

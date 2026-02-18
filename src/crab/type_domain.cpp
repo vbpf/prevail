@@ -301,7 +301,7 @@ void TypeDomain::detach(const Variable v) {
 }
 
 TypeSet TypeDomain::get_typeset(const Variable v) const {
-    if (is_bottom_) {
+    if (is_bottom()) {
         return TypeSet{};
     }
     const auto it = var_to_id.find(v);
@@ -313,7 +313,7 @@ TypeSet TypeDomain::get_typeset(const Variable v) const {
 }
 
 void TypeDomain::restrict_var(const Variable v, const TypeSet mask) {
-    if (is_bottom_) {
+    if (is_bottom()) {
         return;
     }
     const size_t id = ensure_var(v);
@@ -321,14 +321,14 @@ void TypeDomain::restrict_var(const Variable v, const TypeSet mask) {
     const TypeSet result = class_types[rep] & mask;
     class_types[rep] = result;
     if (result.is_empty()) {
-        is_bottom_ = true;
+        set_to_bottom();
     } else {
         merge_if_singleton(id);
     }
 }
 
 void TypeDomain::unify(const Variable v1, const Variable v2) {
-    if (is_bottom_) {
+    if (is_bottom()) {
         return;
     }
     const size_t id1 = ensure_var(v1);
@@ -339,7 +339,7 @@ void TypeDomain::unify(const Variable v1, const Variable v2) {
     const size_t new_rep = dsu.unite(id1, id2);
     class_types[new_rep] = ts;
     if (ts.is_empty()) {
-        is_bottom_ = true;
+        set_to_bottom();
     } else {
         merge_if_singleton(id1);
     }
@@ -356,10 +356,10 @@ void TypeDomain::set_to_top() {
 }
 
 TypeDomain TypeDomain::join(const TypeDomain& other) const {
-    if (is_bottom_) {
+    if (is_bottom()) {
         return other;
     }
-    if (other.is_bottom_) {
+    if (other.is_bottom()) {
         return *this;
     }
 
@@ -435,10 +435,10 @@ TypeDomain TypeDomain::join(const TypeDomain& other) const {
 }
 
 void TypeDomain::operator|=(const TypeDomain& other) {
-    if (other.is_bottom_) {
+    if (other.is_bottom()) {
         return;
     }
-    if (is_bottom_) {
+    if (is_bottom()) {
         *this = other;
         return;
     }
@@ -448,7 +448,7 @@ void TypeDomain::operator|=(const TypeDomain& other) {
 TypeDomain TypeDomain::operator|(const TypeDomain& other) const { return join(other); }
 
 std::optional<TypeDomain> TypeDomain::meet(const TypeDomain& other) const {
-    if (is_bottom_ || other.is_bottom_) {
+    if (is_bottom() || other.is_bottom()) {
         return std::nullopt;
     }
 
@@ -469,7 +469,7 @@ std::optional<TypeDomain> TypeDomain::meet(const TypeDomain& other) const {
     for (const auto& [_, members] : other_classes) {
         for (size_t i = 1; i < members.size(); i++) {
             result.unify(members[0], members[i]);
-            if (result.is_bottom_) {
+            if (result.is_bottom()) {
                 return std::nullopt;
             }
         }
@@ -478,7 +478,7 @@ std::optional<TypeDomain> TypeDomain::meet(const TypeDomain& other) const {
     // Intersect TypeSets from other
     for (const auto& [v, _] : other.var_to_id) {
         result.restrict_var(v, other.get_typeset(v));
-        if (result.is_bottom_) {
+        if (result.is_bottom()) {
             return std::nullopt;
         }
     }
@@ -487,10 +487,10 @@ std::optional<TypeDomain> TypeDomain::meet(const TypeDomain& other) const {
 }
 
 bool TypeDomain::operator<=(const TypeDomain& other) const {
-    if (is_bottom_) {
+    if (is_bottom()) {
         return true;
     }
-    if (other.is_bottom_) {
+    if (other.is_bottom()) {
         return false;
     }
 
@@ -558,14 +558,14 @@ TypeDomain TypeDomain::narrow(const TypeDomain& other) const {
         return std::move(*res);
     }
     TypeDomain res;
-    res.is_bottom_ = true;
+    res.set_to_bottom();
     return res;
 }
 
 // -- Assignment --------------------------------------------------------------
 
 void TypeDomain::assign_type(const Reg& lhs, const Reg& rhs) {
-    if (is_bottom_) {
+    if (is_bottom()) {
         return;
     }
     const Variable lhs_var = reg_type(lhs);
@@ -590,7 +590,7 @@ void TypeDomain::assign_from_expr(const Variable lhs, const LinearExpression& ex
             merge_if_singleton(id);
         } else {
             // Not a valid TypeEncoding — same as asserting an impossible type.
-            is_bottom_ = true;
+            set_to_bottom();
         }
     } else if (terms.size() == 1) {
         const auto& [var, coeff] = *terms.begin();
@@ -614,7 +614,7 @@ void TypeDomain::assign_from_expr(const Variable lhs, const LinearExpression& ex
 }
 
 void TypeDomain::assign_type(const Reg& lhs, const std::optional<LinearExpression>& rhs) {
-    if (is_bottom_) {
+    if (is_bottom()) {
         return;
     }
     const Variable lhs_var = reg_type(lhs);
@@ -626,14 +626,14 @@ void TypeDomain::assign_type(const Reg& lhs, const std::optional<LinearExpressio
 }
 
 void TypeDomain::assign_type(const std::optional<Variable> lhs, const LinearExpression& t) {
-    if (is_bottom_ || !lhs) {
+    if (is_bottom() || !lhs) {
         return;
     }
     assign_from_expr(*lhs, t);
 }
 
 void TypeDomain::assign_type(const Reg& lhs, const TypeEncoding type) {
-    if (is_bottom_) {
+    if (is_bottom()) {
         return;
     }
     const Variable v = reg_type(lhs);
@@ -646,14 +646,14 @@ void TypeDomain::assign_type(const Reg& lhs, const TypeEncoding type) {
 // -- Constraint handling -----------------------------------------------------
 
 void TypeDomain::add_constraint(const LinearConstraint& cst) {
-    if (is_bottom_) {
+    if (is_bottom()) {
         return;
     }
     if (cst.is_tautology()) {
         return;
     }
     if (cst.is_contradiction()) {
-        is_bottom_ = true;
+        set_to_bottom();
         return;
     }
 
@@ -672,7 +672,7 @@ void TypeDomain::add_constraint(const LinearConstraint& cst) {
                 if (const auto te = int_to_type_encoding(val)) {
                     restrict_var(var, TypeSet{*te});
                 } else {
-                    is_bottom_ = true;
+                    set_to_bottom();
                 }
             } else if (coeff == -1) {
                 // -var + c == 0 -> var == c
@@ -680,7 +680,7 @@ void TypeDomain::add_constraint(const LinearConstraint& cst) {
                 if (const auto te = int_to_type_encoding(val)) {
                     restrict_var(var, TypeSet{*te});
                 } else {
-                    is_bottom_ = true;
+                    set_to_bottom();
                 }
             }
         } else if (terms.size() == 2) {
@@ -724,7 +724,7 @@ void TypeDomain::add_constraint(const LinearConstraint& cst) {
 void TypeDomain::restrict_to(const Variable v, const TypeSet mask) { restrict_var(v, mask); }
 
 void TypeDomain::remove_type(const Variable v, const TypeEncoding te) {
-    if (is_bottom_) {
+    if (is_bottom()) {
         return;
     }
     const size_t id = ensure_var(v);
@@ -732,7 +732,7 @@ void TypeDomain::remove_type(const Variable v, const TypeEncoding te) {
     const TypeSet result = class_types[rep].remove(te);
     class_types[rep] = result;
     if (result.is_empty()) {
-        is_bottom_ = true;
+        set_to_bottom();
     } else {
         merge_if_singleton(id);
     }
@@ -741,14 +741,14 @@ void TypeDomain::remove_type(const Variable v, const TypeEncoding te) {
 // -- Havoc -------------------------------------------------------------------
 
 void TypeDomain::havoc_type(const Reg& r) {
-    if (is_bottom_) {
+    if (is_bottom()) {
         return;
     }
     detach(reg_type(r));
 }
 
 void TypeDomain::havoc_type(const Variable& v) {
-    if (is_bottom_) {
+    if (is_bottom()) {
         return;
     }
     detach(v);
@@ -757,7 +757,7 @@ void TypeDomain::havoc_type(const Variable& v) {
 // -- Query methods -----------------------------------------------------------
 
 bool TypeDomain::entail(const LinearConstraint& cst) const {
-    if (is_bottom_) {
+    if (is_bottom()) {
         return true;
     }
     if (cst.is_tautology()) {
@@ -854,7 +854,7 @@ bool TypeDomain::type_is_not_stack(const Reg& r) const { return !get_typeset(reg
 bool TypeDomain::type_is_not_number(const Reg& r) const { return !get_typeset(reg_type(r)).contains(T_NUM); }
 
 std::vector<TypeEncoding> TypeDomain::iterate_types(const Reg& reg) const {
-    if (is_bottom_) {
+    if (is_bottom()) {
         return {};
     }
     const TypeSet ts = get_typeset(reg_type(reg));
@@ -868,12 +868,12 @@ std::optional<TypeEncoding> TypeDomain::get_type(const Reg& r) const { return ge
 
 bool TypeDomain::implies_group(const Reg& premise_reg, const TypeGroup premise_group, const Reg& conclusion_reg,
                                const TypeSet conclusion_set) const {
-    if (is_bottom_) {
+    if (is_bottom()) {
         return true;
     }
     TypeDomain restricted = *this;
     restricted.restrict_var(reg_type(premise_reg), to_typeset(premise_group));
-    if (restricted.is_bottom_) {
+    if (restricted.is_bottom()) {
         return true;
     }
     return restricted.get_typeset(reg_type(conclusion_reg)).is_subset_of(conclusion_set);
@@ -881,19 +881,19 @@ bool TypeDomain::implies_group(const Reg& premise_reg, const TypeGroup premise_g
 
 bool TypeDomain::implies_not_type(const Reg& premise_reg, const TypeEncoding excluded_type, const Reg& conclusion_reg,
                                   const TypeSet conclusion_set) const {
-    if (is_bottom_) {
+    if (is_bottom()) {
         return true;
     }
     TypeDomain restricted = *this;
     restricted.remove_type(reg_type(premise_reg), excluded_type);
-    if (restricted.is_bottom_) {
+    if (restricted.is_bottom()) {
         return true;
     }
     return restricted.get_typeset(reg_type(conclusion_reg)).is_subset_of(conclusion_set);
 }
 
 bool TypeDomain::entail_type(const Variable v, const TypeEncoding te) const {
-    if (is_bottom_) {
+    if (is_bottom()) {
         return true;
     }
     return get_typeset(v) == TypeSet{te};
@@ -943,7 +943,7 @@ bool TypeDomain::is_initialized(const LinearExpression& expr) const {
 /// if both variables have a singleton TypeSet {te}, they are already merged
 /// with the same sentinel.
 bool TypeDomain::same_type(const Reg& a, const Reg& b) const {
-    if (is_bottom_) {
+    if (is_bottom()) {
         return true;
     }
     const auto it_a = var_to_id.find(reg_type(a));
@@ -961,7 +961,7 @@ bool TypeDomain::is_in_group(const Reg& r, const TypeGroup group) const {
 // -- Serialization -----------------------------------------------------------
 
 StringInvariant TypeDomain::to_set() const {
-    if (is_bottom_) {
+    if (is_bottom()) {
         return StringInvariant::bottom();
     }
 
