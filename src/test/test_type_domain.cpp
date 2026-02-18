@@ -8,14 +8,12 @@
 #include "arith/dsl_syntax.hpp"
 #include "crab/type_domain.hpp"
 #include "crab/type_encoding.hpp"
-#include "crab/var_registry.hpp"
 
 using namespace prevail;
 
 static constexpr Reg r0{0};
 static constexpr Reg r1{1};
 static constexpr Reg r2{2};
-static constexpr Reg r3{3};
 
 // ============================================================================
 // Basic top / bottom

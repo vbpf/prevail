@@ -36,23 +36,19 @@ DataKind regkind(const std::string& s);
 std::vector<DataKind> iterate_kinds(DataKind lb = KIND_VALUE_MIN, DataKind ub = KIND_MAX);
 std::ostream& operator<<(std::ostream& o, const DataKind& s);
 
-// The exact numbers are taken advantage of in EbpfDomain
-enum TypeEncoding {
-    T_UNINIT = -7,
-    T_MAP_PROGRAMS = -6,
-    T_MAP = -5,
-    T_NUM = -4,
-    T_CTX = -3,
-    T_PACKET = -2,
-    T_STACK = -1,
-    T_SHARED = 0
+enum class TypeEncoding {
+    T_UNINIT = 0,
+    T_MAP_PROGRAMS = 1,
+    T_MAP = 2,
+    T_NUM = 3,
+    T_CTX = 4,
+    T_PACKET = 5,
+    T_STACK = 6,
+    T_SHARED = 7,
 };
+using enum TypeEncoding;
+constexpr size_t NUM_TYPE_ENCODINGS = 8;
 
-constexpr TypeEncoding T_MIN = T_UNINIT;
-constexpr TypeEncoding T_MIN_VALID = T_MAP_PROGRAMS;
-constexpr TypeEncoding T_MAX = T_SHARED;
-
-std::vector<TypeEncoding> iterate_types(TypeEncoding lb, TypeEncoding ub);
 std::string typeset_to_string(const std::vector<TypeEncoding>& items);
 
 std::ostream& operator<<(std::ostream& os, TypeEncoding s);
@@ -64,7 +60,7 @@ std::optional<TypeEncoding> int_to_type_encoding(int v);
 // ============================================================================
 
 /// Map a TypeEncoding to its bit position (0..7).
-constexpr unsigned type_to_bit(const TypeEncoding te) { return static_cast<unsigned>(static_cast<int>(te) + 7); }
+constexpr unsigned type_to_bit(const TypeEncoding te) { return static_cast<unsigned>(te); }
 
 /// A compact bitset over the 8 TypeEncoding values.
 /// Uses SmallBitsetDomain<uint8_t> for lattice operations (join = OR, meet = AND,
@@ -80,7 +76,7 @@ class TypeSet {
     /// The empty set.
     static constexpr TypeSet empty() { return TypeSet{0}; }
     /// The full set (all 8 types).
-    static constexpr TypeSet all() { return TypeSet{0xFF}; }
+    static constexpr TypeSet all() { return TypeSet{static_cast<uint8_t>((1u << NUM_TYPE_ENCODINGS) - 1)}; }
 
     /// Singleton set containing one type.
     static constexpr TypeSet singleton(const TypeEncoding te) {
@@ -137,8 +133,8 @@ class TypeSet {
 
     /// Whether self is a subset of other.
     [[nodiscard]]
-    constexpr bool is_subset_of(const TypeSet o) const {
-        return dom_ <= o.dom_;
+    constexpr bool is_subset_of(const TypeSet other) const {
+        return dom_ <= other.dom_;
     }
 
     /// Remove a single type from the set.

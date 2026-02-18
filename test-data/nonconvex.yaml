@@ -1,10 +1,13 @@
+# Copyright (c) Prevail Verifier contributors.
+# SPDX-License-Identifier: MIT
+
 # Tests for non-convex type sets after branch joins.
 #
 # These tests verify that the type domain tracks exact type sets rather than
 # interval overapproximations. With a zone-based (convex) type domain,
 # joining branches with non-adjacent type encodings produces spurious
-# intermediate types. For example, {map_fd(-5), ctx(-3)} becomes [-5,-3]
-# which includes num(-4). See https://github.com/vbpf/prevail/issues/286
+# intermediate types. For example, {map_fd(2), ctx(4)} becomes [2,4]
+# which includes num(3). See https://github.com/vbpf/prevail/issues/286
 ---
 test-case: non-adjacent type join map_fd and ctx
 
@@ -109,7 +112,7 @@ code:
   <out>: |
     r3 = r2
 
-# {num(-4), shared(0)} — zone interval [-4,0] adds ctx, packet, stack
+# {num(3), shared(7)} — zone interval [3,7] adds ctx, packet, stack
 post:
   - r0.type=number
   - r0.uvalue=[0, +oo]
@@ -147,7 +150,7 @@ code:
   <out>: |
     r3 = r2
 
-# {map_fd(-5), shared(0)} — zone interval [-5,0] includes ALL valid types:
+# {map_fd(2), shared(7)} — zone interval [2,7] includes ALL valid types:
 # map_fd, num, ctx, packet, stack, shared. Worst-case overapproximation.
 post:
   - r0.type=number
@@ -190,7 +193,7 @@ code:
     r3 = r2
     r3 -= r1; same_type(r2, r1) — both are {num, ctx}, equality preserved
 
-# {num(-4), ctx(-3)} are adjacent, but this test verifies that equality
+# {num(3), ctx(4)} are adjacent, but this test verifies that equality
 # tracking works correctly for same-type subtraction with these types.
 # The subtraction should succeed: in both branches r1 and r2 share a type.
 post:

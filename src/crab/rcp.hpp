@@ -48,7 +48,7 @@ inline const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
     {T_NUM, {}}, // TODO: DataKind::svalues
 };
 
-std::optional<Variable> get_type_offset_variable(const Reg& reg, int type);
+std::optional<Variable> get_type_offset_variable(const Reg& reg, TypeEncoding type);
 
 /** TypeToNumDomain implements a Reduced Cardinal Power Domain between TypeDomain and NumAbsDomain.
  * This struct is used to represent the eBPF abstract domain where type information (TypeDomain) is used to guide the

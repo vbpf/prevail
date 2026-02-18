@@ -18,10 +18,6 @@ namespace prevail {
 
 Variable reg_type(const Reg& lhs);
 
-/// Number of sentinel DSU elements (one per TypeEncoding value).
-constexpr size_t NUM_TYPE_SENTINELS = T_SHARED - T_UNINIT + 1;
-static_assert(NUM_TYPE_SENTINELS == 8, "Update if TypeEncoding values change");
-
 /// Type abstract domain based on disjoint-set with TypeSet annotations.
 ///
 /// Tracks must-equality between type variables (partition into equivalence
@@ -56,6 +52,7 @@ class TypeDomain {
 
     TypeDomain operator|(const TypeDomain& other) const;
 
+    [[nodiscard]]
     std::optional<TypeDomain> meet(const TypeDomain& other) const;
     bool operator<=(const TypeDomain& other) const;
     void set_to_top();
@@ -64,7 +61,11 @@ class TypeDomain {
     bool is_bottom() const {
         return is_bottom_;
     }
-    TypeDomain widen(const TypeDomain& other) const { return *this | other; }
+    [[nodiscard]]
+    TypeDomain widen(const TypeDomain& other) const {
+        return *this | other;
+    }
+    [[nodiscard]]
     TypeDomain narrow(const TypeDomain& other) const;
 
     // Assignment

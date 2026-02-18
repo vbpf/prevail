@@ -3,6 +3,7 @@
 #pragma once
 
 #include <bit>
+#include <cassert>
 #include <type_traits>
 
 namespace prevail {
@@ -51,10 +52,17 @@ class SmallBitsetDomain {
     // Bit access
     [[nodiscard]]
     constexpr bool test(unsigned i) const {
+        assert(i < std::numeric_limits<UInt>::digits);
         return (bits_ & (UInt{1} << i)) != 0;
     }
-    constexpr void set(unsigned i) { bits_ |= (UInt{1} << i); }
-    constexpr void reset(unsigned i) { bits_ &= ~(UInt{1} << i); }
+    constexpr void set(unsigned i) {
+        assert(i < std::numeric_limits<UInt>::digits);
+        bits_ = static_cast<UInt>(bits_ | (UInt{1} << i));
+    }
+    constexpr void reset(unsigned i) {
+        assert(i < std::numeric_limits<UInt>::digits);
+        bits_ = static_cast<UInt>(bits_ & ~(UInt{1} << i));
+    }
 
     [[nodiscard]]
     constexpr bool is_empty() const {

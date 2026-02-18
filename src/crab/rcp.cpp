@@ -10,7 +10,7 @@
 
 namespace prevail {
 
-std::optional<Variable> get_type_offset_variable(const Reg& reg, const int type) {
+std::optional<Variable> get_type_offset_variable(const Reg& reg, const TypeEncoding type) {
     RegPack r = reg_pack(reg);
     switch (type) {
     case T_CTX: return r.ctx_offset;

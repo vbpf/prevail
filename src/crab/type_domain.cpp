@@ -17,14 +17,11 @@
 
 namespace prevail {
 
-template <is_enum T>
-static void operator++(T& t) {
-    t = static_cast<T>(1 + static_cast<std::underlying_type_t<T>>(t));
-}
-
 // ============================================================================
 // DataKind utilities
 // ============================================================================
+
+static void operator++(DataKind& t) { t = static_cast<DataKind>(1 + static_cast<std::underlying_type_t<DataKind>>(t)); }
 
 std::vector<DataKind> iterate_kinds(const DataKind lb, const DataKind ub) {
     if (lb > ub) {
@@ -43,20 +40,6 @@ std::vector<DataKind> iterate_kinds(const DataKind lb, const DataKind ub) {
 // ============================================================================
 // TypeEncoding utilities
 // ============================================================================
-
-std::vector<TypeEncoding> iterate_types(const TypeEncoding lb, const TypeEncoding ub) {
-    if (lb > ub) {
-        CRAB_ERROR("lower bound ", lb, " is greater than upper bound ", ub);
-    }
-    if (lb < T_MIN || ub > T_MAX) {
-        CRAB_ERROR("bounds ", lb, " and ", ub, " are out of range");
-    }
-    std::vector<TypeEncoding> res;
-    for (TypeEncoding i = lb; i <= ub; ++i) {
-        res.push_back(i);
-    }
-    return res;
-}
 
 static constexpr auto S_UNINIT = "uninit";
 static constexpr auto S_STACK = "stack";
@@ -132,7 +115,7 @@ TypeEncoding string_to_type_encoding(const std::string& s) {
 }
 
 std::optional<TypeEncoding> int_to_type_encoding(const int v) {
-    if (v >= T_MIN && v <= T_MAX) {
+    if (v >= 0 && v < static_cast<int>(NUM_TYPE_ENCODINGS)) {
         return static_cast<TypeEncoding>(v);
     }
     return std::nullopt;
@@ -159,18 +142,14 @@ std::optional<TypeEncoding> TypeSet::as_singleton() const {
     if (!is_singleton()) {
         return std::nullopt;
     }
-    const int bit = std::countr_zero(raw());
-    return int_to_type_encoding(bit - 7);
+    return static_cast<TypeEncoding>(std::countr_zero(raw()));
 }
 
 std::vector<TypeEncoding> TypeSet::to_vector() const {
     std::vector<TypeEncoding> result;
     uint8_t tmp = raw();
     while (tmp != 0) {
-        const int bit = std::countr_zero(tmp);
-        if (auto te = int_to_type_encoding(bit - 7)) {
-            result.push_back(*te);
-        }
+        result.push_back(static_cast<TypeEncoding>(std::countr_zero(tmp)));
         tmp &= tmp - 1; // clear lowest set bit
     }
     return result;
@@ -265,10 +244,11 @@ Variable reg_type(const Reg& lhs) { return variable_registry->type_reg(lhs.v); }
 
 // -- Sentinel initialization -------------------------------------------------
 
+/// Number of sentinel DSU elements (one per TypeEncoding value).
 void TypeDomain::init_sentinels() {
-    dsu = DisjointSetUnion{NUM_TYPE_SENTINELS};
-    id_to_var.assign(NUM_TYPE_SENTINELS, std::nullopt);
-    class_types.resize(NUM_TYPE_SENTINELS);
+    dsu = DisjointSetUnion{NUM_TYPE_ENCODINGS};
+    id_to_var.assign(NUM_TYPE_ENCODINGS, std::nullopt);
+    class_types.resize(NUM_TYPE_ENCODINGS);
     for (const TypeEncoding te : TypeSet::all().to_vector()) {
         class_types[type_to_bit(te)] = TypeSet::singleton(te);
     }
@@ -451,6 +431,8 @@ TypeDomain TypeDomain::join(const TypeDomain& other) const {
         }
     }
 
+    // Soundness: result.get_typeset(v) >= this->get_typeset(v) | other.get_typeset(v),
+    // and equalities in result hold iff they hold in both operands (same key pair).
     return result;
 }
 
@@ -600,8 +582,7 @@ void TypeDomain::assign_type(const Reg& lhs, const Reg& rhs) {
 }
 
 void TypeDomain::assign_from_expr(const Variable lhs, const LinearExpression& expr) {
-    const auto& terms = expr.variable_terms();
-    if (terms.empty()) {
+    if (const auto& terms = expr.variable_terms(); terms.empty()) {
         // Constant expression: assign that type encoding
         const int val = expr.constant_term().narrow<int>();
         detach(lhs);
