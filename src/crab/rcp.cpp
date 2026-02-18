@@ -25,7 +25,9 @@ std::optional<Variable> get_type_offset_variable(const Reg& reg, const int type)
 
 std::optional<Variable> TypeToNumDomain::get_type_offset_variable(const Reg& reg) const {
     const auto type = types.get_type(reg);
-    if (!type) return {};
+    if (!type) {
+        return {};
+    }
     return prevail::get_type_offset_variable(reg, *type);
 }
 

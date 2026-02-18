@@ -100,41 +100,66 @@ class TypeSet {
     constexpr TypeSet operator|(const TypeSet o) const { return TypeSet{(dom_ | o.dom_).raw()}; }
     constexpr TypeSet operator&(const TypeSet o) const { return TypeSet{(dom_ & o.dom_).raw()}; }
     constexpr TypeSet operator~() const { return TypeSet{(~dom_).raw()}; }
-    constexpr TypeSet& operator|=(const TypeSet o) { dom_ |= o.dom_; return *this; }
+    constexpr TypeSet& operator|=(const TypeSet o) {
+        dom_ |= o.dom_;
+        return *this;
+    }
 
     constexpr bool operator==(const TypeSet o) const { return dom_ == o.dom_; }
     constexpr bool operator!=(const TypeSet o) const { return dom_ != o.dom_; }
 
     /// Whether this set is empty.
-    [[nodiscard]] constexpr bool is_empty() const { return dom_.is_empty(); }
+    [[nodiscard]]
+    constexpr bool is_empty() const {
+        return dom_.is_empty();
+    }
     /// Whether this set contains exactly one type.
-    [[nodiscard]] constexpr bool is_singleton() const { return dom_.is_singleton(); }
+    [[nodiscard]]
+    constexpr bool is_singleton() const {
+        return dom_.is_singleton();
+    }
     /// Number of types in the set.
-    [[nodiscard]] int count() const { return dom_.count(); }
+    [[nodiscard]]
+    int count() const {
+        return dom_.count();
+    }
     /// Raw bits (for hashing/debugging).
-    [[nodiscard]] constexpr uint8_t raw() const { return dom_.raw(); }
+    [[nodiscard]]
+    constexpr uint8_t raw() const {
+        return dom_.raw();
+    }
 
     /// Whether this set contains a given type.
-    [[nodiscard]] constexpr bool contains(const TypeEncoding te) const { return dom_.test(type_to_bit(te)); }
+    [[nodiscard]]
+    constexpr bool contains(const TypeEncoding te) const {
+        return dom_.test(type_to_bit(te));
+    }
 
     /// Whether self is a subset of other.
-    [[nodiscard]] constexpr bool is_subset_of(const TypeSet o) const { return dom_ <= o.dom_; }
+    [[nodiscard]]
+    constexpr bool is_subset_of(const TypeSet o) const {
+        return dom_ <= o.dom_;
+    }
 
     /// Remove a single type from the set.
-    [[nodiscard]] constexpr TypeSet remove(const TypeEncoding te) const {
+    [[nodiscard]]
+    constexpr TypeSet remove(const TypeEncoding te) const {
         auto copy = dom_;
         copy.reset(type_to_bit(te));
         return TypeSet{copy.raw()};
     }
 
     /// Get the singleton type, if exactly one element.
-    [[nodiscard]] std::optional<TypeEncoding> as_singleton() const;
+    [[nodiscard]]
+    std::optional<TypeEncoding> as_singleton() const;
 
     /// Iterate over all types in this set, in encoding order.
-    [[nodiscard]] std::vector<TypeEncoding> to_vector() const;
+    [[nodiscard]]
+    std::vector<TypeEncoding> to_vector() const;
 
     /// Format as string: singleton → "typename", multi → "{t1, t2, ...}".
-    [[nodiscard]] std::string to_string() const;
+    [[nodiscard]]
+    std::string to_string() const;
 };
 
 // ============================================================================

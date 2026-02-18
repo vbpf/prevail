@@ -183,7 +183,8 @@ TEST_CASE("unify intersects TypeSets", "[type_domain]") {
     using namespace dsl_syntax;
     TypeDomain td;
     td.restrict_to(reg_type(r0), TypeSet::singleton(T_MAP) | TypeSet::singleton(T_CTX) | TypeSet::singleton(T_STACK));
-    td.restrict_to(reg_type(r1), TypeSet::singleton(T_CTX) | TypeSet::singleton(T_PACKET) | TypeSet::singleton(T_STACK));
+    td.restrict_to(reg_type(r1),
+                   TypeSet::singleton(T_CTX) | TypeSet::singleton(T_PACKET) | TypeSet::singleton(T_STACK));
     td.add_constraint(eq(reg_type(r0), reg_type(r1)));
     // Intersection: {ctx, stack}
     const auto types = td.iterate_types(r0);
@@ -206,8 +207,10 @@ TEST_CASE("unify transitive chain progressively narrows", "[type_domain]") {
     using namespace dsl_syntax;
     TypeDomain td;
     td.restrict_to(reg_type(r0), TypeSet::singleton(T_MAP) | TypeSet::singleton(T_CTX) | TypeSet::singleton(T_STACK));
-    td.restrict_to(reg_type(r1), TypeSet::singleton(T_CTX) | TypeSet::singleton(T_STACK) | TypeSet::singleton(T_SHARED));
-    td.restrict_to(reg_type(r2), TypeSet::singleton(T_STACK) | TypeSet::singleton(T_SHARED) | TypeSet::singleton(T_PACKET));
+    td.restrict_to(reg_type(r1),
+                   TypeSet::singleton(T_CTX) | TypeSet::singleton(T_STACK) | TypeSet::singleton(T_SHARED));
+    td.restrict_to(reg_type(r2),
+                   TypeSet::singleton(T_STACK) | TypeSet::singleton(T_SHARED) | TypeSet::singleton(T_PACKET));
 
     td.add_constraint(eq(reg_type(r0), reg_type(r1))); // r0,r1 → {ctx, stack}
     REQUIRE(!td.is_bottom());
