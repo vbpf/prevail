@@ -3,13 +3,11 @@
 
 #pragma once
 
-#include <cstdint>
+#include <bitset>
 #include <initializer_list>
 #include <optional>
 #include <string>
 #include <vector>
-
-#include "crab/small_bitset_domain.hpp"
 
 namespace prevail {
 
@@ -62,87 +60,79 @@ std::optional<TypeEncoding> int_to_type_encoding(int v);
 /// Map a TypeEncoding to its bit position (0..7).
 constexpr unsigned type_to_bit(const TypeEncoding te) { return static_cast<unsigned>(te); }
 
-/// A compact bitset over the 8 TypeEncoding values.
-/// Uses SmallBitsetDomain<uint8_t> for lattice operations (join = OR, meet = AND,
-/// subsumption = subset). Adds type-specific accessors (contains, singleton, remove
-/// by TypeEncoding).
+/// A compact bitset over the 8 TypeEncoding values, backed by std::bitset.
+/// Join = OR, Meet = AND, subsumption = subset.
 class TypeSet {
-    SmallBitsetDomain<uint8_t> dom_;
+    std::bitset<NUM_TYPE_ENCODINGS> bits_;
+
+    explicit TypeSet(std::bitset<NUM_TYPE_ENCODINGS> bits) : bits_{bits} {}
 
   public:
-    constexpr TypeSet() = default;
-    constexpr explicit TypeSet(uint8_t bits) : dom_{bits} {}
+    TypeSet() = default;
 
-    /// The empty set.
-    static constexpr TypeSet empty() { return TypeSet{0}; }
-    /// The full set (all 8 types).
-    static constexpr TypeSet all() { return TypeSet{static_cast<uint8_t>((1u << NUM_TYPE_ENCODINGS) - 1)}; }
-
-    /// Singleton set containing one type.
-    static constexpr TypeSet singleton(const TypeEncoding te) {
-        return TypeSet{static_cast<uint8_t>(1u << type_to_bit(te))};
+    /// Build a TypeSet from one or more TypeEncoding values.
+    /// Supports brace initialization: TypeSet{T_MAP, T_CTX}
+    TypeSet(const std::initializer_list<TypeEncoding> types) {
+        for (const auto te : types) {
+            bits_.set(type_to_bit(te));
+        }
     }
 
-    /// Build a TypeSet from a list of TypeEncoding values.
-    static constexpr TypeSet of(const std::initializer_list<TypeEncoding> types) {
-        TypeSet result = empty();
-        for (const auto te : types) {
-            result |= singleton(te);
-        }
+    /// The full set (all 8 types).
+    static TypeSet all() {
+        TypeSet result;
+        result.bits_.set();
         return result;
     }
 
-    // Lattice operations delegated to SmallBitsetDomain
-    constexpr TypeSet operator|(const TypeSet o) const { return TypeSet{(dom_ | o.dom_).raw()}; }
-    constexpr TypeSet operator&(const TypeSet o) const { return TypeSet{(dom_ & o.dom_).raw()}; }
-    constexpr TypeSet operator~() const { return TypeSet{(~dom_).raw()}; }
-    constexpr TypeSet& operator|=(const TypeSet o) {
-        dom_ |= o.dom_;
+    // Lattice operations
+    TypeSet operator|(const TypeSet o) const { return TypeSet{bits_ | o.bits_}; }
+    TypeSet operator&(const TypeSet o) const { return TypeSet{bits_ & o.bits_}; }
+    TypeSet operator~() const { return TypeSet{~bits_}; }
+    TypeSet& operator|=(const TypeSet o) {
+        bits_ |= o.bits_;
         return *this;
     }
 
-    constexpr bool operator==(const TypeSet o) const { return dom_ == o.dom_; }
-    constexpr bool operator!=(const TypeSet o) const { return dom_ != o.dom_; }
+    bool operator==(const TypeSet o) const { return bits_ == o.bits_; }
+    bool operator!=(const TypeSet o) const { return bits_ != o.bits_; }
 
     /// Whether this set is empty.
     [[nodiscard]]
-    constexpr bool is_empty() const {
-        return dom_.is_empty();
+    bool is_empty() const {
+        return bits_.none();
     }
+
     /// Whether this set contains exactly one type.
     [[nodiscard]]
-    constexpr bool is_singleton() const {
-        return dom_.is_singleton();
+    bool is_singleton() const {
+        return bits_.count() == 1;
     }
+
     /// Number of types in the set.
     [[nodiscard]]
     int count() const {
-        return dom_.count();
-    }
-    /// Raw bits (for hashing/debugging).
-    [[nodiscard]]
-    constexpr uint8_t raw() const {
-        return dom_.raw();
+        return static_cast<int>(bits_.count());
     }
 
     /// Whether this set contains a given type.
     [[nodiscard]]
-    constexpr bool contains(const TypeEncoding te) const {
-        return dom_.test(type_to_bit(te));
+    bool contains(const TypeEncoding te) const {
+        return bits_.test(type_to_bit(te));
     }
 
     /// Whether self is a subset of other.
     [[nodiscard]]
-    constexpr bool is_subset_of(const TypeSet other) const {
-        return dom_ <= other.dom_;
+    bool is_subset_of(const TypeSet other) const {
+        return (bits_ & other.bits_) == bits_;
     }
 
     /// Remove a single type from the set.
     [[nodiscard]]
-    constexpr TypeSet remove(const TypeEncoding te) const {
-        auto copy = dom_;
+    TypeSet remove(const TypeEncoding te) const {
+        auto copy = bits_;
         copy.reset(type_to_bit(te));
-        return TypeSet{copy.raw()};
+        return TypeSet{copy};
     }
 
     /// Get the singleton type, if exactly one element.

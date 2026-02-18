@@ -3,7 +3,6 @@
 
 // This file is eBPF-specific, not derived from CRAB.
 #include <algorithm>
-#include <bit>
 #include <cassert>
 #include <map>
 #include <optional>
@@ -142,15 +141,20 @@ std::optional<TypeEncoding> TypeSet::as_singleton() const {
     if (!is_singleton()) {
         return std::nullopt;
     }
-    return static_cast<TypeEncoding>(std::countr_zero(raw()));
+    for (unsigned i = 0; i < NUM_TYPE_ENCODINGS; i++) {
+        if (contains(static_cast<TypeEncoding>(i))) {
+            return static_cast<TypeEncoding>(i);
+        }
+    }
+    return std::nullopt; // unreachable
 }
 
 std::vector<TypeEncoding> TypeSet::to_vector() const {
     std::vector<TypeEncoding> result;
-    uint8_t tmp = raw();
-    while (tmp != 0) {
-        result.push_back(static_cast<TypeEncoding>(std::countr_zero(tmp)));
-        tmp &= tmp - 1; // clear lowest set bit
+    for (unsigned i = 0; i < NUM_TYPE_ENCODINGS; i++) {
+        if (contains(static_cast<TypeEncoding>(i))) {
+            result.push_back(static_cast<TypeEncoding>(i));
+        }
     }
     return result;
 }
@@ -171,29 +175,21 @@ std::string TypeSet::to_string() const {
 
 TypeSet to_typeset(const TypeGroup group) {
     switch (group) {
-    case TypeGroup::number: return TypeSet::singleton(T_NUM);
-    case TypeGroup::map_fd: return TypeSet::singleton(T_MAP);
-    case TypeGroup::ctx: return TypeSet::singleton(T_CTX);
-    case TypeGroup::packet: return TypeSet::singleton(T_PACKET);
-    case TypeGroup::stack: return TypeSet::singleton(T_STACK);
-    case TypeGroup::shared: return TypeSet::singleton(T_SHARED);
-    case TypeGroup::map_fd_programs: return TypeSet::singleton(T_MAP_PROGRAMS);
-    case TypeGroup::ctx_or_num: return TypeSet::singleton(T_NUM) | TypeSet::singleton(T_CTX);
-    case TypeGroup::stack_or_num: return TypeSet::singleton(T_NUM) | TypeSet::singleton(T_STACK);
-    case TypeGroup::mem:
-        return TypeSet::singleton(T_PACKET) | TypeSet::singleton(T_STACK) | TypeSet::singleton(T_SHARED);
-    case TypeGroup::mem_or_num:
-        return TypeSet::singleton(T_NUM) | TypeSet::singleton(T_PACKET) | TypeSet::singleton(T_STACK) |
-               TypeSet::singleton(T_SHARED);
-    case TypeGroup::pointer:
-        return TypeSet::singleton(T_CTX) | TypeSet::singleton(T_PACKET) | TypeSet::singleton(T_STACK) |
-               TypeSet::singleton(T_SHARED);
-    case TypeGroup::ptr_or_num:
-        return TypeSet::singleton(T_NUM) | TypeSet::singleton(T_CTX) | TypeSet::singleton(T_PACKET) |
-               TypeSet::singleton(T_STACK) | TypeSet::singleton(T_SHARED);
-    case TypeGroup::stack_or_packet: return TypeSet::singleton(T_STACK) | TypeSet::singleton(T_PACKET);
-    case TypeGroup::singleton_ptr:
-        return TypeSet::singleton(T_CTX) | TypeSet::singleton(T_PACKET) | TypeSet::singleton(T_STACK);
+    case TypeGroup::number: return TypeSet{T_NUM};
+    case TypeGroup::map_fd: return TypeSet{T_MAP};
+    case TypeGroup::ctx: return TypeSet{T_CTX};
+    case TypeGroup::packet: return TypeSet{T_PACKET};
+    case TypeGroup::stack: return TypeSet{T_STACK};
+    case TypeGroup::shared: return TypeSet{T_SHARED};
+    case TypeGroup::map_fd_programs: return TypeSet{T_MAP_PROGRAMS};
+    case TypeGroup::ctx_or_num: return TypeSet{T_NUM, T_CTX};
+    case TypeGroup::stack_or_num: return TypeSet{T_NUM, T_STACK};
+    case TypeGroup::mem: return TypeSet{T_PACKET, T_STACK, T_SHARED};
+    case TypeGroup::mem_or_num: return TypeSet{T_NUM, T_PACKET, T_STACK, T_SHARED};
+    case TypeGroup::pointer: return TypeSet{T_CTX, T_PACKET, T_STACK, T_SHARED};
+    case TypeGroup::ptr_or_num: return TypeSet{T_NUM, T_CTX, T_PACKET, T_STACK, T_SHARED};
+    case TypeGroup::stack_or_packet: return TypeSet{T_STACK, T_PACKET};
+    case TypeGroup::singleton_ptr: return TypeSet{T_CTX, T_PACKET, T_STACK};
     default: CRAB_ERROR("Unsupported type group", group);
     }
 }
@@ -250,7 +246,7 @@ void TypeDomain::init_sentinels() {
     id_to_var.assign(NUM_TYPE_ENCODINGS, std::nullopt);
     class_types.resize(NUM_TYPE_ENCODINGS);
     for (const TypeEncoding te : TypeSet::all().to_vector()) {
-        class_types[type_to_bit(te)] = TypeSet::singleton(te);
+        class_types[type_to_bit(te)] = TypeSet{te};
     }
 }
 
@@ -306,7 +302,7 @@ void TypeDomain::detach(const Variable v) {
 
 TypeSet TypeDomain::get_typeset(const Variable v) const {
     if (is_bottom_) {
-        return TypeSet::empty();
+        return TypeSet{};
     }
     const auto it = var_to_id.find(v);
     if (it == var_to_id.end()) {
@@ -407,7 +403,7 @@ TypeDomain TypeDomain::join(const TypeDomain& other) const {
     TypeDomain result;
     for (const auto& [_, members] : key_groups) {
         // TypeSet = union of per-variable TypeSets from both operands
-        TypeSet ts = TypeSet::empty();
+        TypeSet ts = TypeSet{};
         for (const Variable& v : members) {
             ts |= get_typeset(v);
             ts |= other.get_typeset(v);
@@ -588,7 +584,7 @@ void TypeDomain::assign_from_expr(const Variable lhs, const LinearExpression& ex
         detach(lhs);
         const size_t id = var_to_id[lhs];
         if (const auto te = int_to_type_encoding(val)) {
-            class_types[id] = TypeSet::singleton(*te);
+            class_types[id] = TypeSet{*te};
             merge_if_singleton(id);
         } else {
             // Not a valid TypeEncoding — same as asserting an impossible type.
@@ -641,7 +637,7 @@ void TypeDomain::assign_type(const Reg& lhs, const TypeEncoding type) {
     const Variable v = reg_type(lhs);
     detach(v);
     const size_t id = var_to_id[v];
-    class_types[id] = TypeSet::singleton(type);
+    class_types[id] = TypeSet{type};
     merge_if_singleton(id);
 }
 
@@ -672,7 +668,7 @@ void TypeDomain::add_constraint(const LinearConstraint& cst) {
                 // var + c == 0 → var == -c
                 const int val = (-constant).narrow<int>();
                 if (const auto te = int_to_type_encoding(val)) {
-                    restrict_var(var, TypeSet::singleton(*te));
+                    restrict_var(var, TypeSet{*te});
                 } else {
                     is_bottom_ = true;
                 }
@@ -680,7 +676,7 @@ void TypeDomain::add_constraint(const LinearConstraint& cst) {
                 // -var + c == 0 → var == c
                 const int val = constant.narrow<int>();
                 if (const auto te = int_to_type_encoding(val)) {
-                    restrict_var(var, TypeSet::singleton(*te));
+                    restrict_var(var, TypeSet{*te});
                 } else {
                     is_bottom_ = true;
                 }
@@ -782,7 +778,7 @@ bool TypeDomain::entail(const LinearConstraint& cst) const {
                 const int val = (-constant).narrow<int>();
                 const TypeSet ts = get_typeset(var);
                 if (const auto te = int_to_type_encoding(val)) {
-                    return ts == TypeSet::singleton(*te);
+                    return ts == TypeSet{*te};
                 }
                 return false;
             }
@@ -791,7 +787,7 @@ bool TypeDomain::entail(const LinearConstraint& cst) const {
                 const int val = constant.narrow<int>();
                 const TypeSet ts = get_typeset(var);
                 if (const auto te = int_to_type_encoding(val)) {
-                    return ts == TypeSet::singleton(*te);
+                    return ts == TypeSet{*te};
                 }
                 return false;
             }
@@ -849,7 +845,7 @@ bool TypeDomain::type_is_pointer(const Reg& r) const {
     return get_typeset(reg_type(r)).is_subset_of(to_typeset(TypeGroup::pointer));
 }
 
-bool TypeDomain::type_is_number(const Reg& r) const { return get_typeset(reg_type(r)) == TypeSet::singleton(T_NUM); }
+bool TypeDomain::type_is_number(const Reg& r) const { return get_typeset(reg_type(r)) == TypeSet{T_NUM}; }
 
 bool TypeDomain::type_is_not_stack(const Reg& r) const { return !get_typeset(reg_type(r)).contains(T_STACK); }
 
@@ -898,7 +894,7 @@ bool TypeDomain::entail_type(const Variable v, const TypeEncoding te) const {
     if (is_bottom_) {
         return true;
     }
-    return get_typeset(v) == TypeSet::singleton(te);
+    return get_typeset(v) == TypeSet{te};
 }
 
 bool TypeDomain::may_have_type(const Reg& r, const TypeEncoding type) const {

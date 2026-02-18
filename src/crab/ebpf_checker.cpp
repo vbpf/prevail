@@ -136,14 +136,14 @@ void EbpfChecker::operator()(const Comparable& s) const {
 }
 
 void EbpfChecker::operator()(const Addable& s) const {
-    if (!dom.rcp.types.implies_group(s.ptr, TypeGroup::pointer, s.num, TypeSet::singleton(T_NUM))) {
+    if (!dom.rcp.types.implies_group(s.ptr, TypeGroup::pointer, s.num, TypeSet{T_NUM})) {
         throw_fail("Only numbers can be added to pointers");
     }
 }
 
 void EbpfChecker::operator()(const ValidDivisor& s) const {
     using namespace dsl_syntax;
-    if (!dom.rcp.types.implies_group(s.reg, TypeGroup::pointer, s.reg, TypeSet::singleton(T_NUM))) {
+    if (!dom.rcp.types.implies_group(s.reg, TypeGroup::pointer, s.reg, TypeSet{T_NUM})) {
         throw_fail("Only numbers can be used as divisors");
     }
     if (!thread_local_options.allow_division_by_zero) {
@@ -154,7 +154,7 @@ void EbpfChecker::operator()(const ValidDivisor& s) const {
 }
 
 void EbpfChecker::operator()(const ValidStore& s) const {
-    if (!dom.rcp.types.implies_not_type(s.mem, T_STACK, s.val, TypeSet::singleton(T_NUM))) {
+    if (!dom.rcp.types.implies_not_type(s.mem, T_STACK, s.val, TypeSet{T_NUM})) {
         throw_fail("Only numbers can be stored to externally-visible regions");
     }
 }

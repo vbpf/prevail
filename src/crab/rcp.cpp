@@ -175,7 +175,7 @@ TypeToNumDomain::join_over_types(const Reg& reg,
     }
     for (const TypeEncoding type : valid_types) {
         TypeToNumDomain tmp(*this);
-        tmp.types.restrict_to(reg_type(reg), TypeSet::singleton(type));
+        tmp.types.restrict_to(reg_type(reg), TypeSet{type});
         // This might have changed the type variable of reg.
         // It might also have changed the type variable of other registers, but we don't deal with that.
         for (const auto& [other_type, kinds] : valid_type_to_kinds) {

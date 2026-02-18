@@ -362,13 +362,13 @@ TypeValueConstraints parse_linear_constraints(const std::set<std::string>& const
             // Tokenize items inside {...} using the existing TYPE regex.
             static const regex type_tok_regex(TYPE);
 
-            TypeSet ts = TypeSet::empty();
+            TypeSet ts = TypeSet{};
             bool any = false;
 
             for (std::sregex_iterator it(inside.begin(), inside.end(), type_tok_regex), end; it != end; ++it) {
                 const auto sym = (*it)[1].str();
                 const auto enc = string_to_type_encoding(sym);
-                ts |= TypeSet::singleton(enc);
+                ts |= TypeSet{enc};
                 any = true;
             }
 

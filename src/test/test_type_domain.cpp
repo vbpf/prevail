@@ -89,7 +89,7 @@ TEST_CASE("iterate_types returns exact non-convex set", "[type_domain]") {
     TypeDomain td;
     // Restrict to {map_fd, shared} — non-adjacent types.
     const Variable v = reg_type(r0);
-    td.restrict_to(v, TypeSet::singleton(T_MAP) | TypeSet::singleton(T_SHARED));
+    td.restrict_to(v, TypeSet{T_MAP, T_SHARED});
     const auto types = td.iterate_types(r0);
     // Must return exactly {map_fd, shared}, not the convex hull.
     REQUIRE(types.size() == 2);
@@ -102,7 +102,7 @@ TEST_CASE("iterate_types returns exact non-convex set", "[type_domain]") {
 
 TEST_CASE("get_type returns nullopt for non-singleton set", "[type_domain]") {
     TypeDomain td;
-    td.restrict_to(reg_type(r0), TypeSet::singleton(T_CTX) | TypeSet::singleton(T_STACK));
+    td.restrict_to(reg_type(r0), TypeSet{T_CTX, T_STACK});
     REQUIRE(!td.get_type(r0).has_value());
 }
 
@@ -148,7 +148,7 @@ TEST_CASE("add_constraint restricts to singleton", "[type_domain]") {
 TEST_CASE("add_constraint removes a type via !=", "[type_domain]") {
     using namespace dsl_syntax;
     TypeDomain td;
-    td.restrict_to(reg_type(r0), TypeSet::singleton(T_NUM) | TypeSet::singleton(T_CTX));
+    td.restrict_to(reg_type(r0), TypeSet{T_NUM, T_CTX});
     td.add_constraint(reg_type(r0) != T_NUM);
     REQUIRE(td.get_type(r0) == T_CTX);
 }
@@ -156,8 +156,8 @@ TEST_CASE("add_constraint removes a type via !=", "[type_domain]") {
 TEST_CASE("add_constraint unifies variables via ==", "[type_domain]") {
     using namespace dsl_syntax;
     TypeDomain td;
-    td.restrict_to(reg_type(r0), TypeSet::singleton(T_MAP) | TypeSet::singleton(T_CTX));
-    td.restrict_to(reg_type(r1), TypeSet::singleton(T_CTX) | TypeSet::singleton(T_SHARED));
+    td.restrict_to(reg_type(r0), TypeSet{T_MAP, T_CTX});
+    td.restrict_to(reg_type(r1), TypeSet{T_CTX, T_SHARED});
     td.add_constraint(eq(reg_type(r0), reg_type(r1)));
     // Intersection: {ctx}
     REQUIRE(td.get_type(r0) == T_CTX);
@@ -180,9 +180,8 @@ TEST_CASE("add_constraint conflicting singleton goes to bottom", "[type_domain]"
 TEST_CASE("unify intersects TypeSets", "[type_domain]") {
     using namespace dsl_syntax;
     TypeDomain td;
-    td.restrict_to(reg_type(r0), TypeSet::singleton(T_MAP) | TypeSet::singleton(T_CTX) | TypeSet::singleton(T_STACK));
-    td.restrict_to(reg_type(r1),
-                   TypeSet::singleton(T_CTX) | TypeSet::singleton(T_PACKET) | TypeSet::singleton(T_STACK));
+    td.restrict_to(reg_type(r0), TypeSet{T_MAP, T_CTX, T_STACK});
+    td.restrict_to(reg_type(r1), TypeSet{T_CTX, T_PACKET, T_STACK});
     td.add_constraint(eq(reg_type(r0), reg_type(r1)));
     // Intersection: {ctx, stack}
     const auto types = td.iterate_types(r0);
@@ -195,8 +194,8 @@ TEST_CASE("unify intersects TypeSets", "[type_domain]") {
 TEST_CASE("unify disjoint TypeSets goes to bottom", "[type_domain]") {
     using namespace dsl_syntax;
     TypeDomain td;
-    td.restrict_to(reg_type(r0), TypeSet::singleton(T_MAP) | TypeSet::singleton(T_CTX));
-    td.restrict_to(reg_type(r1), TypeSet::singleton(T_PACKET) | TypeSet::singleton(T_SHARED));
+    td.restrict_to(reg_type(r0), TypeSet{T_MAP, T_CTX});
+    td.restrict_to(reg_type(r1), TypeSet{T_PACKET, T_SHARED});
     td.add_constraint(eq(reg_type(r0), reg_type(r1)));
     REQUIRE(td.is_bottom());
 }
@@ -204,11 +203,9 @@ TEST_CASE("unify disjoint TypeSets goes to bottom", "[type_domain]") {
 TEST_CASE("unify transitive chain progressively narrows", "[type_domain]") {
     using namespace dsl_syntax;
     TypeDomain td;
-    td.restrict_to(reg_type(r0), TypeSet::singleton(T_MAP) | TypeSet::singleton(T_CTX) | TypeSet::singleton(T_STACK));
-    td.restrict_to(reg_type(r1),
-                   TypeSet::singleton(T_CTX) | TypeSet::singleton(T_STACK) | TypeSet::singleton(T_SHARED));
-    td.restrict_to(reg_type(r2),
-                   TypeSet::singleton(T_STACK) | TypeSet::singleton(T_SHARED) | TypeSet::singleton(T_PACKET));
+    td.restrict_to(reg_type(r0), TypeSet{T_MAP, T_CTX, T_STACK});
+    td.restrict_to(reg_type(r1), TypeSet{T_CTX, T_STACK, T_SHARED});
+    td.restrict_to(reg_type(r2), TypeSet{T_STACK, T_SHARED, T_PACKET});
 
     td.add_constraint(eq(reg_type(r0), reg_type(r1))); // r0,r1 → {ctx, stack}
     REQUIRE(!td.is_bottom());
@@ -231,9 +228,9 @@ TEST_CASE("unify transitive chain progressively narrows", "[type_domain]") {
 
 TEST_CASE("restrict narrows the whole equivalence class", "[type_domain]") {
     TypeDomain td;
-    td.restrict_to(reg_type(r0), TypeSet::singleton(T_CTX) | TypeSet::singleton(T_STACK));
+    td.restrict_to(reg_type(r0), TypeSet{T_CTX, T_STACK});
     td.assign_type(r1, r0); // r1 unified with r0
-    td.restrict_to(reg_type(r0), TypeSet::singleton(T_CTX));
+    td.restrict_to(reg_type(r0), TypeSet{T_CTX});
     // Both must be narrowed.
     REQUIRE(td.get_type(r0) == T_CTX);
     REQUIRE(td.get_type(r1) == T_CTX);
@@ -329,8 +326,8 @@ TEST_CASE("join with bottom is identity", "[type_domain][join]") {
 
 TEST_CASE("meet intersects TypeSets", "[type_domain]") {
     TypeDomain a, b;
-    a.restrict_to(reg_type(r0), TypeSet::singleton(T_CTX) | TypeSet::singleton(T_STACK) | TypeSet::singleton(T_PACKET));
-    b.restrict_to(reg_type(r0), TypeSet::singleton(T_CTX) | TypeSet::singleton(T_SHARED));
+    a.restrict_to(reg_type(r0), TypeSet{T_CTX, T_STACK, T_PACKET});
+    b.restrict_to(reg_type(r0), TypeSet{T_CTX, T_SHARED});
     const auto m = a.meet(b);
     REQUIRE(m.has_value());
     REQUIRE(m->get_type(r0) == T_CTX);
@@ -392,7 +389,7 @@ TEST_CASE("bottom is subsumed by everything", "[type_domain][subsumption]") {
 TEST_CASE("subsumption respects TypeSet refinement", "[type_domain][subsumption]") {
     TypeDomain narrow_td, wide_td;
     narrow_td.assign_type(r0, T_CTX);
-    wide_td.restrict_to(reg_type(r0), TypeSet::singleton(T_CTX) | TypeSet::singleton(T_STACK));
+    wide_td.restrict_to(reg_type(r0), TypeSet{T_CTX, T_STACK});
     REQUIRE(narrow_td <= wide_td);
     REQUIRE(!(wide_td <= narrow_td));
 }
@@ -483,7 +480,7 @@ TEST_CASE("entail checks equality through singleton", "[type_domain]") {
 TEST_CASE("entail checks equality through DSU", "[type_domain]") {
     using namespace dsl_syntax;
     TypeDomain td;
-    td.restrict_to(reg_type(r0), TypeSet::singleton(T_CTX) | TypeSet::singleton(T_STACK));
+    td.restrict_to(reg_type(r0), TypeSet{T_CTX, T_STACK});
     td.assign_type(r1, r0);
     // Unified but not singleton — entail should still confirm equality.
     REQUIRE(td.entail(eq(reg_type(r0), reg_type(r1))));
@@ -495,18 +492,18 @@ TEST_CASE("entail checks equality through DSU", "[type_domain]") {
 
 TEST_CASE("implies_group checks conditional type constraint", "[type_domain]") {
     TypeDomain td;
-    td.restrict_to(reg_type(r0), TypeSet::singleton(T_CTX) | TypeSet::singleton(T_NUM));
+    td.restrict_to(reg_type(r0), TypeSet{T_CTX, T_NUM});
 
     // If r0 is a pointer, then r0 must be ctx.
-    REQUIRE(td.implies_group(r0, TypeGroup::pointer, r0, TypeSet::singleton(T_CTX)));
+    REQUIRE(td.implies_group(r0, TypeGroup::pointer, r0, TypeSet{T_CTX}));
 }
 
 TEST_CASE("implies_not_type checks conditional type constraint", "[type_domain]") {
     TypeDomain td;
-    td.restrict_to(reg_type(r0), TypeSet::singleton(T_CTX) | TypeSet::singleton(T_NUM));
+    td.restrict_to(reg_type(r0), TypeSet{T_CTX, T_NUM});
 
     // If r0 is not stack, then r0 is in {ctx, num} (trivially true here).
-    REQUIRE(td.implies_not_type(r0, T_STACK, r0, TypeSet::singleton(T_CTX) | TypeSet::singleton(T_NUM)));
+    REQUIRE(td.implies_not_type(r0, T_STACK, r0, TypeSet{T_CTX, T_NUM}));
 }
 
 // ============================================================================
@@ -535,7 +532,7 @@ TEST_CASE("to_set outputs singleton types", "[type_domain][serialization]") {
 
 TEST_CASE("to_set outputs multi-valued TypeSet as 'in' notation", "[type_domain][serialization]") {
     TypeDomain td;
-    td.restrict_to(reg_type(r0), TypeSet::singleton(T_CTX) | TypeSet::singleton(T_STACK));
+    td.restrict_to(reg_type(r0), TypeSet{T_CTX, T_STACK});
     const auto inv = td.to_set();
     REQUIRE(!inv.is_bottom());
     REQUIRE(inv.contains("r0.type in {ctx, stack}"));
@@ -543,7 +540,7 @@ TEST_CASE("to_set outputs multi-valued TypeSet as 'in' notation", "[type_domain]
 
 TEST_CASE("to_set shows equality for unified variables", "[type_domain][serialization]") {
     TypeDomain td;
-    td.restrict_to(reg_type(r0), TypeSet::singleton(T_CTX) | TypeSet::singleton(T_STACK));
+    td.restrict_to(reg_type(r0), TypeSet{T_CTX, T_STACK});
     td.assign_type(r1, r0);
     const auto inv = td.to_set();
     REQUIRE(!inv.is_bottom());
