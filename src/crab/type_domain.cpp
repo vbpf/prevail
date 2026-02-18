@@ -591,7 +591,8 @@ void TypeDomain::assign_from_expr(const Variable lhs, const LinearExpression& ex
             class_types[id] = TypeSet::singleton(*te);
             merge_if_singleton(id);
         } else {
-            class_types[id] = TypeSet::all();
+            // Not a valid TypeEncoding — same as asserting an impossible type.
+            is_bottom_ = true;
         }
     } else if (terms.size() == 1) {
         const auto& [var, coeff] = *terms.begin();
