@@ -100,8 +100,14 @@ struct TypeToNumDomain {
     static TypeToNumDomain bottom() { return TypeToNumDomain{TypeDomain::top(), NumAbsDomain::bottom()}; }
     static TypeToNumDomain top() { return TypeToNumDomain{TypeDomain::top(), NumAbsDomain::top()}; }
 
-    bool is_bottom() const { return values.is_bottom(); }
-    bool is_top() const { return values.is_top(); }
+    [[nodiscard]]
+    bool is_bottom() const {
+        return values.is_bottom();
+    }
+    [[nodiscard]]
+    bool is_top() const {
+        return values.is_top();
+    }
 
     void set_to_top() {
         types.set_to_top();
@@ -131,6 +137,7 @@ struct TypeToNumDomain {
     TypeToNumDomain operator&(const TypeToNumDomain& other) const;
     TypeToNumDomain operator&(TypeToNumDomain&& other) const;
 
+    [[nodiscard]]
     std::optional<Variable> get_type_offset_variable(const Reg& reg) const;
 
     /**
@@ -152,6 +159,7 @@ struct TypeToNumDomain {
      *
      * @return A vector of all kind variables that are meaningless (effectively Bottom) in `dom`.
      */
+    [[nodiscard]]
     std::vector<Variable> get_nonexistent_kind_variables() const;
 
     /**
@@ -172,6 +180,7 @@ struct TypeToNumDomain {
      * @return A vector containing the variable, which domain it came from (`true` if left),
      * and its interval value, for each type-specific constraint to be preserved.
      */
+    [[nodiscard]]
     std::vector<std::tuple<Variable, Interval>> collect_type_dependent_constraints(const TypeToNumDomain& right) const;
 
     /**
@@ -205,23 +214,52 @@ struct TypeToNumDomain {
     void assign_type(auto&&... args) { types.assign_type(std::forward<decltype(args)>(args)...); }
 
     // Convenience forwarding to TypeDomain.
-    bool is_in_group(const Reg& r, const TypeSet ts) const { return types.is_in_group(r, ts); }
-    bool may_have_type(const Reg& r, const TypeEncoding te) const { return types.may_have_type(r, te); }
-    bool may_have_type(const Variable v, const TypeEncoding te) const { return types.may_have_type(v, te); }
-    bool is_initialized(const Reg& r) const { return types.is_initialized(r); }
-    bool is_initialized(const Variable v) const { return types.is_initialized(v); }
-    bool same_type(const Reg& a, const Reg& b) const { return types.same_type(a, b); }
-    bool entail_type(const Variable v, const TypeEncoding te) const { return types.entail_type(v, te); }
+    [[nodiscard]]
+    bool is_in_group(const Reg& r, const TypeSet ts) const {
+        return types.is_in_group(r, ts);
+    }
+    [[nodiscard]]
+    bool may_have_type(const Reg& r, const TypeEncoding te) const {
+        return types.may_have_type(r, te);
+    }
+    [[nodiscard]]
+    bool may_have_type(const Variable v, const TypeEncoding te) const {
+        return types.may_have_type(v, te);
+    }
+    [[nodiscard]]
+    bool is_initialized(const Reg& r) const {
+        return types.is_initialized(r);
+    }
+    [[nodiscard]]
+    bool is_initialized(const Variable v) const {
+        return types.is_initialized(v);
+    }
+    [[nodiscard]]
+    bool same_type(const Reg& a, const Reg& b) const {
+        return types.same_type(a, b);
+    }
+    [[nodiscard]]
+    bool entail_type(const Variable v, const TypeEncoding te) const {
+        return types.entail_type(v, te);
+    }
+    [[nodiscard]]
     bool implies_superset(const Reg& premise_reg, const TypeSet premise_set, const Reg& conclusion_reg,
                           const TypeSet conclusion_set) const {
         return types.implies_superset(premise_reg, premise_set, conclusion_reg, conclusion_set);
     }
+    [[nodiscard]]
     bool implies_not_type(const Reg& premise_reg, const TypeEncoding excluded_type, const Reg& conclusion_reg,
                           const TypeSet conclusion_set) const {
         return types.implies_not_type(premise_reg, excluded_type, conclusion_reg, conclusion_set);
     }
-    std::optional<TypeEncoding> get_type(const Reg& r) const { return types.get_type(r); }
-    std::vector<TypeEncoding> iterate_types(const Reg& reg) const { return types.iterate_types(reg); }
+    [[nodiscard]]
+    std::optional<TypeEncoding> get_type(const Reg& r) const {
+        return types.get_type(r);
+    }
+    [[nodiscard]]
+    std::vector<TypeEncoding> iterate_types(const Reg& reg) const {
+        return types.iterate_types(reg);
+    }
     void havoc_type(const Reg& r) { types.havoc_type(r); }
     void havoc_type(const Variable& v) { types.havoc_type(v); }
     void assume_eq_types(const Variable v1, const Variable v2) { types.assume_eq(v1, v2); }
@@ -233,10 +271,13 @@ struct TypeToNumDomain {
 
     void havoc_register(const Reg& reg);
 
+    [[nodiscard]]
     TypeToNumDomain widen(const TypeToNumDomain& other) const;
 
+    [[nodiscard]]
     TypeToNumDomain narrow(const TypeToNumDomain& other) const;
 
+    [[nodiscard]]
     StringInvariant to_set() const;
     friend std::ostream& operator<<(std::ostream& o, const TypeToNumDomain& dom);
 };

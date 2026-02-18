@@ -21,8 +21,8 @@ Interval FiniteDomain::eval_interval(const Variable v, const int finite_width) c
     return variable_registry->is_unsigned(v) ? span.zero_extend(finite_width) : span.sign_extend(finite_width);
 }
 
-static std::vector<LinearConstraint> assume_bit_cst_interval(Condition::Op op, bool is64, Interval dst_interval,
-                                                             Interval src_interval) {
+static std::vector<LinearConstraint> assume_bit_cst_interval(const Condition::Op op, const bool is64,
+                                                             Interval dst_interval, Interval src_interval) {
     using namespace dsl_syntax;
     using Op = Condition::Op;
 
@@ -327,8 +327,9 @@ FiniteDomain::assume_signed_32bit_gt(const bool strict, const Variable left_sval
     }
 }
 
-std::vector<LinearConstraint> FiniteDomain::assume_signed_cst_interval(Condition::Op op, bool is64,
-                                                                       Variable left_svalue, Variable left_uvalue,
+std::vector<LinearConstraint> FiniteDomain::assume_signed_cst_interval(const Condition::Op op, const bool is64,
+                                                                       const Variable left_svalue,
+                                                                       const Variable left_uvalue,
                                                                        const LinearExpression& right_svalue,
                                                                        const LinearExpression& right_uvalue) const {
 
@@ -351,12 +352,12 @@ std::vector<LinearConstraint> FiniteDomain::assume_signed_cst_interval(Condition
     }
 
     const bool is_lt = op == Condition::Op::SLT || op == Condition::Op::SLE;
-    bool strict = op == Condition::Op::SLT || op == Condition::Op::SGT;
+    const bool strict = op == Condition::Op::SLT || op == Condition::Op::SGT;
 
-    auto llb = left_interval.lb();
-    auto lub = left_interval.ub();
-    auto rlb = right_interval.lb();
-    auto rub = right_interval.ub();
+    const auto llb = left_interval.lb();
+    const auto lub = left_interval.ub();
+    const auto rlb = right_interval.lb();
+    const auto rub = right_interval.ub();
     if (!is_lt && (strict ? lub <= rlb : lub < rlb)) {
         // Left signed interval is lower than right signed interval.
         return {LinearConstraint::false_const()};
@@ -394,18 +395,18 @@ std::vector<LinearConstraint> FiniteDomain::assume_signed_cst_interval(Condition
 }
 
 std::vector<LinearConstraint>
-FiniteDomain::assume_unsigned_64bit_lt(bool strict, Variable left_svalue, Variable left_uvalue,
+FiniteDomain::assume_unsigned_64bit_lt(const bool strict, const Variable left_svalue, const Variable left_uvalue,
                                        const Interval& left_interval_low, const Interval& left_interval_high,
                                        const LinearExpression& right_svalue, const LinearExpression& right_uvalue,
                                        const Interval& right_interval) const {
 
     using namespace dsl_syntax;
 
-    auto rub = right_interval.ub();
-    auto lllb = left_interval_low.truncate_to<uint64_t>().lb();
+    const auto rub = right_interval.ub();
+    const auto lllb = left_interval_low.truncate_to<uint64_t>().lb();
     if (right_interval <= Interval::nonnegative(64) && (strict ? lllb >= rub : lllb > rub)) {
         // The high interval is out of range.
-        if (auto lsubn = eval_interval(left_svalue).ub().number()) {
+        if (const auto lsubn = eval_interval(left_svalue).ub().number()) {
             return {left_uvalue >= 0, (strict ? left_uvalue < right_uvalue : left_uvalue <= right_uvalue),
                     left_uvalue <= *lsubn, left_svalue >= 0};
         } else {
@@ -413,10 +414,10 @@ FiniteDomain::assume_unsigned_64bit_lt(bool strict, Variable left_svalue, Variab
                     left_svalue >= 0};
         }
     }
-    auto lhlb = left_interval_high.truncate_to<uint64_t>().lb();
+    const auto lhlb = left_interval_high.truncate_to<uint64_t>().lb();
     if (right_interval <= Interval::unsigned_high(64) && (strict ? lhlb >= rub : lhlb > rub)) {
         // The high interval is out of range.
-        if (auto lsubn = eval_interval(left_svalue).ub().number()) {
+        if (const auto lsubn = eval_interval(left_svalue).ub().number()) {
             return {left_uvalue >= 0, (strict ? left_uvalue < *rub.number() : left_uvalue <= *rub.number()),
                     left_uvalue <= *lsubn, left_svalue >= 0};
         } else {
@@ -426,7 +427,7 @@ FiniteDomain::assume_unsigned_64bit_lt(bool strict, Variable left_svalue, Variab
     }
     if (right_interval <= Interval::signed_int(64)) {
         // Interval can be represented as both an svalue and a uvalue since it fits in [0, INT_MAX].
-        auto llub = left_interval_low.truncate_to<uint64_t>().ub();
+        const auto llub = left_interval_low.truncate_to<uint64_t>().ub();
         return {0 <= left_uvalue, strict ? left_uvalue < right_uvalue : left_uvalue <= right_uvalue,
                 left_uvalue <= *llub.number(), 0 <= left_svalue,
                 strict ? left_svalue < right_svalue : left_svalue <= right_svalue};
@@ -525,8 +526,9 @@ FiniteDomain::assume_unsigned_32bit_gt(const bool strict, const Variable left_sv
     }
 }
 
-std::vector<LinearConstraint> FiniteDomain::assume_unsigned_cst_interval(Condition::Op op, bool is64,
-                                                                         Variable left_svalue, Variable left_uvalue,
+std::vector<LinearConstraint> FiniteDomain::assume_unsigned_cst_interval(Condition::Op op, const bool is64,
+                                                                         const Variable left_svalue,
+                                                                         const Variable left_uvalue,
                                                                          const LinearExpression& right_svalue,
                                                                          const LinearExpression& right_uvalue) const {
 
@@ -541,7 +543,7 @@ std::vector<LinearConstraint> FiniteDomain::assume_unsigned_cst_interval(Conditi
 
     // Handle uvalue != right.
     if (op == Condition::Op::NE) {
-        if (auto rn = right_interval.singleton()) {
+        if (const auto rn = right_interval.singleton()) {
             if (rn == left_interval.zero_extend(is64 ? 64 : 32).lb().number()) {
                 // "NE lower bound" is equivalent to "GT lower bound".
                 op = Condition::Op::GT;
@@ -559,7 +561,7 @@ std::vector<LinearConstraint> FiniteDomain::assume_unsigned_cst_interval(Conditi
     }
 
     const bool is_lt = op == Condition::Op::LT || op == Condition::Op::LE;
-    bool strict = op == Condition::Op::LT || op == Condition::Op::GT;
+    const bool strict = op == Condition::Op::LT || op == Condition::Op::GT;
 
     auto [llb, lub] = left_interval.pair();
     auto [rlb, rub] = right_interval.pair();
@@ -757,8 +759,9 @@ void FiniteDomain::apply(const SignedArithBinOp op, const Variable x, const Vari
     }
 }
 
-void FiniteDomain::apply(BitwiseBinOp op, Variable x, Variable y, Variable z, int finite_width) {
-    Interval yi = dom.eval_interval(y);
+void FiniteDomain::apply(const BitwiseBinOp op, const Variable x, const Variable y, const Variable z,
+                         const int finite_width) {
+    const Interval yi = dom.eval_interval(y);
     Interval zi = dom.eval_interval(z);
     if (op == BitwiseBinOp::SHL || op == BitwiseBinOp::LSHR || op == BitwiseBinOp::ASHR) {
         zi.mask_shift_count(finite_width);
@@ -779,9 +782,10 @@ void FiniteDomain::apply(BitwiseBinOp op, Variable x, Variable y, Variable z, in
 }
 
 // Apply a bitwise operator to a uvalue.
-void FiniteDomain::apply(BitwiseBinOp op, Variable x, Variable y, const Number& k, int finite_width) {
+void FiniteDomain::apply(const BitwiseBinOp op, const Variable x, const Variable y, const Number& k,
+                         const int finite_width) {
     // Convert to intervals and perform the operation
-    Interval yi = dom.eval_interval(y);
+    const Interval yi = dom.eval_interval(y);
     Interval zi{k.cast_to<uint64_t>()};
     if (op == BitwiseBinOp::SHL || op == BitwiseBinOp::LSHR || op == BitwiseBinOp::ASHR) {
         zi.mask_shift_count(finite_width);
@@ -813,9 +817,9 @@ void FiniteDomain::apply(const BinOp op, const Variable x, const Variable y, con
     apply(op, x, y, z, 0);
 }
 
-void FiniteDomain::overflow_bounds(Variable lhs, int finite_width, bool issigned) {
+void FiniteDomain::overflow_bounds(const Variable lhs, const int finite_width, const bool issigned) {
     using namespace dsl_syntax;
-    auto interval = eval_interval(lhs);
+    const auto interval = eval_interval(lhs);
     if (interval.size() >= Interval::unsigned_int(finite_width).size()) {
         // Interval covers the full space.
         havoc(lhs);
@@ -825,8 +829,8 @@ void FiniteDomain::overflow_bounds(Variable lhs, int finite_width, bool issigned
         havoc(lhs);
         return;
     }
-    Number lb_value = interval.lb().number().value();
-    Number ub_value = interval.ub().number().value();
+    const Number lb_value = interval.lb().number().value();
+    const Number ub_value = interval.ub().number().value();
 
     // Compute the interval, taking overflow into account.
     // For a signed result, we need to ensure the signed and unsigned results match
@@ -843,7 +847,7 @@ void FiniteDomain::overflow_bounds(Variable lhs, int finite_width, bool issigned
         havoc(lhs);
         return;
     }
-    auto new_interval = Interval{lb, ub};
+    const auto new_interval = Interval{lb, ub};
     if (new_interval != interval) {
         // Update the variable, which will lose any relationships to other variables.
         dom.set(lhs, new_interval);
@@ -1015,7 +1019,7 @@ void FiniteDomain::shl(const Variable svalue, const Variable uvalue, const int i
     overflow_bounds(svalue, uvalue, finite_width);
 }
 
-void FiniteDomain::lshr(const Variable svalue, const Variable uvalue, int imm, int finite_width) {
+void FiniteDomain::lshr(const Variable svalue, const Variable uvalue, const int imm, const int finite_width) {
     const auto uinterval = eval_interval(uvalue);
     if (uinterval.finite_size()) {
         auto [lb_n, ub_n] = uinterval.pair_number();
@@ -1041,14 +1045,14 @@ void FiniteDomain::lshr(const Variable svalue, const Variable uvalue, int imm, i
 }
 
 void FiniteDomain::ashr(const Variable svalue, const Variable uvalue, const LinearExpression& right_svalue,
-                        int finite_width) {
+                        const int finite_width) {
     Interval left_interval = Interval::bottom();
     Interval right_interval = Interval::bottom();
     Interval left_interval_positive = Interval::bottom();
     Interval left_interval_negative = Interval::bottom();
     get_signed_intervals(finite_width == 64, svalue, uvalue, right_svalue, left_interval, right_interval,
                          left_interval_positive, left_interval_negative);
-    if (auto sn = right_interval.singleton()) {
+    if (const auto sn = right_interval.singleton()) {
         // The BPF ISA requires masking the imm.
         const int64_t imm = sn->cast_to<int64_t>() & (finite_width - 1);
 

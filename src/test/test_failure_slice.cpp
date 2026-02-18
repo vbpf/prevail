@@ -6,7 +6,6 @@
 #include <sstream>
 
 #include "ebpf_verifier.hpp"
-#include "linux/gpl/spec_type_descriptors.hpp"
 
 using namespace prevail;
 
@@ -88,18 +87,18 @@ TEST_CASE("extract_instruction_deps for Mem store", "[failure_slice][deps]") {
 // Test that extract_assertion_registers correctly identifies assertion dependencies
 TEST_CASE("extract_assertion_registers for ValidAccess", "[failure_slice][deps]") {
     ValidAccess va{0, Reg{1}, 0, Imm{8}, false, AccessType::read};
-    Assertion assertion = va;
+    const Assertion assertion = va;
 
-    auto regs = extract_assertion_registers(assertion);
+    const auto regs = extract_assertion_registers(assertion);
 
     REQUIRE(regs.contains(Reg{1}));
 }
 
 TEST_CASE("extract_assertion_registers for Comparable", "[failure_slice][deps]") {
     Comparable comp{Reg{1}, Reg{2}, false};
-    Assertion assertion = comp;
+    const Assertion assertion = comp;
 
-    auto regs = extract_assertion_registers(assertion);
+    const auto regs = extract_assertion_registers(assertion);
 
     REQUIRE(regs.contains(Reg{1}));
     REQUIRE(regs.contains(Reg{2}));
@@ -107,18 +106,18 @@ TEST_CASE("extract_assertion_registers for Comparable", "[failure_slice][deps]")
 
 TEST_CASE("extract_assertion_registers for ValidDivisor", "[failure_slice][deps]") {
     ValidDivisor vd{Reg{3}, false};
-    Assertion assertion = vd;
+    const Assertion assertion = vd;
 
-    auto regs = extract_assertion_registers(assertion);
+    const auto regs = extract_assertion_registers(assertion);
 
     REQUIRE(regs.contains(Reg{3}));
 }
 
 TEST_CASE("extract_assertion_registers for BoundedLoopCount", "[failure_slice][deps]") {
     BoundedLoopCount blc{Label{0}};
-    Assertion assertion = blc;
+    const Assertion assertion = blc;
 
-    auto regs = extract_assertion_registers(assertion);
+    const auto regs = extract_assertion_registers(assertion);
 
     REQUIRE(regs.empty());
 }
@@ -146,15 +145,15 @@ TEST_CASE("failure slice for exposeptr.o", "[failure_slice][integration]") {
     if (!sample_exists(sample)) {
         SKIP("Sample file not found: " << sample);
     }
-    auto slices = get_failure_slices(sample, ".text");
+    const auto slices = get_failure_slices(sample, ".text");
 
     REQUIRE(slices.size() == 1);
-    REQUIRE(slices[0].relevance.size() > 0);
+    REQUIRE(!slices[0].relevance.empty());
 
     // The failure involves map update with registers r1, r3
-    auto& failing_relevance = slices[0].relevance.at(slices[0].failing_label);
+    const auto& failing_relevance = slices[0].relevance.at(slices[0].failing_label);
     // At minimum r3 should be relevant (the value being stored)
-    REQUIRE(failing_relevance.registers.size() > 0);
+    REQUIRE(!failing_relevance.registers.empty());
 }
 
 TEST_CASE("failure slice for nullmapref.o", "[failure_slice][integration]") {
@@ -162,11 +161,11 @@ TEST_CASE("failure slice for nullmapref.o", "[failure_slice][integration]") {
     if (!sample_exists(sample)) {
         SKIP("Sample file not found: " << sample);
     }
-    auto slices = get_failure_slices(sample, "test");
+    const auto slices = get_failure_slices(sample, "test");
 
-    REQUIRE(slices.size() >= 1);
+    REQUIRE(!slices.empty());
     // Slice should have at least the failing label
-    REQUIRE(slices[0].relevance.size() >= 1);
+    REQUIRE(!slices[0].relevance.empty());
 }
 
 // Test print_failure_slices produces output
@@ -239,9 +238,9 @@ TEST_CASE("assume guard registers become relevant in slice", "[failure_slice][in
     }
     auto slices = get_failure_slices(sample, "xdp");
 
-    REQUIRE(slices.size() >= 1);
+    REQUIRE(!slices.empty());
     const auto& slice = slices[0];
-    REQUIRE(slice.relevance.size() > 0);
+    REQUIRE(!slice.relevance.empty());
 
     // Check that at least one Assume label is in the slice
     // (the guard condition that determines reachability of the failing label)
@@ -259,7 +258,7 @@ TEST_CASE("assume guard registers become relevant in slice", "[failure_slice][in
         if (std::holds_alternative<Assume>(prog.instruction_at(label))) {
             found_assume_in_slice = true;
             // The Assume's condition registers should be in the relevance set
-            REQUIRE(relevance.registers.size() > 0);
+            REQUIRE(!relevance.registers.empty());
             break;
         }
     }
@@ -271,7 +270,7 @@ TEST_CASE("empty seed assertion still includes failing label", "[failure_slice][
     if (!sample_exists(sample)) {
         SKIP("Sample file not found: " << sample);
     }
-    auto slices = get_failure_slices(sample, "test");
+    const auto slices = get_failure_slices(sample, "test");
     if (slices.empty()) {
         // bounded_loop may pass verification depending on build; skip if so
         SKIP("Program passed verification (no failure slices)");
