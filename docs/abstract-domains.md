@@ -131,7 +131,7 @@ the set of types that the class might have.
 
 ```text
 Top:    each variable is its own class, TypeSet = all 8 types
-Bottom: is_bottom_ flag (contradiction detected)
+Bottom: state_ == nullptr (contradiction detected)
 ```
 
 ### Sentinel-Merging Invariant

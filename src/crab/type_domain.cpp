@@ -6,6 +6,7 @@
 #include <cassert>
 #include <map>
 #include <optional>
+#include <set>
 #include <sstream>
 
 #include "arith/variable.hpp"
@@ -510,12 +511,12 @@ TypeDomain::State TypeDomain::State::join(const State& a, const State& b) {
     // partition correctly without a special singleton key.
 
     // Collect all variables from both operands.
-    std::map<Variable, bool> all_vars_seen;
+    std::set<Variable> all_vars_seen;
     for (const auto& v : a.var_ids.vars() | std::views::keys) {
-        all_vars_seen[v] = true;
+        all_vars_seen.insert(v);
     }
     for (const auto& v : b.var_ids.vars() | std::views::keys) {
-        all_vars_seen[v] = true;
+        all_vars_seen.insert(v);
     }
 
     // Compute (rep_left, rep_right) for each variable, group by key pair.
@@ -525,7 +526,7 @@ TypeDomain::State TypeDomain::State::join(const State& a, const State& b) {
     size_t next_unique_a = a.dsu.size();
     size_t next_unique_b = b.dsu.size();
     std::map<std::pair<size_t, size_t>, std::vector<Variable>> key_groups;
-    for (const auto& v : all_vars_seen | std::views::keys) {
+    for (const auto& v : all_vars_seen) {
         size_t key_a;
         if (const auto id = a.var_ids.find_id(v)) {
             key_a = a.dsu.find_const(*id);
