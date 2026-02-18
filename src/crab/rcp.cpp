@@ -24,7 +24,9 @@ std::optional<Variable> get_type_offset_variable(const Reg& reg, const int type)
 }
 
 std::optional<Variable> TypeToNumDomain::get_type_offset_variable(const Reg& reg) const {
-    return prevail::get_type_offset_variable(reg, types.get_type(reg));
+    const auto type = types.get_type(reg);
+    if (!type) return {};
+    return prevail::get_type_offset_variable(reg, *type);
 }
 
 bool TypeToNumDomain::operator<=(const TypeToNumDomain& other) const {
@@ -149,7 +151,6 @@ TypeToNumDomain::collect_type_dependent_constraints(const TypeToNumDomain& right
 }
 
 std::vector<TypeEncoding> TypeToNumDomain::enumerate_types(const Reg& reg) const {
-    using namespace dsl_syntax;
     if (!types.is_initialized(reg)) {
         return {T_UNINIT};
     }
@@ -159,7 +160,6 @@ std::vector<TypeEncoding> TypeToNumDomain::enumerate_types(const Reg& reg) const
 TypeToNumDomain
 TypeToNumDomain::join_over_types(const Reg& reg,
                                  const std::function<void(TypeToNumDomain&, TypeEncoding)>& transition) const {
-    using namespace dsl_syntax;
     if (!types.is_initialized(reg)) {
         TypeToNumDomain res = *this;
         transition(res, T_UNINIT);
@@ -173,7 +173,7 @@ TypeToNumDomain::join_over_types(const Reg& reg,
     }
     for (const TypeEncoding type : valid_types) {
         TypeToNumDomain tmp(*this);
-        tmp.types.add_constraint(reg_type(reg) == type);
+        tmp.types.restrict_to(reg_type(reg), TypeSet::singleton(type));
         // This might have changed the type variable of reg.
         // It might also have changed the type variable of other registers, but we don't deal with that.
         for (const auto& [other_type, kinds] : valid_type_to_kinds) {
@@ -199,13 +199,6 @@ void TypeToNumDomain::havoc_all_locations_having_type(const TypeEncoding type) {
                 values.havoc(variable_registry->kind_var(kind, type_variable));
             }
         }
-    }
-}
-
-void TypeToNumDomain::assume_type(const LinearConstraint& cst) {
-    types.add_constraint(cst);
-    if (types.inv.is_bottom()) {
-        values.set_to_bottom();
     }
 }
 

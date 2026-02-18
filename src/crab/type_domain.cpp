@@ -1,20 +1,16 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
-// ReSharper disable CppMemberFunctionMayBeStatic
 
 // This file is eBPF-specific, not derived from CRAB.
-#include <functional>
+#include <algorithm>
 #include <map>
 #include <optional>
+#include <sstream>
 
-#include "arith/dsl_syntax.hpp"
 #include "arith/variable.hpp"
-#include "crab/array_domain.hpp"
-#include "crab/interval.hpp"
 #include "crab/type_domain.hpp"
 #include "crab/type_encoding.hpp"
 #include "crab/var_registry.hpp"
-#include "crab/zone_domain.hpp"
 #include "crab_utils/debug.hpp"
 
 namespace prevail {
@@ -23,6 +19,10 @@ template <is_enum T>
 static void operator++(T& t) {
     t = static_cast<T>(1 + static_cast<std::underlying_type_t<T>>(t));
 }
+
+// ============================================================================
+// DataKind utilities
+// ============================================================================
 
 std::vector<DataKind> iterate_kinds(const DataKind lb, const DataKind ub) {
     if (lb > ub) {
@@ -38,6 +38,10 @@ std::vector<DataKind> iterate_kinds(const DataKind lb, const DataKind ub) {
     return res;
 }
 
+// ============================================================================
+// TypeEncoding utilities
+// ============================================================================
+
 std::vector<TypeEncoding> iterate_types(const TypeEncoding lb, const TypeEncoding ub) {
     if (lb > ub) {
         CRAB_ERROR("lower bound ", lb, " is greater than upper bound ", ub);
@@ -50,18 +54,6 @@ std::vector<TypeEncoding> iterate_types(const TypeEncoding lb, const TypeEncodin
         res.push_back(i);
     }
     return res;
-}
-
-std::vector<TypeEncoding> TypeDomain::iterate_types(const Reg& reg) const {
-    const Interval allowed_types = inv.eval_interval(reg_type(reg));
-    if (!allowed_types) {
-        return {};
-    }
-    if (allowed_types.contains(T_UNINIT)) {
-        return {T_UNINIT};
-    }
-    auto [lb, ub] = allowed_types.bound(T_MIN_VALID, T_MAX);
-    return prevail::iterate_types(lb, ub);
 }
 
 static constexpr auto S_UNINIT = "uninit";
@@ -137,86 +129,11 @@ TypeEncoding string_to_type_encoding(const std::string& s) {
     throw std::runtime_error(std::string("Unsupported type name: ") + s);
 }
 
-Variable reg_type(const Reg& lhs) { return variable_registry->type_reg(lhs.v); }
-
-void TypeDomain::assign_type(const Reg& lhs, const Reg& rhs) { inv.assign(reg_type(lhs), reg_type(rhs)); }
-
-void TypeDomain::assign_type(const std::optional<Variable> lhs, const LinearExpression& t) { inv.assign(lhs, t); }
-
-void TypeDomain::assign_type(const Reg& lhs, const std::optional<LinearExpression>& rhs) {
-    inv.assign(reg_type(lhs), rhs);
-}
-
-void TypeDomain::havoc_type(const Reg& r) { inv.havoc(reg_type(r)); }
-void TypeDomain::havoc_type(const Variable& v) { inv.havoc(v); }
-
-TypeEncoding TypeDomain::get_type(const LinearExpression& v) const {
-    const auto res = inv.eval_interval(v).singleton();
-    if (!res) {
-        return T_UNINIT;
+std::optional<TypeEncoding> int_to_type_encoding(const int v) {
+    if (v >= T_MIN && v <= T_MAX) {
+        return static_cast<TypeEncoding>(v);
     }
-    return res->narrow<TypeEncoding>();
-}
-
-TypeEncoding TypeDomain::get_type(const Reg& r) const {
-    const auto res = inv.eval_interval(reg_type(r)).singleton();
-    if (!res) {
-        return T_UNINIT;
-    }
-    return res->narrow<TypeEncoding>();
-}
-
-[[nodiscard]]
-bool TypeDomain::is_initialized(const Reg& r) const {
-    using namespace dsl_syntax;
-    return inv.entail(reg_type(r) != T_UNINIT);
-}
-
-[[nodiscard]]
-bool TypeDomain::is_initialized(const LinearExpression& v) const {
-    using namespace dsl_syntax;
-    return inv.entail(v != T_UNINIT);
-}
-
-// Check whether a given type value is within the range of a given type variable's value.
-bool TypeDomain::may_have_type(const Reg& r, const TypeEncoding type) const {
-    const Interval interval = inv.eval_interval(reg_type(r));
-    return interval.contains(type);
-}
-
-bool TypeDomain::may_have_type(const LinearExpression& v, const TypeEncoding type) const {
-    const Interval interval = inv.eval_interval(v);
-    return interval.contains(type);
-}
-
-static LinearConstraint eq_types(const Reg& a, const Reg& b) {
-    using namespace dsl_syntax;
-    return eq(reg_type(a), reg_type(b));
-}
-
-bool TypeDomain::same_type(const Reg& a, const Reg& b) const { return inv.entail(eq_types(a, b)); }
-
-bool TypeDomain::is_in_group(const Reg& r, const TypeGroup group) const {
-    using namespace dsl_syntax;
-    const Variable t = reg_type(r);
-    switch (group) {
-    case TypeGroup::number: return inv.entail(t == T_NUM);
-    case TypeGroup::map_fd: return inv.entail(t == T_MAP);
-    case TypeGroup::map_fd_programs: return inv.entail(t == T_MAP_PROGRAMS);
-    case TypeGroup::ctx: return inv.entail(t == T_CTX);
-    case TypeGroup::ctx_or_num: return inv.entail(t == T_CTX) || inv.entail(t == T_NUM);
-    case TypeGroup::packet: return inv.entail(t == T_PACKET);
-    case TypeGroup::stack: return inv.entail(t == T_STACK);
-    case TypeGroup::stack_or_num: return inv.entail(t == T_STACK) || inv.entail(t == T_NUM);
-    case TypeGroup::shared: return inv.entail(t == T_SHARED);
-    case TypeGroup::mem: return inv.entail(t >= T_PACKET);
-    case TypeGroup::mem_or_num: return inv.entail(t >= T_NUM) && inv.entail(t != T_CTX);
-    case TypeGroup::pointer: return inv.entail(t >= T_CTX);
-    case TypeGroup::ptr_or_num: return inv.entail(t >= T_NUM);
-    case TypeGroup::stack_or_packet: return inv.entail(t >= T_PACKET) && inv.entail(t <= T_STACK);
-    case TypeGroup::singleton_ptr: return inv.entail(t >= T_CTX) && inv.entail(t <= T_STACK);
-    default: CRAB_ERROR("Unsupported type group", group);
-    }
+    return std::nullopt;
 }
 
 std::string typeset_to_string(const std::vector<TypeEncoding>& items) {
@@ -230,6 +147,75 @@ std::string typeset_to_string(const std::vector<TypeEncoding>& items) {
     }
     ss << "}";
     return ss.str();
+}
+
+// ============================================================================
+// TypeSet methods
+// ============================================================================
+
+std::optional<TypeEncoding> TypeSet::as_singleton() const {
+    if (!is_singleton()) {
+        return std::nullopt;
+    }
+    const int bit = __builtin_ctz(raw());
+    return int_to_type_encoding(bit - 7);
+}
+
+std::vector<TypeEncoding> TypeSet::to_vector() const {
+    std::vector<TypeEncoding> result;
+    uint8_t tmp = raw();
+    while (tmp != 0) {
+        const int bit = __builtin_ctz(tmp);
+        if (auto te = int_to_type_encoding(bit - 7)) {
+            result.push_back(*te);
+        }
+        tmp &= tmp - 1; // clear lowest set bit
+    }
+    return result;
+}
+
+std::string TypeSet::to_string() const {
+    const auto items = to_vector();
+    if (items.size() == 1) {
+        std::stringstream ss;
+        ss << items[0];
+        return ss.str();
+    }
+    return typeset_to_string(items);
+}
+
+
+// ============================================================================
+// TypeGroup utilities
+// ============================================================================
+
+TypeSet to_typeset(const TypeGroup group) {
+    switch (group) {
+    case TypeGroup::number: return TypeSet::singleton(T_NUM);
+    case TypeGroup::map_fd: return TypeSet::singleton(T_MAP);
+    case TypeGroup::ctx: return TypeSet::singleton(T_CTX);
+    case TypeGroup::packet: return TypeSet::singleton(T_PACKET);
+    case TypeGroup::stack: return TypeSet::singleton(T_STACK);
+    case TypeGroup::shared: return TypeSet::singleton(T_SHARED);
+    case TypeGroup::map_fd_programs: return TypeSet::singleton(T_MAP_PROGRAMS);
+    case TypeGroup::ctx_or_num: return TypeSet::singleton(T_NUM) | TypeSet::singleton(T_CTX);
+    case TypeGroup::stack_or_num: return TypeSet::singleton(T_NUM) | TypeSet::singleton(T_STACK);
+    case TypeGroup::mem:
+        return TypeSet::singleton(T_PACKET) | TypeSet::singleton(T_STACK) | TypeSet::singleton(T_SHARED);
+    case TypeGroup::mem_or_num:
+        return TypeSet::singleton(T_NUM) | TypeSet::singleton(T_PACKET) | TypeSet::singleton(T_STACK) |
+               TypeSet::singleton(T_SHARED);
+    case TypeGroup::pointer:
+        return TypeSet::singleton(T_CTX) | TypeSet::singleton(T_PACKET) | TypeSet::singleton(T_STACK) |
+               TypeSet::singleton(T_SHARED);
+    case TypeGroup::ptr_or_num:
+        return TypeSet::singleton(T_NUM) | TypeSet::singleton(T_CTX) | TypeSet::singleton(T_PACKET) |
+               TypeSet::singleton(T_STACK) | TypeSet::singleton(T_SHARED);
+    case TypeGroup::stack_or_packet: return TypeSet::singleton(T_STACK) | TypeSet::singleton(T_PACKET);
+    case TypeGroup::singleton_ptr:
+        return TypeSet::singleton(T_CTX) | TypeSet::singleton(T_PACKET) | TypeSet::singleton(T_STACK);
+    default: CRAB_ERROR("Unsupported type group", group);
+    }
 }
 
 bool is_singleton_type(const TypeGroup t) {
@@ -269,5 +255,783 @@ std::ostream& operator<<(std::ostream& os, const TypeGroup ts) {
     }
     CRAB_ERROR("Unsupported type group", ts);
 }
+
+// ============================================================================
+// TypeDomain — DSU-based implementation
+// ============================================================================
+
+Variable reg_type(const Reg& lhs) { return variable_registry->type_reg(lhs.v); }
+
+// -- Sentinel initialization -------------------------------------------------
+
+void TypeDomain::init_sentinels() {
+    dsu = DisjointSetUnion{NUM_TYPE_SENTINELS};
+    id_to_var.assign(NUM_TYPE_SENTINELS, std::nullopt);
+    class_types.resize(NUM_TYPE_SENTINELS);
+    for (const TypeEncoding te : TypeSet::all().to_vector()) {
+        class_types[type_to_bit(te)] = TypeSet::singleton(te);
+    }
+}
+
+TypeDomain::TypeDomain() { init_sentinels(); }
+
+/// If the class containing `id` has a singleton TypeSet, merge it with the
+/// corresponding sentinel element to maintain the singleton-merging invariant.
+void TypeDomain::merge_if_singleton(const size_t id) {
+    const size_t rep = dsu.find(id);
+    const TypeSet ts = class_types[rep];
+    if (const auto te = ts.as_singleton()) {
+        const size_t sentinel = type_to_bit(*te);
+        const size_t sentinel_rep = dsu.find(sentinel);
+        if (rep != sentinel_rep) {
+            const size_t new_rep = dsu.unite(rep, sentinel);
+            class_types[new_rep] = ts;
+        }
+    }
+}
+
+// -- Internal helpers --------------------------------------------------------
+
+size_t TypeDomain::ensure_var(const Variable v) {
+    if (const auto it = var_to_id.find(v); it != var_to_id.end()) {
+        return it->second;
+    }
+    const size_t id = dsu.push();
+    var_to_id[v] = id;
+    while (id_to_var.size() <= id) {
+        id_to_var.push_back(std::nullopt);
+    }
+    id_to_var[id] = v;
+    class_types.push_back(TypeSet::all());
+    return id;
+}
+
+void TypeDomain::detach(const Variable v) {
+    if (const auto it = var_to_id.find(v); it != var_to_id.end()) {
+        id_to_var[it->second] = std::nullopt; // orphan old element
+    }
+    const size_t new_id = dsu.push();
+    var_to_id[v] = new_id;
+    while (id_to_var.size() <= new_id) {
+        id_to_var.push_back(std::nullopt);
+    }
+    id_to_var[new_id] = v;
+    class_types.push_back(TypeSet::all());
+}
+
+TypeSet TypeDomain::get_typeset(const Variable v) const {
+    if (is_bottom_) {
+        return TypeSet::empty();
+    }
+    const auto it = var_to_id.find(v);
+    if (it == var_to_id.end()) {
+        return TypeSet::all(); // unknown variable = top
+    }
+    const size_t rep = dsu.find_const(it->second);
+    return class_types[rep];
+}
+
+void TypeDomain::restrict_var(const Variable v, const TypeSet mask) {
+    if (is_bottom_) {
+        return;
+    }
+    const size_t id = ensure_var(v);
+    const size_t rep = dsu.find(id);
+    const TypeSet result = class_types[rep] & mask;
+    class_types[rep] = result;
+    if (result.is_empty()) {
+        is_bottom_ = true;
+    } else {
+        merge_if_singleton(id);
+    }
+}
+
+void TypeDomain::unify(const Variable v1, const Variable v2) {
+    if (is_bottom_) {
+        return;
+    }
+    const size_t id1 = ensure_var(v1);
+    const size_t id2 = ensure_var(v2);
+    const size_t rep1 = dsu.find(id1);
+    const size_t rep2 = dsu.find(id2);
+    const TypeSet ts = class_types[rep1] & class_types[rep2];
+    const size_t new_rep = dsu.unite(id1, id2);
+    class_types[new_rep] = ts;
+    if (ts.is_empty()) {
+        is_bottom_ = true;
+    } else {
+        merge_if_singleton(id1);
+    }
+}
+
+// -- Lattice operations ------------------------------------------------------
+
+void TypeDomain::set_to_top() {
+    var_to_id.clear();
+    id_to_var.clear();
+    class_types.clear();
+    is_bottom_ = false;
+    init_sentinels();
+}
+
+TypeDomain TypeDomain::join(const TypeDomain& other) const {
+    if (is_bottom_) {
+        return other;
+    }
+    if (other.is_bottom_) {
+        return *this;
+    }
+
+    // With the singleton-merging invariant, all variables with singleton {te}
+    // share the same DSU rep (the sentinel) in each operand. So raw DSU reps
+    // partition correctly without a special singleton key.
+
+    // Collect all variables from both operands.
+    std::map<Variable, bool> all_vars_seen;
+    for (const auto& [v, _] : var_to_id) {
+        all_vars_seen[v] = true;
+    }
+    for (const auto& [v, _] : other.var_to_id) {
+        all_vars_seen[v] = true;
+    }
+
+    // Compute (rep_left, rep_right) for each variable, group by key pair.
+    std::map<std::pair<std::optional<size_t>, std::optional<size_t>>, std::vector<Variable>> key_groups;
+    for (const auto& [v, _] : all_vars_seen) {
+        std::optional<size_t> key_a;
+        if (const auto it = var_to_id.find(v); it != var_to_id.end()) {
+            key_a = dsu.find_const(it->second);
+        }
+        std::optional<size_t> key_b;
+        if (const auto it = other.var_to_id.find(v); it != other.var_to_id.end()) {
+            key_b = other.dsu.find_const(it->second);
+        }
+        key_groups[{key_a, key_b}].push_back(v);
+    }
+
+    // Build result
+    TypeDomain result;
+    for (const auto& [_, members] : key_groups) {
+        // TypeSet = union of per-variable TypeSets from both operands
+        TypeSet ts = TypeSet::empty();
+        for (const Variable& v : members) {
+            ts |= get_typeset(v);
+            ts |= other.get_typeset(v);
+        }
+
+        // Register all members in the result, unified
+        std::optional<size_t> first_id;
+        for (const Variable& v : members) {
+            const size_t id = result.ensure_var(v);
+            result.class_types[id] = ts;
+            if (first_id) {
+                const size_t new_rep = result.dsu.unite(*first_id, id);
+                result.class_types[new_rep] = ts;
+            } else {
+                first_id = id;
+            }
+        }
+        // Maintain singleton-merging invariant in result.
+        if (first_id) {
+            result.merge_if_singleton(*first_id);
+        }
+    }
+
+    return result;
+}
+
+void TypeDomain::operator|=(const TypeDomain& other) {
+    if (other.is_bottom_) {
+        return;
+    }
+    if (is_bottom_) {
+        *this = other;
+        return;
+    }
+    *this = join(other);
+}
+
+TypeDomain TypeDomain::operator|(const TypeDomain& other) const { return join(other); }
+
+std::optional<TypeDomain> TypeDomain::meet(const TypeDomain& other) const {
+    if (is_bottom_ || other.is_bottom_) {
+        return std::nullopt;
+    }
+
+    TypeDomain result = *this;
+
+    // Ensure all other variables exist in result
+    for (const auto& [v, _] : other.var_to_id) {
+        result.ensure_var(v);
+    }
+
+    // Merge equalities from other
+    // Group other's variables by representative
+    std::map<size_t, std::vector<Variable>> other_classes;
+    for (const auto& [v, id] : other.var_to_id) {
+        const size_t rep = other.dsu.find_const(id);
+        other_classes[rep].push_back(v);
+    }
+    for (const auto& [_, members] : other_classes) {
+        for (size_t i = 1; i < members.size(); i++) {
+            result.unify(members[0], members[i]);
+            if (result.is_bottom_) {
+                return std::nullopt;
+            }
+        }
+    }
+
+    // Intersect TypeSets from other
+    for (const auto& [v, _] : other.var_to_id) {
+        result.restrict_var(v, other.get_typeset(v));
+        if (result.is_bottom_) {
+            return std::nullopt;
+        }
+    }
+
+    return result;
+}
+
+bool TypeDomain::operator<=(const TypeDomain& other) const {
+    if (is_bottom_) {
+        return true;
+    }
+    if (other.is_bottom_) {
+        return false;
+    }
+
+    // Check TypeSet refinement: S[v] in self must be subset of S[v] in other.
+    // Check both directions: variables in self must refine other, AND
+    // variables in other that are absent in self (top = all types) must also be all types.
+    for (const auto& [v, id] : var_to_id) {
+        const size_t rep = dsu.find_const(id);
+        const TypeSet ts_self = class_types[rep];
+        const TypeSet ts_other = other.get_typeset(v);
+        if (!ts_self.is_subset_of(ts_other)) {
+            return false;
+        }
+    }
+    for (const auto& [v, id] : other.var_to_id) {
+        if (!var_to_id.contains(v)) {
+            // Variable absent in self means unconstrained (all types).
+            // This is only subsumed if other also allows all types.
+            const size_t rep = other.dsu.find_const(id);
+            if (other.class_types[rep] != TypeSet::all()) {
+                return false;
+            }
+        }
+    }
+
+    // Check equality preservation: other's equalities must hold in self.
+    // With the singleton-merging invariant, DSU rep equality is the single
+    // source of truth — no singleton fallback needed.
+    std::map<size_t, std::vector<Variable>> other_classes;
+    for (const auto& [v, id] : other.var_to_id) {
+        const size_t rep = other.dsu.find_const(id);
+        other_classes[rep].push_back(v);
+    }
+    for (const auto& [_, members] : other_classes) {
+        if (members.size() <= 1) {
+            continue;
+        }
+        const auto it0 = var_to_id.find(members[0]);
+        if (it0 == var_to_id.end()) {
+            // First variable unknown in self (top). All others must also be unknown.
+            for (size_t i = 1; i < members.size(); i++) {
+                if (var_to_id.contains(members[i])) {
+                    return false;
+                }
+            }
+            continue;
+        }
+        const size_t rep0 = dsu.find_const(it0->second);
+        for (size_t i = 1; i < members.size(); i++) {
+            const auto it = var_to_id.find(members[i]);
+            if (it == var_to_id.end()) {
+                return false;
+            }
+            if (dsu.find_const(it->second) != rep0) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+TypeDomain TypeDomain::narrow(const TypeDomain& other) const {
+    if (auto res = meet(other)) {
+        return std::move(*res);
+    }
+    return top();
+}
+
+// -- Assignment --------------------------------------------------------------
+
+void TypeDomain::assign_type(const Reg& lhs, const Reg& rhs) {
+    if (is_bottom_) {
+        return;
+    }
+    const Variable lhs_var = reg_type(lhs);
+    const Variable rhs_var = reg_type(rhs);
+    detach(lhs_var);
+    const size_t rhs_id = ensure_var(rhs_var);
+    const size_t lhs_id = var_to_id[lhs_var];
+    const TypeSet rhs_ts = class_types[dsu.find(rhs_id)];
+    const size_t new_rep = dsu.unite(lhs_id, rhs_id);
+    class_types[new_rep] = rhs_ts;
+    merge_if_singleton(lhs_id);
+}
+
+void TypeDomain::assign_from_expr(const Variable lhs, const LinearExpression& expr) {
+    const auto& terms = expr.variable_terms();
+    if (terms.empty()) {
+        // Constant expression: assign that type encoding
+        const int val = expr.constant_term().narrow<int>();
+        detach(lhs);
+        const size_t id = var_to_id[lhs];
+        if (const auto te = int_to_type_encoding(val)) {
+            class_types[id] = TypeSet::singleton(*te);
+            merge_if_singleton(id);
+        } else {
+            class_types[id] = TypeSet::all();
+        }
+    } else if (terms.size() == 1) {
+        const auto& [var, coeff] = *terms.begin();
+        if (coeff == 1 && expr.constant_term() == 0) {
+            // Simple variable copy: detach lhs, unify with rhs
+            detach(lhs);
+            const size_t rhs_id = ensure_var(var);
+            const size_t lhs_id = var_to_id[lhs];
+            const TypeSet rhs_ts = class_types[dsu.find(rhs_id)];
+            const size_t new_rep = dsu.unite(lhs_id, rhs_id);
+            class_types[new_rep] = rhs_ts;
+            merge_if_singleton(lhs_id);
+        } else {
+            // Complex expression: havoc
+            detach(lhs);
+        }
+    } else {
+        // Multi-variable: havoc
+        detach(lhs);
+    }
+}
+
+void TypeDomain::assign_type(const Reg& lhs, const std::optional<LinearExpression>& rhs) {
+    if (is_bottom_) {
+        return;
+    }
+    const Variable lhs_var = reg_type(lhs);
+    if (!rhs) {
+        havoc_type(lhs_var);
+        return;
+    }
+    assign_from_expr(lhs_var, *rhs);
+}
+
+void TypeDomain::assign_type(const std::optional<Variable> lhs, const LinearExpression& t) {
+    if (is_bottom_ || !lhs) {
+        return;
+    }
+    assign_from_expr(*lhs, t);
+}
+
+void TypeDomain::assign_type(const Reg& lhs, const TypeEncoding type) {
+    if (is_bottom_) {
+        return;
+    }
+    const Variable v = reg_type(lhs);
+    detach(v);
+    const size_t id = var_to_id[v];
+    class_types[id] = TypeSet::singleton(type);
+    merge_if_singleton(id);
+}
+
+// -- Constraint handling -----------------------------------------------------
+
+void TypeDomain::add_constraint(const LinearConstraint& cst) {
+    if (is_bottom_) {
+        return;
+    }
+    if (cst.is_tautology()) {
+        return;
+    }
+    if (cst.is_contradiction()) {
+        is_bottom_ = true;
+        return;
+    }
+
+    const auto& expr = cst.expression();
+    const auto& terms = expr.variable_terms();
+    const Number& constant = expr.constant_term();
+
+    switch (cst.kind()) {
+    case ConstraintKind::EQUALS_ZERO: {
+        // expression == 0
+        if (terms.size() == 1) {
+            const auto& [var, coeff] = *terms.begin();
+            if (coeff == 1) {
+                // var + c == 0 → var == -c
+                const int val = (-constant).narrow<int>();
+                if (const auto te = int_to_type_encoding(val)) {
+                    restrict_var(var, TypeSet::singleton(*te));
+                } else {
+                    is_bottom_ = true;
+                }
+            } else if (coeff == -1) {
+                // -var + c == 0 → var == c
+                const int val = constant.narrow<int>();
+                if (const auto te = int_to_type_encoding(val)) {
+                    restrict_var(var, TypeSet::singleton(*te));
+                } else {
+                    is_bottom_ = true;
+                }
+            }
+        } else if (terms.size() == 2) {
+            // var1 - var2 + c == 0 → if c == 0: unify var1, var2
+            auto it = terms.begin();
+            const auto& [v1, c1] = *it++;
+            const auto& [v2, c2] = *it;
+            if (constant == 0 && ((c1 == 1 && c2 == -1) || (c1 == -1 && c2 == 1))) {
+                unify(v1, v2);
+            }
+        }
+        break;
+    }
+    case ConstraintKind::NOT_ZERO: {
+        // expression != 0
+        if (terms.size() == 1) {
+            const auto& [var, coeff] = *terms.begin();
+            if (coeff == 1) {
+                // var + c != 0 → var != -c
+                const int val = (-constant).narrow<int>();
+                if (const auto te = int_to_type_encoding(val)) {
+                    const size_t id = ensure_var(var);
+                    const size_t rep = dsu.find(id);
+                    const TypeSet result = class_types[rep].remove(*te);
+                    class_types[rep] = result;
+                    if (result.is_empty()) {
+                        is_bottom_ = true;
+                    }
+                }
+            } else if (coeff == -1) {
+                // -var + c != 0 → var != c
+                const int val = constant.narrow<int>();
+                if (const auto te = int_to_type_encoding(val)) {
+                    const size_t id = ensure_var(var);
+                    const size_t rep = dsu.find(id);
+                    const TypeSet result = class_types[rep].remove(*te);
+                    class_types[rep] = result;
+                    if (result.is_empty()) {
+                        is_bottom_ = true;
+                    }
+                }
+            }
+        }
+        break;
+    }
+    case ConstraintKind::LESS_THAN_OR_EQUALS_ZERO:
+    case ConstraintKind::LESS_THAN_ZERO:
+        // Order comparisons on type encodings are not meaningful.
+        CRAB_ERROR("Order comparison on type variable");
+    }
+}
+
+void TypeDomain::restrict_to(const Variable v, const TypeSet mask) { restrict_var(v, mask); }
+
+void TypeDomain::remove_type(const Variable v, const TypeEncoding te) {
+    if (is_bottom_) {
+        return;
+    }
+    const size_t id = ensure_var(v);
+    const size_t rep = dsu.find(id);
+    const TypeSet result = class_types[rep].remove(te);
+    class_types[rep] = result;
+    if (result.is_empty()) {
+        is_bottom_ = true;
+    } else {
+        merge_if_singleton(id);
+    }
+}
+
+// -- Havoc -------------------------------------------------------------------
+
+void TypeDomain::havoc_type(const Reg& r) {
+    if (is_bottom_) {
+        return;
+    }
+    detach(reg_type(r));
+}
+
+void TypeDomain::havoc_type(const Variable& v) {
+    if (is_bottom_) {
+        return;
+    }
+    detach(v);
+}
+
+// -- Query methods -----------------------------------------------------------
+
+bool TypeDomain::entail(const LinearConstraint& cst) const {
+    if (is_bottom_) {
+        return true;
+    }
+    if (cst.is_tautology()) {
+        return true;
+    }
+    if (cst.is_contradiction()) {
+        return false;
+    }
+
+    const auto& expr = cst.expression();
+    const auto& terms = expr.variable_terms();
+    const Number& constant = expr.constant_term();
+
+    switch (cst.kind()) {
+    case ConstraintKind::EQUALS_ZERO: {
+        if (terms.size() == 1) {
+            const auto& [var, coeff] = *terms.begin();
+            if (coeff == 1) {
+                // var == -c
+                const int val = (-constant).narrow<int>();
+                const TypeSet ts = get_typeset(var);
+                if (const auto te = int_to_type_encoding(val)) {
+                    return ts == TypeSet::singleton(*te);
+                }
+                return false;
+            }
+            if (coeff == -1) {
+                // var == c
+                const int val = constant.narrow<int>();
+                const TypeSet ts = get_typeset(var);
+                if (const auto te = int_to_type_encoding(val)) {
+                    return ts == TypeSet::singleton(*te);
+                }
+                return false;
+            }
+        } else if (terms.size() == 2) {
+            // var1 - var2 == 0 → same class check
+            auto it = terms.begin();
+            const auto& [v1, c1] = *it++;
+            const auto& [v2, c2] = *it;
+            if (constant == 0 && ((c1 == 1 && c2 == -1) || (c1 == -1 && c2 == 1))) {
+                const auto it1 = var_to_id.find(v1);
+                const auto it2 = var_to_id.find(v2);
+                if (it1 != var_to_id.end() && it2 != var_to_id.end()) {
+                    // With the singleton-merging invariant, DSU rep comparison
+                    // is sufficient (same singletons share the sentinel rep).
+                    return dsu.find_const(it1->second) == dsu.find_const(it2->second);
+                }
+                return false;
+            }
+        }
+        return false;
+    }
+    case ConstraintKind::NOT_ZERO: {
+        if (terms.size() == 1) {
+            const auto& [var, coeff] = *terms.begin();
+            if (coeff == 1) {
+                // var != -c
+                const int val = (-constant).narrow<int>();
+                const TypeSet ts = get_typeset(var);
+                if (const auto te = int_to_type_encoding(val)) {
+                    return !ts.contains(*te);
+                }
+                return true;
+            }
+            if (coeff == -1) {
+                // var != c
+                const int val = constant.narrow<int>();
+                const TypeSet ts = get_typeset(var);
+                if (const auto te = int_to_type_encoding(val)) {
+                    return !ts.contains(*te);
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+    case ConstraintKind::LESS_THAN_OR_EQUALS_ZERO:
+    case ConstraintKind::LESS_THAN_ZERO:
+        // Order comparisons on type encodings are not meaningful.
+        CRAB_ERROR("Order comparison on type variable");
+    }
+    return false;
+}
+
+bool TypeDomain::type_is_pointer(const Reg& r) const {
+    return get_typeset(reg_type(r)).is_subset_of(to_typeset(TypeGroup::pointer));
+}
+
+bool TypeDomain::type_is_number(const Reg& r) const {
+    return get_typeset(reg_type(r)) == TypeSet::singleton(T_NUM);
+}
+
+bool TypeDomain::type_is_not_stack(const Reg& r) const { return !get_typeset(reg_type(r)).contains(T_STACK); }
+
+bool TypeDomain::type_is_not_number(const Reg& r) const { return !get_typeset(reg_type(r)).contains(T_NUM); }
+
+std::vector<TypeEncoding> TypeDomain::iterate_types(const Reg& reg) const {
+    if (is_bottom_) {
+        return {};
+    }
+    const TypeSet ts = get_typeset(reg_type(reg));
+    if (ts.contains(T_UNINIT)) {
+        return {T_UNINIT};
+    }
+    return ts.remove(T_UNINIT).to_vector();
+}
+
+std::optional<TypeEncoding> TypeDomain::get_type(const Reg& r) const {
+    return get_typeset(reg_type(r)).as_singleton();
+}
+
+bool TypeDomain::implies_group(const Reg& premise_reg, const TypeGroup premise_group,
+                               const Reg& conclusion_reg, const TypeSet conclusion_set) const {
+    if (is_bottom_) {
+        return true;
+    }
+    TypeDomain restricted = *this;
+    restricted.restrict_var(reg_type(premise_reg), to_typeset(premise_group));
+    if (restricted.is_bottom_) {
+        return true;
+    }
+    return restricted.get_typeset(reg_type(conclusion_reg)).is_subset_of(conclusion_set);
+}
+
+bool TypeDomain::implies_not_type(const Reg& premise_reg, const TypeEncoding excluded_type,
+                                  const Reg& conclusion_reg, const TypeSet conclusion_set) const {
+    if (is_bottom_) {
+        return true;
+    }
+    TypeDomain restricted = *this;
+    restricted.remove_type(reg_type(premise_reg), excluded_type);
+    if (restricted.is_bottom_) {
+        return true;
+    }
+    return restricted.get_typeset(reg_type(conclusion_reg)).is_subset_of(conclusion_set);
+}
+
+bool TypeDomain::entail_type(const Variable v, const TypeEncoding te) const {
+    if (is_bottom_) {
+        return true;
+    }
+    return get_typeset(v) == TypeSet::singleton(te);
+}
+
+bool TypeDomain::may_have_type(const Reg& r, const TypeEncoding type) const {
+    return get_typeset(reg_type(r)).contains(type);
+}
+
+bool TypeDomain::may_have_type(const LinearExpression& expr, const TypeEncoding type) const {
+    const auto& terms = expr.variable_terms();
+    if (terms.empty()) {
+        const int val = expr.constant_term().narrow<int>();
+        return int_to_type_encoding(val) == type;
+    }
+    if (terms.size() == 1) {
+        const auto& [var, coeff] = *terms.begin();
+        if (coeff == 1 && expr.constant_term() == 0) {
+            return get_typeset(var).contains(type);
+        }
+    }
+    return true; // conservatively true for complex expressions
+}
+
+bool TypeDomain::may_have_type(const Variable v, const TypeEncoding type) const {
+    return get_typeset(v).contains(type);
+}
+
+bool TypeDomain::is_initialized(const Reg& r) const { return !get_typeset(reg_type(r)).contains(T_UNINIT); }
+
+bool TypeDomain::is_initialized(const LinearExpression& expr) const {
+    const auto& terms = expr.variable_terms();
+    if (terms.empty()) {
+        const int val = expr.constant_term().narrow<int>();
+        return int_to_type_encoding(val) != T_UNINIT;
+    }
+    if (terms.size() == 1) {
+        const auto& [var, coeff] = *terms.begin();
+        if (coeff == 1 && expr.constant_term() == 0) {
+            return !get_typeset(var).contains(T_UNINIT);
+        }
+    }
+    return false; // conservatively not initialized
+}
+
+/// With the singleton-merging invariant, this is a pure DSU rep comparison:
+/// if both variables have a singleton TypeSet {te}, they are already merged
+/// with the same sentinel.
+bool TypeDomain::same_type(const Reg& a, const Reg& b) const {
+    if (is_bottom_) {
+        return true;
+    }
+    const auto it_a = var_to_id.find(reg_type(a));
+    const auto it_b = var_to_id.find(reg_type(b));
+    if (it_a != var_to_id.end() && it_b != var_to_id.end()) {
+        return dsu.find_const(it_a->second) == dsu.find_const(it_b->second);
+    }
+    return false;
+}
+
+bool TypeDomain::is_in_group(const Reg& r, const TypeGroup group) const {
+    return get_typeset(reg_type(r)).is_subset_of(to_typeset(group));
+}
+
+// -- Serialization -----------------------------------------------------------
+
+StringInvariant TypeDomain::to_set() const {
+    if (is_bottom_) {
+        return StringInvariant::bottom();
+    }
+
+    // Group variables by DSU representative. With the singleton-merging invariant,
+    // variables sharing a singleton TypeSet are already in the same DSU class.
+    std::map<size_t, std::vector<Variable>> classes;
+    for (const auto& [v, id] : var_to_id) {
+        if (!id_to_var[id]) {
+            continue; // orphaned
+        }
+        const size_t rep = dsu.find_const(id);
+        classes[rep].push_back(v);
+    }
+
+    std::set<std::string> result;
+
+    for (const auto& [_, members] : classes) {
+        // Get TypeSet from the first member (all members in the group have the same TypeSet)
+        const TypeSet ts = get_typeset(members[0]);
+        if (ts == TypeSet::all()) {
+            continue; // top = no constraint
+        }
+
+        // Sort members for deterministic output
+        std::vector<Variable> sorted = members;
+        std::sort(sorted.begin(), sorted.end(), variable_registry->printing_order);
+
+        if (const auto te = ts.as_singleton()) {
+            // Singleton TypeSet: emit concrete type for every member
+            for (const Variable& m : sorted) {
+                // Stack type variables with type=number are implicit (not printed)
+                if (*te == T_NUM && variable_registry->is_in_stack(m)) {
+                    continue;
+                }
+                result.insert(variable_registry->name(m) + "=" + ts.to_string());
+            }
+        } else {
+            // Multi-valued TypeSet: emit set for first member, equality for rest
+            const std::string first_name = variable_registry->name(sorted[0]);
+            result.insert(first_name + " in " + ts.to_string());
+
+            for (size_t i = 1; i < sorted.size(); i++) {
+                result.insert(variable_registry->name(sorted[i]) + "=" + first_name);
+            }
+        }
+    }
+
+    return StringInvariant{std::move(result)};
+}
+
+std::ostream& operator<<(std::ostream& o, const TypeDomain& dom) { return o << dom.to_set(); }
 
 } // namespace prevail

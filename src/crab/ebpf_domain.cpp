@@ -312,8 +312,6 @@ ExtendedNumber EbpfDomain::get_loop_count_upper_bound() const {
 
 Interval EbpfDomain::get_r0() const { return rcp.values.eval_interval(reg_pack(R0_RETURN_VALUE).svalue); }
 
-std::ostream& operator<<(std::ostream& o, const TypeDomain& dom) { return o << dom.inv; }
-
 std::ostream& operator<<(std::ostream& o, const TypeToNumDomain& dom) {
     if (dom.is_bottom()) {
         o << "_|_";
@@ -349,12 +347,12 @@ void EbpfDomain::initialize_packet() {
     }
 }
 
-EbpfDomain EbpfDomain::from_constraints(const std::vector<LinearConstraint>& type_constraints,
+EbpfDomain EbpfDomain::from_constraints(const std::vector<std::pair<Variable, TypeSet>>& type_restrictions,
                                         const std::vector<LinearConstraint>& value_constraints) {
     EbpfDomain inv;
 
-    for (const auto& cst : type_constraints) {
-        inv.add_type_constraint(cst);
+    for (const auto& [var, ts] : type_restrictions) {
+        inv.rcp.types.restrict_to(var, ts);
     }
     for (const auto& cst : value_constraints) {
         inv.add_value_constraint(cst);
@@ -368,9 +366,13 @@ EbpfDomain EbpfDomain::from_constraints(const std::set<std::string>& constraints
         inv = setup_entry(false);
     }
     auto numeric_ranges = std::vector<Interval>();
-    auto [type_constraints, value_constraints] = parse_linear_constraints(constraints, numeric_ranges);
+    auto [type_constraints, value_constraints, type_set_restrictions] =
+        parse_linear_constraints(constraints, numeric_ranges);
     for (const auto& cst : type_constraints) {
         inv.add_type_constraint(cst);
+    }
+    for (const auto& [var, ts] : type_set_restrictions) {
+        inv.rcp.types.restrict_to(var, ts);
     }
     for (const auto& cst : value_constraints) {
         inv.add_value_constraint(cst);

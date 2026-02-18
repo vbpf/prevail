@@ -321,6 +321,7 @@ TypeValueConstraints parse_linear_constraints(const std::set<std::string>& const
 
     std::vector<LinearConstraint> value_csts;
     std::vector<LinearConstraint> type_csts;
+    std::vector<TypeSetRestriction> type_set_restrictions;
     for (const std::string& cst_text : constraints) {
         std::smatch m;
         if (regex_match(cst_text, m, regex(SPECIAL_VAR "=" IMM))) {
@@ -361,36 +362,21 @@ TypeValueConstraints parse_linear_constraints(const std::set<std::string>& const
             // Tokenize items inside {...} using the existing TYPE regex.
             static const regex type_tok_regex(TYPE);
 
+            TypeSet ts = TypeSet::empty();
             bool any = false;
-            Number lb = 0, ub = 0; // initialize once we see the first item
 
             for (std::sregex_iterator it(inside.begin(), inside.end(), type_tok_regex), end; it != end; ++it) {
-                // TYPE has a single capturing group with the symbolic token
                 const auto sym = (*it)[1].str();
                 const auto enc = string_to_type_encoding(sym);
-
-                // Convert to Number for the DSL constraints
-                const Number n = static_cast<int>(enc);
-                if (!any) {
-                    lb = ub = n;
-                    any = true;
-                } else {
-                    if (n < lb) {
-                        lb = n;
-                    }
-                    if (n > ub) {
-                        ub = n;
-                    }
-                }
+                ts |= TypeSet::singleton(enc);
+                any = true;
             }
 
             if (!any) {
                 throw std::runtime_error("Empty type set in 'in { ... }' constraint: " + cst_text);
             }
 
-            // Emit interval over-approx: lb <= d <= ub
-            type_csts.push_back(lb <= d);
-            type_csts.push_back(d <= ub);
+            type_set_restrictions.push_back({d, ts});
         } else if (regex_match(cst_text, m, regex(REG DOT KIND "=" IMM))) {
             Variable d = variable_registry->reg(regkind(m[2]), regnum(m[1]));
             Number value;
@@ -447,7 +433,7 @@ TypeValueConstraints parse_linear_constraints(const std::set<std::string>& const
             throw std::runtime_error(std::string("Unknown constraint: ") + cst_text);
         }
     }
-    return {type_csts, value_csts};
+    return {type_csts, value_csts, type_set_restrictions};
 }
 
 // return a-b, taking account potential optional-none

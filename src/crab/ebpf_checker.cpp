@@ -45,12 +45,6 @@ class EbpfChecker final {
         }
     }
 
-    void require_type(const TypeToNumDomain& inv, const LinearConstraint& cst, const std::string& msg) const {
-        if (!inv.types.inv.entail(cst)) {
-            throw_fail(msg);
-        }
-    }
-
     [[noreturn]]
     void throw_fail(const std::string& msg) const {
         throw VerificationError(msg + " (" + to_string(assertion) + ")");
@@ -123,7 +117,7 @@ void EbpfChecker::operator()(const Comparable& s) const {
     if (dom.rcp.types.same_type(s.r1, s.r2)) {
         // Same type. If both are numbers, that's okay. Otherwise:
         TypeDomain non_number_types = dom.rcp.types;
-        non_number_types.add_constraint(type_is_not_number(s.r2));
+        non_number_types.remove_type(reg_type(s.r2), T_NUM);
         // We must check that they belong to a singleton region:
         if (!non_number_types.is_in_group(s.r1, TypeGroup::singleton_ptr) &&
             !non_number_types.is_in_group(s.r1, TypeGroup::map_fd)) {
@@ -135,19 +129,21 @@ void EbpfChecker::operator()(const Comparable& s) const {
     } else {
         // _Maybe_ different types, so r2 must be a number.
         // We checked in a previous assertion that r1 is a pointer or a number.
-        require_type(dom.rcp, type_is_number(s.r2), "Cannot subtract pointers to different regions");
+        if (!dom.rcp.types.entail_type(reg_type(s.r2), T_NUM)) {
+            throw_fail("Cannot subtract pointers to different regions");
+        }
     }
 }
 
 void EbpfChecker::operator()(const Addable& s) const {
-    if (!dom.rcp.types.implies(type_is_pointer(s.ptr), type_is_number(s.num))) {
+    if (!dom.rcp.types.implies_group(s.ptr, TypeGroup::pointer, s.num, TypeSet::singleton(T_NUM))) {
         throw_fail("Only numbers can be added to pointers");
     }
 }
 
 void EbpfChecker::operator()(const ValidDivisor& s) const {
     using namespace dsl_syntax;
-    if (!dom.rcp.types.implies(type_is_pointer(s.reg), type_is_number(s.reg))) {
+    if (!dom.rcp.types.implies_group(s.reg, TypeGroup::pointer, s.reg, TypeSet::singleton(T_NUM))) {
         throw_fail("Only numbers can be used as divisors");
     }
     if (!thread_local_options.allow_division_by_zero) {
@@ -158,7 +154,7 @@ void EbpfChecker::operator()(const ValidDivisor& s) const {
 }
 
 void EbpfChecker::operator()(const ValidStore& s) const {
-    if (!dom.rcp.types.implies(type_is_not_stack(s.mem), type_is_number(s.val))) {
+    if (!dom.rcp.types.implies_not_type(s.mem, T_STACK, s.val, TypeSet::singleton(T_NUM))) {
         throw_fail("Only numbers can be stored to externally-visible regions");
     }
 }
