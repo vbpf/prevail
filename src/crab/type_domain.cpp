@@ -722,29 +722,13 @@ void TypeDomain::add_constraint(const LinearConstraint& cst) {
                 // var + c != 0 → var != -c
                 const int val = (-constant).narrow<int>();
                 if (const auto te = int_to_type_encoding(val)) {
-                    const size_t id = ensure_var(var);
-                    const size_t rep = dsu.find(id);
-                    const TypeSet result = class_types[rep].remove(*te);
-                    class_types[rep] = result;
-                    if (result.is_empty()) {
-                        is_bottom_ = true;
-                    } else {
-                        merge_if_singleton(id);
-                    }
+                    remove_type(var, *te);
                 }
             } else if (coeff == -1) {
                 // -var + c != 0 → var != c
                 const int val = constant.narrow<int>();
                 if (const auto te = int_to_type_encoding(val)) {
-                    const size_t id = ensure_var(var);
-                    const size_t rep = dsu.find(id);
-                    const TypeSet result = class_types[rep].remove(*te);
-                    class_types[rep] = result;
-                    if (result.is_empty()) {
-                        is_bottom_ = true;
-                    } else {
-                        merge_if_singleton(id);
-                    }
+                    remove_type(var, *te);
                 }
             }
         }
