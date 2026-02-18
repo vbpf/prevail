@@ -18,26 +18,116 @@ namespace prevail {
 
 Variable reg_type(const Reg& lhs);
 
+/// Bidirectional map between Variables and DSU element IDs.
+///
+/// Maintains a partial bijection: every live Variable maps to exactly one ID
+/// and vice versa. Orphaned IDs (from detach) have no Variable but still
+/// occupy a slot in id_to_var.
+class VarIdMap {
+    std::map<Variable, size_t> var_to_id_;
+    std::vector<std::optional<Variable>> id_to_var_;
+
+  public:
+    VarIdMap() = default;
+
+    /// Look up the DSU element ID for a variable, or nullopt if absent.
+    [[nodiscard]]
+    std::optional<size_t> find_id(Variable v) const {
+        if (const auto it = var_to_id_.find(v); it != var_to_id_.end()) {
+            return it->second;
+        }
+        return std::nullopt;
+    }
+
+    /// Look up the variable for a DSU element ID, or nullopt if orphaned.
+    [[nodiscard]]
+    std::optional<Variable> find_var(size_t id) const {
+        if (id < id_to_var_.size()) {
+            return id_to_var_[id];
+        }
+        return std::nullopt;
+    }
+
+    /// Whether a variable is present.
+    [[nodiscard]]
+    bool contains(Variable v) const {
+        return var_to_id_.contains(v);
+    }
+
+    /// Insert or overwrite a bidirectional mapping. Grows id_to_var if needed.
+    void insert(Variable v, size_t id) {
+        var_to_id_[v] = id;
+        while (id_to_var_.size() <= id) {
+            id_to_var_.push_back(std::nullopt);
+        }
+        id_to_var_[id] = v;
+    }
+
+    /// Orphan an ID: remove its variable mapping (if any), but keep the slot.
+    void orphan(size_t id) {
+        if (id < id_to_var_.size()) {
+            if (const auto& var = id_to_var_[id]) {
+                var_to_id_.erase(*var);
+            }
+            id_to_var_[id] = std::nullopt;
+        }
+    }
+
+    /// Orphan the old ID for a variable (if any) without removing the variable
+    /// from var_to_id. Used by detach, which immediately re-inserts.
+    void orphan_var(Variable v) {
+        if (const auto it = var_to_id_.find(v); it != var_to_id_.end()) {
+            id_to_var_[it->second] = std::nullopt;
+        }
+    }
+
+    /// Number of ID slots (including orphaned).
+    [[nodiscard]]
+    size_t id_capacity() const {
+        return id_to_var_.size();
+    }
+
+    /// Iterate over all live (Variable, ID) pairs.
+    [[nodiscard]]
+    const std::map<Variable, size_t>& vars() const {
+        return var_to_id_;
+    }
+};
+
 /// Type abstract domain based on disjoint-set with TypeSet annotations.
 ///
 /// Tracks must-equality between type variables (partition into equivalence
 /// classes) and exact finite sets of possible types per class.
 ///
-/// ## Singleton-merging invariant
+/// ## Representation
 ///
-/// The domain pre-allocates 8 *sentinel* DSU elements (IDs 0..7), one per
-/// TypeEncoding value. Sentinel `i` has `class_types[i] = {te}` where
-/// `type_to_bit(te) == i`. After every mutation that may narrow a class's
-/// TypeSet to a singleton, the class is merged with the corresponding sentinel
-/// via `merge_if_singleton`. This guarantees:
+/// - Bottom = nullopt (state_ has no value). Unique representation.
+/// - Top = default State (sentinels only, no variables). Unique representation.
+/// - Non-trivial = State with variables registered in the DSU.
+///   The representation is NOT unique: DSU element IDs depend on insertion
+///   order, orphaned elements accumulate from detach(), and DSU tree shape
+///   depends on union/find history. Two TypeDomains can represent the same
+///   abstract value with different internal states. This means equality
+///   comparison must be semantic (compare partitions + TypeSets), not
+///   structural (compare raw state).
 ///
-///   All DSU elements whose TypeSet is the singleton {te} belong to the
-///   same equivalence class as sentinel type_to_bit(te).
+/// Note on TypeSet vs TypeDomain defaults: TypeSet{} is bottom (empty bitset,
+/// "no types possible"), while TypeDomain{} is top ("all types possible for
+/// every variable"). This asymmetry is intentional and follows from how each
+/// lattice works: for TypeSet, the empty set is the strongest constraint;
+/// for TypeDomain, having no registered variables means no constraints.
 ///
-/// Consequences:
-/// - `same_type(a, b)` reduces to a single DSU rep comparison.
-/// - `join` can use raw DSU reps as partition keys (no singleton_key hack).
-/// - `operator<=` equality check is pure DSU (no singleton special-case).
+/// ## Invariants (when state_ has value, i.e., not bottom)
+///
+/// 1. Sentinels: IDs 0..7 exist. class_types[type_to_bit(te)] = {te}.
+/// 2. Singleton-merging: any class with singleton TypeSet {te} has the same
+///    DSU representative as sentinel type_to_bit(te). This ensures same_type()
+///    is a single DSU rep comparison and join uses raw reps as partition keys.
+/// 3. class_types[dsu.find(id)] is the TypeSet for id's equivalence class.
+///    class_types at non-representative indices may be stale.
+/// 4. var_ids maintains a partial bijection between live Variables and DSU IDs.
+/// 5. class_types.size() == var_ids.id_capacity() == dsu.size().
+/// 6. No representative has an empty TypeSet (empty -> bottom).
 class TypeDomain {
   public:
     TypeDomain();
@@ -59,7 +149,7 @@ class TypeDomain {
     static TypeDomain top() { return TypeDomain{}; }
     [[nodiscard]]
     bool is_bottom() const {
-        return is_bottom_;
+        return !state_.has_value();
     }
     [[nodiscard]]
     TypeDomain widen(const TypeDomain& other) const {
@@ -146,16 +236,19 @@ class TypeDomain {
     friend std::ostream& operator<<(std::ostream& o, const TypeDomain& dom);
 
   private:
-    DisjointSetUnion dsu;
-    std::map<Variable, size_t> var_to_id;
-    std::vector<std::optional<Variable>> id_to_var;
-    std::vector<TypeSet> class_types; // indexed by DSU element, valid at representative
-    bool is_bottom_ = false;
+    /// Internal state. Present = live domain, absent = bottom.
+    struct State {
+        DisjointSetUnion dsu;
+        VarIdMap var_ids;
+        std::vector<TypeSet> class_types;
 
-    void set_to_bottom() { is_bottom_ = true; }
+        State();
+    };
+    std::optional<State> state_{State{}};
 
-    // Internal helpers
-    void init_sentinels();
+    void set_to_bottom() { state_.reset(); }
+
+    // Internal helpers (all require state_ to have value)
     void merge_if_singleton(size_t id);
     size_t ensure_var(Variable v);
     void detach(Variable v);

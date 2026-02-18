@@ -233,36 +233,36 @@ std::ostream& operator<<(std::ostream& os, const TypeGroup ts) {
 }
 
 // ============================================================================
-// TypeDomain — DSU-based implementation
+// TypeDomain -- DSU-based implementation
 // ============================================================================
 
 Variable reg_type(const Reg& lhs) { return variable_registry->type_reg(lhs.v); }
 
-// -- Sentinel initialization -------------------------------------------------
+// -- State initialization ----------------------------------------------------
 
-/// Number of sentinel DSU elements (one per TypeEncoding value).
-void TypeDomain::init_sentinels() {
+TypeDomain::State::State() {
     dsu = DisjointSetUnion{NUM_TYPE_ENCODINGS};
-    id_to_var.assign(NUM_TYPE_ENCODINGS, std::nullopt);
+    var_ids = VarIdMap{};
     class_types.resize(NUM_TYPE_ENCODINGS);
     for (const TypeEncoding te : TypeSet::all().to_vector()) {
         class_types[type_to_bit(te)] = TypeSet{te};
     }
 }
 
-TypeDomain::TypeDomain() { init_sentinels(); }
+TypeDomain::TypeDomain() = default;
 
 /// If the class containing `id` has a singleton TypeSet, merge it with the
 /// corresponding sentinel element to maintain the singleton-merging invariant.
 void TypeDomain::merge_if_singleton(const size_t id) {
-    const size_t rep = dsu.find(id);
-    const TypeSet ts = class_types[rep];
+    auto& s = *state_;
+    const size_t rep = s.dsu.find(id);
+    const TypeSet ts = s.class_types[rep];
     if (const auto te = ts.as_singleton()) {
         const size_t sentinel = type_to_bit(*te);
-        const size_t sentinel_rep = dsu.find(sentinel);
+        const size_t sentinel_rep = s.dsu.find(sentinel);
         if (rep != sentinel_rep) {
-            const size_t new_rep = dsu.unite(rep, sentinel);
-            class_types[new_rep] = ts;
+            const size_t new_rep = s.dsu.unite(rep, sentinel);
+            s.class_types[new_rep] = ts;
         }
     }
 }
@@ -270,56 +270,49 @@ void TypeDomain::merge_if_singleton(const size_t id) {
 // -- Internal helpers --------------------------------------------------------
 
 size_t TypeDomain::ensure_var(const Variable v) {
-    if (const auto it = var_to_id.find(v); it != var_to_id.end()) {
-        return it->second;
+    auto& s = *state_;
+    if (const auto existing = s.var_ids.find_id(v)) {
+        return *existing;
     }
-    const size_t id = dsu.push();
-    var_to_id[v] = id;
-    while (id_to_var.size() <= id) {
-        id_to_var.push_back(std::nullopt);
-    }
-    id_to_var[id] = v;
-    class_types.push_back(TypeSet::all());
-    assert(class_types.size() == dsu.size());
-    assert(id_to_var.size() == dsu.size());
+    const size_t id = s.dsu.push();
+    s.var_ids.insert(v, id);
+    s.class_types.push_back(TypeSet::all());
+    assert(s.class_types.size() == s.dsu.size());
+    assert(s.var_ids.id_capacity() == s.dsu.size());
     return id;
 }
 
 void TypeDomain::detach(const Variable v) {
-    if (const auto it = var_to_id.find(v); it != var_to_id.end()) {
-        id_to_var[it->second] = std::nullopt; // orphan old element
-    }
-    const size_t new_id = dsu.push();
-    var_to_id[v] = new_id;
-    while (id_to_var.size() <= new_id) {
-        id_to_var.push_back(std::nullopt);
-    }
-    id_to_var[new_id] = v;
-    class_types.push_back(TypeSet::all());
-    assert(class_types.size() == dsu.size());
-    assert(id_to_var.size() == dsu.size());
+    auto& s = *state_;
+    s.var_ids.orphan_var(v);
+    const size_t new_id = s.dsu.push();
+    s.var_ids.insert(v, new_id);
+    s.class_types.push_back(TypeSet::all());
+    assert(s.class_types.size() == s.dsu.size());
+    assert(s.var_ids.id_capacity() == s.dsu.size());
 }
 
 TypeSet TypeDomain::get_typeset(const Variable v) const {
     if (is_bottom()) {
         return TypeSet{};
     }
-    const auto it = var_to_id.find(v);
-    if (it == var_to_id.end()) {
-        return TypeSet::all(); // unknown variable = top
+    const auto& s = *state_;
+    if (const auto id = s.var_ids.find_id(v)) {
+        const size_t rep = s.dsu.find_const(*id);
+        return s.class_types[rep];
     }
-    const size_t rep = dsu.find_const(it->second);
-    return class_types[rep];
+    return TypeSet::all(); // unknown variable = top
 }
 
 void TypeDomain::restrict_var(const Variable v, const TypeSet mask) {
     if (is_bottom()) {
         return;
     }
+    auto& s = *state_;
     const size_t id = ensure_var(v);
-    const size_t rep = dsu.find(id);
-    const TypeSet result = class_types[rep] & mask;
-    class_types[rep] = result;
+    const size_t rep = s.dsu.find(id);
+    const TypeSet result = s.class_types[rep] & mask;
+    s.class_types[rep] = result;
     if (result.is_empty()) {
         set_to_bottom();
     } else {
@@ -331,13 +324,14 @@ void TypeDomain::unify(const Variable v1, const Variable v2) {
     if (is_bottom()) {
         return;
     }
+    auto& s = *state_;
     const size_t id1 = ensure_var(v1);
     const size_t id2 = ensure_var(v2);
-    const size_t rep1 = dsu.find(id1);
-    const size_t rep2 = dsu.find(id2);
-    const TypeSet ts = class_types[rep1] & class_types[rep2];
-    const size_t new_rep = dsu.unite(id1, id2);
-    class_types[new_rep] = ts;
+    const size_t rep1 = s.dsu.find(id1);
+    const size_t rep2 = s.dsu.find(id2);
+    const TypeSet ts = s.class_types[rep1] & s.class_types[rep2];
+    const size_t new_rep = s.dsu.unite(id1, id2);
+    s.class_types[new_rep] = ts;
     if (ts.is_empty()) {
         set_to_bottom();
     } else {
@@ -347,13 +341,7 @@ void TypeDomain::unify(const Variable v1, const Variable v2) {
 
 // -- Lattice operations ------------------------------------------------------
 
-void TypeDomain::set_to_top() {
-    var_to_id.clear();
-    id_to_var.clear();
-    class_types.clear();
-    is_bottom_ = false;
-    init_sentinels();
-}
+void TypeDomain::set_to_top() { state_.emplace(); }
 
 TypeDomain TypeDomain::join(const TypeDomain& other) const {
     if (is_bottom()) {
@@ -362,6 +350,8 @@ TypeDomain TypeDomain::join(const TypeDomain& other) const {
     if (other.is_bottom()) {
         return *this;
     }
+    const auto& a = *state_;
+    const auto& b = *other.state_;
 
     // With the singleton-merging invariant, all variables with singleton {te}
     // share the same DSU rep (the sentinel) in each operand. So raw DSU reps
@@ -369,10 +359,10 @@ TypeDomain TypeDomain::join(const TypeDomain& other) const {
 
     // Collect all variables from both operands.
     std::map<Variable, bool> all_vars_seen;
-    for (const auto& [v, _] : var_to_id) {
+    for (const auto& [v, _] : a.var_ids.vars()) {
         all_vars_seen[v] = true;
     }
-    for (const auto& [v, _] : other.var_to_id) {
+    for (const auto& [v, _] : b.var_ids.vars()) {
         all_vars_seen[v] = true;
     }
 
@@ -380,19 +370,19 @@ TypeDomain TypeDomain::join(const TypeDomain& other) const {
     // Variables absent from one side get unique keys (not nullopt) to avoid
     // falsely unifying unrelated variables that happen to share a rep on the
     // other side.
-    size_t next_unique_a = dsu.size();
-    size_t next_unique_b = other.dsu.size();
+    size_t next_unique_a = a.dsu.size();
+    size_t next_unique_b = b.dsu.size();
     std::map<std::pair<size_t, size_t>, std::vector<Variable>> key_groups;
     for (const auto& [v, _] : all_vars_seen) {
         size_t key_a;
-        if (const auto it = var_to_id.find(v); it != var_to_id.end()) {
-            key_a = dsu.find_const(it->second);
+        if (const auto id = a.var_ids.find_id(v)) {
+            key_a = a.dsu.find_const(*id);
         } else {
             key_a = next_unique_a++;
         }
         size_t key_b;
-        if (const auto it = other.var_to_id.find(v); it != other.var_to_id.end()) {
-            key_b = other.dsu.find_const(it->second);
+        if (const auto id = b.var_ids.find_id(v)) {
+            key_b = b.dsu.find_const(*id);
         } else {
             key_b = next_unique_b++;
         }
@@ -414,14 +404,14 @@ TypeDomain TypeDomain::join(const TypeDomain& other) const {
         for (const Variable& v : members) {
             const size_t id = result.ensure_var(v);
             if (first_id) {
-                result.dsu.unite(*first_id, id);
+                result.state_->dsu.unite(*first_id, id);
             } else {
                 first_id = id;
             }
         }
         // Set the TypeSet on the representative (after all unifications).
         if (first_id) {
-            result.class_types[result.dsu.find(*first_id)] = ts;
+            result.state_->class_types[result.state_->dsu.find(*first_id)] = ts;
         }
         // Maintain singleton-merging invariant in result.
         if (first_id) {
@@ -453,17 +443,18 @@ std::optional<TypeDomain> TypeDomain::meet(const TypeDomain& other) const {
     }
 
     TypeDomain result = *this;
+    const auto& b = *other.state_;
 
     // Ensure all other variables exist in result
-    for (const auto& [v, _] : other.var_to_id) {
+    for (const auto& [v, _] : b.var_ids.vars()) {
         result.ensure_var(v);
     }
 
     // Merge equalities from other
     // Group other's variables by representative
     std::map<size_t, std::vector<Variable>> other_classes;
-    for (const auto& [v, id] : other.var_to_id) {
-        const size_t rep = other.dsu.find_const(id);
+    for (const auto& [v, id] : b.var_ids.vars()) {
+        const size_t rep = b.dsu.find_const(id);
         other_classes[rep].push_back(v);
     }
     for (const auto& [_, members] : other_classes) {
@@ -476,7 +467,7 @@ std::optional<TypeDomain> TypeDomain::meet(const TypeDomain& other) const {
     }
 
     // Intersect TypeSets from other
-    for (const auto& [v, _] : other.var_to_id) {
+    for (const auto& [v, _] : b.var_ids.vars()) {
         result.restrict_var(v, other.get_typeset(v));
         if (result.is_bottom()) {
             return std::nullopt;
@@ -493,24 +484,26 @@ bool TypeDomain::operator<=(const TypeDomain& other) const {
     if (other.is_bottom()) {
         return false;
     }
+    const auto& a = *state_;
+    const auto& b = *other.state_;
 
     // Check TypeSet refinement: S[v] in self must be subset of S[v] in other.
     // Check both directions: variables in self must refine other, AND
     // variables in other that are absent in self (top = all types) must also be all types.
-    for (const auto& [v, id] : var_to_id) {
-        const size_t rep = dsu.find_const(id);
-        const TypeSet ts_self = class_types[rep];
+    for (const auto& [v, id] : a.var_ids.vars()) {
+        const size_t rep = a.dsu.find_const(id);
+        const TypeSet ts_self = a.class_types[rep];
         const TypeSet ts_other = other.get_typeset(v);
         if (!ts_self.is_subset_of(ts_other)) {
             return false;
         }
     }
-    for (const auto& [v, id] : other.var_to_id) {
-        if (!var_to_id.contains(v)) {
+    for (const auto& [v, id] : b.var_ids.vars()) {
+        if (!a.var_ids.contains(v)) {
             // Variable absent in self means unconstrained (all types).
             // This is only subsumed if other also allows all types.
-            const size_t rep = other.dsu.find_const(id);
-            if (other.class_types[rep] != TypeSet::all()) {
+            const size_t rep = b.dsu.find_const(id);
+            if (b.class_types[rep] != TypeSet::all()) {
                 return false;
             }
         }
@@ -518,33 +511,33 @@ bool TypeDomain::operator<=(const TypeDomain& other) const {
 
     // Check equality preservation: other's equalities must hold in self.
     // With the singleton-merging invariant, DSU rep equality is the single
-    // source of truth — no singleton fallback needed.
+    // source of truth -- no singleton fallback needed.
     std::map<size_t, std::vector<Variable>> other_classes;
-    for (const auto& [v, id] : other.var_to_id) {
-        const size_t rep = other.dsu.find_const(id);
+    for (const auto& [v, id] : b.var_ids.vars()) {
+        const size_t rep = b.dsu.find_const(id);
         other_classes[rep].push_back(v);
     }
     for (const auto& [_, members] : other_classes) {
         if (members.size() <= 1) {
             continue;
         }
-        const auto it0 = var_to_id.find(members[0]);
-        if (it0 == var_to_id.end()) {
+        const auto id0 = a.var_ids.find_id(members[0]);
+        if (!id0) {
             // First variable unknown in self (top). All others must also be unknown.
             for (size_t i = 1; i < members.size(); i++) {
-                if (var_to_id.contains(members[i])) {
+                if (a.var_ids.contains(members[i])) {
                     return false;
                 }
             }
             continue;
         }
-        const size_t rep0 = dsu.find_const(it0->second);
+        const size_t rep0 = a.dsu.find_const(*id0);
         for (size_t i = 1; i < members.size(); i++) {
-            const auto it = var_to_id.find(members[i]);
-            if (it == var_to_id.end()) {
+            const auto id_i = a.var_ids.find_id(members[i]);
+            if (!id_i) {
                 return false;
             }
-            if (dsu.find_const(it->second) != rep0) {
+            if (a.dsu.find_const(*id_i) != rep0) {
                 return false;
             }
         }
@@ -568,28 +561,30 @@ void TypeDomain::assign_type(const Reg& lhs, const Reg& rhs) {
     if (is_bottom()) {
         return;
     }
+    auto& s = *state_;
     const Variable lhs_var = reg_type(lhs);
     const Variable rhs_var = reg_type(rhs);
     detach(lhs_var);
     const size_t rhs_id = ensure_var(rhs_var);
-    const size_t lhs_id = var_to_id[lhs_var];
-    const TypeSet rhs_ts = class_types[dsu.find(rhs_id)];
-    const size_t new_rep = dsu.unite(lhs_id, rhs_id);
-    class_types[new_rep] = rhs_ts;
+    const size_t lhs_id = *s.var_ids.find_id(lhs_var);
+    const TypeSet rhs_ts = s.class_types[s.dsu.find(rhs_id)];
+    const size_t new_rep = s.dsu.unite(lhs_id, rhs_id);
+    s.class_types[new_rep] = rhs_ts;
     merge_if_singleton(lhs_id);
 }
 
 void TypeDomain::assign_from_expr(const Variable lhs, const LinearExpression& expr) {
+    auto& s = *state_;
     if (const auto& terms = expr.variable_terms(); terms.empty()) {
         // Constant expression: assign that type encoding
         const int val = expr.constant_term().narrow<int>();
         detach(lhs);
-        const size_t id = var_to_id[lhs];
+        const size_t id = *s.var_ids.find_id(lhs);
         if (const auto te = int_to_type_encoding(val)) {
-            class_types[id] = TypeSet{*te};
+            s.class_types[id] = TypeSet{*te};
             merge_if_singleton(id);
         } else {
-            // Not a valid TypeEncoding — same as asserting an impossible type.
+            // Not a valid TypeEncoding -- same as asserting an impossible type.
             set_to_bottom();
         }
     } else if (terms.size() == 1) {
@@ -598,10 +593,10 @@ void TypeDomain::assign_from_expr(const Variable lhs, const LinearExpression& ex
             // Simple variable copy: detach lhs, unify with rhs
             detach(lhs);
             const size_t rhs_id = ensure_var(var);
-            const size_t lhs_id = var_to_id[lhs];
-            const TypeSet rhs_ts = class_types[dsu.find(rhs_id)];
-            const size_t new_rep = dsu.unite(lhs_id, rhs_id);
-            class_types[new_rep] = rhs_ts;
+            const size_t lhs_id = *s.var_ids.find_id(lhs);
+            const TypeSet rhs_ts = s.class_types[s.dsu.find(rhs_id)];
+            const size_t new_rep = s.dsu.unite(lhs_id, rhs_id);
+            s.class_types[new_rep] = rhs_ts;
             merge_if_singleton(lhs_id);
         } else {
             // Complex expression: havoc
@@ -636,10 +631,11 @@ void TypeDomain::assign_type(const Reg& lhs, const TypeEncoding type) {
     if (is_bottom()) {
         return;
     }
+    auto& s = *state_;
     const Variable v = reg_type(lhs);
     detach(v);
-    const size_t id = var_to_id[v];
-    class_types[id] = TypeSet{type};
+    const size_t id = *s.var_ids.find_id(v);
+    s.class_types[id] = TypeSet{type};
     merge_if_singleton(id);
 }
 
@@ -727,10 +723,11 @@ void TypeDomain::remove_type(const Variable v, const TypeEncoding te) {
     if (is_bottom()) {
         return;
     }
+    auto& s = *state_;
     const size_t id = ensure_var(v);
-    const size_t rep = dsu.find(id);
-    const TypeSet result = class_types[rep].remove(te);
-    class_types[rep] = result;
+    const size_t rep = s.dsu.find(id);
+    const TypeSet result = s.class_types[rep].remove(te);
+    s.class_types[rep] = result;
     if (result.is_empty()) {
         set_to_bottom();
     } else {
@@ -766,6 +763,7 @@ bool TypeDomain::entail(const LinearConstraint& cst) const {
     if (cst.is_contradiction()) {
         return false;
     }
+    const auto& s = *state_;
 
     const auto& expr = cst.expression();
     const auto& terms = expr.variable_terms();
@@ -799,12 +797,12 @@ bool TypeDomain::entail(const LinearConstraint& cst) const {
             const auto& [v1, c1] = *it++;
             const auto& [v2, c2] = *it;
             if (constant == 0 && ((c1 == 1 && c2 == -1) || (c1 == -1 && c2 == 1))) {
-                const auto it1 = var_to_id.find(v1);
-                const auto it2 = var_to_id.find(v2);
-                if (it1 != var_to_id.end() && it2 != var_to_id.end()) {
+                const auto id1 = s.var_ids.find_id(v1);
+                const auto id2 = s.var_ids.find_id(v2);
+                if (id1 && id2) {
                     // With the singleton-merging invariant, DSU rep comparison
                     // is sufficient (same singletons share the sentinel rep).
-                    return dsu.find_const(it1->second) == dsu.find_const(it2->second);
+                    return s.dsu.find_const(*id1) == s.dsu.find_const(*id2);
                 }
                 return false;
             }
@@ -946,10 +944,11 @@ bool TypeDomain::same_type(const Reg& a, const Reg& b) const {
     if (is_bottom()) {
         return true;
     }
-    const auto it_a = var_to_id.find(reg_type(a));
-    const auto it_b = var_to_id.find(reg_type(b));
-    if (it_a != var_to_id.end() && it_b != var_to_id.end()) {
-        return dsu.find_const(it_a->second) == dsu.find_const(it_b->second);
+    const auto& s = *state_;
+    const auto id_a = s.var_ids.find_id(reg_type(a));
+    const auto id_b = s.var_ids.find_id(reg_type(b));
+    if (id_a && id_b) {
+        return s.dsu.find_const(*id_a) == s.dsu.find_const(*id_b);
     }
     return false;
 }
@@ -964,15 +963,13 @@ StringInvariant TypeDomain::to_set() const {
     if (is_bottom()) {
         return StringInvariant::bottom();
     }
+    const auto& s = *state_;
 
     // Group variables by DSU representative. With the singleton-merging invariant,
     // variables sharing a singleton TypeSet are already in the same DSU class.
     std::map<size_t, std::vector<Variable>> classes;
-    for (const auto& [v, id] : var_to_id) {
-        if (!id_to_var[id]) {
-            continue; // orphaned
-        }
-        const size_t rep = dsu.find_const(id);
+    for (const auto& [v, id] : s.var_ids.vars()) {
+        const size_t rep = s.dsu.find_const(id);
         classes[rep].push_back(v);
     }
 
