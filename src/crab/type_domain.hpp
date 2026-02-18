@@ -2,132 +2,155 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-// This file is eBPF-specific, not derived from CRAB.
+#include <memory>
 #include <optional>
+#include <vector>
 
-#include "arith/dsl_syntax.hpp"
+#include "arith/linear_constraint.hpp"
 #include "arith/variable.hpp"
-#include "crab/add_bottom.hpp"
 #include "crab/type_encoding.hpp"
 #include "ir/syntax.hpp"
+#include "string_constraints.hpp"
 
 namespace prevail {
 
 Variable reg_type(const Reg& lhs);
 
-inline LinearConstraint type_is_pointer(const Reg& r) {
-    using namespace dsl_syntax;
-    return reg_type(r) >= T_CTX;
-}
+/// Type abstract domain based on disjoint-set with TypeSet annotations.
+///
+/// Tracks must-equality between type variables (partition into equivalence
+/// classes) and exact finite sets of possible types per class.
+///
+/// ## Representation
+///
+/// - Bottom = nullptr (state_ is empty). Unique representation.
+/// - Top = default State (sentinels only, no variables). Unique representation.
+/// - Non-trivial = State with variables registered in the DSU.
+///   The representation is NOT unique: DSU element IDs depend on insertion
+///   order, orphaned elements accumulate from detach(), and DSU tree shape
+///   depends on union/find history. Two TypeDomains can represent the same
+///   abstract value with different internal states. This means equality
+///   comparison must be semantic (compare partitions + TypeSets), not
+///   structural (compare raw state).
+///
+/// Note on TypeSet vs TypeDomain defaults: TypeSet{} is bottom (empty bitset,
+/// "no types possible"), while TypeDomain{} is top ("all types possible for
+/// every variable"). This asymmetry is intentional and follows from how each
+/// lattice works: for TypeSet, the empty set is the strongest constraint;
+/// for TypeDomain, having no registered variables means no constraints.
+///
+/// ## Invariants (when state_ is non-null, i.e., not bottom)
+///
+/// 1. Sentinels: IDs 0..7 exist. class_types[type_to_bit(te)] = {te}.
+/// 2. Singleton-merging: any class with singleton TypeSet {te} has the same
+///    DSU representative as sentinel type_to_bit(te). This ensures same_type()
+///    is a single DSU rep comparison and join uses raw reps as partition keys.
+/// 3. class_types[dsu.find(id)] is the TypeSet for id's equivalence class.
+///    class_types at non-representative indices may be stale.
+/// 4. var_ids maintains a partial bijection between live Variables and DSU IDs.
+///    Same pattern as ZoneDomain's VertMap/RevMap (Variable <-> VertId).
+/// 5. class_types.size() == var_ids.id_capacity() == dsu.size().
+/// 6. No representative has an empty TypeSet (empty -> bottom).
+class TypeDomain {
+  public:
+    TypeDomain();
+    ~TypeDomain();
 
-inline LinearConstraint type_is_number(const Reg& r) {
-    using namespace dsl_syntax;
-    return reg_type(r) == T_NUM;
-}
+    TypeDomain(const TypeDomain& other);
+    TypeDomain(TypeDomain&& other) noexcept;
+    TypeDomain& operator=(const TypeDomain& other);
+    TypeDomain& operator=(TypeDomain&& other) noexcept;
 
-inline LinearConstraint type_is_not_stack(const Reg& r) {
-    using namespace dsl_syntax;
-    return reg_type(r) != T_STACK;
-}
+    // Lattice operations
+    void operator|=(const TypeDomain& other);
 
-inline LinearConstraint type_is_not_number(const Reg& r) {
-    using namespace dsl_syntax;
-    return reg_type(r) != T_NUM;
-}
+    TypeDomain operator|(const TypeDomain& other) const;
 
-struct TypeDomain {
-    // Underlying numerical domain should be different, but for interop with ArrayDomain we reuse NumAbsDomain.
-    using T = NumAbsDomain;
-    T inv;
-
-    TypeDomain() : inv(T::top()) {}
-    explicit TypeDomain(const T& other) : inv(other) {};
-
-    TypeDomain(const TypeDomain& other) = default;
-    TypeDomain(TypeDomain&& other) noexcept : inv(std::move(other.inv)) {}
-    TypeDomain& operator=(const TypeDomain& other) {
-        if (this != &other) {
-            inv = other.inv;
-        }
-        return *this;
-    }
-
-    void operator|=(const TypeDomain& other) { inv |= other.inv; }
-    void operator|=(TypeDomain&& other) { inv |= std::move(other.inv); }
-
-    TypeDomain operator|(const TypeDomain& other) const { return TypeDomain{inv | other.inv}; }
-    TypeDomain operator|(TypeDomain&& other) const { return TypeDomain{inv | std::move(other.inv)}; }
-
-    std::optional<TypeDomain> meet(const TypeDomain& other) const {
-        if (auto res = this->inv & other.inv) {
-            return TypeDomain{std::move(res)};
-        }
-        return {};
-    }
-    bool operator<=(const TypeDomain& other) const { return inv <= other.inv; }
-    void set_to_top() { inv.set_to_top(); }
+    [[nodiscard]]
+    std::optional<TypeDomain> meet(const TypeDomain& other) const;
+    bool operator<=(const TypeDomain& other) const;
+    void set_to_top();
     static TypeDomain top() { return TypeDomain{}; }
-    TypeDomain widen(const TypeDomain& other) const { return TypeDomain{inv.widen(other.inv)}; }
-    TypeDomain narrow(const TypeDomain& other) const { return TypeDomain{inv.narrow(other.inv)}; }
+    [[nodiscard]]
+    bool is_bottom() const {
+        return !state_;
+    }
+    [[nodiscard]]
+    TypeDomain widen(const TypeDomain& other) const {
+        return *this | other;
+    }
+    [[nodiscard]]
+    TypeDomain narrow(const TypeDomain& other) const;
 
+    // Assignment
     void assign_type(const Reg& lhs, const Reg& rhs);
     void assign_type(const Reg& lhs, const std::optional<LinearExpression>& rhs);
     void assign_type(std::optional<Variable> lhs, const LinearExpression& t);
-    void add_constraint(const LinearConstraint& cst) { inv.add_constraint(cst); }
+    void assign_type(const Reg& lhs, TypeEncoding type);
+
+    // Constraint handling
+    void restrict_to(Variable v, TypeSet mask);
+    void assume_eq(Variable v1, Variable v2);
+
+    /// Remove a single type from a variable's set.
+    void remove_type(Variable v, TypeEncoding te);
+
+    // Havoc
     void havoc_type(const Reg& r);
     void havoc_type(const Variable& v);
 
-    bool type_is_pointer(const Reg& r) const {
-        using namespace dsl_syntax;
-        return inv.entail(reg_type(r) >= T_CTX);
-    }
-
-    bool type_is_number(const Reg& r) const {
-        using namespace dsl_syntax;
-        return inv.entail(reg_type(r) == T_NUM);
-    }
-
-    bool type_is_not_stack(const Reg& r) const {
-        using namespace dsl_syntax;
-        return inv.entail(reg_type(r) != T_STACK);
-    }
-
-    bool type_is_not_number(const Reg& r) const {
-        using namespace dsl_syntax;
-        return inv.entail(reg_type(r) != T_NUM);
-    }
-
+    // Query methods
+    [[nodiscard]]
     std::vector<TypeEncoding> iterate_types(const Reg& reg) const;
 
     [[nodiscard]]
-    TypeEncoding get_type(const LinearExpression& v) const;
-    [[nodiscard]]
-    TypeEncoding get_type(const Reg& r) const;
+    std::optional<TypeEncoding> get_type(const Reg& r) const;
 
+    /// Check: "if premise_reg's types are a subset of premise_set, then
+    /// conclusion_reg's types are a subset of conclusion_set."
     [[nodiscard]]
-    bool implies(const LinearConstraint& premise, const LinearConstraint& conclusion) const {
-        return inv.when(premise).entail(conclusion);
-    }
+    bool implies_superset(const Reg& premise_reg, TypeSet premise_set, const Reg& conclusion_reg,
+                          TypeSet conclusion_set) const;
 
+    /// Check: "if premise_reg's type is not excluded_type, then conclusion_reg's
+    /// types are a subset of conclusion_set."
     [[nodiscard]]
-    bool may_have_type(const LinearExpression& v, TypeEncoding type) const;
+    bool implies_not_type(const Reg& premise_reg, TypeEncoding excluded_type, const Reg& conclusion_reg,
+                          TypeSet conclusion_set) const;
+
+    /// Check whether a variable's type is certainly `te` (singleton TypeSet).
+    [[nodiscard]]
+    bool entail_type(Variable v, TypeEncoding te) const;
+
     [[nodiscard]]
     bool may_have_type(const Reg& r, TypeEncoding type) const;
+    [[nodiscard]]
+    bool may_have_type(Variable v, TypeEncoding type) const;
 
     [[nodiscard]]
     bool is_initialized(const Reg& r) const;
-
     [[nodiscard]]
-    bool is_initialized(const LinearExpression& v) const;
+    bool is_initialized(Variable v) const;
 
     [[nodiscard]]
     bool same_type(const Reg& a, const Reg& b) const;
+    [[nodiscard]]
+    bool is_in_group(const Reg& r, TypeSet types) const;
 
     [[nodiscard]]
-    bool is_in_group(const Reg& r, TypeGroup group) const;
-
-    StringInvariant to_set() const { return inv.to_set(); }
+    StringInvariant to_set() const;
     friend std::ostream& operator<<(std::ostream& o, const TypeDomain& dom);
+
+  private:
+    struct State;
+    std::unique_ptr<State> state_;
+
+    void set_to_bottom();
+
+    [[nodiscard]]
+    TypeSet get_typeset(Variable v) const;
+    [[nodiscard]]
+    TypeDomain join(const TypeDomain& other) const;
 };
 
 } // namespace prevail

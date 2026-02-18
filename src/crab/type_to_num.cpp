@@ -4,13 +4,13 @@
 
 #include "arith/variable.hpp"
 #include "crab/interval.hpp"
-#include "crab/rcp.hpp"
 #include "crab/type_domain.hpp"
+#include "crab/type_to_num.hpp"
 #include "crab/var_registry.hpp"
 
 namespace prevail {
 
-std::optional<Variable> get_type_offset_variable(const Reg& reg, const int type) {
+std::optional<Variable> get_type_offset_variable(const Reg& reg, const TypeEncoding type) {
     RegPack r = reg_pack(reg);
     switch (type) {
     case T_CTX: return r.ctx_offset;
@@ -24,7 +24,11 @@ std::optional<Variable> get_type_offset_variable(const Reg& reg, const int type)
 }
 
 std::optional<Variable> TypeToNumDomain::get_type_offset_variable(const Reg& reg) const {
-    return prevail::get_type_offset_variable(reg, types.get_type(reg));
+    const auto type = types.get_type(reg);
+    if (!type) {
+        return {};
+    }
+    return prevail::get_type_offset_variable(reg, *type);
 }
 
 bool TypeToNumDomain::operator<=(const TypeToNumDomain& other) const {
@@ -66,6 +70,9 @@ void TypeToNumDomain::join_selective(const TypeToNumDomain& right) {
 void TypeToNumDomain::operator|=(const TypeToNumDomain& other) {
     if (is_bottom()) {
         *this = other;
+        // No return: the zone in `other` may not be fully closed. Falling through
+        // to join_selective triggers zone self-join, whose closure step tightens
+        // difference constraints (e.g. r2.uvalue-r1.uvalue<=-2 vs <=-1).
     }
     if (other.is_bottom()) {
         return;
@@ -149,7 +156,6 @@ TypeToNumDomain::collect_type_dependent_constraints(const TypeToNumDomain& right
 }
 
 std::vector<TypeEncoding> TypeToNumDomain::enumerate_types(const Reg& reg) const {
-    using namespace dsl_syntax;
     if (!types.is_initialized(reg)) {
         return {T_UNINIT};
     }
@@ -159,7 +165,6 @@ std::vector<TypeEncoding> TypeToNumDomain::enumerate_types(const Reg& reg) const
 TypeToNumDomain
 TypeToNumDomain::join_over_types(const Reg& reg,
                                  const std::function<void(TypeToNumDomain&, TypeEncoding)>& transition) const {
-    using namespace dsl_syntax;
     if (!types.is_initialized(reg)) {
         TypeToNumDomain res = *this;
         transition(res, T_UNINIT);
@@ -173,7 +178,7 @@ TypeToNumDomain::join_over_types(const Reg& reg,
     }
     for (const TypeEncoding type : valid_types) {
         TypeToNumDomain tmp(*this);
-        tmp.types.add_constraint(reg_type(reg) == type);
+        tmp.types.restrict_to(reg_type(reg), TypeSet{type});
         // This might have changed the type variable of reg.
         // It might also have changed the type variable of other registers, but we don't deal with that.
         for (const auto& [other_type, kinds] : valid_type_to_kinds) {
@@ -199,13 +204,6 @@ void TypeToNumDomain::havoc_all_locations_having_type(const TypeEncoding type) {
                 values.havoc(variable_registry->kind_var(kind, type_variable));
             }
         }
-    }
-}
-
-void TypeToNumDomain::assume_type(const LinearConstraint& cst) {
-    types.add_constraint(cst);
-    if (types.inv.is_bottom()) {
-        values.set_to_bottom();
     }
 }
 
@@ -267,8 +265,8 @@ TypeToNumDomain TypeToNumDomain::widen(const TypeToNumDomain& other) const {
     return res;
 }
 
-TypeToNumDomain TypeToNumDomain::narrow(const TypeToNumDomain& rcp) const {
-    return TypeToNumDomain{types.narrow(rcp.types), values.narrow(rcp.values)};
+TypeToNumDomain TypeToNumDomain::narrow(const TypeToNumDomain& other) const {
+    return TypeToNumDomain{types.narrow(other.types), values.narrow(other.values)};
 }
 
 StringInvariant TypeToNumDomain::to_set() const {

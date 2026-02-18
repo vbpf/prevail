@@ -6,7 +6,6 @@
 #include "crab/var_registry.hpp"
 #include "crab/zone_domain.hpp"
 #include "string_constraints.hpp"
-#include "type_encoding.hpp"
 
 using namespace splitdbm;
 
@@ -763,18 +762,7 @@ StringInvariant ZoneDomain::to_set() const {
 
         std::stringstream elem;
         elem << variable;
-        if (variable_registry->is_type(variable)) {
-            auto [lb, ub] = v_out.bound(T_UNINIT, T_MAX);
-            if (lb == ub) {
-                if (variable_registry->is_in_stack(variable) && lb == T_NUM) {
-                    // no need to show this
-                    continue;
-                }
-                elem << "=" << lb;
-            } else {
-                elem << " in " << typeset_to_string(iterate_types(lb, ub));
-            }
-        } else if (variable_registry->is_min_only(variable)) {
+        if (variable_registry->is_min_only(variable)) {
             // One-sided variables: display just the lower bound
             elem << "=" << v_out.lb();
         } else {

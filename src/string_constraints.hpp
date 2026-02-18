@@ -9,7 +9,9 @@
 #include <vector>
 
 #include "arith/linear_constraint.hpp"
+#include "arith/variable.hpp"
 #include "crab/interval.hpp"
+#include "crab/type_encoding.hpp"
 
 namespace prevail {
 struct StringInvariant {
@@ -57,8 +59,20 @@ struct StringInvariant {
     friend std::ostream& operator<<(std::ostream&, const StringInvariant& inv);
 };
 
+struct TypeSetRestriction {
+    Variable var;
+    TypeSet types;
+};
+
+/// Parsed type equality: v1.type == v2.type.
+struct TypeEquality {
+    Variable v1;
+    Variable v2;
+};
+
 struct TypeValueConstraints {
-    std::vector<LinearConstraint> type_csts;
+    std::vector<TypeEquality> type_equalities;
+    std::vector<TypeSetRestriction> type_restrictions;
     std::vector<LinearConstraint> value_csts;
 };
 

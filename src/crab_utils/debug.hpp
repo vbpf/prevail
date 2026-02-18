@@ -3,13 +3,11 @@
 #pragma once
 
 /* Logging and debug messages */
-#include <cstdlib>
 #include <iostream>
 #include <sstream>
 
 #include <iosfwd>
 #include <set>
-#include <stdarg.h>
 #include <string>
 
 namespace prevail {
@@ -43,14 +41,14 @@ void ___print___(std::ostream& os, ArgTypes... args) {
     (void)ExpandVariadicPack{0, ((os << args), void(), 0)...};
 }
 
-#define CRAB_ERROR(...)                                                \
-    do {                                                               \
-        std::ostringstream os;                                         \
-        os << "CRAB ERROR: ";                                          \
-        ___print___(os, __VA_ARGS__);                                  \
-        ___print___(os, "; function ", __func__, ", line ", __LINE__); \
-        os << "\n";                                                    \
-        throw std::runtime_error(os.str());                            \
+#define CRAB_ERROR(...)                                                 \
+    do {                                                                \
+        std::ostringstream _os;                                         \
+        _os << "CRAB ERROR: ";                                          \
+        ___print___(_os, __VA_ARGS__);                                  \
+        ___print___(_os, "; function ", __func__, ", line ", __LINE__); \
+        _os << "\n";                                                    \
+        throw std::runtime_error(_os.str());                            \
     } while (0)
 
 extern bool CrabWarningFlag;
@@ -64,7 +62,5 @@ void CrabEnableWarningMsg(bool b);
             std::cerr << "\n";                   \
         }                                        \
     } while (0)
-
-constexpr bool CrabSanityCheckFlag = false;
 
 } // end namespace prevail

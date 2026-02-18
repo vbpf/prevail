@@ -160,7 +160,7 @@ Split Difference Bound Matrix -- sparse graph + potential function implementatio
 
 ### TypeDomain
 
-Abstract domain tracking the type (CTX, STACK, PACKET, etc.) of each register.
+Abstract domain tracking the type (CTX, STACK, PACKET, etc.) of each register using a disjoint-set union (DSU) with per-class `TypeSet` annotations. Tracks both possible types (as bitsets) and must-equalities (as equivalence classes).
 
 ## Memory Regions
 

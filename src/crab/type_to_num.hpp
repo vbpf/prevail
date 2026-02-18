@@ -48,13 +48,44 @@ inline const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
     {T_NUM, {}}, // TODO: DataKind::svalues
 };
 
-std::optional<Variable> get_type_offset_variable(const Reg& reg, int type);
+std::optional<Variable> get_type_offset_variable(const Reg& reg, TypeEncoding type);
 
-/** TypeToNumDomain implements a Reduced Cardinal Power Domain between TypeDomain and NumAbsDomain.
- * This struct is used to represent the eBPF abstract domain where type information (TypeDomain) is used to guide the
- * precision of the numeric domain(NumAbsDomain). For example, if a register is known to be of type stack, then the
- * numeric domain can track its stack offset; if a register is known to be a number, the numeric domain can track its
- * signed integer value, etc. */
+/** TypeToNumDomain is a Reduced Product of TypeDomain x NumAbsDomain.
+ *
+ * Type information guides the precision of the numeric domain. For example, if a register is known to be of type
+ * stack, the numeric domain tracks its stack offset; if a register is a number, the numeric domain tracks its signed
+ * integer value, etc. Each type has associated "kind" variables (see type_to_kinds); a kind variable is meaningful
+ * only when its type is in the register's TypeSet, and is conceptually bottom otherwise.
+ *
+ * The reduction is one-directional (Type -> Num) and interval-level only. It is RCP-like in that
+ * kind variables in the numeric domain are reinterpreted based on which types are present:
+ * - At join time, collect_type_dependent_constraints preserves per-type interval constraints from
+ *   whichever side has a type the other doesn't, preventing the zone join from losing them.
+ *   This is what an RCP join does: each "slot" (type) has its own numeric sub-state, and
+ *   constraints from a slot that exists on only one side are carried across unchanged.
+ * - At subsumption time, type-irrelevant kind variables are havocked to top in the wider domain
+ *   so that the numeric check correctly treats "absent type = bottom" on the narrower side.
+ *
+ * There is no Num-to-Type reduction: the numeric domain does not narrow the type set. The old
+ * zone-based TypeDomain had an implicit Num-to-Type reduction via zone closure over integer-encoded
+ * types, but that was encoding-dependent and gave spurious precision that depended on the contiguous
+ * ordering of type values.
+ *
+ * Note: join_over_types() performs a cardinal-power-style operation (partition by type, transform,
+ * rejoin), but the domain itself is a flat product -- it does not maintain separate numeric states
+ * per type.
+ *
+ * Toward a full Reduced Cardinal Power (RCP):
+ * A true RCP would maintain a separate numeric sub-state for each type combination. Since type
+ * combinations are per-register and the numeric domain is binary-relational (DBM tracks pairwise
+ * differences), the partitioning key would be pairs of register types. For k type encodings and
+ * n registers, this gives up to k^2 numeric sub-states per register pair which is largely wasteful:
+ * most type combinations never co-occur, and most sub-states would be identical. The current design
+ * approximates this by keeping a single shared numeric domain and reinterpreting kind variables at
+ * domain boundaries (join, subsumption). join_over_types() goes further by transiently splitting
+ * the numeric state for type-dependent transitions (e.g., loads/stores that behave differently per
+ * pointer kind), but these per-type states are rejoined immediately and not persisted. A full RCP
+ * would persist the partition and only merge sub-states lazily or on demand. */
 struct TypeToNumDomain {
     TypeDomain types{TypeDomain::top()};
     NumAbsDomain values{NumAbsDomain::top()};
@@ -169,11 +200,32 @@ struct TypeToNumDomain {
 
     void havoc_all_locations_having_type(TypeEncoding type);
 
-    void assume_type(const LinearConstraint& cst);
-
     void assign(const Reg& lhs, const Reg& rhs);
 
     void assign_type(auto&&... args) { types.assign_type(std::forward<decltype(args)>(args)...); }
+
+    // Convenience forwarding to TypeDomain.
+    bool is_in_group(const Reg& r, const TypeSet ts) const { return types.is_in_group(r, ts); }
+    bool may_have_type(const Reg& r, const TypeEncoding te) const { return types.may_have_type(r, te); }
+    bool may_have_type(const Variable v, const TypeEncoding te) const { return types.may_have_type(v, te); }
+    bool is_initialized(const Reg& r) const { return types.is_initialized(r); }
+    bool is_initialized(const Variable v) const { return types.is_initialized(v); }
+    bool same_type(const Reg& a, const Reg& b) const { return types.same_type(a, b); }
+    bool entail_type(const Variable v, const TypeEncoding te) const { return types.entail_type(v, te); }
+    bool implies_superset(const Reg& premise_reg, const TypeSet premise_set, const Reg& conclusion_reg,
+                          const TypeSet conclusion_set) const {
+        return types.implies_superset(premise_reg, premise_set, conclusion_reg, conclusion_set);
+    }
+    bool implies_not_type(const Reg& premise_reg, const TypeEncoding excluded_type, const Reg& conclusion_reg,
+                          const TypeSet conclusion_set) const {
+        return types.implies_not_type(premise_reg, excluded_type, conclusion_reg, conclusion_set);
+    }
+    std::optional<TypeEncoding> get_type(const Reg& r) const { return types.get_type(r); }
+    std::vector<TypeEncoding> iterate_types(const Reg& reg) const { return types.iterate_types(reg); }
+    void havoc_type(const Reg& r) { types.havoc_type(r); }
+    void havoc_type(const Variable& v) { types.havoc_type(v); }
+    void assume_eq(const Variable v1, const Variable v2) { types.assume_eq(v1, v2); }
+    void remove_type(const Variable v, const TypeEncoding te) { types.remove_type(v, te); }
 
     void havoc_offsets(const Reg& reg);
 
@@ -183,7 +235,7 @@ struct TypeToNumDomain {
 
     TypeToNumDomain widen(const TypeToNumDomain& other) const;
 
-    TypeToNumDomain narrow(const TypeToNumDomain& rcp) const;
+    TypeToNumDomain narrow(const TypeToNumDomain& other) const;
 
     StringInvariant to_set() const;
     friend std::ostream& operator<<(std::ostream& o, const TypeToNumDomain& dom);

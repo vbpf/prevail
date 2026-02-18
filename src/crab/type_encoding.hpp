@@ -3,7 +3,11 @@
 
 #pragma once
 
+#include <bitset>
+#include <initializer_list>
+#include <optional>
 #include <string>
+#include <vector>
 
 namespace prevail {
 
@@ -30,27 +34,130 @@ DataKind regkind(const std::string& s);
 std::vector<DataKind> iterate_kinds(DataKind lb = KIND_VALUE_MIN, DataKind ub = KIND_MAX);
 std::ostream& operator<<(std::ostream& o, const DataKind& s);
 
-// The exact numbers are taken advantage of in EbpfDomain
-enum TypeEncoding {
-    T_UNINIT = -7,
-    T_MAP_PROGRAMS = -6,
-    T_MAP = -5,
-    T_NUM = -4,
-    T_CTX = -3,
-    T_PACKET = -2,
-    T_STACK = -1,
-    T_SHARED = 0
+enum class TypeEncoding {
+    T_UNINIT = 0,
+    T_MAP_PROGRAMS = 1,
+    T_MAP = 2,
+    T_NUM = 3,
+    T_CTX = 4,
+    T_PACKET = 5,
+    T_STACK = 6,
+    T_SHARED = 7,
 };
+using enum TypeEncoding;
+constexpr size_t NUM_TYPE_ENCODINGS = 8;
 
-constexpr TypeEncoding T_MIN = T_UNINIT;
-constexpr TypeEncoding T_MIN_VALID = T_MAP_PROGRAMS;
-constexpr TypeEncoding T_MAX = T_SHARED;
-
-std::vector<TypeEncoding> iterate_types(TypeEncoding lb, TypeEncoding ub);
 std::string typeset_to_string(const std::vector<TypeEncoding>& items);
 
 std::ostream& operator<<(std::ostream& os, TypeEncoding s);
 TypeEncoding string_to_type_encoding(const std::string& s);
+std::optional<TypeEncoding> int_to_type_encoding(int v);
+
+// ============================================================================
+// TypeSet — compact u8 bitset over TypeEncoding values
+// ============================================================================
+
+/// Map a TypeEncoding to its bit position (0..7).
+constexpr unsigned type_to_bit(const TypeEncoding te) { return static_cast<unsigned>(te); }
+
+/// A compact bitset over the 8 TypeEncoding values, backed by std::bitset.
+/// Join = OR, Meet = AND, subsumption = subset.
+class TypeSet {
+    std::bitset<NUM_TYPE_ENCODINGS> bits_;
+
+    explicit TypeSet(std::bitset<NUM_TYPE_ENCODINGS> bits) : bits_{bits} {}
+
+  public:
+    TypeSet() = default;
+
+    /// Build a TypeSet from one or more TypeEncoding values.
+    /// Supports brace initialization: TypeSet{T_MAP, T_CTX}
+    TypeSet(const std::initializer_list<TypeEncoding> types) {
+        for (const auto te : types) {
+            bits_.set(type_to_bit(te));
+        }
+    }
+
+    /// The full set (all 8 types).
+    static TypeSet all() {
+        TypeSet result;
+        result.bits_.set();
+        return result;
+    }
+
+    // Lattice operations
+    TypeSet operator|(const TypeSet o) const { return TypeSet{bits_ | o.bits_}; }
+    TypeSet operator&(const TypeSet o) const { return TypeSet{bits_ & o.bits_}; }
+    TypeSet operator~() const { return TypeSet{~bits_}; }
+    TypeSet& operator|=(const TypeSet o) {
+        bits_ |= o.bits_;
+        return *this;
+    }
+
+    bool operator==(const TypeSet o) const { return bits_ == o.bits_; }
+    bool operator!=(const TypeSet o) const { return bits_ != o.bits_; }
+
+    /// Whether this set is empty.
+    [[nodiscard]]
+    bool is_empty() const {
+        return bits_.none();
+    }
+
+    /// Whether this set contains exactly one type.
+    [[nodiscard]]
+    bool is_singleton() const {
+        return bits_.count() == 1;
+    }
+
+    /// Number of types in the set.
+    [[nodiscard]]
+    int count() const {
+        return static_cast<int>(bits_.count());
+    }
+
+    /// Whether this set contains a given type.
+    [[nodiscard]]
+    bool contains(const TypeEncoding te) const {
+        return bits_.test(type_to_bit(te));
+    }
+
+    /// Whether self is a subset of other.
+    [[nodiscard]]
+    bool is_subset_of(const TypeSet other) const {
+        return (bits_ & other.bits_) == bits_;
+    }
+
+    /// Remove a single type from the set.
+    [[nodiscard]]
+    TypeSet remove(const TypeEncoding te) const {
+        auto copy = bits_;
+        copy.reset(type_to_bit(te));
+        return TypeSet{copy};
+    }
+
+    /// Get the singleton type, if exactly one element.
+    [[nodiscard]]
+    std::optional<TypeEncoding> as_singleton() const;
+
+    /// Iterate over all types in this set, in encoding order.
+    [[nodiscard]]
+    std::vector<TypeEncoding> to_vector() const;
+
+    /// Format as string: singleton -> "typename", multi -> "{t1, t2, ...}".
+    [[nodiscard]]
+    std::string to_string() const;
+};
+
+// Named type sets for common semantic groups.
+extern const TypeSet TS_NUM;
+extern const TypeSet TS_MAP;
+extern const TypeSet TS_POINTER;
+extern const TypeSet TS_SINGLETON_PTR;
+extern const TypeSet TS_MEM;
+
+// ============================================================================
+// TypeGroup
+// ============================================================================
 
 enum class TypeGroup {
     number,
@@ -69,6 +176,9 @@ enum class TypeGroup {
     stack_or_packet, ///< reg <= T_STACK && reg >= T_PACKET
     singleton_ptr,   ///< reg <= T_STACK && reg >= T_CTX
 };
+
+/// Convert a TypeGroup to its corresponding TypeSet.
+TypeSet to_typeset(TypeGroup group);
 
 bool is_singleton_type(TypeGroup t);
 std::ostream& operator<<(std::ostream& os, TypeGroup ts);

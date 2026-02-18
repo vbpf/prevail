@@ -1,0 +1,210 @@
+# Copyright (c) Prevail Verifier contributors.
+# SPDX-License-Identifier: MIT
+
+# Tests for non-convex type sets after branch joins.
+#
+# These tests verify that the type domain tracks exact type sets rather than
+# interval overapproximations. With a zone-based (convex) type domain,
+# joining branches with non-adjacent type encodings produces spurious
+# intermediate types. For example, {map_fd(2), ctx(4)} becomes [2,4]
+# which includes num(3). See https://github.com/vbpf/prevail/issues/286
+---
+test-case: non-adjacent type join map_fd and ctx
+
+pre: ["r0.type=number",
+      "r8.type=map_fd", "r8.map_fd=1",
+      "r9.type=ctx", "r9.ctx_offset=0"]
+
+code:
+  <start>: |
+    if r0 == 0 goto <ctx>
+  <mapfd>: |
+    r2 = r8
+    goto <out>
+  <ctx>: |
+    r2 = r9
+    goto <out>
+  <out>: |
+    r3 = r2
+
+# Zone domain would produce: r2.type in {map_fd, num, ctx} (spurious num)
+post:
+  - r0.type=number
+  - r0.uvalue=[0, +oo]
+  - r2.ctx_offset=0
+  - r2.map_fd=1
+  - r2.type in {map_fd, ctx}
+  - r3.ctx_offset=0
+  - r3.map_fd=1
+  - r3.svalue=r2.svalue
+  - r3.type=r2.type
+  - r3.uvalue=r2.uvalue
+  - r8.map_fd=1
+  - r8.type=map_fd
+  - r9.ctx_offset=0
+  - r9.type=ctx
+
+---
+test-case: non-adjacent same-type join map_fd and ctx
+
+pre: ["r0.type=number",
+      "r6.type=map_fd", "r6.map_fd=1",
+      "r7.type=map_fd", "r7.map_fd=2",
+      "r8.type=ctx", "r8.ctx_offset=4",
+      "r9.type=ctx", "r9.ctx_offset=0"]
+
+code:
+  <start>: |
+    if r0 == 0 goto <ctx>
+  <mapfd>: |
+    r1 = r6
+    r2 = r7
+    goto <out>
+  <ctx>: |
+    r1 = r8
+    r2 = r9
+    goto <out>
+  <out>: |
+    r3 = r2
+
+# r1 and r2 both have the same type in each branch:
+#   mapfd: r1=r2=map_fd, ctx: r1=r2=ctx
+# Zone domain would show r1.type in {map_fd, num, ctx} (spurious num)
+post:
+  - r0.type=number
+  - r0.uvalue=[0, +oo]
+  - r1.ctx_offset=4
+  - r1.map_fd=1
+  - r1.type in {map_fd, ctx}
+  - r2.ctx_offset=0
+  - r2.map_fd=2
+  - r2.type=r1.type
+  - r3.ctx_offset=0
+  - r3.map_fd=2
+  - r3.svalue=r2.svalue
+  - r3.type=r1.type
+  - r3.uvalue=r2.uvalue
+  - r6.map_fd=1
+  - r6.type=map_fd
+  - r7.map_fd=2
+  - r7.type=map_fd
+  - r8.ctx_offset=4
+  - r8.type=ctx
+  - r9.ctx_offset=0
+  - r9.type=ctx
+
+---
+test-case: non-adjacent type join num and shared
+
+pre: ["r0.type=number",
+      "r8.type=number", "r8.svalue=4", "r8.uvalue=4",
+      "r9.type=shared", "r9.shared_offset=0", "r9.shared_region_size=64"]
+
+code:
+  <start>: |
+    if r0 == 0 goto <shared>
+  <num>: |
+    r2 = r8
+    goto <out>
+  <shared>: |
+    r2 = r9
+    goto <out>
+  <out>: |
+    r3 = r2
+
+# {num(3), shared(7)} — zone interval [3,7] adds ctx, packet, stack
+post:
+  - r0.type=number
+  - r0.uvalue=[0, +oo]
+  - r2.shared_offset=0
+  - r2.shared_region_size=64
+  - r2.type in {number, shared}
+  - r3.shared_offset=0
+  - r3.shared_region_size=r2.shared_region_size
+  - r3.svalue=r2.svalue
+  - r3.type=r2.type
+  - r3.uvalue=r2.uvalue
+  - r8.svalue=4
+  - r8.type=number
+  - r8.uvalue=4
+  - r9.shared_offset=0
+  - r9.shared_region_size=64
+  - r9.type=shared
+
+---
+test-case: maximally non-adjacent type join map_fd and shared
+
+pre: ["r0.type=number",
+      "r8.type=map_fd", "r8.map_fd=1",
+      "r9.type=shared", "r9.shared_offset=0", "r9.shared_region_size=64"]
+
+code:
+  <start>: |
+    if r0 == 0 goto <shared>
+  <mapfd>: |
+    r2 = r8
+    goto <out>
+  <shared>: |
+    r2 = r9
+    goto <out>
+  <out>: |
+    r3 = r2
+
+# {map_fd(2), shared(7)} — zone interval [2,7] includes ALL valid types:
+# map_fd, num, ctx, packet, stack, shared. Worst-case overapproximation.
+post:
+  - r0.type=number
+  - r0.uvalue=[0, +oo]
+  - r2.map_fd=1
+  - r2.shared_offset=0
+  - r2.shared_region_size=64
+  - r2.type in {map_fd, shared}
+  - r3.map_fd=1
+  - r3.shared_offset=0
+  - r3.shared_region_size=r2.shared_region_size
+  - r3.svalue=r2.svalue
+  - r3.type=r2.type
+  - r3.uvalue=r2.uvalue
+  - r8.map_fd=1
+  - r8.type=map_fd
+  - r9.shared_offset=0
+  - r9.shared_region_size=64
+  - r9.type=shared
+
+---
+test-case: non-adjacent same-type subtract num and ctx
+
+pre: ["r0.type=number",
+      "r8.type=ctx", "r8.ctx_offset=4",
+      "r9.type=ctx", "r9.ctx_offset=0"]
+
+code:
+  <start>: |
+    if r0 == 0 goto <ctx>
+  <number>: |
+    r1 = 1
+    r2 = r0
+    goto <out>
+  <ctx>: |
+    r1 = r8
+    r2 = r9
+    goto <out>
+  <out>: |
+    r3 = r2
+    r3 -= r1; same_type(r2, r1) — both are {num, ctx}, equality preserved
+
+# {num(3), ctx(4)} are adjacent, but this test verifies that equality
+# tracking works correctly for same-type subtraction with these types.
+# The subtraction should succeed: in both branches r1 and r2 share a type.
+post:
+  - r0.type=number
+  - r0.uvalue=[0, +oo]
+  - r1.ctx_offset=4
+  - r1.type in {number, ctx}
+  - r2.type=r1.type
+  - r2.ctx_offset=0
+  - r3.type=number
+  - r8.ctx_offset=4
+  - r8.type=ctx
+  - r9.ctx_offset=0
+  - r9.type=ctx

@@ -326,7 +326,10 @@ void ArrayDomain::split_number_var(NumAbsDomain& inv, DataKind kind, const Inter
 }
 
 // we can only treat this as non-member because we use global state
-static std::optional<std::pair<offset_t, unsigned>> kill_and_find_var(NumAbsDomain& inv, DataKind kind,
+// Find overlapping cells for the given index range and kill (havoc + remove) them.
+// Returns the exact offset and size if the index and element size are both constant.
+template <typename HavocFn>
+static std::optional<std::pair<offset_t, unsigned>> kill_and_find_var(const HavocFn& havoc_var, DataKind kind,
                                                                       const Interval& ii, const Interval& elem_size) {
     std::optional<std::pair<offset_t, unsigned>> res;
 
@@ -346,15 +349,15 @@ static std::optional<std::pair<offset_t, unsigned>> kill_and_find_var(NumAbsDoma
         cells = offset_map.get_overlap_cells_symbolic_offset(ii | (ii + elem_size));
     }
     if (!cells.empty()) {
-        // Forget the scalars from the numerical domain
+        // Forget the scalars from the relevant domain
         for (const auto& c : cells) {
-            inv.havoc(cell_var(kind, c));
+            havoc_var(cell_var(kind, c));
 
             // Forget signed and unsigned values together.
             if (kind == DataKind::svalues) {
-                inv.havoc(cell_var(DataKind::uvalues, c));
+                havoc_var(cell_var(DataKind::uvalues, c));
             } else if (kind == DataKind::uvalues) {
-                inv.havoc(cell_var(DataKind::svalues, c));
+                havoc_var(cell_var(DataKind::svalues, c));
             }
         }
         // Remove the cells. If needed again they will be re-created.
@@ -579,7 +582,7 @@ static std::optional<std::pair<offset_t, unsigned>> split_and_find_var(const Arr
     if (kind == DataKind::svalues || kind == DataKind::uvalues) {
         array_domain.split_number_var(inv, kind, idx, elem_size);
     }
-    return kill_and_find_var(inv, kind, idx, elem_size);
+    return kill_and_find_var([&inv](Variable v) { inv.havoc(v); }, kind, idx, elem_size);
 }
 
 std::optional<Variable> ArrayDomain::store(NumAbsDomain& inv, const DataKind kind, const Interval& idx,
@@ -597,7 +600,7 @@ std::optional<Variable> ArrayDomain::store(NumAbsDomain& inv, const DataKind kin
 std::optional<Variable> ArrayDomain::store_type(TypeDomain& inv, const Interval& idx, const Interval& width,
                                                 const bool is_num) {
     constexpr auto kind = DataKind::types;
-    if (auto maybe_cell = split_and_find_var(*this, inv.inv, kind, idx, width)) {
+    if (auto maybe_cell = kill_and_find_var([&inv](Variable v) { inv.havoc_type(v); }, kind, idx, width)) {
         // perform strong update
         auto [offset, size] = *maybe_cell;
         if (is_num) {
@@ -623,7 +626,7 @@ void ArrayDomain::havoc(NumAbsDomain& inv, const DataKind kind, const Interval& 
 
 void ArrayDomain::havoc_type(TypeDomain& inv, const Interval& idx, const Interval& elem_size) {
     constexpr auto kind = DataKind::types;
-    if (auto maybe_cell = split_and_find_var(*this, inv.inv, kind, idx, elem_size)) {
+    if (auto maybe_cell = kill_and_find_var([&inv](Variable v) { inv.havoc_type(v); }, kind, idx, elem_size)) {
         auto [offset, size] = *maybe_cell;
         num_bytes.havoc(offset, size);
     }
