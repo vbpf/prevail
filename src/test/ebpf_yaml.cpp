@@ -581,7 +581,17 @@ void print_failure(const Failure& failure, std::ostream& os) {
 }
 
 void foreach_suite(const string& path, const std::function<void(const TestCase&)>& f) {
-    for (const TestCase& test_case : read_suite(path)) {
+    static std::map<string, vector<TestCase>> cache;
+    auto [it, inserted] = cache.try_emplace(path);
+    if (inserted) {
+        try {
+            it->second = read_suite(path);
+        } catch (...) {
+            cache.erase(it);
+            throw;
+        }
+    }
+    for (const TestCase& test_case : it->second) {
         f(test_case);
     }
 }
