@@ -413,13 +413,15 @@ TypeDomain TypeDomain::join(const TypeDomain& other) const {
         std::optional<size_t> first_id;
         for (const Variable& v : members) {
             const size_t id = result.ensure_var(v);
-            result.class_types[id] = ts;
             if (first_id) {
-                const size_t new_rep = result.dsu.unite(*first_id, id);
-                result.class_types[new_rep] = ts;
+                result.dsu.unite(*first_id, id);
             } else {
                 first_id = id;
             }
+        }
+        // Set the TypeSet on the representative (after all unifications).
+        if (first_id) {
+            result.class_types[result.dsu.find(*first_id)] = ts;
         }
         // Maintain singleton-merging invariant in result.
         if (first_id) {
