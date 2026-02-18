@@ -3,6 +3,7 @@
 
 // This file is eBPF-specific, not derived from CRAB.
 #include <algorithm>
+#include <cassert>
 #include <map>
 #include <optional>
 #include <sstream>
@@ -184,7 +185,6 @@ std::string TypeSet::to_string() const {
     return typeset_to_string(items);
 }
 
-
 // ============================================================================
 // TypeGroup utilities
 // ============================================================================
@@ -303,6 +303,8 @@ size_t TypeDomain::ensure_var(const Variable v) {
     }
     id_to_var[id] = v;
     class_types.push_back(TypeSet::all());
+    assert(class_types.size() == dsu.size());
+    assert(id_to_var.size() == dsu.size());
     return id;
 }
 
@@ -317,6 +319,8 @@ void TypeDomain::detach(const Variable v) {
     }
     id_to_var[new_id] = v;
     class_types.push_back(TypeSet::all());
+    assert(class_types.size() == dsu.size());
+    assert(id_to_var.size() == dsu.size());
 }
 
 TypeSet TypeDomain::get_typeset(const Variable v) const {
@@ -396,15 +400,24 @@ TypeDomain TypeDomain::join(const TypeDomain& other) const {
     }
 
     // Compute (rep_left, rep_right) for each variable, group by key pair.
-    std::map<std::pair<std::optional<size_t>, std::optional<size_t>>, std::vector<Variable>> key_groups;
+    // Variables absent from one side get unique keys (not nullopt) to avoid
+    // falsely unifying unrelated variables that happen to share a rep on the
+    // other side.
+    size_t next_unique_a = dsu.size();
+    size_t next_unique_b = other.dsu.size();
+    std::map<std::pair<size_t, size_t>, std::vector<Variable>> key_groups;
     for (const auto& [v, _] : all_vars_seen) {
-        std::optional<size_t> key_a;
+        size_t key_a;
         if (const auto it = var_to_id.find(v); it != var_to_id.end()) {
             key_a = dsu.find_const(it->second);
+        } else {
+            key_a = next_unique_a++;
         }
-        std::optional<size_t> key_b;
+        size_t key_b;
         if (const auto it = other.var_to_id.find(v); it != other.var_to_id.end()) {
             key_b = other.dsu.find_const(it->second);
+        } else {
+            key_b = next_unique_b++;
         }
         key_groups[{key_a, key_b}].push_back(v);
     }
@@ -563,7 +576,9 @@ TypeDomain TypeDomain::narrow(const TypeDomain& other) const {
     if (auto res = meet(other)) {
         return std::move(*res);
     }
-    return top();
+    TypeDomain res;
+    res.is_bottom_ = true;
+    return res;
 }
 
 // -- Assignment --------------------------------------------------------------
@@ -712,6 +727,8 @@ void TypeDomain::add_constraint(const LinearConstraint& cst) {
                     class_types[rep] = result;
                     if (result.is_empty()) {
                         is_bottom_ = true;
+                    } else {
+                        merge_if_singleton(id);
                     }
                 }
             } else if (coeff == -1) {
@@ -724,6 +741,8 @@ void TypeDomain::add_constraint(const LinearConstraint& cst) {
                     class_types[rep] = result;
                     if (result.is_empty()) {
                         is_bottom_ = true;
+                    } else {
+                        merge_if_singleton(id);
                     }
                 }
             }
@@ -863,9 +882,7 @@ bool TypeDomain::type_is_pointer(const Reg& r) const {
     return get_typeset(reg_type(r)).is_subset_of(to_typeset(TypeGroup::pointer));
 }
 
-bool TypeDomain::type_is_number(const Reg& r) const {
-    return get_typeset(reg_type(r)) == TypeSet::singleton(T_NUM);
-}
+bool TypeDomain::type_is_number(const Reg& r) const { return get_typeset(reg_type(r)) == TypeSet::singleton(T_NUM); }
 
 bool TypeDomain::type_is_not_stack(const Reg& r) const { return !get_typeset(reg_type(r)).contains(T_STACK); }
 
@@ -882,12 +899,10 @@ std::vector<TypeEncoding> TypeDomain::iterate_types(const Reg& reg) const {
     return ts.remove(T_UNINIT).to_vector();
 }
 
-std::optional<TypeEncoding> TypeDomain::get_type(const Reg& r) const {
-    return get_typeset(reg_type(r)).as_singleton();
-}
+std::optional<TypeEncoding> TypeDomain::get_type(const Reg& r) const { return get_typeset(reg_type(r)).as_singleton(); }
 
-bool TypeDomain::implies_group(const Reg& premise_reg, const TypeGroup premise_group,
-                               const Reg& conclusion_reg, const TypeSet conclusion_set) const {
+bool TypeDomain::implies_group(const Reg& premise_reg, const TypeGroup premise_group, const Reg& conclusion_reg,
+                               const TypeSet conclusion_set) const {
     if (is_bottom_) {
         return true;
     }
@@ -899,8 +914,8 @@ bool TypeDomain::implies_group(const Reg& premise_reg, const TypeGroup premise_g
     return restricted.get_typeset(reg_type(conclusion_reg)).is_subset_of(conclusion_set);
 }
 
-bool TypeDomain::implies_not_type(const Reg& premise_reg, const TypeEncoding excluded_type,
-                                  const Reg& conclusion_reg, const TypeSet conclusion_set) const {
+bool TypeDomain::implies_not_type(const Reg& premise_reg, const TypeEncoding excluded_type, const Reg& conclusion_reg,
+                                  const TypeSet conclusion_set) const {
     if (is_bottom_) {
         return true;
     }
