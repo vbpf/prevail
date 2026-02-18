@@ -50,10 +50,10 @@ TEST_CASE("join same precise type", "[join][lattice]") {
                  {{r0_type, TS::singleton(T_NUM)}}, {});
 }
 
-TEST_CASE("join disjoint precise types widens to range", "[join][lattice]") {
+TEST_CASE("join disjoint precise types gives exact union", "[join][lattice]") {
     using namespace dsl_syntax;
     require_join({{r0_type, TS::singleton(T_MAP)}}, {}, {{r0_type, TS::singleton(T_STACK)}}, {},
-                 {{r0_type, TS::of({T_MAP, T_NUM, T_CTX, T_PACKET, T_STACK})}}, {});
+                 {{r0_type, TS::of({T_MAP, T_STACK})}}, {});
 }
 
 TEST_CASE("join precise with top widens type range", "[join][lattice]") {
@@ -149,8 +149,7 @@ TEST_CASE("join with matching memory types but different offsets", "[join][latti
 TEST_CASE("join with different types and unknown offsets", "[join][lattice]") {
     using namespace dsl_syntax;
     require_join({{r0_type, TS::singleton(T_MAP)}}, {r0.svalue == 1}, {{r0_type, TS::singleton(T_STACK)}},
-                 {r0.svalue == 2}, {{r0_type, TS::of({T_MAP, T_NUM, T_CTX, T_PACKET, T_STACK})}},
-                 {r0.svalue >= 1, r0.svalue <= 2});
+                 {r0.svalue == 2}, {{r0_type, TS::of({T_MAP, T_STACK})}}, {r0.svalue >= 1, r0.svalue <= 2});
 }
 
 // 6) Shared memory offsets and sizes
@@ -165,7 +164,7 @@ TEST_CASE("join shared offsets and sizes", "[join][lattice]") {
 TEST_CASE("join preserves shared offset across type widening", "[join][lattice]") {
     using namespace dsl_syntax;
     require_join({{r0_type, TS::singleton(T_SHARED)}}, {r0.shared_offset == 0}, {{r0_type, TS::singleton(T_NUM)}}, {},
-                 {{r0_type, TS::of({T_NUM, T_CTX, T_PACKET, T_STACK, T_SHARED})}}, {r0.shared_offset == 0});
+                 {{r0_type, TS::of({T_NUM, T_SHARED})}}, {r0.shared_offset == 0});
 }
 
 // 7) Stack numeric size interactions
@@ -180,7 +179,7 @@ TEST_CASE("join stack offsets and numeric size", "[join][lattice]") {
 TEST_CASE("join preserves stack facts across type mismatch", "[join][lattice]") {
     using namespace dsl_syntax;
     require_join({{r0_type, TS::singleton(T_STACK)}}, {r0.stack_offset == 64, r0.stack_numeric_size == 8},
-                 {{r0_type, TS::singleton(T_NUM)}}, {}, {{r0_type, TS::of({T_NUM, T_CTX, T_PACKET, T_STACK})}},
+                 {{r0_type, TS::singleton(T_NUM)}}, {}, {{r0_type, TS::of({T_NUM, T_STACK})}},
                  {r0.stack_offset == 64, r0.stack_numeric_size == 8});
 }
 
@@ -385,7 +384,7 @@ TEST_CASE("join preserves multi-register per-type field", "[join][lattice]") {
     using namespace dsl_syntax;
     require_join({{r6_type, TS::singleton(T_PACKET)}, {r7_type, TS::singleton(T_NUM)}}, {r6.packet_offset == 4},
                  {{r6_type, TS::singleton(T_NUM)}, {r7_type, TS::singleton(T_STACK)}}, {r7.stack_offset == 128},
-                 {{r6_type, TS::of({T_NUM, T_PACKET})}, {r7_type, TS::of({T_NUM, T_CTX, T_PACKET, T_STACK})}},
+                 {{r6_type, TS::of({T_NUM, T_PACKET})}, {r7_type, TS::of({T_NUM, T_STACK})}},
                  {r6.packet_offset == 4, r7.stack_offset == 128});
 }
 
