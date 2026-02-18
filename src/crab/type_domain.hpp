@@ -53,10 +53,8 @@ class TypeDomain {
 
     // Lattice operations
     void operator|=(const TypeDomain& other);
-    void operator|=(TypeDomain&& other) { *this |= other; }
 
     TypeDomain operator|(const TypeDomain& other) const;
-    TypeDomain operator|(TypeDomain&& other) const { return *this | other; }
 
     std::optional<TypeDomain> meet(const TypeDomain& other) const;
     bool operator<=(const TypeDomain& other) const;

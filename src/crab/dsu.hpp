@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <cassert>
 #include <vector>
 
 namespace prevail {
@@ -23,6 +24,7 @@ class DisjointSetUnion {
 
     /// Find representative with path compression.
     size_t find(const size_t x) {
+        assert(x < parent_.size());
         if (parent_[x] != x) {
             parent_[x] = find(parent_[x]);
         }
@@ -32,6 +34,7 @@ class DisjointSetUnion {
     /// Find representative without mutation (path walking, no compression).
     [[nodiscard]]
     size_t find_const(size_t x) const {
+        assert(x < parent_.size());
         while (parent_[x] != x) {
             x = parent_[x];
         }

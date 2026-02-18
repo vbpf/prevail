@@ -3,6 +3,7 @@
 
 // This file is eBPF-specific, not derived from CRAB.
 #include <algorithm>
+#include <bit>
 #include <cassert>
 #include <map>
 #include <optional>
@@ -158,7 +159,7 @@ std::optional<TypeEncoding> TypeSet::as_singleton() const {
     if (!is_singleton()) {
         return std::nullopt;
     }
-    const int bit = __builtin_ctz(raw());
+    const int bit = std::countr_zero(raw());
     return int_to_type_encoding(bit - 7);
 }
 
@@ -166,7 +167,7 @@ std::vector<TypeEncoding> TypeSet::to_vector() const {
     std::vector<TypeEncoding> result;
     uint8_t tmp = raw();
     while (tmp != 0) {
-        const int bit = __builtin_ctz(tmp);
+        const int bit = std::countr_zero(tmp);
         if (auto te = int_to_type_encoding(bit - 7)) {
             result.push_back(*te);
         }
