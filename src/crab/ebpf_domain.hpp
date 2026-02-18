@@ -8,7 +8,7 @@
 
 #include "arith/variable.hpp"
 #include "crab/array_domain.hpp"
-#include "crab/rcp.hpp"
+#include "crab/type_to_num.hpp"
 #include "string_constraints.hpp"
 
 namespace prevail {
@@ -45,7 +45,7 @@ class EbpfDomain final {
 
   public:
     EbpfDomain();
-    EbpfDomain(TypeToNumDomain rcp, ArrayDomain stack);
+    EbpfDomain(TypeToNumDomain state, ArrayDomain stack);
 
     // Generic abstract domain operations
     static EbpfDomain top();
@@ -99,7 +99,8 @@ class EbpfDomain final {
 
     bool get_map_fd_range(const Reg& map_fd_reg, int32_t* start_fd, int32_t* end_fd) const;
 
-    TypeToNumDomain rcp;
+    /// Type + numeric tracking
+    TypeToNumDomain state;
 
     /// Represents the stack as a memory region, i.e., an array of bytes,
     /// allowing mapping to variable in the m_inv numeric domains

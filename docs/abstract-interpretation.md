@@ -184,7 +184,7 @@ Combines information from multiple paths:
 EbpfDomain operator|(const EbpfDomain& a, const EbpfDomain& b) {
     // Result must include all behaviors of both a and b
     return EbpfDomain{
-        a.rcp | b.rcp,      // Join type-numeric domain
+        a.state | b.state,      // Join type-numeric domain
         a.stack | b.stack   // Join array domain
     };
 }
@@ -198,7 +198,7 @@ Refines information (intersection):
 EbpfDomain operator&(const EbpfDomain& a, const EbpfDomain& b) {
     // Result must satisfy both a and b
     return EbpfDomain{
-        a.rcp & b.rcp,
+        a.state & b.state,
         a.stack & b.stack
     };
 }
@@ -211,7 +211,7 @@ Checks if one state is more precise than another:
 ```cpp
 bool operator<=(const EbpfDomain& a, const EbpfDomain& b) {
     // a is more precise if it represents fewer concrete states
-    return a.rcp <= b.rcp && a.stack <= b.stack;
+    return a.state <= b.state && a.stack <= b.stack;
 }
 ```
 

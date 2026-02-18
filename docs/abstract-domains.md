@@ -25,7 +25,7 @@ The top-level domain combining all tracking:
 
 ```cpp
 struct EbpfDomain {
-    TypeToNumDomain rcp;   // Type + numeric tracking per register
+    TypeToNumDomain state;  // Type + numeric tracking
     ArrayDomain stack;      // Stack memory model
     
     // Domain operations
@@ -62,7 +62,7 @@ EbpfDomain EbpfDomain::setup_entry(bool check_termination) {
 
 ## TypeToNumDomain (Type-Guided Numeric Constraints)
 
-**File**: `src/crab/rcp.hpp`
+**File**: `src/crab/type_to_num.hpp`
 
 `TypeToNumDomain` tracks two things: the possible type of each register (number vs different pointer kinds), and numeric constraints (intervals / DBM constraints) over per-register variables.
 
@@ -111,48 +111,57 @@ void TypeToNumDomain::assign_type(Reg r, Type t) {
 
 **File**: `src/crab/type_domain.hpp`
 
-Tracks the type of each register:
+Tracks the possible types and must-equalities of register type variables using a
+disjoint-set union (DSU) with per-class type set annotations.
+
+### Type Encoding
 
 ```cpp
-enum class Type {
-    T_UNINIT,    // Uninitialized
-    T_NUM,       // Numeric value (not a pointer)
-    T_CTX,       // Context pointer
-    T_STACK,     // Stack pointer
-    T_PACKET,    // Packet data pointer
-    T_SHARED,    // Shared memory pointer
-    T_MAP,       // Map pointer
-    T_MAP_FD,    // Map file descriptor
+enum class TypeEncoding {
+    T_UNINIT = 0, T_MAP_PROGRAMS = 1, T_MAP = 2, T_NUM = 3,
+    T_CTX = 4, T_PACKET = 5, T_STACK = 6, T_SHARED = 7,
 };
 ```
 
-### Type Lattice
+### Representation
+
+Each type variable maps to a DSU element. The DSU partitions variables into equivalence
+classes (must-equal groups). Each class has a `TypeSet` -- a `std::bitset<8>` recording
+the set of types that the class might have.
 
 ```text
-           T_TOP (any type)
-         /   |   \    \
-    T_CTX T_STACK T_NUM ...
-         \   |   /    /
-          T_BOTTOM (unreachable)
+Top:    each variable is its own class, TypeSet = all 8 types
+Bottom: is_bottom_ flag (contradiction detected)
 ```
+
+### Sentinel-Merging Invariant
+
+The DSU pre-allocates 8 sentinel elements (IDs 0..7), one per TypeEncoding value.
+Whenever a class's TypeSet narrows to a singleton `{te}`, the class is merged with
+the sentinel for `te`. This guarantees that all variables known to have the same
+singleton type are in the same equivalence class, making equality queries a single
+DSU representative comparison.
 
 ### Operations
 
-```cpp
-// Join: if types differ, go to top
-Type join(Type a, Type b) {
-    if (a == b) return a;
-    return T_TOP;
-}
+- **Join (|)**: For each variable, take the union of type sets from both sides. Two
+  variables are in the same class in the result only if they were in the same class
+  on both sides (DSU representatives must match on both). The sentinel-merging
+  invariant ensures that variables with the same singleton type on both sides are
+  detected as equal without special-casing.
 
-// Meet: if types differ, go to bottom
-Type meet(Type a, Type b) {
-    if (a == b) return a;
-    if (a == T_TOP) return b;
-    if (b == T_TOP) return a;
-    return T_BOTTOM;  // Contradiction
-}
-```
+- **Meet (&)**: For each variable, intersect type sets. Variables equal on either side
+  are unified. Empty intersection -> bottom.
+
+- **Subsumption (<=)**: `A <= B` iff every type set in A is a subset of the
+  corresponding set in B, and every equality in A is also present in B.
+
+- **Unify (add_constraint x == y)**: Merge the classes of x and y; intersect their
+  type sets. Transitive: unify(x,y) then unify(y,z) narrows all three.
+
+- **restrict_to(v, mask)**: Intersect v's type set with mask (non-convex narrowing).
+
+- **remove_type(v, te)**: Remove a single type from v's set.
 
 ## NumAbsDomain
 

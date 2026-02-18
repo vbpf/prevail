@@ -4,8 +4,8 @@
 
 #include "arith/variable.hpp"
 #include "crab/interval.hpp"
-#include "crab/rcp.hpp"
 #include "crab/type_domain.hpp"
+#include "crab/type_to_num.hpp"
 #include "crab/var_registry.hpp"
 
 namespace prevail {
@@ -70,6 +70,9 @@ void TypeToNumDomain::join_selective(const TypeToNumDomain& right) {
 void TypeToNumDomain::operator|=(const TypeToNumDomain& other) {
     if (is_bottom()) {
         *this = other;
+        // No return: the zone in `other` may not be fully closed. Falling through
+        // to join_selective triggers zone self-join, whose closure step tightens
+        // difference constraints (e.g. r2.uvalue-r1.uvalue<=-2 vs <=-1).
     }
     if (other.is_bottom()) {
         return;
@@ -262,8 +265,8 @@ TypeToNumDomain TypeToNumDomain::widen(const TypeToNumDomain& other) const {
     return res;
 }
 
-TypeToNumDomain TypeToNumDomain::narrow(const TypeToNumDomain& rcp) const {
-    return TypeToNumDomain{types.narrow(rcp.types), values.narrow(rcp.values)};
+TypeToNumDomain TypeToNumDomain::narrow(const TypeToNumDomain& other) const {
+    return TypeToNumDomain{types.narrow(other.types), values.narrow(other.values)};
 }
 
 StringInvariant TypeToNumDomain::to_set() const {

@@ -207,14 +207,14 @@ TEST_CASE("unify transitive chain progressively narrows", "[type_domain]") {
     td.restrict_to(reg_type(r1), TypeSet{T_CTX, T_STACK, T_SHARED});
     td.restrict_to(reg_type(r2), TypeSet{T_STACK, T_SHARED, T_PACKET});
 
-    td.add_constraint(eq(reg_type(r0), reg_type(r1))); // r0,r1 → {ctx, stack}
+    td.add_constraint(eq(reg_type(r0), reg_type(r1))); // r0,r1 -> {ctx, stack}
     REQUIRE(!td.is_bottom());
     {
         const auto types = td.iterate_types(r0);
         REQUIRE(types.size() == 2);
     }
 
-    td.add_constraint(eq(reg_type(r1), reg_type(r2))); // r0,r1,r2 → {stack}
+    td.add_constraint(eq(reg_type(r1), reg_type(r2))); // r0,r1,r2 -> {stack}
     REQUIRE(!td.is_bottom());
     REQUIRE(td.get_type(r0) == T_STACK);
     REQUIRE(td.get_type(r1) == T_STACK);
@@ -351,7 +351,7 @@ TEST_CASE("meet with incompatible equalities goes to bottom", "[type_domain]") {
     b.assign_type(r0, T_STACK);
     b.assign_type(r1, r0); // r0=r1={stack}
     // meet: r0 must be {ctx} (from a) and in same class as r1 with {stack} (from b)
-    // intersection of r0's class with {stack} = {ctx} & {stack} = empty → bottom
+    // intersection of r0's class with {stack} = {ctx} & {stack} = empty -> bottom
     const auto m = a.meet(b);
     REQUIRE(!m.has_value());
 }
@@ -473,7 +473,7 @@ TEST_CASE("entail checks equality through singleton", "[type_domain]") {
     TypeDomain td;
     td.assign_type(r0, T_NUM);
     td.assign_type(r1, T_NUM);
-    // Not explicitly unified, but both singleton {num} → implicitly equal.
+    // Not explicitly unified, but both singleton {num} -> implicitly equal.
     REQUIRE(td.entail(eq(reg_type(r0), reg_type(r1))));
 }
 

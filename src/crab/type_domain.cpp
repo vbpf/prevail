@@ -665,7 +665,7 @@ void TypeDomain::add_constraint(const LinearConstraint& cst) {
         if (terms.size() == 1) {
             const auto& [var, coeff] = *terms.begin();
             if (coeff == 1) {
-                // var + c == 0 → var == -c
+                // var + c == 0 -> var == -c
                 const int val = (-constant).narrow<int>();
                 if (const auto te = int_to_type_encoding(val)) {
                     restrict_var(var, TypeSet{*te});
@@ -673,7 +673,7 @@ void TypeDomain::add_constraint(const LinearConstraint& cst) {
                     is_bottom_ = true;
                 }
             } else if (coeff == -1) {
-                // -var + c == 0 → var == c
+                // -var + c == 0 -> var == c
                 const int val = constant.narrow<int>();
                 if (const auto te = int_to_type_encoding(val)) {
                     restrict_var(var, TypeSet{*te});
@@ -682,7 +682,7 @@ void TypeDomain::add_constraint(const LinearConstraint& cst) {
                 }
             }
         } else if (terms.size() == 2) {
-            // var1 - var2 + c == 0 → if c == 0: unify var1, var2
+            // var1 - var2 + c == 0 -> if c == 0: unify var1, var2
             auto it = terms.begin();
             const auto& [v1, c1] = *it++;
             const auto& [v2, c2] = *it;
@@ -697,13 +697,13 @@ void TypeDomain::add_constraint(const LinearConstraint& cst) {
         if (terms.size() == 1) {
             const auto& [var, coeff] = *terms.begin();
             if (coeff == 1) {
-                // var + c != 0 → var != -c
+                // var + c != 0 -> var != -c
                 const int val = (-constant).narrow<int>();
                 if (const auto te = int_to_type_encoding(val)) {
                     remove_type(var, *te);
                 }
             } else if (coeff == -1) {
-                // -var + c != 0 → var != c
+                // -var + c != 0 -> var != c
                 const int val = constant.narrow<int>();
                 if (const auto te = int_to_type_encoding(val)) {
                     remove_type(var, *te);
@@ -792,7 +792,7 @@ bool TypeDomain::entail(const LinearConstraint& cst) const {
                 return false;
             }
         } else if (terms.size() == 2) {
-            // var1 - var2 == 0 → same class check
+            // var1 - var2 == 0 -> same class check
             auto it = terms.begin();
             const auto& [v1, c1] = *it++;
             const auto& [v2, c2] = *it;

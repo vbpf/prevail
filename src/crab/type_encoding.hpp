@@ -143,7 +143,7 @@ class TypeSet {
     [[nodiscard]]
     std::vector<TypeEncoding> to_vector() const;
 
-    /// Format as string: singleton → "typename", multi → "{t1, t2, ...}".
+    /// Format as string: singleton -> "typename", multi -> "{t1, t2, ...}".
     [[nodiscard]]
     std::string to_string() const;
 };
