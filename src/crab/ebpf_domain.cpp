@@ -181,8 +181,6 @@ EbpfDomain EbpfDomain::narrow(const EbpfDomain& other) const {
 
 void EbpfDomain::add_value_constraint(const LinearConstraint& cst) { state.values.add_constraint(cst); }
 
-void EbpfDomain::add_type_constraint(const LinearConstraint& cst) { state.types.add_constraint(cst); }
-
 void EbpfDomain::havoc(const Variable var) {
     // TODO: type inv?
     state.values.havoc(var);
@@ -368,12 +366,12 @@ EbpfDomain EbpfDomain::from_constraints(const std::set<std::string>& constraints
         inv = setup_entry(false);
     }
     auto numeric_ranges = std::vector<Interval>();
-    auto [type_constraints, value_constraints, type_set_restrictions] =
+    auto [type_equalities, type_restrictions, value_constraints] =
         parse_linear_constraints(constraints, numeric_ranges);
-    for (const auto& cst : type_constraints) {
-        inv.add_type_constraint(cst);
+    for (const auto& [v1, v2] : type_equalities) {
+        inv.state.assume_eq(v1, v2);
     }
-    for (const auto& [var, ts] : type_set_restrictions) {
+    for (const auto& [var, ts] : type_restrictions) {
         inv.state.types.restrict_to(var, ts);
     }
     for (const auto& cst : value_constraints) {
@@ -400,7 +398,7 @@ EbpfDomain EbpfDomain::setup_entry(const bool init_r1) {
     inv.state.values.assign(r10.stack_offset, EBPF_TOTAL_STACK_SIZE);
     // stack_numeric_size would be 0, but TOP has the same result
     // so no need to assign it.
-    inv.state.types.assign_type(r10_reg, T_STACK);
+    inv.state.assign_type(r10_reg, T_STACK);
 
     if (init_r1) {
         const auto r1 = reg_pack(R1_ARG);
@@ -408,7 +406,7 @@ EbpfDomain EbpfDomain::setup_entry(const bool init_r1) {
         inv.state.values.add_constraint(1 <= r1.svalue);
         inv.state.values.add_constraint(r1.svalue <= PTR_MAX);
         inv.state.values.assign(r1.ctx_offset, 0);
-        inv.state.types.assign_type(r1_reg, T_CTX);
+        inv.state.assign_type(r1_reg, T_CTX);
     }
 
     inv.initialize_packet();

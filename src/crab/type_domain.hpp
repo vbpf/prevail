@@ -88,10 +88,9 @@ class TypeDomain {
     void assign_type(std::optional<Variable> lhs, const LinearExpression& t);
     void assign_type(const Reg& lhs, TypeEncoding type);
 
-    // Constraint handling (== and != only; order comparisons are not meaningful)
-    void add_constraint(const LinearConstraint& cst);
-
+    // Constraint handling
     void restrict_to(Variable v, TypeSet mask);
+    void assume_eq(Variable v1, Variable v2);
 
     /// Remove a single type from a variable's set.
     void remove_type(Variable v, TypeEncoding te);
@@ -102,28 +101,19 @@ class TypeDomain {
 
     // Query methods
     [[nodiscard]]
-    bool type_is_pointer(const Reg& r) const;
-    [[nodiscard]]
-    bool type_is_number(const Reg& r) const;
-    [[nodiscard]]
-    bool type_is_not_stack(const Reg& r) const;
-    [[nodiscard]]
-    bool type_is_not_number(const Reg& r) const;
-
-    [[nodiscard]]
     std::vector<TypeEncoding> iterate_types(const Reg& reg) const;
 
     [[nodiscard]]
     std::optional<TypeEncoding> get_type(const Reg& r) const;
 
-    /// Check: "if premise_reg belongs to premise_group, then conclusion_reg's
-    /// types must be a subset of conclusion_set."
+    /// Check: "if premise_reg's types are a subset of premise_set, then
+    /// conclusion_reg's types are a subset of conclusion_set."
     [[nodiscard]]
-    bool implies_group(const Reg& premise_reg, TypeGroup premise_group, const Reg& conclusion_reg,
-                       TypeSet conclusion_set) const;
+    bool implies_superset(const Reg& premise_reg, TypeSet premise_set, const Reg& conclusion_reg,
+                          TypeSet conclusion_set) const;
 
     /// Check: "if premise_reg's type is not excluded_type, then conclusion_reg's
-    /// types must be a subset of conclusion_set."
+    /// types are a subset of conclusion_set."
     [[nodiscard]]
     bool implies_not_type(const Reg& premise_reg, TypeEncoding excluded_type, const Reg& conclusion_reg,
                           TypeSet conclusion_set) const;
@@ -133,8 +123,6 @@ class TypeDomain {
     bool entail_type(Variable v, TypeEncoding te) const;
 
     [[nodiscard]]
-    bool may_have_type(const LinearExpression& v, TypeEncoding type) const;
-    [[nodiscard]]
     bool may_have_type(const Reg& r, TypeEncoding type) const;
     [[nodiscard]]
     bool may_have_type(Variable v, TypeEncoding type) const;
@@ -142,17 +130,12 @@ class TypeDomain {
     [[nodiscard]]
     bool is_initialized(const Reg& r) const;
     [[nodiscard]]
-    bool is_initialized(const LinearExpression& expr) const;
+    bool is_initialized(Variable v) const;
 
     [[nodiscard]]
     bool same_type(const Reg& a, const Reg& b) const;
     [[nodiscard]]
-    bool is_in_group(const Reg& r, TypeGroup group) const;
-
-    /// Check whether a LinearConstraint (== or !=) is entailed.
-    /// Used by the test infrastructure; prefer entail_type for new code.
-    [[nodiscard]]
-    bool entail(const LinearConstraint& cst) const;
+    bool is_in_group(const Reg& r, TypeSet types) const;
 
     [[nodiscard]]
     StringInvariant to_set() const;

@@ -64,10 +64,16 @@ struct TypeSetRestriction {
     TypeSet types;
 };
 
+/// Parsed type equality: v1.type == v2.type.
+struct TypeEquality {
+    Variable v1;
+    Variable v2;
+};
+
 struct TypeValueConstraints {
-    std::vector<LinearConstraint> type_csts;
+    std::vector<TypeEquality> type_equalities;
+    std::vector<TypeSetRestriction> type_restrictions;
     std::vector<LinearConstraint> value_csts;
-    std::vector<TypeSetRestriction> type_set_restrictions;
 };
 
 TypeValueConstraints parse_linear_constraints(const std::set<std::string>& constraints,

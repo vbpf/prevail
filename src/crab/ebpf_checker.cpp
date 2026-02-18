@@ -6,6 +6,7 @@
 #include <bitset>
 #include <optional>
 #include <utility>
+#include <variant>
 
 #include "arith/dsl_syntax.hpp"
 #include "config.hpp"
@@ -114,13 +115,12 @@ void EbpfChecker::check_access_shared(const LinearExpression& lb, const LinearEx
 
 void EbpfChecker::operator()(const Comparable& s) const {
     using namespace dsl_syntax;
-    if (dom.state.types.same_type(s.r1, s.r2)) {
+    if (dom.state.same_type(s.r1, s.r2)) {
         // Same type. If both are numbers, that's okay. Otherwise:
         TypeDomain non_number_types = dom.state.types;
         non_number_types.remove_type(reg_type(s.r2), T_NUM);
         // We must check that they belong to a singleton region:
-        if (!non_number_types.is_in_group(s.r1, TypeGroup::singleton_ptr) &&
-            !non_number_types.is_in_group(s.r1, TypeGroup::map_fd)) {
+        if (!non_number_types.is_in_group(s.r1, TS_SINGLETON_PTR) && !non_number_types.is_in_group(s.r1, TS_MAP)) {
             throw_fail("Cannot subtract pointers to non-singleton regions");
         }
         // And, to avoid wraparound errors, they must be within bounds.
@@ -129,21 +129,21 @@ void EbpfChecker::operator()(const Comparable& s) const {
     } else {
         // _Maybe_ different types, so r2 must be a number.
         // We checked in a previous assertion that r1 is a pointer or a number.
-        if (!dom.state.types.entail_type(reg_type(s.r2), T_NUM)) {
+        if (!dom.state.entail_type(reg_type(s.r2), T_NUM)) {
             throw_fail("Cannot subtract pointers to different regions");
         }
     }
 }
 
 void EbpfChecker::operator()(const Addable& s) const {
-    if (!dom.state.types.implies_group(s.ptr, TypeGroup::pointer, s.num, TypeSet{T_NUM})) {
+    if (!dom.state.implies_superset(s.ptr, TS_POINTER, s.num, TS_NUM)) {
         throw_fail("Only numbers can be added to pointers");
     }
 }
 
 void EbpfChecker::operator()(const ValidDivisor& s) const {
     using namespace dsl_syntax;
-    if (!dom.state.types.implies_group(s.reg, TypeGroup::pointer, s.reg, TypeSet{T_NUM})) {
+    if (!dom.state.implies_superset(s.reg, TS_POINTER, s.reg, TS_NUM)) {
         throw_fail("Only numbers can be used as divisors");
     }
     if (!thread_local_options.allow_division_by_zero) {
@@ -154,13 +154,13 @@ void EbpfChecker::operator()(const ValidDivisor& s) const {
 }
 
 void EbpfChecker::operator()(const ValidStore& s) const {
-    if (!dom.state.types.implies_not_type(s.mem, T_STACK, s.val, TypeSet{T_NUM})) {
+    if (!dom.state.implies_not_type(s.mem, T_STACK, s.val, TS_NUM)) {
         throw_fail("Only numbers can be stored to externally-visible regions");
     }
 }
 
 void EbpfChecker::operator()(const TypeConstraint& s) const {
-    if (!dom.state.types.is_in_group(s.reg, s.types)) {
+    if (!dom.state.is_in_group(s.reg, to_typeset(s.types))) {
         throw_fail("Invalid type");
     }
 }
@@ -370,7 +370,7 @@ void EbpfChecker::operator()(const ZeroCtxOffset& s) const {
     const auto reg = reg_pack(s.reg);
     // The domain is not expressive enough to handle join of null and non-null ctx,
     // Since non-null ctx pointers are nonzero numbers.
-    if (s.or_null && dom.state.types.get_type(s.reg) == T_NUM && dom.state.values.entail(reg.uvalue == 0)) {
+    if (s.or_null && dom.state.is_in_group(s.reg, TS_NUM) && dom.state.values.entail(reg.uvalue == 0)) {
         return;
     }
     require_value(dom.state, reg.ctx_offset == 0, "Nonzero context offset");

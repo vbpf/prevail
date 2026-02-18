@@ -83,7 +83,6 @@ class EbpfDomain final {
   private:
     // private generic domain functions
     void add_value_constraint(const LinearConstraint& cst);
-    void add_type_constraint(const LinearConstraint& cst);
     void havoc(Variable var);
 
     [[nodiscard]]

@@ -157,7 +157,7 @@ DSU representative comparison.
   corresponding set in B, and every equality in A is also present in B.
 
 - **Unify (add_constraint x == y)**: Merge the classes of x and y; intersect their
-  type sets. Transitive: unify(x,y) then unify(y,z) narrows all three.
+  type sets. Transitive: assume_eq(x,y) then assume_eq(y,z) narrows all three.
 
 - **restrict_to(v, mask)**: Intersect v's type set with mask (non-convex narrowing).
 

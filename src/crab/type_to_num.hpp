@@ -204,6 +204,29 @@ struct TypeToNumDomain {
 
     void assign_type(auto&&... args) { types.assign_type(std::forward<decltype(args)>(args)...); }
 
+    // Convenience forwarding to TypeDomain.
+    bool is_in_group(const Reg& r, const TypeSet ts) const { return types.is_in_group(r, ts); }
+    bool may_have_type(const Reg& r, const TypeEncoding te) const { return types.may_have_type(r, te); }
+    bool may_have_type(const Variable v, const TypeEncoding te) const { return types.may_have_type(v, te); }
+    bool is_initialized(const Reg& r) const { return types.is_initialized(r); }
+    bool is_initialized(const Variable v) const { return types.is_initialized(v); }
+    bool same_type(const Reg& a, const Reg& b) const { return types.same_type(a, b); }
+    bool entail_type(const Variable v, const TypeEncoding te) const { return types.entail_type(v, te); }
+    bool implies_superset(const Reg& premise_reg, const TypeSet premise_set, const Reg& conclusion_reg,
+                          const TypeSet conclusion_set) const {
+        return types.implies_superset(premise_reg, premise_set, conclusion_reg, conclusion_set);
+    }
+    bool implies_not_type(const Reg& premise_reg, const TypeEncoding excluded_type, const Reg& conclusion_reg,
+                          const TypeSet conclusion_set) const {
+        return types.implies_not_type(premise_reg, excluded_type, conclusion_reg, conclusion_set);
+    }
+    std::optional<TypeEncoding> get_type(const Reg& r) const { return types.get_type(r); }
+    std::vector<TypeEncoding> iterate_types(const Reg& reg) const { return types.iterate_types(reg); }
+    void havoc_type(const Reg& r) { types.havoc_type(r); }
+    void havoc_type(const Variable& v) { types.havoc_type(v); }
+    void assume_eq(const Variable v1, const Variable v2) { types.assume_eq(v1, v2); }
+    void remove_type(const Variable v, const TypeEncoding te) { types.remove_type(v, te); }
+
     void havoc_offsets(const Reg& reg);
 
     void havoc_register_except_type(const Reg& reg);

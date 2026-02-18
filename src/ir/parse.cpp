@@ -320,8 +320,8 @@ TypeValueConstraints parse_linear_constraints(const std::set<std::string>& const
     using namespace dsl_syntax;
 
     std::vector<LinearConstraint> value_csts;
-    std::vector<LinearConstraint> type_csts;
-    std::vector<TypeSetRestriction> type_set_restrictions;
+    std::vector<TypeEquality> type_equalities;
+    std::vector<TypeSetRestriction> type_restrictions;
     for (const std::string& cst_text : constraints) {
         std::smatch m;
         if (regex_match(cst_text, m, regex(SPECIAL_VAR "=" IMM))) {
@@ -347,14 +347,14 @@ TypeValueConstraints parse_linear_constraints(const std::set<std::string>& const
         } else if (regex_match(cst_text, m,
                                regex(REG DOT "type"
                                              "=" REG DOT "type"))) {
-            LinearExpression d = variable_registry->type_reg(regnum(m[1]));
-            LinearExpression s = variable_registry->type_reg(regnum(m[2]));
-            type_csts.push_back(d == s);
+            Variable d = variable_registry->type_reg(regnum(m[1]));
+            Variable s = variable_registry->type_reg(regnum(m[2]));
+            type_equalities.push_back({d, s});
         } else if (regex_match(cst_text, m,
                                regex(REG DOT "type"
                                              "=" TYPE))) {
             Variable d = variable_registry->type_reg(regnum(m[1]));
-            type_csts.push_back(d == string_to_type_encoding(m[2]));
+            type_restrictions.push_back({d, TypeSet{string_to_type_encoding(m[2])}});
         } else if (regex_match(cst_text, m, regex(REG DOT "type" IN TYPE_SET))) {
             Variable d = variable_registry->type_reg(regnum(m[1]));
             const std::string inside = m[2]; // everything between the braces
@@ -362,7 +362,7 @@ TypeValueConstraints parse_linear_constraints(const std::set<std::string>& const
             // Tokenize items inside {...} using the existing TYPE regex.
             static const regex type_tok_regex(TYPE);
 
-            TypeSet ts = TypeSet{};
+            TypeSet ts{};
             bool any = false;
 
             for (std::sregex_iterator it(inside.begin(), inside.end(), type_tok_regex), end; it != end; ++it) {
@@ -376,7 +376,7 @@ TypeValueConstraints parse_linear_constraints(const std::set<std::string>& const
                 throw std::runtime_error("Empty type set in 'in { ... }' constraint: " + cst_text);
             }
 
-            type_set_restrictions.push_back({d, ts});
+            type_restrictions.push_back({d, ts});
         } else if (regex_match(cst_text, m, regex(REG DOT KIND "=" IMM))) {
             Variable d = variable_registry->reg(regkind(m[2]), regnum(m[1]));
             Number value;
@@ -413,7 +413,7 @@ TypeValueConstraints parse_linear_constraints(const std::set<std::string>& const
                 Number lb = signed_number(m[1]);
                 Number ub = signed_number(m[2]);
                 Variable d = variable_registry->cell_var(DataKind::types, lb, ub - lb + 1);
-                type_csts.push_back(d == type);
+                type_restrictions.push_back({d, TypeSet{type}});
             }
         } else if (regex_match(cst_text, m,
                                regex("s" ARRAY_RANGE DOT "svalue"
@@ -433,7 +433,7 @@ TypeValueConstraints parse_linear_constraints(const std::set<std::string>& const
             throw std::runtime_error(std::string("Unknown constraint: ") + cst_text);
         }
     }
-    return {type_csts, value_csts, type_set_restrictions};
+    return {type_equalities, type_restrictions, value_csts};
 }
 
 // return a-b, taking account potential optional-none

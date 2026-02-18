@@ -41,6 +41,16 @@ std::vector<DataKind> iterate_kinds(const DataKind lb, const DataKind ub) {
 }
 
 // ============================================================================
+// TypeSet constants
+// ============================================================================
+
+const TypeSet TS_NUM{T_NUM};
+const TypeSet TS_MAP{T_MAP};
+const TypeSet TS_POINTER{T_CTX, T_PACKET, T_STACK, T_SHARED};
+const TypeSet TS_SINGLETON_PTR{T_CTX, T_PACKET, T_STACK};
+const TypeSet TS_MEM{T_PACKET, T_STACK, T_SHARED};
+
+// ============================================================================
 // TypeEncoding utilities
 // ============================================================================
 
@@ -262,15 +272,12 @@ struct TypeDomain::State {
     [[nodiscard]]
     bool same_type(Variable a, Variable b) const;
     [[nodiscard]]
-    bool entail(const LinearConstraint& cst) const;
-    [[nodiscard]]
     StringInvariant to_set() const;
 
     // Mutations returning false on empty TypeSet (caller sets bottom)
     bool restrict_var(Variable v, TypeSet mask);
-    bool unify(Variable v1, Variable v2);
+    bool assume_eq(Variable v1, Variable v2);
     bool remove_type(Variable v, TypeEncoding te);
-    bool add_constraint(const LinearConstraint& cst);
     bool assign_from_expr(Variable lhs, const LinearExpression& expr);
 
     // Mutations that never produce bottom
@@ -370,76 +377,6 @@ bool TypeDomain::State::same_type(const Variable a, const Variable b) const {
     return false;
 }
 
-bool TypeDomain::State::entail(const LinearConstraint& cst) const {
-    if (cst.is_tautology()) {
-        return true;
-    }
-    if (cst.is_contradiction()) {
-        return false;
-    }
-
-    const auto& expr = cst.expression();
-    const auto& terms = expr.variable_terms();
-    const Number& constant = expr.constant_term();
-
-    switch (cst.kind()) {
-    case ConstraintKind::EQUALS_ZERO: {
-        if (terms.size() == 1) {
-            const auto& [var, coeff] = *terms.begin();
-            if (coeff == 1) {
-                const int val = (-constant).narrow<int>();
-                const TypeSet ts = get_typeset(var);
-                if (const auto te = int_to_type_encoding(val)) {
-                    return ts == TypeSet{*te};
-                }
-                return false;
-            }
-            if (coeff == -1) {
-                const int val = constant.narrow<int>();
-                const TypeSet ts = get_typeset(var);
-                if (const auto te = int_to_type_encoding(val)) {
-                    return ts == TypeSet{*te};
-                }
-                return false;
-            }
-        } else if (terms.size() == 2) {
-            auto it = terms.begin();
-            const auto& [v1, c1] = *it++;
-            const auto& [v2, c2] = *it;
-            if (constant == 0 && ((c1 == 1 && c2 == -1) || (c1 == -1 && c2 == 1))) {
-                return same_type(v1, v2);
-            }
-        }
-        return false;
-    }
-    case ConstraintKind::NOT_ZERO: {
-        if (terms.size() == 1) {
-            const auto& [var, coeff] = *terms.begin();
-            if (coeff == 1) {
-                const int val = (-constant).narrow<int>();
-                const TypeSet ts = get_typeset(var);
-                if (const auto te = int_to_type_encoding(val)) {
-                    return !ts.contains(*te);
-                }
-                return true;
-            }
-            if (coeff == -1) {
-                const int val = constant.narrow<int>();
-                const TypeSet ts = get_typeset(var);
-                if (const auto te = int_to_type_encoding(val)) {
-                    return !ts.contains(*te);
-                }
-                return true;
-            }
-        }
-        return false;
-    }
-    case ConstraintKind::LESS_THAN_OR_EQUALS_ZERO:
-    case ConstraintKind::LESS_THAN_ZERO: CRAB_ERROR("Order comparison on type variable");
-    }
-    return false;
-}
-
 StringInvariant TypeDomain::State::to_set() const {
     // Group variables by DSU representative.
     std::map<size_t, std::vector<Variable>> classes;
@@ -458,7 +395,7 @@ StringInvariant TypeDomain::State::to_set() const {
 
         // Sort members for deterministic output
         std::vector<Variable> sorted = members;
-        std::ranges::sort(sorted, variable_registry->printing_order);
+        std::ranges::sort(sorted, VariableRegistry::printing_order);
 
         if (const auto te = ts.as_singleton()) {
             for (const Variable& m : sorted) {
@@ -495,7 +432,7 @@ bool TypeDomain::State::restrict_var(const Variable v, const TypeSet mask) {
     return true;
 }
 
-bool TypeDomain::State::unify(const Variable v1, const Variable v2) {
+bool TypeDomain::State::assume_eq(const Variable v1, const Variable v2) {
     const size_t id1 = ensure_var(v1);
     const size_t id2 = ensure_var(v2);
     const size_t rep1 = dsu.find(id1);
@@ -519,68 +456,6 @@ bool TypeDomain::State::remove_type(const Variable v, const TypeEncoding te) {
         return false;
     }
     merge_if_singleton(id);
-    return true;
-}
-
-bool TypeDomain::State::add_constraint(const LinearConstraint& cst) {
-    if (cst.is_tautology()) {
-        return true;
-    }
-    if (cst.is_contradiction()) {
-        return false;
-    }
-
-    const auto& expr = cst.expression();
-    const auto& terms = expr.variable_terms();
-    const Number& constant = expr.constant_term();
-
-    switch (cst.kind()) {
-    case ConstraintKind::EQUALS_ZERO: {
-        if (terms.size() == 1) {
-            const auto& [var, coeff] = *terms.begin();
-            if (coeff == 1) {
-                const int val = (-constant).narrow<int>();
-                if (const auto te = int_to_type_encoding(val)) {
-                    return restrict_var(var, TypeSet{*te});
-                }
-                return false;
-            } else if (coeff == -1) {
-                const int val = constant.narrow<int>();
-                if (const auto te = int_to_type_encoding(val)) {
-                    return restrict_var(var, TypeSet{*te});
-                }
-                return false;
-            }
-        } else if (terms.size() == 2) {
-            auto it = terms.begin();
-            const auto& [v1, c1] = *it++;
-            const auto& [v2, c2] = *it;
-            if (constant == 0 && ((c1 == 1 && c2 == -1) || (c1 == -1 && c2 == 1))) {
-                return unify(v1, v2);
-            }
-        }
-        break;
-    }
-    case ConstraintKind::NOT_ZERO: {
-        if (terms.size() == 1) {
-            const auto& [var, coeff] = *terms.begin();
-            if (coeff == 1) {
-                const int val = (-constant).narrow<int>();
-                if (const auto te = int_to_type_encoding(val)) {
-                    return remove_type(var, *te);
-                }
-            } else if (coeff == -1) {
-                const int val = constant.narrow<int>();
-                if (const auto te = int_to_type_encoding(val)) {
-                    return remove_type(var, *te);
-                }
-            }
-        }
-        break;
-    }
-    case ConstraintKind::LESS_THAN_OR_EQUALS_ZERO:
-    case ConstraintKind::LESS_THAN_ZERO: CRAB_ERROR("Order comparison on type variable");
-    }
     return true;
 }
 
@@ -712,7 +587,7 @@ std::optional<TypeDomain::State> TypeDomain::State::meet(const State& other) con
     }
     for (const auto& members : other_classes | std::views::values) {
         for (size_t i = 1; i < members.size(); i++) {
-            if (!result.unify(members[0], members[i])) {
+            if (!result.assume_eq(members[0], members[i])) {
                 return std::nullopt;
             }
         }
@@ -884,17 +759,17 @@ void TypeDomain::assign_type(const Reg& lhs, const TypeEncoding type) {
 
 // -- Constraint handling -----------------------------------------------------
 
-void TypeDomain::add_constraint(const LinearConstraint& cst) {
+void TypeDomain::restrict_to(const Variable v, const TypeSet mask) {
     if (auto* s = state_.get()) {
-        if (!s->add_constraint(cst)) {
+        if (!s->restrict_var(v, mask)) {
             set_to_bottom();
         }
     }
 }
 
-void TypeDomain::restrict_to(const Variable v, const TypeSet mask) {
+void TypeDomain::assume_eq(const Variable v1, const Variable v2) {
     if (auto* s = state_.get()) {
-        if (!s->restrict_var(v, mask)) {
+        if (!s->assume_eq(v1, v2)) {
             set_to_bottom();
         }
     }
@@ -931,23 +806,6 @@ TypeSet TypeDomain::get_typeset(const Variable v) const {
     return TypeSet{}; // bottom
 }
 
-bool TypeDomain::entail(const LinearConstraint& cst) const {
-    if (!state_) {
-        return true; // bottom entails everything
-    }
-    return state_->entail(cst);
-}
-
-bool TypeDomain::type_is_pointer(const Reg& r) const {
-    return get_typeset(reg_type(r)).is_subset_of(to_typeset(TypeGroup::pointer));
-}
-
-bool TypeDomain::type_is_number(const Reg& r) const { return get_typeset(reg_type(r)) == TypeSet{T_NUM}; }
-
-bool TypeDomain::type_is_not_stack(const Reg& r) const { return !get_typeset(reg_type(r)).contains(T_STACK); }
-
-bool TypeDomain::type_is_not_number(const Reg& r) const { return !get_typeset(reg_type(r)).contains(T_NUM); }
-
 std::vector<TypeEncoding> TypeDomain::iterate_types(const Reg& reg) const {
     if (!state_) {
         return {};
@@ -961,13 +819,13 @@ std::vector<TypeEncoding> TypeDomain::iterate_types(const Reg& reg) const {
 
 std::optional<TypeEncoding> TypeDomain::get_type(const Reg& r) const { return get_typeset(reg_type(r)).as_singleton(); }
 
-bool TypeDomain::implies_group(const Reg& premise_reg, const TypeGroup premise_group, const Reg& conclusion_reg,
-                               const TypeSet conclusion_set) const {
+bool TypeDomain::implies_superset(const Reg& premise_reg, const TypeSet premise_set, const Reg& conclusion_reg,
+                                  const TypeSet conclusion_set) const {
     if (!state_) {
         return true;
     }
     State restricted = *state_;
-    if (!restricted.restrict_var(reg_type(premise_reg), to_typeset(premise_group))) {
+    if (!restricted.restrict_var(reg_type(premise_reg), premise_set)) {
         return true;
     }
     return restricted.get_typeset(reg_type(conclusion_reg)).is_subset_of(conclusion_set);
@@ -996,41 +854,13 @@ bool TypeDomain::may_have_type(const Reg& r, const TypeEncoding type) const {
     return get_typeset(reg_type(r)).contains(type);
 }
 
-bool TypeDomain::may_have_type(const LinearExpression& expr, const TypeEncoding type) const {
-    const auto& terms = expr.variable_terms();
-    if (terms.empty()) {
-        const int val = expr.constant_term().narrow<int>();
-        return int_to_type_encoding(val) == type;
-    }
-    if (terms.size() == 1) {
-        const auto& [var, coeff] = *terms.begin();
-        if (coeff == 1 && expr.constant_term() == 0) {
-            return get_typeset(var).contains(type);
-        }
-    }
-    return true; // conservatively true for complex expressions
-}
-
 bool TypeDomain::may_have_type(const Variable v, const TypeEncoding type) const {
     return get_typeset(v).contains(type);
 }
 
 bool TypeDomain::is_initialized(const Reg& r) const { return !get_typeset(reg_type(r)).contains(T_UNINIT); }
 
-bool TypeDomain::is_initialized(const LinearExpression& expr) const {
-    const auto& terms = expr.variable_terms();
-    if (terms.empty()) {
-        const int val = expr.constant_term().narrow<int>();
-        return int_to_type_encoding(val) != T_UNINIT;
-    }
-    if (terms.size() == 1) {
-        const auto& [var, coeff] = *terms.begin();
-        if (coeff == 1 && expr.constant_term() == 0) {
-            return !get_typeset(var).contains(T_UNINIT);
-        }
-    }
-    return false; // conservatively not initialized
-}
+bool TypeDomain::is_initialized(const Variable v) const { return !get_typeset(v).contains(T_UNINIT); }
 
 bool TypeDomain::same_type(const Reg& a, const Reg& b) const {
     if (const auto* s = state_.get()) {
@@ -1039,8 +869,8 @@ bool TypeDomain::same_type(const Reg& a, const Reg& b) const {
     return true; // bottom entails everything
 }
 
-bool TypeDomain::is_in_group(const Reg& r, const TypeGroup group) const {
-    return get_typeset(reg_type(r)).is_subset_of(to_typeset(group));
+bool TypeDomain::is_in_group(const Reg& r, const TypeSet types) const {
+    return get_typeset(reg_type(r)).is_subset_of(types);
 }
 
 // -- Serialization -----------------------------------------------------------

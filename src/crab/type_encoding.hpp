@@ -148,6 +148,13 @@ class TypeSet {
     std::string to_string() const;
 };
 
+// Named type sets for common semantic groups.
+extern const TypeSet TS_NUM;
+extern const TypeSet TS_MAP;
+extern const TypeSet TS_POINTER;
+extern const TypeSet TS_SINGLETON_PTR;
+extern const TypeSet TS_MEM;
+
 // ============================================================================
 // TypeGroup
 // ============================================================================

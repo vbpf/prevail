@@ -85,7 +85,7 @@ class EbpfTransformer final {
 
     static void recompute_stack_numeric_size(TypeToNumDomain& state, ArrayDomain& stack, const Reg& reg);
 
-    static void recompute_stack_numeric_size(TypeToNumDomain& state, ArrayDomain& stack, Variable type_variable);
+    static void recompute_stack_numeric_size(TypeToNumDomain& state, const ArrayDomain& stack, Variable type_variable);
 
     static void do_load_stack(TypeToNumDomain& state, ArrayDomain& stack, const Reg& target_reg,
                               const LinearExpression& addr, int width, const Reg& src_reg);
@@ -135,17 +135,17 @@ void EbpfTransformer::scratch_caller_saved_registers() {
 void EbpfTransformer::save_callee_saved_registers(const std::string& prefix) {
     // TODO: define location `stack_frame_var`, and pass to dom.state.assign().
     //       Similarly in restore_callee_saved_registers
-    for (uint8_t r = R6; r <= R9; r++) {
-        if (dom.state.types.is_initialized(Reg{r})) {
-            const Variable type_var = variable_registry->type_reg(r);
-            dom.state.assign_type(variable_registry->stack_frame_var(DataKind::types, r, prefix), type_var);
-            for (const TypeEncoding type : dom.state.types.iterate_types(Reg{r})) {
+    for (const Reg r : {Reg{R6}, Reg{R7}, Reg{R8}, Reg{R9}}) {
+        if (dom.state.is_initialized(r)) {
+            const Variable type_var = variable_registry->type_reg(r.v);
+            dom.state.assign_type(variable_registry->stack_frame_var(DataKind::types, r.v, prefix), type_var);
+            for (const TypeEncoding type : dom.state.iterate_types(r)) {
                 auto kinds = type_to_kinds.at(type);
                 kinds.push_back(DataKind::uvalues);
                 kinds.push_back(DataKind::svalues);
                 for (const DataKind kind : kinds) {
-                    const Variable src_var = variable_registry->reg(kind, r);
-                    const Variable dst_var = variable_registry->stack_frame_var(kind, r, prefix);
+                    const Variable src_var = variable_registry->reg(kind, r.v);
+                    const Variable dst_var = variable_registry->stack_frame_var(kind, r.v, prefix);
                     if (!dom.state.values.eval_interval(src_var).is_top()) {
                         dom.state.values.assign(dst_var, src_var);
                     }
@@ -159,9 +159,9 @@ void EbpfTransformer::restore_callee_saved_registers(const std::string& prefix) 
     for (uint8_t r = R6; r <= R9; r++) {
         Reg reg{r};
         const Variable type_var = variable_registry->stack_frame_var(DataKind::types, r, prefix);
-        if (dom.state.types.is_initialized(type_var)) {
+        if (dom.state.is_initialized(type_var)) {
             dom.state.assign_type(reg, type_var);
-            for (const TypeEncoding type : dom.state.types.iterate_types(reg)) {
+            for (const TypeEncoding type : dom.state.iterate_types(reg)) {
                 auto kinds = type_to_kinds.at(type);
                 kinds.push_back(DataKind::uvalues);
                 kinds.push_back(DataKind::svalues);
@@ -177,7 +177,7 @@ void EbpfTransformer::restore_callee_saved_registers(const std::string& prefix) 
                 }
             }
         }
-        dom.state.types.havoc_type(type_var);
+        dom.state.havoc_type(type_var);
     }
 }
 
@@ -231,7 +231,7 @@ void EbpfTransformer::operator()(const Assume& s) {
         const auto src_reg = *psrc_reg;
         const auto src = reg_pack(src_reg);
         // This should have been checked by EbpfChecker
-        assert(dom.state.types.same_type(cond.left, std::get<Reg>(cond.right)));
+        assert(dom.state.same_type(cond.left, std::get<Reg>(cond.right)));
         dom.state = dom.state.join_over_types(cond.left, [&](TypeToNumDomain& state, const TypeEncoding type) {
             if (type == T_NUM) {
                 for (const LinearConstraint& cst :
@@ -282,7 +282,7 @@ void EbpfTransformer::operator()(const Un& stmt) {
     }
     const auto dst = reg_pack(stmt.dst);
     auto swap_endianness = [&](const Variable v, auto be_or_le) {
-        if (dom.state.types.type_is_number(stmt.dst)) {
+        if (dom.state.is_in_group(stmt.dst, TS_NUM)) {
             if (const auto n = dom.state.values.eval_interval(v).singleton()) {
                 if (n->fits_cast_to<int64_t>()) {
                     dom.state.values.set(v, Interval{be_or_le(n->cast_to<int64_t>())});
@@ -403,7 +403,7 @@ void EbpfTransformer::do_load_stack(TypeToNumDomain& state, ArrayDomain& stack, 
         state.assign_type(target_reg, T_NUM);
     } else {
         state.assign_type(target_reg, stack.load_type(addr, width));
-        if (!state.types.is_initialized(target_reg)) {
+        if (!state.is_initialized(target_reg)) {
             // We don't know what we loaded, so just havoc the destination register.
             state.havoc_register(target_reg);
             return;
@@ -419,7 +419,7 @@ void EbpfTransformer::do_load_stack(TypeToNumDomain& state, ArrayDomain& stack, 
         state.havoc_register_except_type(target_reg);
         state.values.assign(target.svalue, sresult);
         state.values.assign(target.uvalue, uresult);
-        for (const TypeEncoding type : state.types.iterate_types(target_reg)) {
+        for (const TypeEncoding type : state.iterate_types(target_reg)) {
             for (const auto& kind : type_to_kinds.at(type)) {
                 const Variable dst_var = variable_registry->reg(kind, target_reg.v);
                 state.values.assign(dst_var, stack.load(state.values, kind, addr, width));
@@ -456,7 +456,7 @@ static void do_load_ctx(TypeToNumDomain& state, const Reg& target_reg, const Lin
 
     if (!maybe_addr) {
         if (may_touch_ptr) {
-            state.types.havoc_type(target_reg);
+            state.havoc_type(target_reg);
         } else {
             state.assign_type(target_reg, T_NUM);
         }
@@ -488,7 +488,7 @@ static void do_load_ctx(TypeToNumDomain& state, const Reg& target_reg, const Lin
         }
     } else {
         if (may_touch_ptr) {
-            state.types.havoc_type(target_reg);
+            state.havoc_type(target_reg);
         } else {
             state.assign_type(target_reg, T_NUM);
         }
@@ -578,12 +578,12 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& state, ArrayDomain& stack,
         stack.havoc(state.values, kind, addr, width);
     }
     bool must_be_num = false;
-    if (opt_val_reg && !state.types.is_initialized(*opt_val_reg)) {
+    if (opt_val_reg && !state.is_initialized(*opt_val_reg)) {
         stack.havoc(state.values, DataKind::svalues, addr, width);
         stack.havoc(state.values, DataKind::uvalues, addr, width);
     } else {
         // opt_val_reg is unset when storing an immediate value.
-        must_be_num = !opt_val_reg || state.types.type_is_number(*opt_val_reg);
+        must_be_num = !opt_val_reg || state.is_in_group(*opt_val_reg, TS_NUM);
         const LinearExpression val_type =
             must_be_num ? LinearExpression{T_NUM} : variable_registry->type_reg(opt_val_reg->v);
         state.assign_type(stack.store_type(state.types, addr, width, must_be_num), val_type);
@@ -595,7 +595,7 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& state, ArrayDomain& stack,
             state.values.assign(stack.store(state.values, DataKind::uvalues, addr, width), val_uvalue);
 
             if (!must_be_num) {
-                for (TypeEncoding type : state.types.iterate_types(*opt_val_reg)) {
+                for (TypeEncoding type : state.iterate_types(*opt_val_reg)) {
                     for (const DataKind kind : type_to_kinds.at(type)) {
                         const Variable src_var = variable_registry->reg(kind, opt_val_reg->v);
                         state.values.assign(stack.store(state.values, kind, addr, width), src_var);
@@ -625,7 +625,7 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& state, ArrayDomain& stack,
     // Update stack_numeric_size for any stack type variables.
     // stack_numeric_size holds the number of continuous bytes starting from stack_offset that are known to be numeric.
     for (const Variable type_variable : variable_registry->get_type_variables()) {
-        if (!state.types.is_initialized(type_variable) || !state.types.may_have_type(type_variable, T_STACK)) {
+        if (!state.is_initialized(type_variable) || !state.may_have_type(type_variable, T_STACK)) {
             continue;
         }
         const Variable stack_offset_variable = variable_registry->kind_var(DataKind::stack_offsets, type_variable);
@@ -720,10 +720,10 @@ void EbpfTransformer::operator()(const Atomic& a) {
     if (dom.is_bottom()) {
         return;
     }
-    if (!dom.state.types.type_is_pointer(a.access.basereg) || !dom.state.types.type_is_number(a.valreg)) {
+    if (!dom.state.is_in_group(a.access.basereg, TS_POINTER) || !dom.state.is_in_group(a.valreg, TS_NUM)) {
         return;
     }
-    if (dom.state.types.type_is_not_stack(a.access.basereg)) {
+    if (!dom.state.may_have_type(a.access.basereg, T_STACK)) {
         // Shared memory regions are volatile so we can just havoc
         // any register that will be updated.
         if (a.op == Atomic::Op::CMPXCHG) {
@@ -951,12 +951,12 @@ void EbpfTransformer::assign_valid_ptr(const Reg& dst_reg, const bool maybe_null
 
 // If nothing is known of the stack_numeric_size,
 // try to recompute the stack_numeric_size.
-void EbpfTransformer::recompute_stack_numeric_size(TypeToNumDomain& state, ArrayDomain& stack,
+void EbpfTransformer::recompute_stack_numeric_size(TypeToNumDomain& state, const ArrayDomain& stack,
                                                    const Variable type_variable) {
     const Variable stack_numeric_size_variable =
         variable_registry->kind_var(DataKind::stack_numeric_sizes, type_variable);
 
-    if (state.types.may_have_type(type_variable, T_STACK)) {
+    if (state.may_have_type(type_variable, T_STACK)) {
         const int numeric_size =
             stack.min_all_num_size(state.values, variable_registry->kind_var(DataKind::stack_offsets, type_variable));
         if (numeric_size > 0) {
@@ -991,7 +991,7 @@ void EbpfTransformer::shl(const Reg& dst_reg, int imm, const int finite_width) {
     // The BPF ISA requires masking the imm.
     imm &= finite_width - 1;
     const RegPack dst = reg_pack(dst_reg);
-    if (dom.state.types.type_is_number(dst_reg)) {
+    if (dom.state.is_in_group(dst_reg, TS_NUM)) {
         dom.state.values->shl(dst.svalue, dst.uvalue, imm, finite_width);
     } else {
         dom.state.values.havoc(dst.svalue);
@@ -1005,7 +1005,7 @@ void EbpfTransformer::lshr(const Reg& dst_reg, int imm, int finite_width) {
     // The BPF ISA requires masking the imm.
     imm &= finite_width - 1;
     const RegPack dst = reg_pack(dst_reg);
-    if (dom.state.types.type_is_number(dst_reg)) {
+    if (dom.state.is_in_group(dst_reg, TS_NUM)) {
         dom.state.values->lshr(dst.svalue, dst.uvalue, imm, finite_width);
     } else {
         dom.state.values.havoc(dst.svalue);
@@ -1017,7 +1017,7 @@ void EbpfTransformer::ashr(const Reg& dst_reg, const LinearExpression& right_sva
     dom.state.havoc_offsets(dst_reg);
 
     const RegPack dst = reg_pack(dst_reg);
-    if (dom.state.types.type_is_number(dst_reg)) {
+    if (dom.state.is_in_group(dst_reg, TS_NUM)) {
         dom.state.values->ashr(dst.svalue, dst.uvalue, right_svalue, finite_width);
     } else {
         dom.state.values.havoc(dst.svalue);
@@ -1045,7 +1045,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
 
     // TODO: Unusable states and values should be better handled.
     //       Probably by propagating an error state.
-    if (!dom.state.types.is_initialized(bin.dst) &&
+    if (!dom.state.is_initialized(bin.dst) &&
         !std::set{Bin::Op::MOV, Bin::Op::MOVSX8, Bin::Op::MOVSX16, Bin::Op::MOVSX32}.contains(bin.op)) {
         dom.state.havoc_register(bin.dst);
         return;
@@ -1060,7 +1060,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
             // Use only the low 32 bits of the value.
             imm = gsl::narrow_cast<int32_t>(pimm->v);
             // If this is a 32-bit operation and the destination is not proven a number, forget the register.
-            if (dom.state.types.type_is_number(bin.dst)) {
+            if (dom.state.is_in_group(bin.dst, TS_NUM)) {
                 // Safe to zero-extend the low 32 bits; even if it's also bin.src, only the 32-bit value is used.
                 dom.state.values->bitwise_and(dst.svalue, dst.uvalue, std::numeric_limits<uint32_t>::max());
             } else {
@@ -1138,13 +1138,13 @@ void EbpfTransformer::operator()(const Bin& bin) {
         // dst op= src
         auto src_reg = std::get<Reg>(bin.v);
         auto src = reg_pack(src_reg);
-        if (!dom.state.types.is_initialized(src_reg)) {
+        if (!dom.state.is_initialized(src_reg)) {
             dom.state.havoc_register(bin.dst);
             return;
         }
         switch (bin.op) {
         case Bin::Op::ADD: {
-            if (dom.state.types.same_type(bin.dst, std::get<Reg>(bin.v))) {
+            if (dom.state.same_type(bin.dst, std::get<Reg>(bin.v))) {
                 // both must have been checked to be numbers
                 dom.state.values->add_overflow(dst.svalue, dst.uvalue, src.svalue, finite_width);
             } else {
@@ -1203,7 +1203,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
             break;
         }
         case Bin::Op::SUB: {
-            if (dom.state.types.same_type(bin.dst, std::get<Reg>(bin.v))) {
+            if (dom.state.same_type(bin.dst, std::get<Reg>(bin.v))) {
                 // src and dest have the same type.
                 TypeDomain tmp_m_type_inv = dom.state.types;
                 dom.state = dom.state.join_over_types(bin.dst, [&](TypeToNumDomain& state, const TypeEncoding type) {
@@ -1231,11 +1231,11 @@ void EbpfTransformer::operator()(const Bin& bin) {
             } else {
                 // We're not sure that lhs and rhs are the same type.
                 // Either they're different, or at least one is not a singleton.
-                if (dom.state.types.type_is_number(std::get<Reg>(bin.v))) {
+                if (dom.state.is_in_group(std::get<Reg>(bin.v), TS_NUM)) {
                     dom.state.values->sub_overflow(dst.svalue, dst.uvalue, src.svalue, finite_width);
                     if (auto dst_offset = dom.state.get_type_offset_variable(bin.dst)) {
                         dom.state.values->sub(dst_offset.value(), src.svalue);
-                        if (dom.state.types.may_have_type(bin.dst, T_STACK)) {
+                        if (dom.state.may_have_type(bin.dst, T_STACK)) {
                             // Reduce the numeric size.
                             using namespace dsl_syntax;
                             if (dom.state.values.intersect(src.svalue > 0)) {
@@ -1282,7 +1282,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
             dom.state.havoc_offsets(bin.dst);
             break;
         case Bin::Op::LSH:
-            if (dom.state.types.type_is_number(src_reg)) {
+            if (dom.state.is_in_group(src_reg, TS_NUM)) {
                 auto src_interval = dom.state.values.eval_interval(src.uvalue);
                 if (std::optional<Number> sn = src_interval.singleton()) {
                     // truncate to uint64?
@@ -1301,7 +1301,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
             dom.state.havoc_offsets(bin.dst);
             break;
         case Bin::Op::RSH:
-            if (dom.state.types.type_is_number(src_reg)) {
+            if (dom.state.is_in_group(src_reg, TS_NUM)) {
                 auto src_interval = dom.state.values.eval_interval(src.uvalue);
                 if (std::optional<Number> sn = src_interval.singleton()) {
                     uint64_t imm = sn->cast_to<uint64_t>() & (bin.is64 ? 63 : 31);
@@ -1318,7 +1318,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
             dom.state.havoc_register_except_type(bin.dst);
             break;
         case Bin::Op::ARSH:
-            if (dom.state.types.type_is_number(src_reg)) {
+            if (dom.state.is_in_group(src_reg, TS_NUM)) {
                 ashr(bin.dst, src.svalue, finite_width);
                 break;
             }
@@ -1337,7 +1337,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
                 dom.state.values.eval_interval(dst.svalue) <= Interval::signed_int(source_width)) {
                 return;
             }
-            if (dom.state.types.type_is_number(src_reg)) {
+            if (dom.state.is_in_group(src_reg, TS_NUM)) {
                 dom.state.havoc_offsets(bin.dst);
                 dom.state.assign_type(bin.dst, T_NUM);
                 dom.state.values->sign_extend(dst.svalue, dst.uvalue, src.svalue, finite_width, source_width);
@@ -1348,7 +1348,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
         }
         case Bin::Op::MOV:
             // Keep relational information if operation is a no-op.
-            if (bin.is64 || dom.state.types.type_is_number(src_reg)) {
+            if (bin.is64 || dom.state.is_in_group(src_reg, TS_NUM)) {
                 if (bin.dst != src_reg) {
                     // the 32bit case is handled below
                     dom.state.assign(bin.dst, src_reg);
