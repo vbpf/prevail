@@ -329,7 +329,7 @@ void ArrayDomain::split_number_var(NumAbsDomain& inv, DataKind kind, const Inter
 // Find overlapping cells for the given index range and kill (havoc + remove) them.
 // Returns the exact offset and size if the index and element size are both constant.
 template <typename HavocFn>
-static std::optional<std::pair<offset_t, unsigned>> kill_and_find_var(HavocFn&& havoc_var, DataKind kind,
+static std::optional<std::pair<offset_t, unsigned>> kill_and_find_var(const HavocFn& havoc_var, DataKind kind,
                                                                       const Interval& ii, const Interval& elem_size) {
     std::optional<std::pair<offset_t, unsigned>> res;
 
