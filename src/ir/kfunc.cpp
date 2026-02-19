@@ -4,6 +4,7 @@
 #include "ir/kfunc.hpp"
 
 #include <array>
+#include <stdexcept>
 #include <string_view>
 
 #include "spec/function_prototypes.hpp"
@@ -20,7 +21,7 @@ struct KfuncPrototypeEntry {
     bool requires_privileged;
 };
 
-static constexpr std::array<KfuncPrototypeEntry, 7> kfunc_prototypes{{
+constexpr std::array<KfuncPrototypeEntry, 7> kfunc_prototypes{{
     {
         1000,
         EbpfHelperPrototype{
@@ -128,7 +129,7 @@ static constexpr std::array<KfuncPrototypeEntry, 7> kfunc_prototypes{{
     },
 }};
 
-static std::optional<KfuncPrototypeEntry> lookup_kfunc_prototype(const int32_t btf_id) {
+std::optional<KfuncPrototypeEntry> lookup_kfunc_prototype(const int32_t btf_id) {
     for (const auto& entry : kfunc_prototypes) {
         const auto [id, proto, flags, required_program_type, requires_privileged] = entry;
         if (id == btf_id) {
@@ -138,7 +139,7 @@ static std::optional<KfuncPrototypeEntry> lookup_kfunc_prototype(const int32_t b
     return std::nullopt;
 }
 
-static ArgSingle::Kind to_arg_single_kind(const ebpf_argument_type_t t) {
+ArgSingle::Kind to_arg_single_kind(const ebpf_argument_type_t t) {
     switch (t) {
     case EBPF_ARGUMENT_TYPE_ANYTHING: return ArgSingle::Kind::ANYTHING;
     case EBPF_ARGUMENT_TYPE_PTR_TO_STACK:
@@ -151,10 +152,11 @@ static ArgSingle::Kind to_arg_single_kind(const ebpf_argument_type_t t) {
     case EBPF_ARGUMENT_TYPE_PTR_TO_CTX_OR_NULL: return ArgSingle::Kind::PTR_TO_CTX;
     default: break;
     }
-    return {};
+    throw std::runtime_error("internal error: unmapped kfunc single-arg type " +
+                             std::to_string(static_cast<int>(t)));
 }
 
-static ArgPair::Kind to_arg_pair_kind(const ebpf_argument_type_t t) {
+ArgPair::Kind to_arg_pair_kind(const ebpf_argument_type_t t) {
     switch (t) {
     case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL:
     case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM: return ArgPair::Kind::PTR_TO_READABLE_MEM;
@@ -162,10 +164,11 @@ static ArgPair::Kind to_arg_pair_kind(const ebpf_argument_type_t t) {
     case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM: return ArgPair::Kind::PTR_TO_WRITABLE_MEM;
     default: break;
     }
-    return {};
+    throw std::runtime_error("internal error: unmapped kfunc pair-arg type " +
+                             std::to_string(static_cast<int>(t)));
 }
 
-static void set_unsupported(std::string* why_not, const std::string& reason) {
+void set_unsupported(std::string* why_not, const std::string& reason) {
     if (why_not) {
         *why_not = reason;
     }
