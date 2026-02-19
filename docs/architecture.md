@@ -98,7 +98,6 @@ Verifies safety properties by checking domain entailment:
 | `ValidAccess` | Memory access within bounds |
 | `ValidStore` | Type-correct store operation |
 | `ValidDivisor` | Non-zero divisor |
-| `ValidCall` | Correct helper signature |
 | `BoundedLoopCount` | Loop iteration limit |
 
 ## Data Flow

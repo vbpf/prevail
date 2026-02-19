@@ -33,7 +33,6 @@ class EbpfChecker final {
     void operator()(const ValidDivisor&) const;
     void operator()(const TypeConstraint&) const;
     void operator()(const ValidAccess&) const;
-    void operator()(const ValidCall&) const;
     void operator()(const ValidMapKeyValue&) const;
     void operator()(const ValidSize&) const;
     void operator()(const ValidStore&) const;
@@ -201,15 +200,6 @@ void EbpfChecker::operator()(const ValidSize& s) const {
     using namespace dsl_syntax;
     const auto r = reg_pack(s.reg);
     require_value(dom.state, s.can_be_zero ? r.svalue >= 0 : r.svalue > 0, "Invalid size");
-}
-
-void EbpfChecker::operator()(const ValidCall& s) const {
-    if (!s.stack_frame_prefix.empty()) {
-        const EbpfHelperPrototype proto = thread_local_program_info->platform->get_helper_prototype(s.func);
-        if (proto.return_type == EBPF_RETURN_TYPE_INTEGER_OR_NO_RETURN_IF_SUCCEED) {
-            throw_fail("tail call not supported in subprogram");
-        }
-    }
 }
 
 void EbpfChecker::operator()(const ValidMapKeyValue& s) const {

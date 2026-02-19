@@ -67,7 +67,6 @@ class AssertExtractor {
     vector<Assertion> operator()(const Call& call) const {
         vector<Assertion> res;
         std::optional<Reg> map_fd_reg;
-        res.emplace_back(ValidCall{call.func, call.stack_frame_prefix});
         for (ArgSingle arg : call.singles) {
             switch (arg.kind) {
             case ArgSingle::Kind::ANYTHING:

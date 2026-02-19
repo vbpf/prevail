@@ -52,10 +52,10 @@ Capability and configuration checks are described in `Notes / Evidence`; they do
 | LDDW immediate (`src=0`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_IMM`) |
 | LDDW map FD pseudo (`src=1`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_MAP_FD`, `LoadMapFd`); `src/elf_loader.cpp`: `try_reloc` |
 | LDDW map value pseudo (`src=2`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_MAP_VALUE`, `LoadMapAddress`); `src/elf_loader.cpp`: `try_reloc` |
-| LDDW variable address pseudo (`src=3`) | Not implemented | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_VARIABLE_ADDR`, `LoadPseudo`); `src/ir/cfg_builder.cpp`: `check_instruction_feature_support` |
-| LDDW code address pseudo (`src=4`) | Not implemented | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_CODE_ADDR`, `LoadPseudo`); `src/ir/cfg_builder.cpp`: `check_instruction_feature_support` |
-| LDDW map-by-index pseudo (`src=5`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw`; `src/ir/cfg_builder.cpp`: `resolve_map_by_index` converts to `LoadMapFd` |
-| LDDW map-value-by-index pseudo (`src=6`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw`; `src/ir/cfg_builder.cpp`: `resolve_map_by_index` converts to `LoadMapAddress` |
+| LDDW variable address pseudo (`src=3`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_VARIABLE_ADDR`, `LoadPseudo`); `src/ir/cfg_builder.cpp`: `resolve_pseudo_load` lowers to scalar `Bin::MOV` |
+| LDDW code address pseudo (`src=4`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_CODE_ADDR`, `LoadPseudo`); `src/ir/cfg_builder.cpp`: `resolve_pseudo_load` lowers to scalar `Bin::MOV` |
+| LDDW map-by-index pseudo (`src=5`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw`; `src/ir/cfg_builder.cpp`: `resolve_pseudo_load` converts to `LoadMapFd` |
+| LDDW map-value-by-index pseudo (`src=6`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw`; `src/ir/cfg_builder.cpp`: `resolve_pseudo_load` converts to `LoadMapAddress` |
 | MEMSX sign-extending loads (`LDXSB/LDXSH/LDXSW`) | Supported | `src/ir/unmarshal.cpp`: `makeMemOp` (`INST_MODE_MEMSX`); `src/crab/ebpf_transformer.cpp`: `operator()(const Mem&)`, `do_load_packet_or_shared` |
 
 ### Atomics
@@ -73,6 +73,7 @@ Capability and configuration checks are described in `Notes / Evidence`; they do
 | Helper unavailable in platform tables | Supported | `src/ir/unmarshal.cpp`: helper-unavailable path in `makeJmp`; `src/ir/cfg_builder.cpp`: `check_instruction_feature_support` |
 | BPF-to-BPF non-recursive local call expansion | Supported | `src/ir/cfg_builder.cpp`; `src/elf_loader.cpp` |
 | Maximum call depth guard | Supported | `src/ir/cfg_builder.cpp`: `MAX_CALL_STACK_FRAMES` |
+| Tail call chain depth guard | Supported | `src/ir/cfg_builder.cpp`: `validate_tail_call_chain_depth` (limit 33) |
 
 ### BTF/ELF Language-Relevant Handling
 

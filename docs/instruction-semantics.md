@@ -422,9 +422,17 @@ Each instruction type generates specific assertions:
 | Load/Store | `ValidAccess` (bounds check) |
 | Store | `ValidStore` (type check) |
 | DIV/MOD | `ValidDivisor` (non-zero) |
-| Call | `ValidCall` (signature) |
+| Call | Type/size/map assertions for helper arguments |
 | Pointer arith | `Addable` (valid operands) |
 | Comparison | `Comparable` (compatible types) |
+
+`ValidCall` was removed as a separate assertion kind, but its safety role is preserved by explicit per-argument checks.
+`TypeConstraint` still enforces helper argument/register type classes, `ValidAccess` enforces pointer-based size/bounds
+requirements for memory arguments, and `ValidMapKeyValue` enforces map key/value presence and map-fd consistency.
+CFG-construction-time checks reject unsupported call forms before analysis. Under the same input assumptions
+(well-formed decoded call instructions and platform helper prototypes), these checks preserve the same invariants that
+`ValidCall` used to represent (argument typing, size/bounds, and map argument validity), while keeping each obligation
+auditable at the assertion site that enforces it.
 
 Example:
 

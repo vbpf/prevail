@@ -396,11 +396,6 @@ struct AssertionPrinterVisitor {
         _os << a.reg << ".value" << op << 0;
     }
 
-    void operator()(ValidCall const& a) {
-        const EbpfHelperPrototype proto = thread_local_program_info->platform->get_helper_prototype(a.func);
-        _os << "valid call(" << proto.name << ")";
-    }
-
     void operator()(ValidMapKeyValue const& a) {
         _os << "within(" << a.access_reg << ":" << (a.key ? "key_size" : "value_size") << "(" << a.map_fd_reg << "))";
     }
@@ -899,7 +894,7 @@ void print_invariants_filtered(std::ostream& os, const Program& prog, const bool
                 relevance ? (relevance->contains(label) ? &relevance->at(label) : nullptr) : nullptr;
             for (const auto& assertion : prog.assertions_at(label)) {
                 // If we have relevance info, only print assertions involving relevant registers.
-                // Assertions with no register deps (e.g., ValidCall, BoundedLoopCount) are always
+                // Assertions with no register deps (e.g., BoundedLoopCount) are always
                 // printed to avoid hiding the failing assertion from the slice output.
                 if (label_relevance) {
                     auto assertion_regs = extract_assertion_registers(assertion);

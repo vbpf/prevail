@@ -37,7 +37,7 @@ FAIL_LOAD_ELF("invalid", "badsymsize.o", "xdp_redirect_map")
 // Some intentional unmarshal failures
 FAIL_UNMARSHAL("invalid", "invalid-lddw.o", ".text")
 
-TEST_CASE("unsupported forms are rejected after unmarshal", "[unmarshal]") {
+TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
     constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
     ebpf_platform_t platform = g_ebpf_platform_linux;
     ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
@@ -58,9 +58,78 @@ TEST_CASE("unsupported forms are rejected after unmarshal", "[unmarshal]") {
             info};
         auto prog_or_error = unmarshal(raw_prog, {});
         REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
-                            Catch::Matchers::ContainsSubstring("not implemented: lddw variable_addr pseudo") &&
-                                Catch::Matchers::ContainsSubstring("(at 0)"));
+        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
+        const auto* bin = std::get_if<Bin>(&prog.instruction_at(Label{0}));
+        REQUIRE(bin != nullptr);
+        REQUIRE(bin->op == Bin::Op::MOV);
+        REQUIRE(bin->is64);
+        REQUIRE(bin->lddw);
+        REQUIRE(bin->dst == Reg{1});
+        const auto* imm = std::get_if<Imm>(&bin->v);
+        REQUIRE(imm != nullptr);
+        REQUIRE(imm->v == 7ULL);
+    }
+
+    SECTION("lddw code_addr pseudo") {
+        RawProgram raw_prog{
+            "",  "", 0, "", {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = 4, .imm = 11}, EbpfInst{}, exit},
+            info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
+        const auto* bin = std::get_if<Bin>(&prog.instruction_at(Label{0}));
+        REQUIRE(bin != nullptr);
+        REQUIRE(bin->op == Bin::Op::MOV);
+        REQUIRE(bin->is64);
+        REQUIRE(bin->lddw);
+        REQUIRE(bin->dst == Reg{2});
+        const auto* imm = std::get_if<Imm>(&bin->v);
+        REQUIRE(imm != nullptr);
+        REQUIRE(imm->v == 11ULL);
+    }
+
+    SECTION("lddw immediate merges high and low words") {
+        RawProgram raw_prog{
+            "",
+            "",
+            0,
+            "",
+            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 3, .src = 0, .imm = 1}, EbpfInst{.imm = 2}, exit},
+            info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
+        const auto* bin = std::get_if<Bin>(&prog.instruction_at(Label{0}));
+        REQUIRE(bin != nullptr);
+        REQUIRE(bin->op == Bin::Op::MOV);
+        REQUIRE(bin->is64);
+        REQUIRE(bin->lddw);
+        REQUIRE(bin->dst == Reg{3});
+        const auto* imm = std::get_if<Imm>(&bin->v);
+        REQUIRE(imm != nullptr);
+        REQUIRE(imm->v == ((2ULL << 32) | 1ULL));
+    }
+
+    SECTION("lddw immediate does not sign-extend low word") {
+        RawProgram raw_prog{
+            "",
+            "",
+            0,
+            "",
+            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 3, .src = 0, .imm = -1}, EbpfInst{.imm = 0}, exit},
+            info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
+        const auto* bin = std::get_if<Bin>(&prog.instruction_at(Label{0}));
+        REQUIRE(bin != nullptr);
+        REQUIRE(bin->op == Bin::Op::MOV);
+        REQUIRE(bin->is64);
+        REQUIRE(bin->lddw);
+        REQUIRE(bin->dst == Reg{3});
+        const auto* imm = std::get_if<Imm>(&bin->v);
+        REQUIRE(imm != nullptr);
+        REQUIRE(imm->v == 0x00000000FFFFFFFFULL);
     }
 
     SECTION("helper id not usable on platform") {
@@ -100,6 +169,48 @@ TEST_CASE("unsupported forms are rejected after unmarshal", "[unmarshal]") {
         auto prog_or_error = unmarshal(raw_prog, {});
         REQUIRE(std::holds_alternative<std::string>(prog_or_error));
         REQUIRE_THAT(std::get<std::string>(prog_or_error), Catch::Matchers::ContainsSubstring("bad instruction"));
+    }
+
+    SECTION("tail call chain depth above 33 is rejected") {
+        std::vector<EbpfInst> insts;
+        for (size_t i = 0; i < 34; i++) {
+            insts.push_back(EbpfInst{.opcode = INST_OP_CALL, .imm = 12});
+        }
+        insts.push_back(exit);
+        RawProgram raw_prog{"", "", 0, "", std::move(insts), info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
+                            Catch::Matchers::ContainsSubstring("tail call chain depth exceeds 33") &&
+                                Catch::Matchers::ContainsSubstring("(at"));
+    }
+
+    SECTION("tail call chain depth of exactly 33 is accepted") {
+        std::vector<EbpfInst> insts;
+        for (size_t i = 0; i < 33; i++) {
+            insts.push_back(EbpfInst{.opcode = INST_OP_CALL, .imm = 12});
+        }
+        insts.push_back(exit);
+        RawProgram raw_prog{"", "", 0, "", std::move(insts), info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        REQUIRE_NOTHROW(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}));
+    }
+
+    SECTION("tail call cycle does not inflate chain depth") {
+        // No exit instruction is intentional; this checks SCC-based depth accounting, not termination.
+        RawProgram raw_prog{"",
+                            "",
+                            0,
+                            "",
+                            {
+                                EbpfInst{.opcode = INST_OP_CALL, .imm = 12},
+                                EbpfInst{.opcode = INST_OP_JA16, .offset = -2},
+                            },
+                            info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        REQUIRE_NOTHROW(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}));
     }
 }
 
