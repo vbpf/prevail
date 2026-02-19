@@ -76,6 +76,20 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         REQUIRE(verify(prog));
     }
 
+    SECTION("kfunc in subprogram is not misclassified when BTF id overlaps helper id") {
+        RawProgram raw_prog{"",
+                            "",
+                            0,
+                            "",
+                            {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_LOCAL, .imm = 1}, exit,
+                             EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 12}, exit},
+                            info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
+        REQUIRE(verify(prog));
+    }
+
     SECTION("kfunc map-value return is lowered to map-lookup call contract") {
         constexpr uint8_t mov64_imm = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
         RawProgram raw_prog{"",

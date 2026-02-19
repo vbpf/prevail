@@ -21,7 +21,22 @@ struct KfuncPrototypeEntry {
     bool requires_privileged;
 };
 
-constexpr std::array<KfuncPrototypeEntry, 8> kfunc_prototypes{{
+constexpr std::array<KfuncPrototypeEntry, 9> kfunc_prototypes{{
+    {
+        12,
+        EbpfHelperPrototype{
+            .name = "kfunc_test_id_overlap_tail_call",
+            .return_type = EBPF_RETURN_TYPE_INTEGER,
+            .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
+                              EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
+            .reallocate_packet = false,
+            .context_descriptor = nullptr,
+            .unsupported = false,
+        },
+        KfuncFlags::none,
+        "",
+        false,
+    },
     {
         1000,
         EbpfHelperPrototype{
@@ -146,9 +161,8 @@ constexpr std::array<KfuncPrototypeEntry, 8> kfunc_prototypes{{
 
 std::optional<KfuncPrototypeEntry> lookup_kfunc_prototype(const int32_t btf_id) {
     for (const auto& entry : kfunc_prototypes) {
-        const auto [id, proto, flags, required_program_type, requires_privileged] = entry;
-        if (id == btf_id) {
-            return KfuncPrototypeEntry{id, proto, flags, required_program_type, requires_privileged};
+        if (entry.btf_id == btf_id) {
+            return entry;
         }
     }
     return std::nullopt;
@@ -199,6 +213,7 @@ std::optional<Call> make_kfunc_call(const int32_t btf_id, const ProgramInfo* inf
 
     Call res;
     res.func = btf_id;
+    res.kind = CallKind::kfunc;
     res.name = proto.name;
     res.reallocate_packet = proto.reallocate_packet;
     res.is_map_lookup = proto.return_type == EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL;
