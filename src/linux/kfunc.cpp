@@ -279,8 +279,8 @@ std::optional<Call> make_kfunc_call(const int32_t btf_id, const ProgramInfo* inf
         case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM:
         case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL:
         case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM: {
-            if (args.size() - i < 2 || (args[i + 1] != EBPF_ARGUMENT_TYPE_CONST_SIZE &&
-                                        args[i + 1] != EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO)) {
+            // args[i+1] is always in bounds: args has a DONTCARE sentinel at index 6.
+            if (args[i + 1] != EBPF_ARGUMENT_TYPE_CONST_SIZE && args[i + 1] != EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO) {
                 set_unsupported(why_not,
                                 std::string("kfunc pointer argument not followed by EBPF_ARGUMENT_TYPE_CONST_SIZE or "
                                             "EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO: ") +
