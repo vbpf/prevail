@@ -355,9 +355,6 @@ std::set<Reg> extract_assertion_registers(const Assertion& assertion) {
                 return {a.reg};
             } else if constexpr (std::is_same_v<T, ValidMapKeyValue>) {
                 return {a.access_reg, a.map_fd_reg};
-            } else if constexpr (std::is_same_v<T, ValidCall>) {
-                // ValidCall checks function validity, no direct register deps
-                return {};
             } else if constexpr (std::is_same_v<T, TypeConstraint>) {
                 return {a.reg};
             } else if constexpr (std::is_same_v<T, FuncConstraint>) {
@@ -425,7 +422,7 @@ std::vector<FailureSlice> AnalysisResult::compute_failure_slices(const Program& 
         }
 
         // Always include the failing label in the slice, even if no registers were extracted
-        // (e.g., ValidCall, BoundedLoopCount assertions have no register deps)
+        // (e.g., BoundedLoopCount has no register deps)
 
         // `visited` tracks all explored labels for deduplication during backward traversal.
         // `slice_labels` tracks only labels that interact with relevant registers (the output slice).

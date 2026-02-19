@@ -349,13 +349,6 @@ struct ValidMapKeyValue {
     constexpr bool operator==(const ValidMapKeyValue&) const = default;
 };
 
-/// Condition check whether a call is valid in the current context.
-struct ValidCall {
-    int32_t func{};
-    std::string stack_frame_prefix; ///< Variable prefix at point of call.
-    bool operator==(const ValidCall&) const = default;
-};
-
 // "if mem is not stack, val is num"
 struct ValidStore {
     Reg mem;
@@ -391,7 +384,7 @@ struct BoundedLoopCount {
 };
 
 using Assertion = std::variant<Comparable, Addable, ValidDivisor, ValidAccess, ValidStore, ValidSize, ValidMapKeyValue,
-                               ValidCall, TypeConstraint, FuncConstraint, ZeroCtxOffset, BoundedLoopCount>;
+                               TypeConstraint, FuncConstraint, ZeroCtxOffset, BoundedLoopCount>;
 
 std::ostream& operator<<(std::ostream& os, Instruction const& ins);
 std::string to_string(Instruction const& ins);

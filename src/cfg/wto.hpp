@@ -48,6 +48,14 @@ class WtoNesting final {
   public:
     explicit WtoNesting(std::vector<Label>&& heads) : _heads(std::move(heads)) {}
 
+    [[nodiscard]]
+    std::optional<Label> outermost_head() const {
+        if (_heads.empty()) {
+            return {};
+        }
+        return _heads.back();
+    }
+
     // Test whether this nesting is a longer subset of another nesting.
     bool operator>(const WtoNesting& nesting) const;
 };

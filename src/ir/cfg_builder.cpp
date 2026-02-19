@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: MIT
 #include <algorithm>
 #include <cassert>
+#include <limits>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -208,8 +210,8 @@ static std::optional<RejectionReason> check_instruction_feature_support(const In
             return reject_capability("requires conformance group base64");
         }
         switch (p->addr.kind) {
-        case PseudoAddress::Kind::VARIABLE_ADDR: return reject_not_implemented("lddw variable_addr pseudo");
-        case PseudoAddress::Kind::CODE_ADDR: return reject_not_implemented("lddw code_addr pseudo");
+        case PseudoAddress::Kind::VARIABLE_ADDR:
+        case PseudoAddress::Kind::CODE_ADDR:
         case PseudoAddress::Kind::MAP_BY_IDX:
         case PseudoAddress::Kind::MAP_VALUE_BY_IDX: break; // Resolved during CFG construction.
         default: return reject_not_implemented("lddw unknown pseudo");
@@ -345,8 +347,29 @@ static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const 
     }
 }
 
-/// Resolve a LoadPseudo with map-by-index addressing to the concrete LoadMapFd or LoadMapAddress instruction.
-static Instruction resolve_map_by_index(const LoadPseudo& pseudo) {
+struct Imm64Parts {
+    int32_t lo{};
+    int32_t hi{};
+};
+
+static uint64_t merge_imm32_to_u64(const Imm64Parts parts) {
+    return static_cast<uint64_t>(static_cast<uint32_t>(parts.lo)) |
+           (static_cast<uint64_t>(static_cast<uint32_t>(parts.hi)) << 32);
+}
+
+/// Resolve a LoadPseudo to a concrete instruction before abstract interpretation.
+/// VARIABLE_ADDR and CODE_ADDR are lowered to immediate scalar loads.
+static Instruction resolve_pseudo_load(const LoadPseudo& pseudo) {
+    if (pseudo.addr.kind == PseudoAddress::Kind::VARIABLE_ADDR || pseudo.addr.kind == PseudoAddress::Kind::CODE_ADDR) {
+        return Bin{
+            .op = Bin::Op::MOV,
+            .dst = pseudo.dst,
+            .v = Imm{merge_imm32_to_u64({.lo = pseudo.addr.imm, .hi = pseudo.addr.next_imm})},
+            .is64 = true,
+            .lddw = true,
+        };
+    }
+
     const auto& descriptors = thread_local_program_info->map_descriptors;
     if (pseudo.addr.imm < 0 || static_cast<size_t>(pseudo.addr.imm) >= descriptors.size()) {
         throw InvalidControlFlow{"invalid map index " + std::to_string(pseudo.addr.imm) + " (have " +
@@ -375,7 +398,7 @@ static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const bool
             continue;
         }
         if (const auto* pseudo = std::get_if<LoadPseudo>(&inst)) {
-            builder.insert(label, resolve_map_by_index(*pseudo));
+            builder.insert(label, resolve_pseudo_load(*pseudo));
         } else {
             builder.insert(label, inst);
         }
@@ -442,6 +465,142 @@ static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const bool
     return builder;
 }
 
+static bool is_tail_call_helper(const Call& call, const ebpf_platform_t& platform) {
+    return platform.get_helper_prototype(call.func).return_type == EBPF_RETURN_TYPE_INTEGER_OR_NO_RETURN_IF_SUCCEED;
+}
+
+static bool is_tail_call_site(const Instruction& ins, const ebpf_platform_t& platform) {
+    if (const auto* call = std::get_if<Call>(&ins)) {
+        return is_tail_call_helper(*call, platform);
+    }
+    if (std::holds_alternative<Callx>(ins)) {
+        // At CFG-construction time, callx target ids are not available.
+        // Conservatively treat callx as a potential tail-call site.
+        return true;
+    }
+    return false;
+}
+
+static void collect_wto_labels(const CycleOrLabel& component, std::set<Label>& labels) {
+    if (const auto plabel = std::get_if<Label>(&component)) {
+        labels.insert(*plabel);
+        return;
+    }
+    for (const auto& nested_component : *std::get<std::shared_ptr<WtoCycle>>(component)) {
+        collect_wto_labels(nested_component, labels);
+    }
+}
+
+/// Enforce a global upper bound on tail-call chain length.
+/// Count tail-call sites over the reachable maximal-SCC DAG so cycles do not inflate depth.
+/// Maximal SCCs are obtained from WTO nesting: all labels in the same outermost WTO cycle
+/// are mutually reachable and therefore belong to the same maximal SCC.
+static void validate_tail_call_chain_depth(const Program& prog, const Wto& wto, const ebpf_platform_t& platform) {
+    constexpr int tail_call_chain_limit = 33;
+
+    // WTO only covers labels reachable from entry.
+    std::set<Label> reachable;
+    for (const auto& component : wto) {
+        collect_wto_labels(component, reachable);
+    }
+
+    // Partition reachable labels by maximal SCC representative:
+    // the outermost containing WTO head, or the label itself if not in a cycle.
+    std::map<Label, Label> maximal_scc_of;
+    std::set<Label> maximal_scc_ids;
+    for (const auto& label : reachable) {
+        const Label scc_id = wto.nesting(label).outermost_head().value_or(label);
+        maximal_scc_of.emplace(label, scc_id);
+        maximal_scc_ids.insert(scc_id);
+    }
+
+    std::map<Label, int> tail_sites_per_scc;
+    std::map<Label, std::optional<Label>> representative_tail_label;
+    std::map<Label, std::set<Label>> dag_successors;
+    std::map<Label, int> indegree;
+    for (const auto& scc_id : maximal_scc_ids) {
+        tail_sites_per_scc.emplace(scc_id, 0);
+        representative_tail_label.emplace(scc_id, std::nullopt);
+        dag_successors.emplace(scc_id, std::set<Label>{});
+        indegree.emplace(scc_id, 0);
+    }
+
+    for (const auto& label : reachable) {
+        const Label src_scc = maximal_scc_of.at(label);
+        if (is_tail_call_site(prog.instruction_at(label), platform)) {
+            ++tail_sites_per_scc.at(src_scc);
+            auto& representative = representative_tail_label.at(src_scc);
+            if (!representative.has_value()) {
+                representative = label;
+            }
+        }
+        for (const auto& child : prog.cfg().children_of(label)) {
+            if (!reachable.contains(child)) {
+                continue;
+            }
+            const Label dst_scc = maximal_scc_of.at(child);
+            if (src_scc != dst_scc && dag_successors[src_scc].insert(dst_scc).second) {
+                ++indegree.at(dst_scc);
+            }
+        }
+    }
+
+    std::map<Label, int> indegree_for_sources = indegree;
+    std::vector<Label> topo_order;
+    topo_order.reserve(maximal_scc_ids.size());
+    for (const auto& scc_id : maximal_scc_ids) {
+        if (indegree.at(scc_id) == 0) {
+            topo_order.push_back(scc_id);
+        }
+    }
+    for (size_t index = 0; index < topo_order.size(); ++index) {
+        const Label scc_id = topo_order[index];
+        for (const auto& succ : dag_successors.at(scc_id)) {
+            --indegree.at(succ);
+            if (indegree.at(succ) == 0) {
+                topo_order.push_back(succ);
+            }
+        }
+    }
+    if (topo_order.size() != maximal_scc_ids.size()) {
+        CRAB_ERROR("WTO-derived SCC graph must be acyclic");
+    }
+
+    // Longest path over maximal SCC DAG by tail-call site count.
+    constexpr int uninitialized_depth = std::numeric_limits<int>::min();
+    std::map<Label, int> max_tail_depth;
+    std::map<Label, std::optional<Label>> depth_label;
+    for (const auto& scc_id : maximal_scc_ids) {
+        max_tail_depth.emplace(scc_id, uninitialized_depth);
+        depth_label.emplace(scc_id, std::nullopt);
+        if (indegree_for_sources.at(scc_id) == 0) {
+            max_tail_depth.at(scc_id) = tail_sites_per_scc.at(scc_id);
+            depth_label.at(scc_id) = representative_tail_label.at(scc_id);
+        }
+    }
+
+    for (const auto& scc_id : topo_order) {
+        const int current_depth = max_tail_depth.at(scc_id);
+        if (current_depth == uninitialized_depth) {
+            continue;
+        }
+        if (current_depth > tail_call_chain_limit) {
+            const Label at = depth_label.at(scc_id).value_or(scc_id);
+            throw InvalidControlFlow{"tail call chain depth exceeds " + std::to_string(tail_call_chain_limit) +
+                                     " (at " + to_string(at) + ")"};
+        }
+        for (const auto& succ : dag_successors.at(scc_id)) {
+            const int candidate_depth = current_depth + tail_sites_per_scc.at(succ);
+            if (candidate_depth > max_tail_depth.at(succ)) {
+                max_tail_depth.at(succ) = candidate_depth;
+                depth_label.at(succ) = representative_tail_label.at(succ).has_value()
+                                           ? representative_tail_label.at(succ)
+                                           : depth_label.at(scc_id);
+            }
+        }
+    }
+}
+
 Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo& info,
                                const ebpf_verifier_options_t& options) {
     thread_local_program_info.set(info);
@@ -452,11 +611,13 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
     // Convert the instruction sequence to a deterministic control-flow graph.
     CfgBuilder builder = instruction_seq_to_cfg(inst_seq, options.cfg_opts.must_have_exit);
 
+    const Wto wto{builder.prog.cfg()};
+    validate_tail_call_chain_depth(builder.prog, wto, *info.platform);
+
     // Detect loops using Weak Topological Ordering (WTO) and insert counters at loop entry points. WTO provides a
     // hierarchical decomposition of the CFG that identifies all strongly connected components (cycles) and their entry
     // points. These entry points serve as natural locations for loop counters that help verify program termination.
     if (options.cfg_opts.check_for_termination) {
-        const Wto wto{builder.prog.cfg()};
         wto.for_each_loop_head([&](const Label& label) -> void {
             builder.insert_after(label, Label::make_increment_counter(label), IncrementLoopCounter{label});
         });

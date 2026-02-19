@@ -268,7 +268,7 @@ post:
 #   - r0.uvalue=0
 #   - r6.type=r7.type
 ---
-test-case: disallow tail call from within a subprogram
+test-case: allow tail call from within a subprogram
 
 pre: ["r0.type=number", "r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r3.type=number"]
 
@@ -280,10 +280,8 @@ code:
     call 12; bpf_tail_call
     exit
 
-post: []
-
-messages:
-  - "0/2: tail call not supported in subprogram (valid call(tail_call))"
+post:
+  - r0.type=number
 ---
 test-case: fail infinite self-recursion
 

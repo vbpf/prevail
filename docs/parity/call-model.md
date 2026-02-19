@@ -8,8 +8,8 @@
 
 ## Tail calls
 
-- [ ] **Tail calls in subprograms** — currently rejected unconditionally (`"tail call not supported in subprogram"`). Linux allows tail calls from subprograms under specific conditions.
-- [ ] **Tail call chain depth tracking** — Linux limits total tail call depth to 33. No chain-depth tracking exists.
+- [x] **Tail calls in subprograms** — no longer rejected unconditionally.
+- [x] **Tail call chain depth tracking** — verifier enforces a tail-call chain limit of 33 during CFG validation.
 
 ## Global functions
 

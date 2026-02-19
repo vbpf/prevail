@@ -53,3 +53,22 @@ TEST_CASE("wto figure 2b", "[wto]") {
     os << wto;
     REQUIRE(os.str() == "entry ( 1 4 2 3 ) exit \n");
 }
+
+TEST_CASE("wto nesting outermost head tracks maximal SCC", "[wto]") {
+    const Wto wto(cfg_from_adjacency_list({{Label::entry, {Label{1}}},
+                                           {Label{1}, {Label{2}}},
+                                           {Label{2}, {Label{3}}},
+                                           {Label{3}, {Label{4}}},
+                                           {Label{4}, {Label{5}, Label{7}}},
+                                           {Label{5}, {Label{6}}},
+                                           {Label{6}, {Label{5}, Label{7}}},
+                                           {Label{7}, {Label{3}, Label{8}}},
+                                           {Label{8}, {Label::exit}}}));
+
+    REQUIRE(wto.nesting(Label{1}).outermost_head() == std::optional<Label>{});
+    REQUIRE(wto.nesting(Label{3}).outermost_head() == std::optional<Label>{});
+    REQUIRE(wto.nesting(Label{4}).outermost_head() == std::optional<Label>{Label{3}});
+    REQUIRE(wto.nesting(Label{5}).outermost_head() == std::optional<Label>{Label{3}});
+    REQUIRE(wto.nesting(Label{6}).outermost_head() == std::optional<Label>{Label{3}});
+    REQUIRE(wto.nesting(Label{7}).outermost_head() == std::optional<Label>{Label{3}});
+}

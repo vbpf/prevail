@@ -422,7 +422,7 @@ Each instruction type generates specific assertions:
 | Load/Store | `ValidAccess` (bounds check) |
 | Store | `ValidStore` (type check) |
 | DIV/MOD | `ValidDivisor` (non-zero) |
-| Call | `ValidCall` (signature) |
+| Call | Type/size/map assertions for helper arguments |
 | Pointer arith | `Addable` (valid operands) |
 | Comparison | `Comparable` (compatible types) |
 
