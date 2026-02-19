@@ -217,6 +217,55 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         REQUIRE_FALSE(verify(bad_nullability_prog));
     }
 
+    SECTION("kfunc writable-memory argument pairs enforce writeability and strict size") {
+        constexpr uint8_t mov64_imm = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
+        constexpr uint8_t mov64_reg = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_REG;
+        constexpr uint8_t add64_imm = INST_CLS_ALU64 | INST_ALU_OP_ADD | INST_SRC_IMM;
+
+        RawProgram good_raw_prog{"",
+                                 "",
+                                 0,
+                                 "",
+                                 {EbpfInst{.opcode = mov64_reg, .dst = 1, .src = R10_STACK_POINTER},
+                                  EbpfInst{.opcode = add64_imm, .dst = 1, .imm = -8},
+                                  EbpfInst{.opcode = mov64_imm, .dst = 2, .imm = 4},
+                                  EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1007}, exit},
+                                 info};
+        auto good_prog_or_error = unmarshal(good_raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(good_prog_or_error));
+        const Program good_prog = Program::from_sequence(std::get<InstructionSeq>(good_prog_or_error), info, {});
+        REQUIRE(verify(good_prog));
+
+        RawProgram bad_nullability_raw_prog{
+            "",
+            "",
+            0,
+            "",
+            {EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 0}, EbpfInst{.opcode = mov64_imm, .dst = 2, .imm = 4},
+             EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1007}, exit},
+            info};
+        auto bad_nullability_prog_or_error = unmarshal(bad_nullability_raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(bad_nullability_prog_or_error));
+        const Program bad_nullability_prog =
+            Program::from_sequence(std::get<InstructionSeq>(bad_nullability_prog_or_error), info, {});
+        REQUIRE_FALSE(verify(bad_nullability_prog));
+
+        RawProgram bad_size_raw_prog{"",
+                                     "",
+                                     0,
+                                     "",
+                                     {EbpfInst{.opcode = mov64_reg, .dst = 1, .src = R10_STACK_POINTER},
+                                      EbpfInst{.opcode = add64_imm, .dst = 1, .imm = -8},
+                                      EbpfInst{.opcode = mov64_imm, .dst = 2, .imm = 0},
+                                      EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1007}, exit},
+                                     info};
+        auto bad_size_prog_or_error = unmarshal(bad_size_raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(bad_size_prog_or_error));
+        const Program bad_size_prog =
+            Program::from_sequence(std::get<InstructionSeq>(bad_size_prog_or_error), info, {});
+        REQUIRE_FALSE(verify(bad_size_prog));
+    }
+
     SECTION("lddw variable_addr pseudo") {
         RawProgram raw_prog{
             "",  "", 0, "", {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 1, .src = 3, .imm = 7}, EbpfInst{}, exit},
