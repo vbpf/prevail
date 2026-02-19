@@ -1,11 +1,11 @@
 # Prevail repository guide for AI agents
 
 ## Soundness-first analysis principles
-- **Soundness beats throughput.** When updating the analyser or verifier, favour transfer functions and abstractions with explicit, auditable invariants over heuristic shortcuts. If a micro-optimisation risks dropping constraints that protect against false negatives, keep the precise version and document why it is safe.
+- **Soundness beats throughput.** When updating the analyzer or verifier, favor transfer functions and abstractions with explicit, auditable invariants over heuristic shortcuts. If a micro-optimization risks dropping constraints that protect against false negatives, keep the precise version and document why it is safe.
 - **Prove invariants when possible.** Encode the assumptions an analysis relies on—preconditions, lattice properties, monotonicity—directly in code comments, assertions, or type-level checks before trusting experiments. When you need executable evidence, add deterministic tests or YAML fixtures that demonstrate both the sound and the unsound outcomes you are ruling out.
 - **Narrate the reasoning.** Any change that affects analysis results should spell out the argument for soundness: what inputs are assumed, what invariants are maintained, and how the change preserves them. Prefer control flow that makes this reasoning self-evident to future auditors.
-- **Default to conservative behaviour.** Introduce new analysis features behind flags or with stricter defaults until you can show they do not compromise soundness; never silently relax checks or widen abstractions without justification.
-- **Optimise for auditability.** Choose designs that are easy to step through and review by hand—even if they are marginally slower or more verbose—so that a future engineer can re-establish the soundness argument quickly.
+- **Default to conservative behavior.** Introduce new analysis features behind flags or with stricter defaults until you can show they do not compromise soundness; never silently relax checks or widen abstractions without justification.
+- **Optimize for auditability.** Choose designs that are easy to step through and review by hand—even if they are marginally slower or more verbose—so that a future engineer can re-establish the soundness argument quickly.
 
 ## Quick project facts
 - **Language & standards:** Core verifier is implemented in modern C++20 (see `CMakeLists.txt`).
@@ -53,12 +53,12 @@
 - **License headers:** Ensure new C/C++ sources include the standard SPDX header; validate with `./scripts/check-license.sh <files>`.
 - **Git hooks:** `scripts/pre-commit` installs automatically from CMake to enforce names, whitespace, formatting, and license headers.
 - **Static includes:** Headers prefer `#pragma once`; follow existing patterns within each subdirectory.
-- **Review for soundness.** Before finishing a change, walk through the modified control-flow and data-flow manually to ensure no undefined behaviour or unchecked user input paths were introduced.
+- **Review for soundness.** Before finishing a change, walk through the modified control-flow and data-flow manually to ensure no undefined behavior or unchecked user input paths were introduced.
 
 ## Working efficiently
 - Prefer adding new verifier logic under the matching subsystem directory (`cfg/`, `crab/`, etc.) to keep separation of concerns.
-- Tests live beside the production code in `src/test`; add focused Catch2 cases when modifying verifier behaviour.
+- Tests live beside the production code in `src/test`; add focused Catch2 cases when modifying verifier behavior.
 - When touching YAML-driven fixtures, update schemas in `test-schema.yaml` if new fields are introduced and exercise them via `run_yaml`.
-- Avoid editing vendored sources beneath `external/` unless the task explicitly targets them; instead, wrap behaviour in our own code where possible.
+- Avoid editing vendored sources beneath `external/` unless the task explicitly targets them; instead, wrap behavior in our own code where possible.
 - Keep runtime/tooling flags documented by updating `README.md` if you introduce new CLI options.
-- When in doubt, favour explicit error handling and early exits to surface problems instead of deferring to implicit behaviour.
+- When in doubt, favor explicit error handling and early exits to surface problems instead of deferring to implicit behavior.

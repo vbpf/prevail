@@ -14,7 +14,6 @@
 
 namespace splitdbm {
 
-using PotentialFunction = std::function<Weight(VertId)>;
 using EdgeVector = std::vector<std::tuple<VertId, VertId, Weight>>;
 
 // Enums used to mark vertices/edges during algorithms.
@@ -32,9 +31,10 @@ inline auto make_heap(const std::vector<Weight>& dists) {
 // Scratch space needed by graph algorithms. Lazily grows on demand.
 // Intended to be wrapped in a single LazyAllocator<ScratchSpace> at the call site.
 struct ScratchSpace {
-    std::vector<char> edge_marks;
+    std::vector<int> edge_marks;
     std::vector<VertId> dual_queue;
     std::vector<int> vert_marks;
+    std::vector<int> stability;
     size_t scratch_sz = 0;
 
     std::vector<Weight> dists;
@@ -43,14 +43,19 @@ struct ScratchSpace {
     unsigned int ts = 0;
     unsigned int ts_idx = 0;
 
+    auto init_search(const VertId src) {
+        dist_ts.at(ts_idx) = ts++;
+        ts_idx = (ts_idx + 1) % dists.size();
+        dists.at(src) = Weight(0);
+        dist_ts.at(src) = ts;
+        return make_heap(dists);
+    }
+
     void grow(const size_t sz) {
         if (sz <= scratch_sz) {
             return;
         }
-        size_t new_sz = scratch_sz;
-        if (new_sz == 0) {
-            new_sz = 10;
-        }
+        size_t new_sz = std::max(size_t{10}, scratch_sz);
         while (new_sz < sz) {
             new_sz *= 2;
         }
@@ -58,14 +63,12 @@ struct ScratchSpace {
         edge_marks.resize(new_sz * new_sz);
         dual_queue.resize(2 * new_sz);
         vert_marks.resize(new_sz);
+        stability.resize(new_sz);
+        dists.resize(new_sz);
+        dists_alt.resize(new_sz);
+        dist_ts.resize(new_sz, ts - 1);
 
         scratch_sz = new_sz;
-
-        while (dists.size() < scratch_sz) {
-            dists.emplace_back();
-            dists_alt.emplace_back();
-            dist_ts.push_back(ts - 1);
-        }
     }
 };
 
@@ -92,10 +95,22 @@ Graph graph_join(const ReadableGraph auto& l, const ReadableGraph auto& r) {
     return g;
 }
 
+Graph copy(const ReadableGraph auto& o) {
+    Graph g;
+    g.growTo(o.size());
+
+    for (VertId s : o.verts()) {
+        for (const auto& e : o.e_succs(s)) {
+            g.add_edge(s, e.val, e.vert);
+        }
+    }
+    return g;
+}
+
 // Syntactic meet.
 Graph graph_meet(const ReadableGraph auto& l, const ReadableGraph auto& r, bool& is_closed) {
     assert(l.size() == r.size());
-    Graph g(Graph::copy(l));
+    Graph g(copy(l));
 
     for (VertId s : r.verts()) {
         for (const auto e : r.e_succs(s)) {
@@ -146,14 +161,14 @@ inline void apply_delta(Graph& g, const EdgeVector& delta) {
     }
 }
 
-inline void close_over_edge(Graph& g, VertId ii, VertId jj) {
+inline void close_over_edge(Graph& g, const VertId ii, const VertId jj) {
     assert(ii != 0 && jj != 0);
     SubGraph g_excl(g, 0);
 
-    Weight c = g_excl.edge_val(ii, jj);
+    const Weight c = g_excl.edge_val(ii, jj);
 
     std::vector<std::pair<VertId, Weight>> src_dec;
-    for (const auto edge : g_excl.e_preds(ii)) {
+    for (const auto& edge : g_excl.e_preds(ii)) {
         VertId se = edge.vert;
         Weight wt_sij = edge.val + c;
 
@@ -172,7 +187,7 @@ inline void close_over_edge(Graph& g, VertId ii, VertId jj) {
     }
 
     std::vector<std::pair<VertId, Weight>> dest_dec;
-    for (const auto edge : g_excl.e_succs(jj)) {
+    for (const auto& edge : g_excl.e_succs(jj)) {
         VertId de = edge.vert;
         Weight wt_ijd = edge.val + c;
         if (de != ii) {
@@ -261,23 +276,16 @@ void compute_sccs(ScratchSpace& scratch, const ReadableGraph auto& x, std::vecto
 }
 
 // Chromatic Dijkstra for close_after_meet.
-void chrome_dijkstra(ScratchSpace& scratch, const ReadableGraph auto& g, const PotentialFunction& p,
-                     std::vector<std::vector<VertId>>& colour_succs, VertId src,
-                     std::vector<std::tuple<VertId, Weight>>& out) {
+void chromatic_dijkstra(ScratchSpace& scratch, const ReadableGraph auto& g, const auto& p,
+                        std::vector<std::vector<VertId>>& colour_succs, VertId src,
+                        std::vector<std::tuple<VertId, Weight>>& out) {
     const size_t sz = g.size();
     if (sz == 0) {
         return;
     }
     scratch.grow(sz);
 
-    // Reset all vertices to infty.
-    scratch.dist_ts.at(scratch.ts_idx) = scratch.ts++;
-    scratch.ts_idx = (scratch.ts_idx + 1) % scratch.dists.size();
-
-    scratch.dists.at(src) = Weight(0);
-    scratch.dist_ts.at(src) = scratch.ts;
-
-    Heap heap = make_heap(scratch.dists);
+    Heap heap = scratch.init_search(src);
 
     for (const auto e : g.e_succs(src)) {
         const VertId dest = e.vert;
@@ -299,7 +307,7 @@ void chrome_dijkstra(ScratchSpace& scratch, const ReadableGraph auto& g, const P
             }
         }
 
-        if (scratch.vert_marks.at(es) == (E_LEFT | E_RIGHT)) {
+        if (scratch.vert_marks.at(es) == E_BOTH) {
             continue;
         }
 
@@ -325,8 +333,8 @@ void chrome_dijkstra(ScratchSpace& scratch, const ReadableGraph auto& g, const P
 }
 
 // Dijkstra recovery for close_after_widen.
-void dijkstra_recover(ScratchSpace& scratch, const ReadableGraph auto& g, const PotentialFunction& p,
-                      const auto& is_stable, VertId src, EdgeVector& delta) {
+void dijkstra_recover(ScratchSpace& scratch, const ReadableGraph auto& g, const auto& p, const auto& is_stable,
+                      VertId src, EdgeVector& delta) {
     const size_t sz = g.size();
     if (sz == 0) {
         return;
@@ -337,13 +345,7 @@ void dijkstra_recover(ScratchSpace& scratch, const ReadableGraph auto& g, const 
 
     scratch.grow(sz);
 
-    scratch.dist_ts.at(scratch.ts_idx) = scratch.ts++;
-    scratch.ts_idx = (scratch.ts_idx + 1) % scratch.dists.size();
-
-    scratch.dists.at(src) = Weight(0);
-    scratch.dist_ts.at(src) = scratch.ts;
-
-    Heap heap = make_heap(scratch.dists);
+    Heap heap = scratch.init_search(src);
 
     for (const auto e : g.e_succs(src)) {
         const VertId dest = e.vert;
@@ -368,7 +370,7 @@ void dijkstra_recover(ScratchSpace& scratch, const ReadableGraph auto& g, const 
             continue;
         }
 
-        const char es_mark = is_stable[es] ? V_STABLE : V_UNSTABLE;
+        const int es_mark = is_stable[es] ? V_STABLE : V_UNSTABLE;
 
         for (const auto e : g.e_succs(es)) {
             const VertId ed = e.vert;
@@ -392,7 +394,7 @@ void dijkstra_recover(ScratchSpace& scratch, const ReadableGraph auto& g, const 
 
 // Forward closure for close_after_assign.
 // Assumes scratch has already been grown to g.size().
-void close_after_assign_fwd(ScratchSpace& scratch, const ReadableGraph auto& g, const PotentialFunction& p, VertId v,
+void close_after_assign_fwd(ScratchSpace& scratch, const ReadableGraph auto& g, const auto& p, VertId v,
                             std::vector<std::tuple<VertId, Weight>>& aux) {
     for (const VertId u : g.verts()) {
         scratch.vert_marks.at(u) = 0;
@@ -420,7 +422,7 @@ void close_after_assign_fwd(ScratchSpace& scratch, const ReadableGraph auto& g, 
         VertId d = *adj_head;
 
         Weight d_wt = scratch.dists.at(d);
-        for (const auto edge : g.e_succs(d)) {
+        for (const auto& edge : g.e_succs(d)) {
             const VertId e = edge.vert;
             Weight e_wt = d_wt + edge.val;
             if (!scratch.vert_marks.at(e)) {
@@ -521,7 +523,7 @@ bool select_potentials(ScratchSpace& scratch, const ReadableGraph auto& g, std::
     return true;
 }
 
-EdgeVector close_after_meet(ScratchSpace& scratch, const ReadableGraph auto& g, const PotentialFunction& pots,
+EdgeVector close_after_meet(ScratchSpace& scratch, const ReadableGraph auto& g, const auto& pots,
                             const ReadableGraph auto& l, const ReadableGraph auto& r) {
     assert(l.size() == r.size());
     const size_t sz = l.size();
@@ -531,7 +533,7 @@ EdgeVector close_after_meet(ScratchSpace& scratch, const ReadableGraph auto& g, 
 
     for (VertId s : g.verts()) {
         for (const auto e : g.e_succs(s)) {
-            unsigned char mark = 0;
+            int mark = 0;
             const VertId d = e.vert;
             if (const auto w = l.lookup(s, d)) {
                 if (*w == e.val) {
@@ -557,7 +559,7 @@ EdgeVector close_after_meet(ScratchSpace& scratch, const ReadableGraph auto& g, 
     EdgeVector delta;
     for (VertId v : g.verts()) {
         adjs.clear();
-        detail::chrome_dijkstra(scratch, g, pots, colour_succs, v, adjs);
+        detail::chromatic_dijkstra(scratch, g, pots, colour_succs, v, adjs);
 
         for (const auto& [d, w] : adjs) {
             delta.emplace_back(v, d, w);
@@ -566,25 +568,23 @@ EdgeVector close_after_meet(ScratchSpace& scratch, const ReadableGraph auto& g, 
     return delta;
 }
 
-EdgeVector close_after_widen(ScratchSpace& scratch, const ReadableGraph auto& g, const PotentialFunction& p,
-                             const auto& is_stable) {
+EdgeVector close_after_widen(ScratchSpace& scratch, const ReadableGraph auto& g, const auto& p, const auto& is_stable) {
     const size_t sz = g.size();
     scratch.grow(sz);
 
     for (VertId v : g.verts()) {
-        scratch.edge_marks.at(v) = is_stable[v] ? V_STABLE : V_UNSTABLE;
+        scratch.stability.at(v) = is_stable[v] ? V_STABLE : V_UNSTABLE;
     }
     EdgeVector delta;
     for (VertId v : g.verts()) {
-        if (!scratch.edge_marks.at(v)) {
-            detail::dijkstra_recover(scratch, g, p, scratch.edge_marks, v, delta);
+        if (!scratch.stability.at(v)) {
+            detail::dijkstra_recover(scratch, g, p, scratch.stability, v, delta);
         }
     }
     return delta;
 }
 
-EdgeVector close_after_assign(ScratchSpace& scratch, const ReadableGraph auto& g, const PotentialFunction& p,
-                              VertId v) {
+EdgeVector close_after_assign(ScratchSpace& scratch, const ReadableGraph auto& g, const auto& p, VertId v) {
     scratch.grow(g.size());
     EdgeVector delta;
     {

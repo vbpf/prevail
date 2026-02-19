@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <ranges>
 #include <vector>
 
 #include <boost/container/flat_map.hpp>
@@ -27,87 +28,61 @@ class TreeSMap final {
     }
 
     struct KeyIterator {
+        using difference_type = std::ptrdiff_t;
+        using value_type = Key;
+
         KeyIterator() = default;
         explicit KeyIterator(const col::const_iterator& _e) : e(_e) {}
 
-        /// return canonical empty iterator
-        static KeyIterator empty_iterator() {
-            static KeyIterator empty_iter;
-            return empty_iter;
-        }
-
         Key operator*() const { return e->first; }
-        bool operator!=(const KeyIterator& o) const { return e != o.e; }
+        bool operator==(const KeyIterator& o) const = default;
         KeyIterator& operator++() {
             ++e;
             return *this;
+        }
+        KeyIterator operator++(int) {
+            auto tmp = *this;
+            ++*this;
+            return tmp;
         }
 
         col::const_iterator e;
     };
 
-    struct KeyConstRange {
+    struct KeyConstRange : std::ranges::view_interface<KeyConstRange> {
         using iterator = KeyIterator;
 
-        explicit KeyConstRange(const col& c) : c{c} {}
-        [[nodiscard]]
-        size_t size() const {
-            return c.size();
+        KeyConstRange() : c{&empty_col()} {}
+        explicit KeyConstRange(const col& c) : c{&c} {}
+
+        static const col& empty_col() {
+            static const col instance;
+            return instance;
         }
 
         [[nodiscard]]
+        size_t size() const {
+            return c->size();
+        }
+        [[nodiscard]]
         KeyIterator begin() const {
-            return KeyIterator(c.cbegin());
+            return KeyIterator(c->cbegin());
         }
         [[nodiscard]]
         KeyIterator end() const {
-            return KeyIterator(c.cend());
+            return KeyIterator(c->cend());
         }
 
-        const col& c;
-    };
-
-    struct ValueRange {
-        explicit ValueRange(const col& c) : c{c} {}
-        [[nodiscard]]
-        size_t size() const {
-            return c.size();
-        }
-
-        [[nodiscard]]
-        auto begin() const {
-            return c.begin();
-        }
-        [[nodiscard]]
-        auto end() const {
-            return c.end();
-        }
-
-        const col& c;
-    };
-
-    struct ValueConstRange {
-        explicit ValueConstRange(const col& c) : c{c} {}
-        [[nodiscard]]
-        size_t size() const {
-            return c.size();
-        }
-
-        [[nodiscard]]
-        auto begin() const {
-            return c.cbegin();
-        }
-        [[nodiscard]]
-        auto end() const {
-            return c.cend();
-        }
-
-        const col& c;
+        const col* c{};
     };
 
     [[nodiscard]]
-    ValueRange values() const {
-        return ValueRange(map);
+    auto begin() const {
+        return map.begin();
+    }
+    [[nodiscard]]
+    auto end() const {
+        return map.end();
     }
 
     [[nodiscard]]
@@ -122,8 +97,7 @@ class TreeSMap final {
 
     [[nodiscard]]
     std::optional<Val> lookup(const Key k) const {
-        const auto v = map.find(k);
-        if (v != map.end()) {
+        if (const auto v = map.find(k); v != map.end()) {
             return {v->second};
         }
         return std::nullopt;
@@ -150,66 +124,20 @@ class AdaptGraph final {
 
     AdaptGraph& operator=(AdaptGraph&& o) noexcept = default;
 
-    template <class G>
-    static AdaptGraph copy(G& o) {
-        AdaptGraph g;
-        g.growTo(o.size());
-
-        for (VertId s : o.verts()) {
-            for (const auto& e : o.e_succs(s)) {
-                g.add_edge(s, e.val, e.vert);
-            }
-        }
-        return g;
-    }
-
-    struct VertConstIterator {
-        VertId v{};
-        const std::vector<int>& is_free;
-
-        VertId operator*() const { return v; }
-
-        bool operator!=(const VertConstIterator& o) {
-            while (v < o.v && is_free[v]) {
-                ++v;
-            }
-            return v < o.v;
-        }
-
-        VertConstIterator& operator++() {
-            ++v;
-            return *this;
-        }
-    };
-    struct VertConstRange {
-        const std::vector<int>& is_free;
-
-        explicit VertConstRange(const std::vector<int>& _is_free) : is_free(_is_free) {}
-
-        [[nodiscard]]
-        VertConstIterator begin() const {
-            return VertConstIterator{0, is_free};
-        }
-        [[nodiscard]]
-        VertConstIterator end() const {
-            return VertConstIterator{static_cast<VertId>(is_free.size()), is_free};
-        }
-
-        [[nodiscard]]
-        size_t size() const {
-            return is_free.size();
-        }
-    };
     [[nodiscard]]
-    VertConstRange verts() const {
-        return VertConstRange{is_free};
+    auto verts() const {
+        return std::views::iota(VertId{0}, static_cast<VertId>(is_free.size())) |
+               std::views::filter([this](const VertId v) { return !is_free[v]; });
     }
 
     struct EdgeConstIterator {
+        using difference_type = std::ptrdiff_t;
+
         struct EdgeRef {
             VertId vert{};
             Weight val;
         };
+        using value_type = EdgeRef;
 
         TreeSMap::ValueIterator it{};
         const std::vector<Weight>* ws{};
@@ -219,64 +147,66 @@ class AdaptGraph final {
         EdgeConstIterator& operator=(const EdgeConstIterator& o) = default;
         EdgeConstIterator() = default;
 
-        /// return canonical empty iterator
-        static EdgeConstIterator empty_iterator() {
-            static EdgeConstIterator empty_iter;
-            return empty_iter;
-        }
-
         EdgeRef operator*() const { return EdgeRef{it->first, (*ws)[it->second]}; }
-        EdgeConstIterator operator++() {
+        EdgeConstIterator& operator++() {
             ++it;
             return *this;
         }
-        bool operator!=(const EdgeConstIterator& o) const { return it != o.it; }
+        EdgeConstIterator operator++(int) {
+            auto tmp = *this;
+            ++*this;
+            return tmp;
+        }
+        bool operator==(const EdgeConstIterator& o) const { return it == o.it; }
     };
 
-    struct EdgeConstRange {
-        using ValueRange = TreeSMap::ValueRange;
+    struct EdgeConstRange : std::ranges::view_interface<EdgeConstRange> {
         using iterator = EdgeConstIterator;
 
-        ValueRange r;
-        const std::vector<Weight>& ws;
+        const TreeSMap* entries{&empty_entries()};
+        const std::vector<Weight>* ws{&empty_ws()};
+
+      private:
+        static const TreeSMap& empty_entries() {
+            static const TreeSMap instance;
+            return instance;
+        }
+        static const std::vector<Weight>& empty_ws() {
+            static constexpr std::vector<Weight> instance;
+            return instance;
+        }
+
+      public:
+        EdgeConstRange() = default;
+        EdgeConstRange(const TreeSMap& entries, const std::vector<Weight>& ws) : entries{&entries}, ws{&ws} {}
 
         [[nodiscard]]
         EdgeConstIterator begin() const {
-            return EdgeConstIterator(r.begin(), ws);
+            return {entries->begin(), *ws};
         }
         [[nodiscard]]
         EdgeConstIterator end() const {
-            return EdgeConstIterator(r.end(), ws);
-        }
-        [[nodiscard]]
-        size_t size() const {
-            return r.size();
+            return {entries->end(), *ws};
         }
     };
 
-    using AdjRange = TreeSMap::KeyConstRange;
-    using AdjConstRange = TreeSMap::KeyConstRange;
-    using NeighbourConstRange = AdjConstRange;
-
     [[nodiscard]]
-    AdjConstRange succs(const VertId v) const {
+    TreeSMap::KeyConstRange succs(const VertId v) const {
         return _succs[v].keys();
     }
     [[nodiscard]]
-    AdjConstRange preds(const VertId v) const {
+    TreeSMap::KeyConstRange preds(const VertId v) const {
         return _preds[v].keys();
     }
 
     [[nodiscard]]
     EdgeConstRange e_succs(const VertId v) const {
-        return {_succs[v].values(), _ws};
+        return {_succs[v], _ws};
     }
     [[nodiscard]]
     EdgeConstRange e_preds(const VertId v) const {
-        return {_preds[v].values(), _ws};
+        return {_preds[v], _ws};
     }
-
-    using ENeighbourConstRange = EdgeConstRange;
 
     // Management
     [[nodiscard]]
@@ -321,7 +251,7 @@ class AdaptGraph final {
             return;
         }
 
-        for (const auto& [key, val] : _succs[v].values()) {
+        for (const auto& [key, val] : _succs[v]) {
             free_widx.push_back(val);
             _preds[key].remove(v);
         }
@@ -362,7 +292,10 @@ class AdaptGraph final {
         return _succs[s].contains(d);
     }
 
-    const Weight& edge_val(const VertId s, const VertId d) const { return _ws[*_succs[s].lookup(d)]; }
+    [[nodiscard]]
+    const Weight& edge_val(const VertId s, const VertId d) const {
+        return _ws[*_succs[s].lookup(d)];
+    }
 
     Weight* lookup(const VertId s, const VertId d) {
         if (const auto idx = _succs[s].lookup(d)) {
@@ -411,26 +344,22 @@ class AdaptGraph final {
         }
     }
 
-    // XXX: g cannot be marked const for complicated reasons
     friend std::ostream& operator<<(std::ostream& o, const AdaptGraph& g) {
         o << "[|";
-        bool first = true;
+        bool first_vert = true;
         for (const VertId v : g.verts()) {
-            auto it = g.e_succs(v).begin();
-            auto end = g.e_succs(v).end();
-
-            if (it != end) {
-                if (first) {
-                    first = false;
+            bool first_edge = true;
+            for (const auto e : g.e_succs(v)) {
+                if (first_edge) {
+                    o << (first_vert ? "" : ", ") << "[v" << v << " -> ";
+                    first_vert = false;
+                    first_edge = false;
                 } else {
                     o << ", ";
                 }
-
-                o << "[v" << v << " -> ";
-                o << "(" << (*it).val << ":" << (*it).vert << ")";
-                for (++it; it != end; ++it) {
-                    o << ", (" << (*it).val << ":" << (*it).vert << ")";
-                }
+                o << "(" << e.val << ":" << e.vert << ")";
+            }
+            if (!first_edge) {
                 o << "]";
             }
         }

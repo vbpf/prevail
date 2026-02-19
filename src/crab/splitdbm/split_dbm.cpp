@@ -6,9 +6,38 @@
 
 namespace splitdbm {
 
-PotentialFunction SplitDBM::pot_func(const std::vector<Weight>& p) {
-    return [&p](const VertId v) -> Weight { return p[v]; };
+namespace {
+
+// Compute deferred relations: bounds from bound_source applied to relations from rel_source.
+Graph compute_deferred(const ReadableGraph auto& bound_source, ReadableGraph auto& rel_source, const size_t sz) {
+    Graph deferred;
+    deferred.growTo(sz);
+    SubGraph rel_excl(rel_source, 0);
+    for (VertId s : rel_excl.verts()) {
+        for (VertId d : rel_excl.succs(s)) {
+            if (auto ws = bound_source.lookup(s, 0)) {
+                if (auto wd = bound_source.lookup(0, d)) {
+                    deferred.add_edge(s, *ws + *wd, d);
+                }
+            }
+        }
+    }
+    return deferred;
 }
+
+// Meet deferred relations into base graph and re-close.
+Graph close_deferred(ScratchSpace& scratch, const ReadableGraph auto& base, const Graph& deferred,
+                     const std::vector<Weight>& pot) {
+    bool is_closed;
+    Graph closed(graph_meet(base, deferred, is_closed));
+    if (!is_closed) {
+        const auto p = [&pot](const VertId v) -> Weight { return pot[v]; };
+        splitdbm::apply_delta(closed, close_after_meet(scratch, SubGraph(closed, 0), p, base, deferred));
+    }
+    return closed;
+}
+
+} // anonymous namespace
 
 SplitDBM::SplitDBM() {
     g_.growTo(1); // Allocate the zero vertex
@@ -87,12 +116,14 @@ bool SplitDBM::add_difference_constraint(const VertId src, const VertId dest, co
     return true;
 }
 
-void SplitDBM::close_after_bound_updates() { apply_delta(close_after_assign(*scratch_, g_, pot_func(potential_), 0)); }
+void SplitDBM::close_after_bound_updates() {
+    apply_delta(close_after_assign(*scratch_, g_, [this](const VertId v) { return potential_[v]; }, 0));
+}
 
 void SplitDBM::apply_delta(const EdgeVector& delta) { splitdbm::apply_delta(g_, delta); }
 
 void SplitDBM::close_after_assign_vertex(const VertId v) {
-    apply_delta(close_after_assign(*scratch_, SubGraph(g_, 0), pot_func(potential_), v));
+    apply_delta(close_after_assign(*scratch_, SubGraph(g_, 0), [this](const VertId u) { return potential_[u]; }, v));
 }
 
 VertId SplitDBM::assign_vertex(const Weight& potential_value,
@@ -199,7 +230,7 @@ void SplitDBM::normalize() {
         bool operator[](const VertId v) const { return !unstable.contains(v); }
     };
 
-    const auto p = pot_func(potential_);
+    const auto p = [this](const VertId v) { return potential_[v]; };
     apply_delta(close_after_widen(*scratch_, SubGraph(g_, 0), p, IsStable(unstable_)));
     apply_delta(close_after_assign(*scratch_, g_, p, 0));
 
@@ -218,7 +249,7 @@ bool SplitDBM::is_subsumed_by(const SplitDBM& left, const SplitDBM& right, const
         }
 
         const VertId x = perm[ox];
-        for (const auto edge : og.e_succs(ox)) {
+        for (const auto& edge : og.e_succs(ox)) {
             const VertId oy = edge.vert;
             const VertId y = perm[oy];
             Weight ow = edge.val;
@@ -264,52 +295,17 @@ SplitDBM SplitDBM::join(const AlignedPair& aligned) {
     GraphPerm gx(perm_x, left.g_);
     GraphPerm gy(perm_y, right.g_);
 
-    // Compute deferred relations: bounds from left applied to relations from right
-    Graph g_deferred_right;
-    g_deferred_right.growTo(sz);
-    SubGraph gy_excl(gy, 0);
-    for (VertId s : gy_excl.verts()) {
-        for (VertId d : gy_excl.succs(s)) {
-            if (auto ws = gx.lookup(s, 0)) {
-                if (auto wd = gx.lookup(0, d)) {
-                    g_deferred_right.add_edge(s, *ws + *wd, d);
-                }
-            }
-        }
-    }
-
-    // Apply deferred relations to right and re-close
-    bool is_closed;
-    Graph g_closed_left(graph_meet(gx, g_deferred_right, is_closed));
-    if (!is_closed) {
-        splitdbm::apply_delta(g_closed_left, close_after_meet(*scratch_, SubGraph(g_closed_left, 0), pot_func(pot_left),
-                                                              gx, g_deferred_right));
-    }
-
-    // Compute deferred relations: bounds from right applied to relations from left
-    Graph g_deferred_left;
-    g_deferred_left.growTo(sz);
-    SubGraph gx_excl(gx, 0);
-    for (VertId s : gx_excl.verts()) {
-        for (VertId d : gx_excl.succs(s)) {
-            if (auto ws = gy.lookup(s, 0)) {
-                if (auto wd = gy.lookup(0, d)) {
-                    g_deferred_left.add_edge(s, *ws + *wd, d);
-                }
-            }
-        }
-    }
-
-    Graph g_closed_right(graph_meet(gy, g_deferred_left, is_closed));
-    if (!is_closed) {
-        splitdbm::apply_delta(g_closed_right, close_after_meet(*scratch_, SubGraph(g_closed_right, 0),
-                                                               pot_func(pot_right), gy, g_deferred_left));
-    }
+    // Compute deferred relations and close
+    auto g_deferred_right = compute_deferred(gx, gy, sz);
+    auto g_closed_left = close_deferred(*scratch_, gx, g_deferred_right, pot_left);
+    auto g_deferred_left = compute_deferred(gy, gx, sz);
+    auto g_closed_right = close_deferred(*scratch_, gy, g_deferred_left, pot_right);
 
     // Syntactic join of the closed graphs
     Graph result_g(graph_join(g_closed_left, g_closed_right));
 
     // Reapply missing independent relations
+    SubGraph gx_excl(gx, 0);
     std::vector<VertId> lb_up, lb_down, ub_up, ub_down;
     for (VertId v : gx_excl.verts()) {
         if (auto wx = gx.lookup(0, v)) {
@@ -354,44 +350,35 @@ SplitDBM SplitDBM::join(const AlignedPair& aligned) {
         }
     }
 
-    return SplitDBM(std::move(result_g), std::move(pot_left), VertSet{});
+    return {std::move(result_g), std::move(pot_left), VertSet{}};
 }
 
 SplitDBM SplitDBM::widen(const AlignedPair& aligned) {
-    const auto& perm_left = aligned.left_perm;
-    const auto& perm_right = aligned.right_perm;
-    const auto& left = aligned.left;
-    const auto& right = aligned.right;
     const size_t sz = aligned.size();
 
     // Build potentials from left (widen uses left's potentials)
     std::vector<Weight> result_pot;
     result_pot.reserve(sz);
     for (size_t i = 0; i < sz; ++i) {
-        result_pot.push_back(left.potential_[perm_left[i]] - left.potential_[0]);
+        result_pot.push_back(aligned.left.potential_[aligned.left_perm[i]] - aligned.left.potential_[0]);
     }
     result_pot[0] = 0;
 
     // Build aligned views
-    const GraphPerm gx(perm_left, left.g_);
-    const GraphPerm gy(perm_right, right.g_);
+    const GraphPerm gx(aligned.left_perm, aligned.left.g_);
+    const GraphPerm gy(aligned.right_perm, aligned.right.g_);
 
     // Perform the widening
-    VertSet result_unstable(left.unstable_);
+    VertSet result_unstable(aligned.left.unstable_);
     Graph result_g(graph_widen(gx, gy, result_unstable));
 
-    return SplitDBM(std::move(result_g), std::move(result_pot), std::move(result_unstable));
+    return {std::move(result_g), std::move(result_pot), std::move(result_unstable)};
 }
 
 std::optional<SplitDBM> SplitDBM::meet(AlignedPair& aligned) {
-    const auto& perm_left = aligned.left_perm;
-    const auto& perm_right = aligned.right_perm;
-    const auto& left = aligned.left;
-    const auto& right = aligned.right;
-
     // Build aligned views
-    const GraphPerm gx(perm_left, left.g_);
-    const GraphPerm gy(perm_right, right.g_);
+    const GraphPerm gx(aligned.left_perm, aligned.left.g_);
+    const GraphPerm gy(aligned.right_perm, aligned.right.g_);
 
     // Compute the syntactic meet of the aligned graphs
     bool is_closed{};
@@ -404,9 +391,9 @@ std::optional<SplitDBM> SplitDBM::meet(AlignedPair& aligned) {
     }
 
     if (!is_closed) {
-        const auto potential_func = pot_func(result_pot);
-        splitdbm::apply_delta(result_g, close_after_meet(*scratch_, SubGraph(result_g, 0), potential_func, gx, gy));
-        splitdbm::apply_delta(result_g, close_after_assign(*scratch_, result_g, potential_func, 0));
+        const auto p = [&result_pot](const VertId v) { return result_pot[v]; };
+        splitdbm::apply_delta(result_g, close_after_meet(*scratch_, SubGraph(result_g, 0), p, gx, gy));
+        splitdbm::apply_delta(result_g, close_after_assign(*scratch_, result_g, p, 0));
     }
 
     return SplitDBM(std::move(result_g), std::move(result_pot), VertSet{});
