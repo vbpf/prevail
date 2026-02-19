@@ -12,6 +12,7 @@
 #include "cfg/cfg.hpp"
 #include "cfg/wto.hpp"
 #include "config.hpp"
+#include "ir/kfunc.hpp"
 #include "ir/program.hpp"
 #include "ir/syntax.hpp"
 #include "platform.hpp"
@@ -162,8 +163,11 @@ static std::optional<RejectionReason> check_instruction_feature_support(const In
         return RejectionReason{.kind = RejectKind::Capability, .detail = std::move(detail)};
     };
 
-    if (std::holds_alternative<CallBtf>(ins)) {
-        return reject_not_implemented("call helper by BTF id");
+    if (const auto p = std::get_if<CallBtf>(&ins)) {
+        std::string why_not;
+        if (!make_kfunc_call(p->btf_id, &why_not)) {
+            return reject_not_implemented(std::move(why_not));
+        }
     }
     if (const auto p = std::get_if<Call>(&ins)) {
         if (!p->is_supported) {
@@ -174,7 +178,8 @@ static std::optional<RejectionReason> check_instruction_feature_support(const In
         return reject_capability("requires conformance group callx");
     }
     if ((std::holds_alternative<Call>(ins) || std::holds_alternative<CallLocal>(ins) ||
-         std::holds_alternative<Callx>(ins) || std::holds_alternative<Exit>(ins)) &&
+         std::holds_alternative<Callx>(ins) || std::holds_alternative<CallBtf>(ins) ||
+         std::holds_alternative<Exit>(ins)) &&
         !supports(platform, bpf_conformance_groups_t::base32)) {
         return reject_capability("requires conformance group base32");
     }
@@ -397,7 +402,14 @@ static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const bool
         if (std::holds_alternative<Undefined>(inst)) {
             continue;
         }
-        if (const auto* pseudo = std::get_if<LoadPseudo>(&inst)) {
+        if (const auto* call_btf = std::get_if<CallBtf>(&inst)) {
+            std::string why_not;
+            const auto call = make_kfunc_call(call_btf->btf_id, &why_not);
+            if (!call) {
+                throw InvalidControlFlow{"not implemented: " + why_not + " (at " + to_string(label) + ")"};
+            }
+            builder.insert(label, *call);
+        } else if (const auto* pseudo = std::get_if<LoadPseudo>(&inst)) {
             builder.insert(label, resolve_pseudo_load(*pseudo));
         } else {
             builder.insert(label, inst);
@@ -418,8 +430,6 @@ static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const bool
         if (std::holds_alternative<Undefined>(inst)) {
             continue;
         }
-        assert(!std::holds_alternative<CallBtf>(inst) && "CallBtf must be rejected before CFG edge construction");
-
         Label fallthrough{builder.prog.cfg().exit_label()};
         if (i + 1 < insts.size()) {
             fallthrough = std::get<0>(insts[i + 1]);

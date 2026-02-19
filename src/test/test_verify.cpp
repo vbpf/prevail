@@ -42,14 +42,47 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
     ebpf_platform_t platform = g_ebpf_platform_linux;
     ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
 
-    SECTION("call helper by BTF id") {
+    SECTION("unknown kfunc btf id") {
         RawProgram raw_prog{
             "", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1}, exit}, info};
         auto prog_or_error = unmarshal(raw_prog, {});
         REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
-                            Catch::Matchers::ContainsSubstring("not implemented: call helper by BTF id") &&
-                                Catch::Matchers::ContainsSubstring("(at 0)"));
+        REQUIRE_THROWS_WITH(
+            Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
+            Catch::Matchers::ContainsSubstring("not implemented: kfunc prototype lookup failed for BTF id 1") &&
+                Catch::Matchers::ContainsSubstring("(at 0)"));
+    }
+
+    SECTION("kfunc call by BTF id is accepted when prototype is known") {
+        RawProgram raw_prog{
+            "", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1000}, exit}, info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
+        REQUIRE(verify(prog));
+    }
+
+    SECTION("kfunc argument typing is enforced from prototype table") {
+        constexpr uint8_t mov64_imm = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
+
+        RawProgram good_raw_prog{
+            "", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1001}, exit}, info};
+        auto good_prog_or_error = unmarshal(good_raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(good_prog_or_error));
+        const Program good_prog = Program::from_sequence(std::get<InstructionSeq>(good_prog_or_error), info, {});
+        REQUIRE(verify(good_prog));
+
+        RawProgram bad_raw_prog{"",
+                                "",
+                                0,
+                                "",
+                                {EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 0},
+                                 EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1001}, exit},
+                                info};
+        auto bad_prog_or_error = unmarshal(bad_raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(bad_prog_or_error));
+        const Program bad_prog = Program::from_sequence(std::get<InstructionSeq>(bad_prog_or_error), info, {});
+        REQUIRE_FALSE(verify(bad_prog));
     }
 
     SECTION("lddw variable_addr pseudo") {
