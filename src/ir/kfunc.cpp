@@ -20,7 +20,7 @@ struct KfuncPrototypeEntry {
     bool requires_privileged;
 };
 
-static constexpr std::array<KfuncPrototypeEntry, 6> kfunc_prototypes{{
+static constexpr std::array<KfuncPrototypeEntry, 7> kfunc_prototypes{{
     {
         1000,
         EbpfHelperPrototype{
@@ -103,6 +103,21 @@ static constexpr std::array<KfuncPrototypeEntry, 6> kfunc_prototypes{{
             .return_type = EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL,
             .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
                               EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
+            .reallocate_packet = false,
+            .context_descriptor = nullptr,
+            .unsupported = false,
+        },
+        KfuncFlags::none,
+        "",
+        false,
+    },
+    {
+        1006,
+        EbpfHelperPrototype{
+            .name = "kfunc_test_readable_mem_or_null_size",
+            .return_type = EBPF_RETURN_TYPE_INTEGER,
+            .argument_type = {EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL, EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO,
+                              EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
             .reallocate_packet = false,
             .context_descriptor = nullptr,
             .unsupported = false,

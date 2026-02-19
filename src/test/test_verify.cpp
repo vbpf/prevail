@@ -62,6 +62,20 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         REQUIRE(verify(prog));
     }
 
+    SECTION("kfunc call in local subprogram does not use helper prototype lookup") {
+        RawProgram raw_prog{"",
+                            "",
+                            0,
+                            "",
+                            {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_LOCAL, .imm = 1}, exit,
+                             EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1000}, exit},
+                            info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
+        REQUIRE(verify(prog));
+    }
+
     SECTION("kfunc map-value return is lowered to map-lookup call contract") {
         constexpr uint8_t mov64_imm = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
         RawProgram raw_prog{"",
@@ -156,6 +170,51 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         REQUIRE(std::holds_alternative<InstructionSeq>(bad_prog_or_error));
         const Program bad_prog = Program::from_sequence(std::get<InstructionSeq>(bad_prog_or_error), info, {});
         REQUIRE_FALSE(verify(bad_prog));
+    }
+
+    SECTION("kfunc pointer-size argument pairs enforce null and size constraints") {
+        constexpr uint8_t mov64_imm = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
+
+        RawProgram good_raw_prog{"",
+                                 "",
+                                 0,
+                                 "",
+                                 {EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 0},
+                                  EbpfInst{.opcode = mov64_imm, .dst = 2, .imm = 0},
+                                  EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1006}, exit},
+                                 info};
+        auto good_prog_or_error = unmarshal(good_raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(good_prog_or_error));
+        const Program good_prog = Program::from_sequence(std::get<InstructionSeq>(good_prog_or_error), info, {});
+        REQUIRE(verify(good_prog));
+
+        RawProgram bad_size_raw_prog{"",
+                                     "",
+                                     0,
+                                     "",
+                                     {EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 0},
+                                      EbpfInst{.opcode = mov64_imm, .dst = 2, .imm = -1},
+                                      EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1006}, exit},
+                                     info};
+        auto bad_size_prog_or_error = unmarshal(bad_size_raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(bad_size_prog_or_error));
+        const Program bad_size_prog =
+            Program::from_sequence(std::get<InstructionSeq>(bad_size_prog_or_error), info, {});
+        REQUIRE_FALSE(verify(bad_size_prog));
+
+        RawProgram bad_nullability_raw_prog{
+            "",
+            "",
+            0,
+            "",
+            {EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 1}, EbpfInst{.opcode = mov64_imm, .dst = 2, .imm = 0},
+             EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1006}, exit},
+            info};
+        auto bad_nullability_prog_or_error = unmarshal(bad_nullability_raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(bad_nullability_prog_or_error));
+        const Program bad_nullability_prog =
+            Program::from_sequence(std::get<InstructionSeq>(bad_nullability_prog_or_error), info, {});
+        REQUIRE_FALSE(verify(bad_nullability_prog));
     }
 
     SECTION("lddw variable_addr pseudo") {
