@@ -152,8 +152,7 @@ ArgSingle::Kind to_arg_single_kind(const ebpf_argument_type_t t) {
     case EBPF_ARGUMENT_TYPE_PTR_TO_CTX_OR_NULL: return ArgSingle::Kind::PTR_TO_CTX;
     default: break;
     }
-    throw std::runtime_error("internal error: unmapped kfunc single-arg type " +
-                             std::to_string(static_cast<int>(t)));
+    throw std::runtime_error("internal error: unmapped kfunc single-arg type " + std::to_string(static_cast<int>(t)));
 }
 
 ArgPair::Kind to_arg_pair_kind(const ebpf_argument_type_t t) {
@@ -164,8 +163,7 @@ ArgPair::Kind to_arg_pair_kind(const ebpf_argument_type_t t) {
     case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM: return ArgPair::Kind::PTR_TO_WRITABLE_MEM;
     default: break;
     }
-    throw std::runtime_error("internal error: unmapped kfunc pair-arg type " +
-                             std::to_string(static_cast<int>(t)));
+    throw std::runtime_error("internal error: unmapped kfunc pair-arg type " + std::to_string(static_cast<int>(t)));
 }
 
 void set_unsupported(std::string* why_not, const std::string& reason) {
