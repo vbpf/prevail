@@ -360,6 +360,27 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
                 throw_fail("FDs cannot be dereferenced directly");
             }
             break;
+        case T_SOCKET:
+        case T_BTF_ID:
+            // TODO: implement proper access checks for these pointer types.
+            if (!is_comparison_check) {
+                throw_fail("Unsupported pointer type for memory access");
+            }
+            break;
+        case T_ALLOC_MEM: {
+            // Treat like shared: offset-bounded access with null check.
+            auto [lb, ub] = lb_ub_access_pair(s, reg.alloc_mem_offset);
+            check_access_shared(lb, ub, reg.alloc_mem_size);
+            if (!is_comparison_check && !s.or_null) {
+                require_value(dom.state, reg.svalue > 0, "Possible null access");
+            }
+            break;
+        }
+        case T_FUNC:
+            if (!is_comparison_check) {
+                throw_fail("Function pointers cannot be dereferenced");
+            }
+            break;
         default: throw_fail("Invalid type");
         }
     }
