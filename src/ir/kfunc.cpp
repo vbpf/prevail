@@ -20,7 +20,7 @@ struct KfuncPrototypeEntry {
     bool requires_privileged;
 };
 
-static constexpr std::array<KfuncPrototypeEntry, 5> kfunc_prototypes{{
+static constexpr std::array<KfuncPrototypeEntry, 6> kfunc_prototypes{{
     {
         1000,
         EbpfHelperPrototype{
@@ -95,6 +95,21 @@ static constexpr std::array<KfuncPrototypeEntry, 5> kfunc_prototypes{{
         KfuncFlags::none,
         "",
         true,
+    },
+    {
+        1005,
+        EbpfHelperPrototype{
+            .name = "kfunc_test_ret_map_value_or_null",
+            .return_type = EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL,
+            .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
+                              EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
+            .reallocate_packet = false,
+            .context_descriptor = nullptr,
+            .unsupported = false,
+        },
+        KfuncFlags::none,
+        "",
+        false,
     },
 }};
 
@@ -175,7 +190,8 @@ std::optional<Call> make_kfunc_call(const int32_t btf_id, const ProgramInfo* inf
         set_unsupported(why_not, std::string("kfunc prototype is unavailable on this platform: ") + proto.name);
         return std::nullopt;
     }
-    if (proto.return_type != EBPF_RETURN_TYPE_INTEGER) {
+    if (proto.return_type != EBPF_RETURN_TYPE_INTEGER &&
+        proto.return_type != EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL) {
         set_unsupported(why_not, std::string("kfunc return type is unsupported on this platform: ") + proto.name);
         return std::nullopt;
     }
