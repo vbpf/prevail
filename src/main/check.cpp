@@ -67,9 +67,7 @@ int main(int argc, char** argv) {
 
     // Parse command line arguments:
 
-    CLI::App app{"PREVAIL is a new eBPF verifier based on abstract interpretation.\n"
-                 "Unsupported language/runtime features are rejected with explicit diagnostics "
-                 "(`rejected:` / `not implemented:`)."};
+    CLI::App app{"PREVAIL is a new eBPF verifier based on abstract interpretation."};
     app.option_defaults()->delimiter(',');
 
     std::string filename;
