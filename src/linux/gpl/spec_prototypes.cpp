@@ -3,136 +3,15 @@
 #include <string_view>
 
 namespace prevail {
-// Unsupported or partially supported return types
+// Most ABI return/argument type constants used below are first-class enum
+// members in spec/ebpf_base.h. Keep only compatibility aliases used by this
+// static prototype table.
 
-// Returns pointer to struct sock_common or NULL on lookup failure.
-// Used by: bpf_sk_lookup_tcp(), bpf_skc_lookup_tcp()
-// Requires: BTF type information for socket structures
-
-// Returns pointer to struct socket (full socket) or NULL.
-// Used by: bpf_sk_lookup_udp(), bpf_sk_fullsock()
-// Requires: BTF type information, socket state validation
-
-// Returns pointer to struct tcp_sock (TCP-specific socket) or NULL.
-// Used by: bpf_tcp_sock(), bpf_get_listener_sock()
-// Requires: BTF type information, TCP socket casting validation
-
-// Returns pointer to dynamically allocated memory or NULL.
-// Used by: bpf_ringbuf_reserve()
-// Requires: Memory allocation tracking, release validation
-// Note: Returned memory must be submitted or discarded, enforced by verifier
-
-// Returns pointer to kernel object identified by BTF type ID, or NULL.
-// Used by: bpf_skc_to_tcp_sock(), bpf_skc_to_tcp6_sock(), bpf_sock_from_file()
-// Requires: BTF type information, dynamic type casting validation
-// Note: Type ID determines what kernel structure is pointed to
-
-// Returns pointer to either generic memory or BTF-identified object, or NULL.
-// Used by: bpf_dynptr_data(), bpf_per_cpu_ptr()
-// Requires: BTF for type identification, memory bounds tracking
-// Note: Dual nature allows flexibility in return type
-
-// Returns non-NULL pointer to kernel object identified by BTF type ID.
-// Used by: bpf_get_current_task_btf(), bpf_task_pt_regs()
-// Requires: BTF type information
-// Note: Unlike _OR_NULL variant, verifier can assume non-null
-
-// Returns non-NULL pointer to either generic memory or BTF-identified object.
-// Used by: bpf_this_cpu_ptr()
-// Requires: BTF for type identification when returning BTF object
-// Note: Always succeeds, never returns NULL
-
-// Alias: Treat non-nullable map value return as nullable for compatibility.
-// Used by: bpf_get_local_storage()
-// Reason: Simplifies implementation - both map value return types use same code path
-// Note: Helper actually never returns NULL, but type system treats as nullable
+// Treat non-nullable map value return as nullable for compatibility.
 #define EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL
 
-// Unsupported or partially supported argument types
-
-// Pointer to struct sock_common identified by BTF.
-// Used by: bpf_sk_release(), bpf_sk_cgroup_id(), bpf_tcp_check_syncookie()
-// Requires: BTF type information, socket pointer validation
-// Note: Base socket type that other socket types derive from
-
-// Pointer to struct bpf_spin_lock within a map value.
-// Used by: bpf_spin_lock(), bpf_spin_unlock()
-// Requires: BTF to locate lock field, 4-byte alignment validation
-// Note: Lock must be at top level of map value struct, cannot be nested
-
-// Pointer to struct sock_common (non-BTF variant).
-// Used by: bpf_sk_fullsock(), bpf_tcp_sock(), bpf_get_listener_sock()
-// Requires: Socket type validation, state checking
-// Note: Less type-safe than PTR_TO_BTF_ID_SOCK_COMMON
-
-// Pointer to kernel object identified by BTF type ID.
-// Used by: bpf_task_storage_get(), bpf_inode_storage_get(), bpf_tcp_send_ack()
-// Requires: BTF type information, type-specific validation
-// Note: Generic BTF pointer - actual type determined by helper's BTF ID specification
-
-// Pointer to long integer for output.
-// Used by: bpf_strtol(), bpf_strtoul(), bpf_get_func_arg(), bpf_get_func_ret()
-// Requires: Writable memory validation, proper alignment (8 bytes)
-// Note: Output parameter for functions that return long values
-
-// Pointer to int for output.
-// Used by: bpf_check_mtu() (for mtu_len parameter)
-// Requires: Writable memory validation, proper alignment (4 bytes)
-// Note: Output parameter for functions that return int values
-
-// Pointer to constant null-terminated string in read-only memory.
-// Used by: bpf_strncmp(), bpf_snprintf() (format string)
-// Requires: Read-only memory validation, null termination verification
-// Note: String must be compile-time constant or from read-only map
-
-// Pointer to a static BPF function for callbacks.
-// Used by: bpf_for_each_map_elem(), bpf_loop(), bpf_timer_set_callback(), bpf_find_vma()
-// Requires: Function signature validation, static function verification
-// Note: Function must be in same BPF program, cannot be helper or external function
-
-// Constant allocation size, zero allowed (for dynamic memory allocation).
-// Used by: bpf_ringbuf_reserve() (size parameter)
-// Requires: Compile-time constant or bounded value, zero is valid (allocation fails gracefully)
-// Note: Used to reserve variable-sized memory chunks
-
-// Pointer to previously allocated memory (for release operations).
-// Used by: bpf_ringbuf_submit(), bpf_ringbuf_discard()
-// Requires: Verification that pointer was from bpf_ringbuf_reserve()
-// Note: Verifier tracks allocation/release pairing
-
-// Alias: Allow NULL map value pointers (for optional map value arguments).
-// Used by: bpf_sk_storage_get() (value parameter when creating new entry)
-// Reason: Simplifies handling - same validation as non-nullable, plus NULL check
-// Note: NULL means "use zero-initialized value" for storage creation
+// Allow NULL map value pointers (optional map value argument compatibility).
 #define EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE_OR_NULL EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE
-
-// Pointer to struct bpf_timer within a map value.
-// Used by: bpf_timer_init(), bpf_timer_set_callback(), bpf_timer_start(), bpf_timer_cancel()
-// Requires: BTF to locate timer field, proper initialization tracking
-// Note: Timer must be in map value, similar constraints to spin locks
-
-// Pointer to per-CPU BTF-identified object.
-// Used by: bpf_per_cpu_ptr() returns this, bpf_this_cpu_ptr()
-// Requires: BTF type information, per-CPU variable handling
-// Note: Points to per-CPU copy of kernel variable
-
-// Alias: Modern name for read-only memory pointer.
-// Reason: Naming consistency with kernel terminology (readonly vs readable)
-// Note: Uses the dedicated read-only-memory argument class.
-
-// Alias: Modern name for optional read-only memory pointer.
-// Reason: Naming consistency with kernel terminology
-// Note: Uses the dedicated optional read-only-memory argument class.
-
-// Alias: Uninitialized map value (output parameter for map operations).
-// Used by: bpf_map_pop_elem(), bpf_map_peek_elem()
-// Reason: Semantically identical to PTR_TO_MAP_VALUE - memory will be written
-// Note: Indicates helper will initialize the memory (pop/peek operations)
-
-// Alias: Const-qualified map pointer (helper won't modify map structure).
-// Used by: bpf_map_peek_elem(), bpf_ringbuf_query() (read-only map operations)
-// Reason: Same validation as PTR_TO_MAP - const is semantic documentation
-// Note: Indicates helper only reads map metadata, doesn't modify map
 
 const ebpf_context_descriptor_t g_sk_buff = sk_buff;
 const ebpf_context_descriptor_t g_xdp_md = xdp_md;
