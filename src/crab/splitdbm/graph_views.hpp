@@ -6,6 +6,12 @@
 // Each view satisfies the same interface as AdaptGraph (verts, succs, preds,
 // e_succs, e_preds, lookup, elem, edge_val, size) so they can be used as
 // template arguments to graph algorithms.
+//
+// IMPORTANT: Methods like succs(), preds(), etc. return lazy std::views::filter
+// ranges.  Each call creates a NEW view object whose iterators are incompatible
+// with those of any other call.  Never compare iterators from separate calls:
+//     WRONG:  v.succs(x).begin() != v.succs(x).end()   // two different views!
+//     RIGHT:  std::ranges::empty(v.succs(x))            // single view object
 
 #include <concepts>
 #include <ranges>

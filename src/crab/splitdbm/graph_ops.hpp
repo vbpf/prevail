@@ -176,7 +176,7 @@ inline void close_over_edge(Graph& g, const VertId ii, const VertId jj) {
         VertId se = edge.vert;
         Weight wt_sij = edge.val + c;
 
-        assert(g_excl.succs(se).begin() != g_excl.succs(se).end());
+        assert(!std::ranges::empty(g_excl.succs(se)));
         if (se != jj) {
             if (Weight* pw = g_excl.lookup(se, jj)) {
                 if (*pw <= wt_sij) {
