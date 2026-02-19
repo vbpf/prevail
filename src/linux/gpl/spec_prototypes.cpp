@@ -890,7 +890,7 @@ static constexpr EbpfHelperPrototype bpf_get_socket_cookie_proto = {
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
         },
-    .context_descriptor = &g_sk_buff,
+    .context_descriptor = nullptr,
 };
 
 static constexpr EbpfHelperPrototype bpf_get_socket_uid_proto = {
@@ -900,7 +900,7 @@ static constexpr EbpfHelperPrototype bpf_get_socket_uid_proto = {
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
         },
-    .context_descriptor = &g_sk_buff,
+    .context_descriptor = nullptr,
 };
 
 static constexpr EbpfHelperPrototype bpf_setsockopt_proto = {

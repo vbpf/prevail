@@ -148,7 +148,9 @@ const std::vector<EbpfProgramType> linux_program_types = {
     PTYPE("raw_tracepoint", &g_tracepoint_descr, BPF_PROG_TYPE_RAW_TRACEPOINT, {"raw_tracepoint/" COMMA "raw_tp/"}),
     PTYPE("raw_tracepoint_writable", &g_tracepoint_descr, BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE,
           {"raw_tracepoint.w/" COMMA "raw_tp.w/"}),
-    PTYPE("cgroup_sock_addr", &g_sock_addr_descr, BPF_PROG_TYPE_CGROUP_SOCK_ADDR, {}),
+    PTYPE("cgroup_sock_addr", &g_sock_addr_descr, BPF_PROG_TYPE_CGROUP_SOCK_ADDR,
+          {"cgroup/bind" COMMA "cgroup/post_bind" COMMA "cgroup/connect" COMMA "cgroup/sendmsg" COMMA
+           "cgroup/recvmsg" COMMA "cgroup/getpeername" COMMA "cgroup/getsockname"}),
     PTYPE("lwt_seg6local", &g_lwt_xmit_descr, BPF_PROG_TYPE_LWT_SEG6LOCAL, {"lwt_seg6local"}),
     PTYPE("lirc_mode2", &g_unspec_descr, BPF_PROG_TYPE_LIRC_MODE2, {"lirc_mode2"}),
     PTYPE("sk_reuseport", &g_sk_reuseport_descr, BPF_PROG_TYPE_SK_REUSEPORT, {"sk_reuseport/"}),
