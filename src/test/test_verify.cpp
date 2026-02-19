@@ -306,15 +306,11 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         auto prog_or_error = unmarshal(raw_prog, {});
         REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
         const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
-        const auto* bin = std::get_if<Bin>(&prog.instruction_at(Label{0}));
-        REQUIRE(bin != nullptr);
-        REQUIRE(bin->op == Bin::Op::MOV);
-        REQUIRE(bin->is64);
-        REQUIRE(bin->lddw);
-        REQUIRE(bin->dst == Reg{2});
-        const auto* imm = std::get_if<Imm>(&bin->v);
-        REQUIRE(imm != nullptr);
-        REQUIRE(imm->v == 11ULL);
+        const auto* pseudo = std::get_if<LoadPseudo>(&prog.instruction_at(Label{0}));
+        REQUIRE(pseudo != nullptr);
+        REQUIRE(pseudo->dst == Reg{2});
+        REQUIRE(pseudo->addr.kind == PseudoAddress::Kind::CODE_ADDR);
+        REQUIRE(pseudo->addr.imm == 11);
     }
 
     SECTION("lddw immediate merges high and low words") {

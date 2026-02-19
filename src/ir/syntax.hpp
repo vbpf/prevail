@@ -396,9 +396,8 @@ struct BoundedLoopCount {
     static constexpr int limit = 100000;
 };
 
-using Assertion =
-    std::variant<Comparable, Addable, ValidDivisor, ValidAccess, ValidStore, ValidSize, ValidMapKeyValue,
-                 ValidCallbackTarget, TypeConstraint, FuncConstraint, ZeroCtxOffset, BoundedLoopCount>;
+using Assertion = std::variant<Comparable, Addable, ValidDivisor, ValidAccess, ValidStore, ValidSize, ValidMapKeyValue,
+                               ValidCallbackTarget, TypeConstraint, FuncConstraint, ZeroCtxOffset, BoundedLoopCount>;
 
 std::ostream& operator<<(std::ostream& os, Instruction const& ins);
 std::string to_string(Instruction const& ins);
