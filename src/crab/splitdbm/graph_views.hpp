@@ -65,7 +65,7 @@ class GraphPerm {
 
     [[nodiscard]]
     auto verts() const {
-        return std::views::iota(VertId{0}, gsl::narrow<VertId>(perm.size()));
+        return std::views::iota(VertId{0}, gsl::narrow_cast<VertId>(perm.size()));
     }
 
     [[nodiscard]]

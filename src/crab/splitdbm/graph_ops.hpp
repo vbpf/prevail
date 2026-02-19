@@ -239,11 +239,11 @@ void strong_connect(ScratchSpace& scratch, const ReadableGraph auto& x, std::vec
             scratch.dual_queue.at(v) = std::min(scratch.dual_queue.at(v), scratch.dual_queue.at(w));
         } else if (scratch.vert_marks.at(w) & 1) {
             scratch.dual_queue.at(v) =
-                std::min(scratch.dual_queue.at(v), gsl::narrow<VertId>(scratch.vert_marks.at(w) >> 1));
+                std::min(scratch.dual_queue.at(v), gsl::narrow_cast<VertId>(scratch.vert_marks.at(w) >> 1));
         }
     }
 
-    if (scratch.dual_queue.at(v) == gsl::narrow<VertId>(scratch.vert_marks.at(v) >> 1)) {
+    if (scratch.dual_queue.at(v) == gsl::narrow_cast<VertId>(scratch.vert_marks.at(v) >> 1)) {
         sccs.emplace_back();
         std::vector<VertId>& scc(sccs.back());
         VertId w;

@@ -126,7 +126,7 @@ class AdaptGraph final {
 
     [[nodiscard]]
     auto verts() const {
-        return std::views::iota(VertId{0}, static_cast<VertId>(is_free.size())) |
+        return std::views::iota(VertId{0}, gsl::narrow_cast<VertId>(is_free.size())) |
                std::views::filter([this](const VertId v) { return !is_free[v]; });
     }
 
