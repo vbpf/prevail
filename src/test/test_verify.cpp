@@ -110,6 +110,28 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         REQUIRE(imm->v == ((2ULL << 32) | 1ULL));
     }
 
+    SECTION("lddw immediate does not sign-extend low word") {
+        RawProgram raw_prog{
+            "",
+            "",
+            0,
+            "",
+            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 3, .src = 0, .imm = -1}, EbpfInst{.imm = 0}, exit},
+            info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
+        const auto* bin = std::get_if<Bin>(&prog.instruction_at(Label{0}));
+        REQUIRE(bin != nullptr);
+        REQUIRE(bin->op == Bin::Op::MOV);
+        REQUIRE(bin->is64);
+        REQUIRE(bin->lddw);
+        REQUIRE(bin->dst == Reg{3});
+        const auto* imm = std::get_if<Imm>(&bin->v);
+        REQUIRE(imm != nullptr);
+        REQUIRE(imm->v == 0x00000000FFFFFFFFULL);
+    }
+
     SECTION("helper id not usable on platform") {
         RawProgram raw_prog{"", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .imm = 0x7fff}, exit}, info};
         auto prog_or_error = unmarshal(raw_prog, {});
