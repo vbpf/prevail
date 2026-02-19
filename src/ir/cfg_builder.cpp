@@ -12,7 +12,7 @@
 #include "cfg/cfg.hpp"
 #include "cfg/wto.hpp"
 #include "config.hpp"
-#include "ir/kfunc.hpp"
+#include "linux/kfunc.hpp"
 #include "ir/program.hpp"
 #include "ir/syntax.hpp"
 #include "platform.hpp"

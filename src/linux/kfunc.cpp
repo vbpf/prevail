@@ -1,7 +1,7 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
 
-#include "ir/kfunc.hpp"
+#include "linux/kfunc.hpp"
 
 #include <array>
 #include <stdexcept>
