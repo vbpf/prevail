@@ -185,7 +185,7 @@ enum class TypeGroup {
     pointer,         ///< any pointer type (ctx | packet | stack | shared | socket | btf_id | alloc_mem)
     ptr_or_num,      ///< pointer | number
     stack_or_packet, ///< stack | packet
-    singleton_ptr,   ///< ctx | packet | stack (NOT "single region" — see is_singleton_type())
+    singleton_ptr,   ///< ctx | packet | stack: uniquely identifiable regions. Unrelated to is_singleton_type.
     socket,          ///< pointer to a socket structure
     btf_id,          ///< pointer to a BTF-typed kernel object
     alloc_mem,       ///< pointer to helper-allocated memory
