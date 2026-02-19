@@ -172,7 +172,7 @@ class AdaptGraph final {
             return instance;
         }
         static const std::vector<Weight>& empty_ws() {
-            static constexpr std::vector<Weight> instance;
+            static std::vector<Weight> instance;
             return instance;
         }
 
