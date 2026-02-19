@@ -249,34 +249,13 @@ std::optional<Call> make_kfunc_call(const int32_t btf_id, const ProgramInfo* inf
         set_unsupported(why_not, std::string("kfunc prototype is unavailable on this platform: ") + proto.name);
         return std::nullopt;
     }
-    switch (proto.return_type) {
-    case EBPF_RETURN_TYPE_INTEGER:
-    case EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL:
-    case EBPF_RETURN_TYPE_INTEGER_OR_NO_RETURN_IF_SUCCEED: break;
-    case EBPF_RETURN_TYPE_PTR_TO_SOCK_COMMON_OR_NULL:
-    case EBPF_RETURN_TYPE_PTR_TO_SOCKET_OR_NULL:
-    case EBPF_RETURN_TYPE_PTR_TO_TCP_SOCKET_OR_NULL:
-        res.return_ptr_type = T_SOCKET;
-        res.return_nullable = true;
-        break;
-    case EBPF_RETURN_TYPE_PTR_TO_ALLOC_MEM_OR_NULL:
-        res.return_ptr_type = T_ALLOC_MEM;
-        res.return_nullable = true;
-        break;
-    case EBPF_RETURN_TYPE_PTR_TO_BTF_ID_OR_NULL:
-    case EBPF_RETURN_TYPE_PTR_TO_MEM_OR_BTF_ID_OR_NULL:
-        res.return_ptr_type = T_BTF_ID;
-        res.return_nullable = true;
-        break;
-    case EBPF_RETURN_TYPE_PTR_TO_BTF_ID:
-    case EBPF_RETURN_TYPE_PTR_TO_MEM_OR_BTF_ID:
-        res.return_ptr_type = T_BTF_ID;
-        res.return_nullable = false;
-        break;
-    default:
+    const auto return_info = classify_call_return_type(proto.return_type);
+    if (!return_info.has_value()) {
         set_unsupported(why_not, std::string("kfunc return type is unsupported on this platform: ") + proto.name);
         return std::nullopt;
     }
+    res.return_ptr_type = return_info->pointer_type;
+    res.return_nullable = return_info->pointer_nullable;
 
     const std::array<ebpf_argument_type_t, 7> args = {
         {EBPF_ARGUMENT_TYPE_DONTCARE, proto.argument_type[0], proto.argument_type[1], proto.argument_type[2],

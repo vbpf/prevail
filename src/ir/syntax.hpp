@@ -212,6 +212,31 @@ struct Call {
     std::string stack_frame_prefix; ///< Variable prefix at point of call.
 };
 
+/// Result of classifying an ABI call return type.
+struct CallReturnTypeInfo {
+    std::optional<TypeEncoding> pointer_type{}; ///< Empty for scalar/map-lookup-style returns.
+    bool pointer_nullable{};
+};
+
+/// Shared helper/kfunc return-type mapping used by unmarshal and kfunc lowering.
+[[nodiscard]]
+inline std::optional<CallReturnTypeInfo> classify_call_return_type(const ebpf_return_type_t return_type) {
+    switch (return_type) {
+    case EBPF_RETURN_TYPE_INTEGER:
+    case EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL:
+    case EBPF_RETURN_TYPE_INTEGER_OR_NO_RETURN_IF_SUCCEED: return CallReturnTypeInfo{};
+    case EBPF_RETURN_TYPE_PTR_TO_SOCK_COMMON_OR_NULL:
+    case EBPF_RETURN_TYPE_PTR_TO_SOCKET_OR_NULL:
+    case EBPF_RETURN_TYPE_PTR_TO_TCP_SOCKET_OR_NULL: return CallReturnTypeInfo{T_SOCKET, true};
+    case EBPF_RETURN_TYPE_PTR_TO_ALLOC_MEM_OR_NULL: return CallReturnTypeInfo{T_ALLOC_MEM, true};
+    case EBPF_RETURN_TYPE_PTR_TO_BTF_ID_OR_NULL:
+    case EBPF_RETURN_TYPE_PTR_TO_MEM_OR_BTF_ID_OR_NULL: return CallReturnTypeInfo{T_BTF_ID, true};
+    case EBPF_RETURN_TYPE_PTR_TO_BTF_ID:
+    case EBPF_RETURN_TYPE_PTR_TO_MEM_OR_BTF_ID: return CallReturnTypeInfo{T_BTF_ID, false};
+    default: return std::nullopt;
+    }
+}
+
 /// Call a "function" (macro) within the same program.
 struct CallLocal {
     Label target;

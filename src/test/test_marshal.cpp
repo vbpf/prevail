@@ -847,6 +847,9 @@ TEST_CASE("unmarshal 64bit immediate", "[disasm][marshal]") {
     compare_unmarshal_marshal(
         EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 2, .imm = 7}, EbpfInst{.imm = 11},
         EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 2, .imm = 7}, EbpfInst{.imm = 11});
+    compare_unmarshal_marshal(
+        EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 2, .imm = 7}, EbpfInst{},
+        EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 2, .imm = 7}, EbpfInst{});
 
     compare_unmarshal_marshal(EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 3, .imm = 7}, EbpfInst{},
                               EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 3, .imm = 7},
