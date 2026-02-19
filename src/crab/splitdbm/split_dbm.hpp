@@ -42,8 +42,6 @@ class SplitDBM {
 
     static inline thread_local prevail::LazyAllocator<ScratchSpace> scratch_;
 
-    static PotentialFunction pot_func(const std::vector<Weight>& p);
-
     void apply_delta(const EdgeVector& delta);
     void close_after_assign_vertex(VertId v);
 
