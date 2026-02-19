@@ -12,8 +12,7 @@ namespace {
 Graph compute_deferred(const ReadableGraph auto& bound_source, ReadableGraph auto& rel_source, const size_t sz) {
     Graph deferred;
     deferred.growTo(sz);
-    SubGraph rel_excl(rel_source, 0);
-    for (VertId s : rel_excl.verts()) {
+    for (SubGraph rel_excl(rel_source, 0); VertId s : rel_excl.verts()) {
         for (VertId d : rel_excl.succs(s)) {
             if (auto ws = bound_source.lookup(s, 0)) {
                 if (auto wd = bound_source.lookup(0, d)) {
@@ -28,7 +27,7 @@ Graph compute_deferred(const ReadableGraph auto& bound_source, ReadableGraph aut
 // Meet deferred relations into base graph and re-close.
 Graph close_deferred(ScratchSpace& scratch, const ReadableGraph auto& base, const Graph& deferred,
                      const std::vector<Weight>& pot) {
-    bool is_closed;
+    bool is_closed{};
     Graph closed(graph_meet(base, deferred, is_closed));
     if (!is_closed) {
         const auto p = [&pot](const VertId v) -> Weight { return pot[v]; };
