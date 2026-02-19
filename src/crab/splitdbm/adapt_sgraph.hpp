@@ -349,7 +349,7 @@ class AdaptGraph final {
         bool first_vert = true;
         for (const VertId v : g.verts()) {
             bool first_edge = true;
-            for (const auto e : g.e_succs(v)) {
+            for (const auto& e : g.e_succs(v)) {
                 if (first_edge) {
                     o << (first_vert ? "" : ", ") << "[v" << v << " -> ";
                     first_vert = false;

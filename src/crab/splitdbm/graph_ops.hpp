@@ -85,7 +85,7 @@ Graph graph_join(const ReadableGraph auto& l, const ReadableGraph auto& r) {
     g.growTo(sz);
 
     for (const VertId s : l.verts()) {
-        for (const auto e : l.e_succs(s)) {
+        for (const auto& e : l.e_succs(s)) {
             const VertId d = e.vert;
             if (const auto pw = r.lookup(s, d)) {
                 g.add_edge(s, std::max(e.val, *pw), d);
@@ -113,7 +113,7 @@ Graph graph_meet(const ReadableGraph auto& l, const ReadableGraph auto& r, bool&
     Graph g(copy(l));
 
     for (VertId s : r.verts()) {
-        for (const auto e : r.e_succs(s)) {
+        for (const auto& e : r.e_succs(s)) {
             if (Weight* pw = g.lookup(s, e.vert)) {
                 if (e.val < *pw) {
                     *pw = e.val;
@@ -134,7 +134,7 @@ Graph graph_widen(const ReadableGraph auto& l, const ReadableGraph auto& r, std:
     Graph g;
     g.growTo(sz);
     for (const VertId s : r.verts()) {
-        for (const auto e : r.e_succs(s)) {
+        for (const auto& e : r.e_succs(s)) {
             const VertId d = e.vert;
             if (auto wl = l.lookup(s, d)) {
                 if (e.val <= *wl) {
@@ -287,7 +287,7 @@ void chromatic_dijkstra(ScratchSpace& scratch, const ReadableGraph auto& g, cons
 
     Heap heap = scratch.init_search(src);
 
-    for (const auto e : g.e_succs(src)) {
+    for (const auto& e : g.e_succs(src)) {
         const VertId dest = e.vert;
         scratch.dists.at(dest) = p(src) + e.val - p(dest);
         scratch.dist_ts.at(dest) = scratch.ts;
@@ -347,7 +347,7 @@ void dijkstra_recover(ScratchSpace& scratch, const ReadableGraph auto& g, const 
 
     Heap heap = scratch.init_search(src);
 
-    for (const auto e : g.e_succs(src)) {
+    for (const auto& e : g.e_succs(src)) {
         const VertId dest = e.vert;
         scratch.dists.at(dest) = p(src) + e.val - p(dest);
         scratch.dist_ts.at(dest) = scratch.ts;
@@ -372,7 +372,7 @@ void dijkstra_recover(ScratchSpace& scratch, const ReadableGraph auto& g, const 
 
         const int es_mark = is_stable[es] ? V_STABLE : V_UNSTABLE;
 
-        for (const auto e : g.e_succs(es)) {
+        for (const auto& e : g.e_succs(es)) {
             const VertId ed = e.vert;
             const Weight v = es_cost + e.val - p(ed);
             if (scratch.dist_ts.at(ed) != scratch.ts || v < scratch.dists.at(ed)) {
@@ -404,7 +404,7 @@ void close_after_assign_fwd(ScratchSpace& scratch, const ReadableGraph auto& g, 
     scratch.dists.at(v) = Weight(0);
     auto adj_head = scratch.dual_queue.begin();
     auto adj_tail = adj_head;
-    for (const auto e : g.e_succs(v)) {
+    for (const auto& e : g.e_succs(v)) {
         const VertId d = e.vert;
         scratch.vert_marks.at(d) = BF_QUEUED;
         scratch.dists.at(d) = e.val;
@@ -485,7 +485,7 @@ bool select_potentials(ScratchSpace& scratch, const ReadableGraph auto& g, std::
 
                 Weight s_pot = potentials[s];
 
-                for (const auto e : g.e_succs(s)) {
+                for (const auto& e : g.e_succs(s)) {
                     const VertId d = e.vert;
                     Weight sd_pot = s_pot + e.val;
                     if (sd_pot < potentials[d]) {
@@ -509,7 +509,7 @@ bool select_potentials(ScratchSpace& scratch, const ReadableGraph auto& g, std::
         while (qtail != qhead) {
             VertId s = *--qtail;
             Weight s_pot = potentials[s];
-            for (const auto e : g.e_succs(s)) {
+            for (const auto& e : g.e_succs(s)) {
                 const VertId d = e.vert;
                 if (s_pot + e.val < potentials[d]) {
                     for (const VertId v : g.verts()) {
@@ -532,7 +532,7 @@ EdgeVector close_after_meet(ScratchSpace& scratch, const ReadableGraph auto& g, 
     std::vector<std::vector<VertId>> colour_succs(2 * sz);
 
     for (VertId s : g.verts()) {
-        for (const auto e : g.e_succs(s)) {
+        for (const auto& e : g.e_succs(s)) {
             int mark = 0;
             const VertId d = e.vert;
             if (const auto w = l.lookup(s, d)) {
@@ -630,7 +630,7 @@ bool repair_potential(ScratchSpace& scratch, const ReadableGraph auto& g, std::v
 
         scratch.dists_alt[es] = p[es] + scratch.dists[es];
 
-        for (const auto e : g.e_succs(es)) {
+        for (const auto& e : g.e_succs(es)) {
             const VertId ed = e.vert;
             if (scratch.dists_alt[ed] == p[ed]) {
                 Weight gnext_ed = scratch.dists_alt[es] + e.val - scratch.dists_alt[ed];

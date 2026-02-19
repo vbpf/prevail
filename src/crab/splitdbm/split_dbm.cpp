@@ -185,7 +185,7 @@ bool SplitDBM::strengthen_bound(const VertId v, const Side side, const Weight& b
         if (!repair_potential(v, 0)) {
             return false;
         }
-        for (const auto e : g_.e_preds(v)) {
+        for (const auto& e : g_.e_preds(v)) {
             if (e.vert == 0) {
                 continue;
             }
@@ -203,7 +203,7 @@ bool SplitDBM::strengthen_bound(const VertId v, const Side side, const Weight& b
         if (!repair_potential(0, v)) {
             return false;
         }
-        for (const auto e : g_.e_succs(v)) {
+        for (const auto& e : g_.e_succs(v)) {
             if (e.vert == 0) {
                 continue;
             }
