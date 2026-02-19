@@ -163,6 +163,8 @@ static std::optional<Call> resolve_kfunc_call(const CallBtf& call_btf, const Pro
     return info.platform->resolve_kfunc_call(call_btf.btf_id, &info, why_not);
 }
 
+using ResolvedKfuncCalls = std::map<Label, Call>;
+
 static std::optional<RejectionReason> check_instruction_feature_support(const Instruction& ins,
                                                                         const ebpf_platform_t& platform) {
     auto reject_not_implemented = [](std::string detail) {
@@ -256,13 +258,23 @@ static std::optional<RejectionReason> check_instruction_feature_support(const In
 
 // Validate instruction-level feature support before CFG construction.
 // This is the user-facing rejection point for unsupported or unavailable features.
-static void validate_instruction_feature_support(const InstructionSeq& insts, const ebpf_platform_t& platform) {
+static void validate_instruction_feature_support(const InstructionSeq& insts, const ProgramInfo& info,
+                                                 ResolvedKfuncCalls* resolved_kfunc_calls) {
+    const auto& platform = *info.platform;
     for (const auto& [label, inst, _] : insts) {
         if (const auto reason = check_instruction_feature_support(inst, platform)) {
             if (reason->kind == RejectKind::NotImplemented) {
                 throw InvalidControlFlow{"not implemented: " + reason->detail + " (at " + to_string(label) + ")"};
             }
             throw InvalidControlFlow{"rejected: " + reason->detail + " (at " + to_string(label) + ")"};
+        }
+        if (const auto* call_btf = std::get_if<CallBtf>(&inst)) {
+            std::string why_not;
+            const auto call = resolve_kfunc_call(*call_btf, info, &why_not);
+            if (!call) {
+                throw InvalidControlFlow{"not implemented: " + why_not + " (at " + to_string(label) + ")"};
+            }
+            resolved_kfunc_calls->insert_or_assign(label, *call);
         }
     }
 }
@@ -394,7 +406,8 @@ static Instruction resolve_pseudo_load(const LoadPseudo& pseudo) {
 }
 
 /// Convert an instruction sequence to a control-flow graph (CFG).
-static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const bool must_have_exit) {
+static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const bool must_have_exit,
+                                         const ResolvedKfuncCalls& resolved_kfunc_calls) {
     CfgBuilder builder;
     assert(thread_local_program_info->platform != nullptr && "platform must be set before CFG construction");
 
@@ -405,13 +418,13 @@ static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const bool
         if (std::holds_alternative<Undefined>(inst)) {
             continue;
         }
-        if (const auto* call_btf = std::get_if<CallBtf>(&inst)) {
-            std::string why_not;
-            const auto call = resolve_kfunc_call(*call_btf, thread_local_program_info.get(), &why_not);
-            if (!call) {
-                throw InvalidControlFlow{"not implemented: " + why_not + " (at " + to_string(label) + ")"};
+        if (std::holds_alternative<CallBtf>(inst)) {
+            const auto it = resolved_kfunc_calls.find(label);
+            if (it == resolved_kfunc_calls.end()) {
+                throw InvalidControlFlow{"internal error: missing validated kfunc resolution (at " + to_string(label) +
+                                         ")"};
             }
-            builder.insert(label, *call);
+            builder.insert(label, it->second);
         } else if (const auto* pseudo = std::get_if<LoadPseudo>(&inst)) {
             builder.insert(label, resolve_pseudo_load(*pseudo));
         } else {
@@ -625,10 +638,11 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
     thread_local_program_info.set(info);
     thread_local_options = options;
     assert(info.platform != nullptr && "platform must be set before instruction feature validation");
-    validate_instruction_feature_support(inst_seq, *info.platform);
+    ResolvedKfuncCalls resolved_kfunc_calls;
+    validate_instruction_feature_support(inst_seq, info, &resolved_kfunc_calls);
 
     // Convert the instruction sequence to a deterministic control-flow graph.
-    CfgBuilder builder = instruction_seq_to_cfg(inst_seq, options.cfg_opts.must_have_exit);
+    CfgBuilder builder = instruction_seq_to_cfg(inst_seq, options.cfg_opts.must_have_exit, resolved_kfunc_calls);
 
     const Wto wto{builder.prog.cfg()};
     validate_tail_call_chain_depth(builder.prog, wto, *info.platform);

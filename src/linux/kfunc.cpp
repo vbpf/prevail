@@ -3,6 +3,7 @@
 
 #include "linux/kfunc.hpp"
 
+#include <algorithm>
 #include <array>
 #include <stdexcept>
 #include <string_view>
@@ -159,11 +160,23 @@ constexpr std::array<KfuncPrototypeEntry, 9> kfunc_prototypes{{
     },
 }};
 
-std::optional<KfuncPrototypeEntry> lookup_kfunc_prototype(const int32_t btf_id) {
-    for (const auto& entry : kfunc_prototypes) {
-        if (entry.btf_id == btf_id) {
-            return entry;
+constexpr bool kfunc_prototypes_are_sorted_by_btf_id() {
+    for (size_t i = 1; i < kfunc_prototypes.size(); ++i) {
+        if (kfunc_prototypes[i - 1].btf_id >= kfunc_prototypes[i].btf_id) {
+            return false;
         }
+    }
+    return true;
+}
+
+static_assert(kfunc_prototypes_are_sorted_by_btf_id(), "kfunc_prototypes must be strictly sorted by btf_id");
+
+std::optional<KfuncPrototypeEntry> lookup_kfunc_prototype(const int32_t btf_id) {
+    const auto it =
+        std::lower_bound(kfunc_prototypes.begin(), kfunc_prototypes.end(), btf_id,
+                         [](const KfuncPrototypeEntry& entry, const int32_t id) { return entry.btf_id < id; });
+    if (it != kfunc_prototypes.end() && it->btf_id == btf_id) {
+        return *it;
     }
     return std::nullopt;
 }
