@@ -249,8 +249,31 @@ std::optional<Call> make_kfunc_call(const int32_t btf_id, const ProgramInfo* inf
         set_unsupported(why_not, std::string("kfunc prototype is unavailable on this platform: ") + proto.name);
         return std::nullopt;
     }
-    if (proto.return_type != EBPF_RETURN_TYPE_INTEGER &&
-        proto.return_type != EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL) {
+    switch (proto.return_type) {
+    case EBPF_RETURN_TYPE_INTEGER:
+    case EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL:
+    case EBPF_RETURN_TYPE_INTEGER_OR_NO_RETURN_IF_SUCCEED: break;
+    case EBPF_RETURN_TYPE_PTR_TO_SOCK_COMMON_OR_NULL:
+    case EBPF_RETURN_TYPE_PTR_TO_SOCKET_OR_NULL:
+    case EBPF_RETURN_TYPE_PTR_TO_TCP_SOCKET_OR_NULL:
+        res.return_ptr_type = T_SOCKET;
+        res.return_nullable = true;
+        break;
+    case EBPF_RETURN_TYPE_PTR_TO_ALLOC_MEM_OR_NULL:
+        res.return_ptr_type = T_ALLOC_MEM;
+        res.return_nullable = true;
+        break;
+    case EBPF_RETURN_TYPE_PTR_TO_BTF_ID_OR_NULL:
+    case EBPF_RETURN_TYPE_PTR_TO_MEM_OR_BTF_ID_OR_NULL:
+        res.return_ptr_type = T_BTF_ID;
+        res.return_nullable = true;
+        break;
+    case EBPF_RETURN_TYPE_PTR_TO_BTF_ID:
+    case EBPF_RETURN_TYPE_PTR_TO_MEM_OR_BTF_ID:
+        res.return_ptr_type = T_BTF_ID;
+        res.return_nullable = false;
+        break;
+    default:
         set_unsupported(why_not, std::string("kfunc return type is unsupported on this platform: ") + proto.name);
         return std::nullopt;
     }
@@ -308,6 +331,33 @@ std::optional<Call> make_kfunc_call(const int32_t btf_id, const ProgramInfo* inf
             i++;
             break;
         }
+        case EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID_SOCK_COMMON:
+        case EBPF_ARGUMENT_TYPE_PTR_TO_SOCK_COMMON:
+            res.singles.push_back({ArgSingle::Kind::PTR_TO_SOCKET, false, Reg{gsl::narrow<uint8_t>(i)}});
+            break;
+        case EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID:
+        case EBPF_ARGUMENT_TYPE_PTR_TO_PERCPU_BTF_ID:
+            res.singles.push_back({ArgSingle::Kind::PTR_TO_BTF_ID, false, Reg{gsl::narrow<uint8_t>(i)}});
+            break;
+        case EBPF_ARGUMENT_TYPE_PTR_TO_ALLOC_MEM:
+            res.singles.push_back({ArgSingle::Kind::PTR_TO_ALLOC_MEM, false, Reg{gsl::narrow<uint8_t>(i)}});
+            break;
+        case EBPF_ARGUMENT_TYPE_PTR_TO_SPIN_LOCK:
+            res.singles.push_back({ArgSingle::Kind::PTR_TO_SPIN_LOCK, false, Reg{gsl::narrow<uint8_t>(i)}});
+            break;
+        case EBPF_ARGUMENT_TYPE_PTR_TO_TIMER:
+            res.singles.push_back({ArgSingle::Kind::PTR_TO_TIMER, false, Reg{gsl::narrow<uint8_t>(i)}});
+            break;
+        case EBPF_ARGUMENT_TYPE_CONST_ALLOC_SIZE_OR_ZERO:
+            res.singles.push_back({ArgSingle::Kind::CONST_SIZE_OR_ZERO, false, Reg{gsl::narrow<uint8_t>(i)}});
+            break;
+        case EBPF_ARGUMENT_TYPE_PTR_TO_LONG:
+            res.singles.push_back({ArgSingle::Kind::PTR_TO_WRITABLE_LONG, false, Reg{gsl::narrow<uint8_t>(i)}});
+            break;
+        case EBPF_ARGUMENT_TYPE_PTR_TO_INT:
+            res.singles.push_back({ArgSingle::Kind::PTR_TO_WRITABLE_INT, false, Reg{gsl::narrow<uint8_t>(i)}});
+            break;
+        case EBPF_ARGUMENT_TYPE_PTR_TO_CONST_STR:
         default:
             set_unsupported(why_not, std::string("kfunc argument type is unsupported on this platform: ") + proto.name);
             return std::nullopt;

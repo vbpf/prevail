@@ -1,6 +1,7 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
 #include <array>
+#include <algorithm>
 
 #include <catch2/catch_all.hpp>
 
@@ -30,7 +31,15 @@ bool has_unmodeled_return_type(const ebpf_return_type_t type) {
     switch (type) {
     case EBPF_RETURN_TYPE_INTEGER:
     case EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL:
-    case EBPF_RETURN_TYPE_INTEGER_OR_NO_RETURN_IF_SUCCEED: return false;
+    case EBPF_RETURN_TYPE_INTEGER_OR_NO_RETURN_IF_SUCCEED:
+    case EBPF_RETURN_TYPE_PTR_TO_SOCK_COMMON_OR_NULL:
+    case EBPF_RETURN_TYPE_PTR_TO_SOCKET_OR_NULL:
+    case EBPF_RETURN_TYPE_PTR_TO_TCP_SOCKET_OR_NULL:
+    case EBPF_RETURN_TYPE_PTR_TO_ALLOC_MEM_OR_NULL:
+    case EBPF_RETURN_TYPE_PTR_TO_BTF_ID_OR_NULL:
+    case EBPF_RETURN_TYPE_PTR_TO_MEM_OR_BTF_ID_OR_NULL:
+    case EBPF_RETURN_TYPE_PTR_TO_BTF_ID:
+    case EBPF_RETURN_TYPE_PTR_TO_MEM_OR_BTF_ID: return false;
     default: return true;
     }
 }
@@ -57,7 +66,18 @@ bool has_unmodeled_argument_type(const ebpf_argument_type_t type) {
     case EBPF_ARGUMENT_TYPE_PTR_TO_STACK:
     case EBPF_ARGUMENT_TYPE_PTR_TO_STACK_OR_NULL:
     case EBPF_ARGUMENT_TYPE_PTR_TO_CTX_OR_NULL:
-    case EBPF_ARGUMENT_TYPE_PTR_TO_FUNC: return false;
+    case EBPF_ARGUMENT_TYPE_PTR_TO_FUNC:
+    case EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID_SOCK_COMMON:
+    case EBPF_ARGUMENT_TYPE_PTR_TO_SOCK_COMMON:
+    case EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID:
+    case EBPF_ARGUMENT_TYPE_PTR_TO_PERCPU_BTF_ID:
+    case EBPF_ARGUMENT_TYPE_PTR_TO_ALLOC_MEM:
+    case EBPF_ARGUMENT_TYPE_PTR_TO_SPIN_LOCK:
+    case EBPF_ARGUMENT_TYPE_PTR_TO_TIMER:
+    case EBPF_ARGUMENT_TYPE_CONST_ALLOC_SIZE_OR_ZERO:
+    case EBPF_ARGUMENT_TYPE_PTR_TO_LONG:
+    case EBPF_ARGUMENT_TYPE_PTR_TO_INT: return false;
+    // PTR_TO_CONST_STR remains unmodeled until const-string provenance is supported.
     default: return true;
     }
 }
@@ -72,6 +92,12 @@ bool has_unmodeled_abi_type(const EbpfHelperPrototype& proto) {
         }
     }
     return false;
+}
+
+bool has_single_arg(const Call& call, const ArgSingle::Kind kind, const Reg reg, const bool or_null = false) {
+    return std::any_of(call.singles.begin(), call.singles.end(), [&](const ArgSingle& arg) {
+        return arg.kind == kind && arg.reg == reg && arg.or_null == or_null;
+    });
 }
 
 } // namespace
@@ -135,7 +161,6 @@ TEST_CASE("linux map-type table covers post-cpumap map ids", "[platform][tables]
 }
 
 TEST_CASE("helper prototypes with unmodeled ABI classes are conservatively rejected", "[platform][tables]") {
-    // Related: #959
     ProgramInfo info{
         .platform = &g_ebpf_platform_linux,
         .type = g_ebpf_platform_linux.get_program_type("socket", ""),
@@ -165,8 +190,71 @@ TEST_CASE("helper prototypes with unmodeled ABI classes are conservatively rejec
     REQUIRE(unmodeled_helpers > 0);
 }
 
+TEST_CASE("new helper ABI classes map to modeled call contracts", "[platform][tables]") {
+    ProgramInfo info{
+        .platform = &g_ebpf_platform_linux,
+        .type = g_ebpf_platform_linux.get_program_type("socket", ""),
+    };
+    thread_local_program_info = info;
+
+    const auto require_supported = [](const int32_t id) -> Call {
+        const Call call = make_call(id, g_ebpf_platform_linux);
+        CAPTURE(id, call.name, call.unsupported_reason);
+        REQUIRE(call.is_supported);
+        return call;
+    };
+
+    const Call strtoul = require_supported(106);
+    REQUIRE(has_single_arg(strtoul, ArgSingle::Kind::PTR_TO_WRITABLE_LONG, Reg{4}));
+
+    const Call ringbuf_reserve = require_supported(131);
+    REQUIRE(ringbuf_reserve.return_ptr_type.has_value());
+    REQUIRE(*ringbuf_reserve.return_ptr_type == T_ALLOC_MEM);
+    REQUIRE(ringbuf_reserve.return_nullable);
+    REQUIRE(has_single_arg(ringbuf_reserve, ArgSingle::Kind::CONST_SIZE_OR_ZERO, Reg{2}));
+
+    const Call ringbuf_submit = require_supported(132);
+    REQUIRE(has_single_arg(ringbuf_submit, ArgSingle::Kind::PTR_TO_ALLOC_MEM, Reg{1}));
+
+    const Call per_cpu_ptr = require_supported(153);
+    REQUIRE(per_cpu_ptr.return_ptr_type.has_value());
+    REQUIRE(*per_cpu_ptr.return_ptr_type == T_BTF_ID);
+    REQUIRE(per_cpu_ptr.return_nullable);
+    REQUIRE(has_single_arg(per_cpu_ptr, ArgSingle::Kind::PTR_TO_BTF_ID, Reg{1}));
+
+    const Call this_cpu_ptr = require_supported(154);
+    REQUIRE(this_cpu_ptr.return_ptr_type.has_value());
+    REQUIRE(*this_cpu_ptr.return_ptr_type == T_BTF_ID);
+    REQUIRE_FALSE(this_cpu_ptr.return_nullable);
+    REQUIRE(has_single_arg(this_cpu_ptr, ArgSingle::Kind::PTR_TO_BTF_ID, Reg{1}));
+
+    const Call check_mtu = require_supported(163);
+    REQUIRE(has_single_arg(check_mtu, ArgSingle::Kind::PTR_TO_WRITABLE_INT, Reg{3}));
+
+    const Call timer_init = require_supported(169);
+    REQUIRE(has_single_arg(timer_init, ArgSingle::Kind::PTR_TO_TIMER, Reg{1}));
+
+    const Call sk_fullsock = require_supported(95);
+    REQUIRE(sk_fullsock.return_ptr_type.has_value());
+    REQUIRE(*sk_fullsock.return_ptr_type == T_SOCKET);
+    REQUIRE(sk_fullsock.return_nullable);
+    REQUIRE(has_single_arg(sk_fullsock, ArgSingle::Kind::PTR_TO_SOCKET, Reg{1}));
+}
+
+TEST_CASE("PTR_TO_CONST_STR helpers remain explicitly unsupported", "[platform][tables]") {
+    ProgramInfo info{
+        .platform = &g_ebpf_platform_linux,
+        .type = g_ebpf_platform_linux.get_program_type("socket", ""),
+    };
+    thread_local_program_info = info;
+
+    const Call strncmp = make_call(182, g_ebpf_platform_linux);
+    CAPTURE(strncmp.name, strncmp.unsupported_reason);
+    REQUIRE_FALSE(strncmp.is_supported);
+    REQUIRE_FALSE(strncmp.unsupported_reason.empty());
+}
+
 TEST_CASE("socket cookie helper availability is not treated as fully context-agnostic", "[platform][tables]") {
-    // Related: #959
     thread_local_program_info = ProgramInfo{
         .platform = &g_ebpf_platform_linux,
         .type = g_ebpf_platform_linux.get_program_type("cgroup/connect4", ""),

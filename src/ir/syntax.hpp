@@ -160,6 +160,14 @@ struct ArgSingle {
         PTR_TO_STACK,
         PTR_TO_FUNC,
         ANYTHING,
+        PTR_TO_SOCKET,
+        PTR_TO_BTF_ID,
+        PTR_TO_ALLOC_MEM,
+        PTR_TO_SPIN_LOCK,
+        PTR_TO_TIMER,
+        CONST_SIZE_OR_ZERO,
+        PTR_TO_WRITABLE_LONG,
+        PTR_TO_WRITABLE_INT,
     } kind{};
     bool or_null{}; ///< true for PTR_TO_CTX_OR_NULL
     Reg reg;
@@ -197,6 +205,8 @@ struct Call {
     std::string unsupported_reason;
     bool is_map_lookup{};
     bool reallocate_packet{};
+    std::optional<TypeEncoding> return_ptr_type{}; ///< Non-integer return pointer type, if any.
+    bool return_nullable{};                        ///< Whether the return pointer may be null.
     std::vector<ArgSingle> singles;
     std::vector<ArgPair> pairs;
     std::string stack_frame_prefix; ///< Variable prefix at point of call.

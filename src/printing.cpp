@@ -270,6 +270,14 @@ std::ostream& operator<<(std::ostream& os, const ArgSingle::Kind kind) {
     case ArgSingle::Kind::MAP_FD_PROGRAMS: return os << "map_fd_programs";
     case ArgSingle::Kind::PTR_TO_MAP_KEY: return os << "map_key";
     case ArgSingle::Kind::PTR_TO_MAP_VALUE: return os << "map_value";
+    case ArgSingle::Kind::PTR_TO_SOCKET: return os << "socket";
+    case ArgSingle::Kind::PTR_TO_BTF_ID: return os << "btf_id";
+    case ArgSingle::Kind::PTR_TO_ALLOC_MEM: return os << "alloc_mem";
+    case ArgSingle::Kind::PTR_TO_SPIN_LOCK: return os << "spin_lock";
+    case ArgSingle::Kind::PTR_TO_TIMER: return os << "timer";
+    case ArgSingle::Kind::CONST_SIZE_OR_ZERO: return os << "size?";
+    case ArgSingle::Kind::PTR_TO_WRITABLE_LONG: return os << "out_long";
+    case ArgSingle::Kind::PTR_TO_WRITABLE_INT: return os << "out_int";
     }
     assert(false);
     return os;
