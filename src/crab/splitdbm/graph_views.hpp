@@ -23,7 +23,7 @@ class GraphPerm {
 
     GraphPerm(const std::vector<VertId>& _perm, const Graph& _g) : g{_g}, perm{_perm}, inv(_g.size(), invalid_vert) {
         assert(perm.size() <= std::numeric_limits<VertId>::max());
-        for (VertId vi = 0; vi < perm.size(); vi++) {
+        for (VertId vi = 0; static_cast<size_t>(vi) < perm.size(); vi++) {
             if (perm[vi] == invalid_vert) {
                 continue;
             }
