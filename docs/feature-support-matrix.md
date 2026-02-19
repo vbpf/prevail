@@ -40,7 +40,7 @@ Capability and configuration checks are described in `Notes / Evidence`; they do
 | `CALL` helper by static ID (`src=0`) | Supported | `src/ir/unmarshal.cpp`: `makeJmp`; `src/ir/cfg_builder.cpp`: `check_instruction_feature_support`; `src/platform.hpp`: `get_helper_prototype`, `is_helper_usable` |
 | `CALL` local subprogram (`src=1`) | Supported | `src/ir/unmarshal.cpp`: `makeJmp`; `src/ir/cfg_builder.cpp` |
 | `CALLX` register-based call | Supported | `src/ir/unmarshal.cpp`: `makeJmp`; `src/ir/cfg_builder.cpp`: `check_instruction_feature_support` |
-| `CALL src=2` (helper by BTF ID) | Not implemented | `src/ir/unmarshal.cpp`: `makeJmp` (`CallBtf`); `src/ir/cfg_builder.cpp`: `check_instruction_feature_support` |
+| `CALL src=2` (helper by BTF ID) | Partial | `src/ir/unmarshal.cpp`: `makeJmp` (`CallBtf`); `src/linux/kfunc.cpp`: `make_kfunc_call`; `src/ir/cfg_builder.cpp`: `check_instruction_feature_support`, `instruction_seq_to_cfg` (table-driven subset; unknown IDs and unavailable program-type/privileged constraints are rejected; return contracts currently limited to integer and map-value-or-null style) |
 | `EXIT` | Supported | `src/ir/unmarshal.cpp`: `makeJmp` (`INST_OP_EXIT`) |
 
 ### Memory and Load/Store Forms

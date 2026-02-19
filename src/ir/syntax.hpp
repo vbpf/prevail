@@ -178,11 +178,17 @@ struct ArgPair {
     constexpr bool operator==(const ArgPair&) const = default;
 };
 
+enum class CallKind {
+    helper,
+    kfunc,
+};
+
 struct Call {
     int32_t func{};
-    // Equality intentionally matches only functional identity (helper id).
+    CallKind kind{CallKind::helper};
+    // Equality intentionally matches only functional identity (call source + id).
     // Metadata such as is_supported/unsupported_reason is diagnostic-only.
-    constexpr bool operator==(const Call& other) const { return func == other.func; }
+    constexpr bool operator==(const Call& other) const { return func == other.func && kind == other.kind; }
 
     // TODO: move name and signature information somewhere else
     std::string name;

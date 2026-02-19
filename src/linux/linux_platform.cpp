@@ -95,6 +95,7 @@
 #endif
 #include "elf_loader.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
+#include "linux/kfunc.hpp"
 #include "linux/linux_platform.hpp"
 #include "platform.hpp"
 #include "verifier.hpp"
@@ -343,10 +344,16 @@ EbpfMapDescriptor& get_map_descriptor_linux(const int map_fd) {
     throw UnmarshalError("map_fd " + std::to_string(map_fd) + " not found");
 }
 
+static std::optional<Call> resolve_kfunc_call_linux(const int32_t btf_id, const ProgramInfo* info,
+                                                    std::string* why_not) {
+    return make_kfunc_call(btf_id, info, why_not);
+}
+
 const ebpf_platform_t g_ebpf_platform_linux = {
     get_program_type_linux,
     get_helper_prototype_linux,
     is_helper_usable_linux,
+    resolve_kfunc_call_linux,
     sizeof(BpfLoadMapDef),
     parse_maps_section_linux,
     get_map_descriptor_linux,
