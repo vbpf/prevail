@@ -462,9 +462,11 @@ struct Unmarshaller {
         case EBPF_ARGUMENT_TYPE_PTR_TO_STACK: return ArgSingle::Kind::PTR_TO_STACK;
         case EBPF_ARGUMENT_TYPE_PTR_TO_STACK_OR_NULL: return ArgSingle::Kind::PTR_TO_STACK;
         case EBPF_ARGUMENT_TYPE_PTR_TO_MAP: return ArgSingle::Kind::MAP_FD;
+        case EBPF_ARGUMENT_TYPE_CONST_PTR_TO_MAP: return ArgSingle::Kind::MAP_FD;
         case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_OF_PROGRAMS: return ArgSingle::Kind::MAP_FD_PROGRAMS;
         case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_KEY: return ArgSingle::Kind::PTR_TO_MAP_KEY;
         case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE: return ArgSingle::Kind::PTR_TO_MAP_VALUE;
+        case EBPF_ARGUMENT_TYPE_PTR_TO_UNINIT_MAP_VALUE: return ArgSingle::Kind::PTR_TO_MAP_VALUE;
         case EBPF_ARGUMENT_TYPE_PTR_TO_CTX: return ArgSingle::Kind::PTR_TO_CTX;
         case EBPF_ARGUMENT_TYPE_PTR_TO_CTX_OR_NULL: return ArgSingle::Kind::PTR_TO_CTX;
         default: break;
@@ -476,6 +478,8 @@ struct Unmarshaller {
         switch (t) {
         case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL:
         case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM: return ArgPair::Kind::PTR_TO_READABLE_MEM;
+        case EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM_OR_NULL:
+        case EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM: return ArgPair::Kind::PTR_TO_READABLE_MEM;
         case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL:
         case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM: return ArgPair::Kind::PTR_TO_WRITABLE_MEM;
         default: break;
@@ -494,7 +498,11 @@ struct Unmarshaller {
             res.unsupported_reason = why;
             return res;
         };
-        if (proto.return_type == EBPF_RETURN_TYPE_UNSUPPORTED) {
+        switch (proto.return_type) {
+        case EBPF_RETURN_TYPE_INTEGER:
+        case EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL:
+        case EBPF_RETURN_TYPE_INTEGER_OR_NO_RETURN_IF_SUCCEED: break;
+        default:
             return mark_unsupported(std::string("helper prototype is unavailable on this platform: ") + proto.name);
         }
         res.reallocate_packet = proto.reallocate_packet;
@@ -510,9 +518,11 @@ struct Unmarshaller {
             case EBPF_ARGUMENT_TYPE_DONTCARE: return res;
             case EBPF_ARGUMENT_TYPE_ANYTHING:
             case EBPF_ARGUMENT_TYPE_PTR_TO_MAP:
+            case EBPF_ARGUMENT_TYPE_CONST_PTR_TO_MAP:
             case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_OF_PROGRAMS:
             case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_KEY:
             case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE:
+            case EBPF_ARGUMENT_TYPE_PTR_TO_UNINIT_MAP_VALUE:
             case EBPF_ARGUMENT_TYPE_PTR_TO_STACK:
             case EBPF_ARGUMENT_TYPE_PTR_TO_CTX:
                 res.singles.push_back({toArgSingleKind(args[i]), false, Reg{gsl::narrow<uint8_t>(i)}});
@@ -521,6 +531,20 @@ struct Unmarshaller {
             case EBPF_ARGUMENT_TYPE_PTR_TO_CTX_OR_NULL:
                 res.singles.push_back({toArgSingleKind(args[i]), true, Reg{gsl::narrow<uint8_t>(i)}});
                 break;
+            case EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID_SOCK_COMMON:
+            case EBPF_ARGUMENT_TYPE_PTR_TO_SPIN_LOCK:
+            case EBPF_ARGUMENT_TYPE_PTR_TO_SOCK_COMMON:
+            case EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID:
+            case EBPF_ARGUMENT_TYPE_PTR_TO_LONG:
+            case EBPF_ARGUMENT_TYPE_PTR_TO_INT:
+            case EBPF_ARGUMENT_TYPE_PTR_TO_CONST_STR:
+            case EBPF_ARGUMENT_TYPE_PTR_TO_FUNC:
+            case EBPF_ARGUMENT_TYPE_CONST_ALLOC_SIZE_OR_ZERO:
+            case EBPF_ARGUMENT_TYPE_PTR_TO_ALLOC_MEM:
+            case EBPF_ARGUMENT_TYPE_PTR_TO_TIMER:
+            case EBPF_ARGUMENT_TYPE_PTR_TO_PERCPU_BTF_ID:
+                return mark_unsupported(std::string("helper argument type is unavailable on this platform: ") +
+                                        proto.name);
             case EBPF_ARGUMENT_TYPE_CONST_SIZE: {
                 // Sanity check: This argument should never be seen in isolation.
                 return mark_unsupported(
@@ -535,6 +559,8 @@ struct Unmarshaller {
             }
             case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL:
             case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM:
+            case EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM_OR_NULL:
+            case EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM:
             case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL:
             case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM:
                 // Sanity check: This argument must be followed by EBPF_ARGUMENT_TYPE_CONST_SIZE or
@@ -554,6 +580,7 @@ struct Unmarshaller {
                 }
                 const bool can_be_zero = (args[i + 1] == EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO);
                 const bool or_null = args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL ||
+                                     args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM_OR_NULL ||
                                      args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL;
                 res.pairs.push_back({toArgPairKind(args[i]), or_null, Reg{gsl::narrow<uint8_t>(i)},
                                      Reg{gsl::narrow<uint8_t>(i + 1)}, can_be_zero});

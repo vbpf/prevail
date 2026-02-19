@@ -3,6 +3,90 @@
 #include <stdexcept>
 #if __linux__
 #include <linux/bpf.h>
+
+#ifndef BPF_PROG_TYPE_CGROUP_SYSCTL
+#define BPF_PROG_TYPE_CGROUP_SYSCTL 23
+#endif
+#ifndef BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE
+#define BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE 24
+#endif
+#ifndef BPF_PROG_TYPE_CGROUP_SOCKOPT
+#define BPF_PROG_TYPE_CGROUP_SOCKOPT 25
+#endif
+#ifndef BPF_PROG_TYPE_TRACING
+#define BPF_PROG_TYPE_TRACING 26
+#endif
+#ifndef BPF_PROG_TYPE_STRUCT_OPS
+#define BPF_PROG_TYPE_STRUCT_OPS 27
+#endif
+#ifndef BPF_PROG_TYPE_EXT
+#define BPF_PROG_TYPE_EXT 28
+#endif
+#ifndef BPF_PROG_TYPE_LSM
+#define BPF_PROG_TYPE_LSM 29
+#endif
+#ifndef BPF_PROG_TYPE_SK_LOOKUP
+#define BPF_PROG_TYPE_SK_LOOKUP 30
+#endif
+#ifndef BPF_PROG_TYPE_SYSCALL
+#define BPF_PROG_TYPE_SYSCALL 31
+#endif
+#ifndef BPF_PROG_TYPE_NETFILTER
+#define BPF_PROG_TYPE_NETFILTER 32
+#endif
+
+#ifndef BPF_MAP_TYPE_XSKMAP
+#define BPF_MAP_TYPE_XSKMAP 17
+#endif
+#ifndef BPF_MAP_TYPE_SOCKHASH
+#define BPF_MAP_TYPE_SOCKHASH 18
+#endif
+#ifndef BPF_MAP_TYPE_CGROUP_STORAGE
+#define BPF_MAP_TYPE_CGROUP_STORAGE 19
+#endif
+#ifndef BPF_MAP_TYPE_REUSEPORT_SOCKARRAY
+#define BPF_MAP_TYPE_REUSEPORT_SOCKARRAY 20
+#endif
+#ifndef BPF_MAP_TYPE_PERCPU_CGROUP_STORAGE
+#define BPF_MAP_TYPE_PERCPU_CGROUP_STORAGE 21
+#endif
+#ifndef BPF_MAP_TYPE_QUEUE
+#define BPF_MAP_TYPE_QUEUE 22
+#endif
+#ifndef BPF_MAP_TYPE_STACK
+#define BPF_MAP_TYPE_STACK 23
+#endif
+#ifndef BPF_MAP_TYPE_SK_STORAGE
+#define BPF_MAP_TYPE_SK_STORAGE 24
+#endif
+#ifndef BPF_MAP_TYPE_DEVMAP_HASH
+#define BPF_MAP_TYPE_DEVMAP_HASH 25
+#endif
+#ifndef BPF_MAP_TYPE_STRUCT_OPS
+#define BPF_MAP_TYPE_STRUCT_OPS 26
+#endif
+#ifndef BPF_MAP_TYPE_RINGBUF
+#define BPF_MAP_TYPE_RINGBUF 27
+#endif
+#ifndef BPF_MAP_TYPE_INODE_STORAGE
+#define BPF_MAP_TYPE_INODE_STORAGE 28
+#endif
+#ifndef BPF_MAP_TYPE_TASK_STORAGE
+#define BPF_MAP_TYPE_TASK_STORAGE 29
+#endif
+#ifndef BPF_MAP_TYPE_BLOOM_FILTER
+#define BPF_MAP_TYPE_BLOOM_FILTER 30
+#endif
+#ifndef BPF_MAP_TYPE_USER_RINGBUF
+#define BPF_MAP_TYPE_USER_RINGBUF 31
+#endif
+#ifndef BPF_MAP_TYPE_CGRP_STORAGE
+#define BPF_MAP_TYPE_CGRP_STORAGE 32
+#endif
+#ifndef BPF_MAP_TYPE_ARENA
+#define BPF_MAP_TYPE_ARENA 33
+#endif
+
 #define PTYPE(name, descr, native_type, prefixes) {name, descr, native_type, prefixes}
 #define PTYPE_PRIVILEGED(name, descr, native_type, prefixes) {name, descr, native_type, prefixes, true}
 #else
@@ -58,15 +142,28 @@ const std::vector<EbpfProgramType> linux_program_types = {
     PTYPE("sk_skb", &g_sk_skb_descr, BPF_PROG_TYPE_SK_SKB, {"sk_skb"}),
     PTYPE("sock_ops", &g_sock_ops_descr, BPF_PROG_TYPE_SOCK_OPS, {"sockops"}),
     PTYPE("tracepoint", &g_tracepoint_descr, BPF_PROG_TYPE_TRACEPOINT, {"tracepoint/"}),
-
-    // The following types are currently mapped to the socket filter program
-    // type but should be mapped to the relevant native linux program type
-    // value.
-    PTYPE("sk_msg", &g_sk_msg_md, BPF_PROG_TYPE_SOCKET_FILTER, {"sk_msg"}),
-    PTYPE("raw_tracepoint", &g_tracepoint_descr, BPF_PROG_TYPE_SOCKET_FILTER, {"raw_tracepoint/"}),
-    PTYPE("cgroup_sock_addr", &g_cgroup_sock_descr, BPF_PROG_TYPE_SOCKET_FILTER, {}),
-    PTYPE("lwt_seg6local", &g_lwt_xmit_descr, BPF_PROG_TYPE_SOCKET_FILTER, {"lwt_seg6local"}),
-    PTYPE("lirc_mode2", &g_sk_msg_md, BPF_PROG_TYPE_SOCKET_FILTER, {"lirc_mode2"}),
+    PTYPE("cgroup_sockopt", &g_sockopt_descr, BPF_PROG_TYPE_CGROUP_SOCKOPT,
+          {"cgroup/getsockopt" COMMA "cgroup/setsockopt"}),
+    PTYPE("sk_msg", &g_sk_msg_md, BPF_PROG_TYPE_SK_MSG, {"sk_msg"}),
+    PTYPE("raw_tracepoint", &g_tracepoint_descr, BPF_PROG_TYPE_RAW_TRACEPOINT, {"raw_tracepoint/" COMMA "raw_tp/"}),
+    PTYPE("raw_tracepoint_writable", &g_tracepoint_descr, BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE,
+          {"raw_tracepoint.w/" COMMA "raw_tp.w/"}),
+    PTYPE("cgroup_sock_addr", &g_sock_addr_descr, BPF_PROG_TYPE_CGROUP_SOCK_ADDR,
+          {"cgroup/bind" COMMA "cgroup/post_bind" COMMA "cgroup/connect" COMMA "cgroup/sendmsg" COMMA
+           "cgroup/recvmsg" COMMA "cgroup/getpeername" COMMA "cgroup/getsockname"}),
+    PTYPE("lwt_seg6local", &g_lwt_xmit_descr, BPF_PROG_TYPE_LWT_SEG6LOCAL, {"lwt_seg6local"}),
+    PTYPE("lirc_mode2", &g_unspec_descr, BPF_PROG_TYPE_LIRC_MODE2, {"lirc_mode2"}),
+    PTYPE("sk_reuseport", &g_sk_reuseport_descr, BPF_PROG_TYPE_SK_REUSEPORT, {"sk_reuseport/"}),
+    PTYPE("flow_dissector", &g_flow_dissector_descr, BPF_PROG_TYPE_FLOW_DISSECTOR, {"flow_dissector"}),
+    PTYPE("cgroup_sysctl", &g_cgroup_sysctl_descr, BPF_PROG_TYPE_CGROUP_SYSCTL, {"cgroup/sysctl"}),
+    PTYPE("ext", &g_unspec_descr, BPF_PROG_TYPE_EXT, {"freplace/"}),
+    PTYPE("tracing", &g_unspec_descr, BPF_PROG_TYPE_TRACING,
+          {"fentry/" COMMA "fexit/" COMMA "fmod_ret/" COMMA "iter/" COMMA "lsm.s/" COMMA "tp_btf/"}),
+    PTYPE("struct_ops", &g_unspec_descr, BPF_PROG_TYPE_STRUCT_OPS, {"struct_ops/"}),
+    PTYPE("lsm", &g_unspec_descr, BPF_PROG_TYPE_LSM, {"lsm/"}),
+    PTYPE("sk_lookup", &g_sk_lookup_descr, BPF_PROG_TYPE_SK_LOOKUP, {"sk_lookup/"}),
+    PTYPE("syscall", &g_unspec_descr, BPF_PROG_TYPE_SYSCALL, {"syscall/"}),
+    PTYPE("netfilter", &g_unspec_descr, BPF_PROG_TYPE_NETFILTER, {"netfilter/"}),
 };
 
 static EbpfProgramType get_program_type_linux(const std::string& section, const std::string& path) {
@@ -120,7 +217,6 @@ static const EbpfMapType linux_map_types[] = {
     {BPF_MAP_TYPE(DEVMAP)},
     {BPF_MAP_TYPE(SOCKMAP)},
     {BPF_MAP_TYPE(CPUMAP)},
-#ifdef BPF_MAP_TYPE_XSKMAP
     {BPF_MAP_TYPE(XSKMAP)},
     {BPF_MAP_TYPE(SOCKHASH)},
     {BPF_MAP_TYPE(CGROUP_STORAGE)},
@@ -128,7 +224,16 @@ static const EbpfMapType linux_map_types[] = {
     {BPF_MAP_TYPE(PERCPU_CGROUP_STORAGE)},
     {BPF_MAP_TYPE(QUEUE)},
     {BPF_MAP_TYPE(STACK)},
-#endif
+    {BPF_MAP_TYPE(SK_STORAGE)},
+    {BPF_MAP_TYPE(DEVMAP_HASH)},
+    {BPF_MAP_TYPE(STRUCT_OPS)},
+    {BPF_MAP_TYPE(RINGBUF)},
+    {BPF_MAP_TYPE(INODE_STORAGE)},
+    {BPF_MAP_TYPE(TASK_STORAGE)},
+    {BPF_MAP_TYPE(BLOOM_FILTER)},
+    {BPF_MAP_TYPE(USER_RINGBUF)},
+    {BPF_MAP_TYPE(CGRP_STORAGE)},
+    {BPF_MAP_TYPE(ARENA)},
 };
 
 EbpfMapType get_map_type_linux(uint32_t platform_specific_type) {

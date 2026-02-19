@@ -1,161 +1,17 @@
 #include "linux/gpl/spec_type_descriptors.hpp"
 #include "platform.hpp"
+#include <string_view>
 
 namespace prevail {
-// Unsupported or partially supported return types
+// Most ABI return/argument type constants used below are first-class enum
+// members in spec/ebpf_base.h. Keep only compatibility aliases used by this
+// static prototype table.
 
-// Returns pointer to struct sock_common or NULL on lookup failure.
-// Used by: bpf_sk_lookup_tcp(), bpf_skc_lookup_tcp()
-// Requires: BTF type information for socket structures
-#define EBPF_RETURN_TYPE_PTR_TO_SOCK_COMMON_OR_NULL EBPF_RETURN_TYPE_UNSUPPORTED
-
-// Returns pointer to struct socket (full socket) or NULL.
-// Used by: bpf_sk_lookup_udp(), bpf_sk_fullsock()
-// Requires: BTF type information, socket state validation
-#define EBPF_RETURN_TYPE_PTR_TO_SOCKET_OR_NULL EBPF_RETURN_TYPE_UNSUPPORTED
-
-// Returns pointer to struct tcp_sock (TCP-specific socket) or NULL.
-// Used by: bpf_tcp_sock(), bpf_get_listener_sock()
-// Requires: BTF type information, TCP socket casting validation
-#define EBPF_RETURN_TYPE_PTR_TO_TCP_SOCKET_OR_NULL EBPF_RETURN_TYPE_UNSUPPORTED
-
-// Returns pointer to dynamically allocated memory or NULL.
-// Used by: bpf_ringbuf_reserve()
-// Requires: Memory allocation tracking, release validation
-// Note: Returned memory must be submitted or discarded, enforced by verifier
-#define EBPF_RETURN_TYPE_PTR_TO_ALLOC_MEM_OR_NULL EBPF_RETURN_TYPE_UNSUPPORTED
-
-// Returns pointer to kernel object identified by BTF type ID, or NULL.
-// Used by: bpf_skc_to_tcp_sock(), bpf_skc_to_tcp6_sock(), bpf_sock_from_file()
-// Requires: BTF type information, dynamic type casting validation
-// Note: Type ID determines what kernel structure is pointed to
-#define EBPF_RETURN_TYPE_PTR_TO_BTF_ID_OR_NULL EBPF_RETURN_TYPE_UNSUPPORTED
-
-// Returns pointer to either generic memory or BTF-identified object, or NULL.
-// Used by: bpf_dynptr_data(), bpf_per_cpu_ptr()
-// Requires: BTF for type identification, memory bounds tracking
-// Note: Dual nature allows flexibility in return type
-#define EBPF_RETURN_TYPE_PTR_TO_MEM_OR_BTF_ID_OR_NULL EBPF_RETURN_TYPE_UNSUPPORTED
-
-// Returns non-NULL pointer to kernel object identified by BTF type ID.
-// Used by: bpf_get_current_task_btf(), bpf_task_pt_regs()
-// Requires: BTF type information
-// Note: Unlike _OR_NULL variant, verifier can assume non-null
-#define EBPF_RETURN_TYPE_PTR_TO_BTF_ID EBPF_RETURN_TYPE_UNSUPPORTED
-
-// Returns non-NULL pointer to either generic memory or BTF-identified object.
-// Used by: bpf_this_cpu_ptr()
-// Requires: BTF for type identification when returning BTF object
-// Note: Always succeeds, never returns NULL
-#define EBPF_RETURN_TYPE_PTR_TO_MEM_OR_BTF_ID EBPF_RETURN_TYPE_UNSUPPORTED
-
-// Alias: Treat non-nullable map value return as nullable for compatibility.
-// Used by: bpf_get_local_storage()
-// Reason: Simplifies implementation - both map value return types use same code path
-// Note: Helper actually never returns NULL, but type system treats as nullable
+// Treat non-nullable map value return as nullable for compatibility.
 #define EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL
 
-// Unsupported or partially supported argument types
-
-// Pointer to struct sock_common identified by BTF.
-// Used by: bpf_sk_release(), bpf_sk_cgroup_id(), bpf_tcp_check_syncookie()
-// Requires: BTF type information, socket pointer validation
-// Note: Base socket type that other socket types derive from
-#define EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID_SOCK_COMMON EBPF_ARGUMENT_TYPE_UNSUPPORTED
-
-// Pointer to struct bpf_spin_lock within a map value.
-// Used by: bpf_spin_lock(), bpf_spin_unlock()
-// Requires: BTF to locate lock field, 4-byte alignment validation
-// Note: Lock must be at top level of map value struct, cannot be nested
-#define EBPF_ARGUMENT_TYPE_PTR_TO_SPIN_LOCK EBPF_ARGUMENT_TYPE_UNSUPPORTED
-
-// Pointer to struct sock_common (non-BTF variant).
-// Used by: bpf_sk_fullsock(), bpf_tcp_sock(), bpf_get_listener_sock()
-// Requires: Socket type validation, state checking
-// Note: Less type-safe than PTR_TO_BTF_ID_SOCK_COMMON
-#define EBPF_ARGUMENT_TYPE_PTR_TO_SOCK_COMMON EBPF_ARGUMENT_TYPE_UNSUPPORTED
-
-// Pointer to kernel object identified by BTF type ID.
-// Used by: bpf_task_storage_get(), bpf_inode_storage_get(), bpf_tcp_send_ack()
-// Requires: BTF type information, type-specific validation
-// Note: Generic BTF pointer - actual type determined by helper's BTF ID specification
-#define EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID EBPF_ARGUMENT_TYPE_UNSUPPORTED
-
-// Pointer to long integer for output.
-// Used by: bpf_strtol(), bpf_strtoul(), bpf_get_func_arg(), bpf_get_func_ret()
-// Requires: Writable memory validation, proper alignment (8 bytes)
-// Note: Output parameter for functions that return long values
-#define EBPF_ARGUMENT_TYPE_PTR_TO_LONG EBPF_ARGUMENT_TYPE_UNSUPPORTED
-
-// Pointer to int for output.
-// Used by: bpf_check_mtu() (for mtu_len parameter)
-// Requires: Writable memory validation, proper alignment (4 bytes)
-// Note: Output parameter for functions that return int values
-#define EBPF_ARGUMENT_TYPE_PTR_TO_INT EBPF_ARGUMENT_TYPE_UNSUPPORTED
-
-// Pointer to constant null-terminated string in read-only memory.
-// Used by: bpf_strncmp(), bpf_snprintf() (format string)
-// Requires: Read-only memory validation, null termination verification
-// Note: String must be compile-time constant or from read-only map
-#define EBPF_ARGUMENT_TYPE_PTR_TO_CONST_STR EBPF_ARGUMENT_TYPE_UNSUPPORTED
-
-// Pointer to a static BPF function for callbacks.
-// Used by: bpf_for_each_map_elem(), bpf_loop(), bpf_timer_set_callback(), bpf_find_vma()
-// Requires: Function signature validation, static function verification
-// Note: Function must be in same BPF program, cannot be helper or external function
-#define EBPF_ARGUMENT_TYPE_PTR_TO_FUNC EBPF_ARGUMENT_TYPE_UNSUPPORTED
-
-// Constant allocation size, zero allowed (for dynamic memory allocation).
-// Used by: bpf_ringbuf_reserve() (size parameter)
-// Requires: Compile-time constant or bounded value, zero is valid (allocation fails gracefully)
-// Note: Used to reserve variable-sized memory chunks
-#define EBPF_ARGUMENT_TYPE_CONST_ALLOC_SIZE_OR_ZERO EBPF_ARGUMENT_TYPE_UNSUPPORTED
-
-// Pointer to previously allocated memory (for release operations).
-// Used by: bpf_ringbuf_submit(), bpf_ringbuf_discard()
-// Requires: Verification that pointer was from bpf_ringbuf_reserve()
-// Note: Verifier tracks allocation/release pairing
-#define EBPF_ARGUMENT_TYPE_PTR_TO_ALLOC_MEM EBPF_ARGUMENT_TYPE_UNSUPPORTED
-
-// Alias: Allow NULL map value pointers (for optional map value arguments).
-// Used by: bpf_sk_storage_get() (value parameter when creating new entry)
-// Reason: Simplifies handling - same validation as non-nullable, plus NULL check
-// Note: NULL means "use zero-initialized value" for storage creation
+// Allow NULL map value pointers (optional map value argument compatibility).
 #define EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE_OR_NULL EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE
-
-// Pointer to struct bpf_timer within a map value.
-// Used by: bpf_timer_init(), bpf_timer_set_callback(), bpf_timer_start(), bpf_timer_cancel()
-// Requires: BTF to locate timer field, proper initialization tracking
-// Note: Timer must be in map value, similar constraints to spin locks
-#define EBPF_ARGUMENT_TYPE_PTR_TO_TIMER EBPF_ARGUMENT_TYPE_UNSUPPORTED
-
-// Pointer to per-CPU BTF-identified object.
-// Used by: bpf_per_cpu_ptr() returns this, bpf_this_cpu_ptr()
-// Requires: BTF type information, per-CPU variable handling
-// Note: Points to per-CPU copy of kernel variable
-#define EBPF_ARGUMENT_TYPE_PTR_TO_PERCPU_BTF_ID EBPF_ARGUMENT_TYPE_UNSUPPORTED
-
-// Alias: Modern name for read-only memory pointer.
-// Reason: Naming consistency with kernel terminology (readonly vs readable)
-// Note: Functionally identical to PTR_TO_READABLE_MEM
-#define EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM
-
-// Alias: Modern name for optional read-only memory pointer.
-// Reason: Naming consistency with kernel terminology
-// Note: Functionally identical to PTR_TO_READABLE_MEM_OR_NULL
-#define EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM_OR_NULL EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL
-
-// Alias: Uninitialized map value (output parameter for map operations).
-// Used by: bpf_map_pop_elem(), bpf_map_peek_elem()
-// Reason: Semantically identical to PTR_TO_MAP_VALUE - memory will be written
-// Note: Indicates helper will initialize the memory (pop/peek operations)
-#define EBPF_ARGUMENT_TYPE_PTR_TO_UNINIT_MAP_VALUE EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE
-
-// Alias: Const-qualified map pointer (helper won't modify map structure).
-// Used by: bpf_map_peek_elem(), bpf_ringbuf_query() (read-only map operations)
-// Reason: Same validation as PTR_TO_MAP - const is semantic documentation
-// Note: Indicates helper only reads map metadata, doesn't modify map
-#define EBPF_ARGUMENT_TYPE_CONST_PTR_TO_MAP EBPF_ARGUMENT_TYPE_PTR_TO_MAP
 
 const ebpf_context_descriptor_t g_sk_buff = sk_buff;
 const ebpf_context_descriptor_t g_xdp_md = xdp_md;
@@ -167,6 +23,12 @@ const ebpf_context_descriptor_t g_tracepoint_descr = tracepoint_descr;
 const ebpf_context_descriptor_t g_perf_event_descr = perf_event_descr;
 const ebpf_context_descriptor_t g_cgroup_sock_descr = cgroup_sock_descr;
 const ebpf_context_descriptor_t g_sock_ops_descr = sock_ops_descr;
+const ebpf_context_descriptor_t g_sock_addr_descr = sock_addr_descr;
+const ebpf_context_descriptor_t g_sockopt_descr = sockopt_descr;
+const ebpf_context_descriptor_t g_sk_lookup_descr = sk_lookup_descr;
+const ebpf_context_descriptor_t g_sk_reuseport_descr = sk_reuseport_descr;
+const ebpf_context_descriptor_t g_flow_dissector_descr = flow_dissector_descr;
+const ebpf_context_descriptor_t g_cgroup_sysctl_descr = cgroup_sysctl_descr;
 
 // eBPF helpers are documented at the following links:
 // https://github.com/iovisor/bpf-docs/blob/master/bpf_helpers.rst
@@ -908,7 +770,7 @@ static constexpr EbpfHelperPrototype bpf_get_socket_cookie_proto = {
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
         },
-    .context_descriptor = &g_sk_buff,
+    .context_descriptor = nullptr,
 };
 
 static constexpr EbpfHelperPrototype bpf_get_socket_uid_proto = {
@@ -1874,8 +1736,7 @@ static constexpr EbpfHelperPrototype bpf_task_storage_delete_proto = {
 };
 
 static constexpr EbpfHelperPrototype bpf_get_current_task_btf_proto = {
-    .name = "get_current_task_btf",
-    .return_type = EBPF_RETURN_TYPE_PTR_TO_BTF_ID,
+    .name = "get_current_task_btf", .return_type = EBPF_RETURN_TYPE_PTR_TO_BTF_ID,
     // .ret_btf_id = &bpf_get_current_btf_ids[0],
 };
 
@@ -2746,6 +2607,20 @@ bool is_helper_usable_linux(const int32_t n) {
     // Check if explicitly marked as unsupported
     if (prototypes[n].unsupported) {
         return false;
+    }
+
+    // Some helpers support multiple incompatible ctx layouts in Linux.
+    // Until attach-type-level helper gating is modeled, keep a conservative
+    // program-type allowlist here instead of treating them as fully generic.
+    if (n == 46) { // bpf_get_socket_cookie
+        const std::string_view program_type = thread_local_program_info->type.name;
+        const bool allowed = program_type == "socket_filter" || program_type == "sched_act" ||
+                             program_type == "sched_cls" || program_type == "sk_skb" || program_type == "cgroup_skb" ||
+                             program_type == "cgroup_sock" || program_type == "cgroup_sock_addr" ||
+                             program_type == "sock_ops" || program_type == "sk_reuseport" || program_type == "tracing";
+        if (!allowed) {
+            return false;
+        }
     }
 
     // If the helper has a context_descriptor, it must match the hook's context_descriptor.
