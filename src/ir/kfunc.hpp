@@ -21,6 +21,6 @@ enum class KfuncFlags : uint32_t {
 
 // Resolve a kfunc BTF ID to a Call contract used by the verifier.
 // Returns nullopt and populates `why_not` if the ID is unknown or currently unsupported.
-std::optional<Call> make_kfunc_call(int32_t btf_id, std::string* why_not = nullptr);
+std::optional<Call> make_kfunc_call(int32_t btf_id, const ProgramInfo* info = nullptr, std::string* why_not = nullptr);
 
 } // namespace prevail

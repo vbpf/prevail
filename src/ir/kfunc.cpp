@@ -4,6 +4,7 @@
 #include "ir/kfunc.hpp"
 
 #include <array>
+#include <string_view>
 
 #include "spec/function_prototypes.hpp"
 
@@ -15,9 +16,11 @@ struct KfuncPrototypeEntry {
     int32_t btf_id;
     EbpfHelperPrototype proto;
     KfuncFlags flags;
+    std::string_view required_program_type;
+    bool requires_privileged;
 };
 
-static constexpr std::array<KfuncPrototypeEntry, 3> kfunc_prototypes{{
+static constexpr std::array<KfuncPrototypeEntry, 5> kfunc_prototypes{{
     {
         1000,
         EbpfHelperPrototype{
@@ -30,6 +33,8 @@ static constexpr std::array<KfuncPrototypeEntry, 3> kfunc_prototypes{{
             .unsupported = false,
         },
         KfuncFlags::none,
+        "",
+        false,
     },
     {
         1001,
@@ -43,6 +48,8 @@ static constexpr std::array<KfuncPrototypeEntry, 3> kfunc_prototypes{{
             .unsupported = false,
         },
         KfuncFlags::none,
+        "",
+        false,
     },
     {
         1002,
@@ -56,14 +63,46 @@ static constexpr std::array<KfuncPrototypeEntry, 3> kfunc_prototypes{{
             .unsupported = false,
         },
         KfuncFlags::acquire,
+        "",
+        false,
+    },
+    {
+        1003,
+        EbpfHelperPrototype{
+            .name = "kfunc_test_xdp_only",
+            .return_type = EBPF_RETURN_TYPE_INTEGER,
+            .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
+                              EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
+            .reallocate_packet = false,
+            .context_descriptor = nullptr,
+            .unsupported = false,
+        },
+        KfuncFlags::none,
+        "xdp",
+        false,
+    },
+    {
+        1004,
+        EbpfHelperPrototype{
+            .name = "kfunc_test_privileged_only",
+            .return_type = EBPF_RETURN_TYPE_INTEGER,
+            .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
+                              EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
+            .reallocate_packet = false,
+            .context_descriptor = nullptr,
+            .unsupported = false,
+        },
+        KfuncFlags::none,
+        "",
+        true,
     },
 }};
 
 static std::optional<KfuncPrototypeEntry> lookup_kfunc_prototype(const int32_t btf_id) {
     for (const auto& entry : kfunc_prototypes) {
-        const auto [id, proto, flags] = entry;
+        const auto [id, proto, flags, required_program_type, requires_privileged] = entry;
         if (id == btf_id) {
-            return KfuncPrototypeEntry{id, proto, flags};
+            return KfuncPrototypeEntry{id, proto, flags, required_program_type, requires_privileged};
         }
     }
     return std::nullopt;
@@ -104,7 +143,7 @@ static void set_unsupported(std::string* why_not, const std::string& reason) {
 
 } // namespace
 
-std::optional<Call> make_kfunc_call(const int32_t btf_id, std::string* why_not) {
+std::optional<Call> make_kfunc_call(const int32_t btf_id, const ProgramInfo* info, std::string* why_not) {
     const auto entry = lookup_kfunc_prototype(btf_id);
     if (!entry) {
         set_unsupported(why_not, "kfunc prototype lookup failed for BTF id " + std::to_string(btf_id));
@@ -120,6 +159,15 @@ std::optional<Call> make_kfunc_call(const int32_t btf_id, std::string* why_not) 
 
     if (entry->flags != KfuncFlags::none) {
         set_unsupported(why_not, std::string("kfunc flags are unsupported on this platform: ") + proto.name);
+        return std::nullopt;
+    }
+    if (info && !entry->required_program_type.empty() && info->type.name != entry->required_program_type) {
+        set_unsupported(why_not,
+                        std::string("kfunc is unavailable for program type ") + info->type.name + ": " + proto.name);
+        return std::nullopt;
+    }
+    if (info && entry->requires_privileged && !info->type.is_privileged) {
+        set_unsupported(why_not, std::string("kfunc requires privileged program type: ") + proto.name);
         return std::nullopt;
     }
 

@@ -165,7 +165,7 @@ static std::optional<RejectionReason> check_instruction_feature_support(const In
 
     if (const auto p = std::get_if<CallBtf>(&ins)) {
         std::string why_not;
-        if (!make_kfunc_call(p->btf_id, &why_not)) {
+        if (!make_kfunc_call(p->btf_id, &thread_local_program_info.get(), &why_not)) {
             return reject_not_implemented(std::move(why_not));
         }
     }
@@ -404,7 +404,7 @@ static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const bool
         }
         if (const auto* call_btf = std::get_if<CallBtf>(&inst)) {
             std::string why_not;
-            const auto call = make_kfunc_call(call_btf->btf_id, &why_not);
+            const auto call = make_kfunc_call(call_btf->btf_id, &thread_local_program_info.get(), &why_not);
             if (!call) {
                 throw InvalidControlFlow{"not implemented: " + why_not + " (at " + to_string(label) + ")"};
             }

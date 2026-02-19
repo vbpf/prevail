@@ -73,6 +73,50 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
                 Catch::Matchers::ContainsSubstring("(at 0)"));
     }
 
+    SECTION("kfunc program type gating is enforced") {
+        RawProgram raw_prog{
+            "", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1003}, exit}, info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        REQUIRE_THROWS_WITH(
+            Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
+            Catch::Matchers::ContainsSubstring("not implemented: kfunc is unavailable for program type") &&
+                Catch::Matchers::ContainsSubstring("(at 0)"));
+
+        ProgramInfo xdp_info{.platform = &platform, .type = platform.get_program_type("xdp", "xdp")};
+        RawProgram xdp_raw_prog{
+            "",      "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1003}, exit},
+            xdp_info};
+        auto xdp_prog_or_error = unmarshal(xdp_raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(xdp_prog_or_error));
+        const Program xdp_prog = Program::from_sequence(std::get<InstructionSeq>(xdp_prog_or_error), xdp_info, {});
+        REQUIRE(verify(xdp_prog));
+    }
+
+    SECTION("kfunc privileged gating is enforced") {
+        RawProgram raw_prog{
+            "", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1004}, exit}, info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        REQUIRE_THROWS_WITH(
+            Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
+            Catch::Matchers::ContainsSubstring("not implemented: kfunc requires privileged program type") &&
+                Catch::Matchers::ContainsSubstring("(at 0)"));
+
+        ProgramInfo kprobe_info{
+            .platform = &platform,
+            .type = platform.get_program_type("kprobe/test_prog", ""),
+        };
+        RawProgram kprobe_raw_prog{
+            "",         "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1004}, exit},
+            kprobe_info};
+        auto kprobe_prog_or_error = unmarshal(kprobe_raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(kprobe_prog_or_error));
+        const Program kprobe_prog =
+            Program::from_sequence(std::get<InstructionSeq>(kprobe_prog_or_error), kprobe_info, {});
+        REQUIRE(verify(kprobe_prog));
+    }
+
     SECTION("kfunc argument typing is enforced from prototype table") {
         constexpr uint8_t mov64_imm = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
 
