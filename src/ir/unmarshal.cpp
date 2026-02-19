@@ -469,6 +469,7 @@ struct Unmarshaller {
         case EBPF_ARGUMENT_TYPE_PTR_TO_UNINIT_MAP_VALUE: return ArgSingle::Kind::PTR_TO_MAP_VALUE;
         case EBPF_ARGUMENT_TYPE_PTR_TO_CTX: return ArgSingle::Kind::PTR_TO_CTX;
         case EBPF_ARGUMENT_TYPE_PTR_TO_CTX_OR_NULL: return ArgSingle::Kind::PTR_TO_CTX;
+        case EBPF_ARGUMENT_TYPE_PTR_TO_FUNC: return ArgSingle::Kind::PTR_TO_FUNC;
         default: break;
         }
         return {};
@@ -525,6 +526,7 @@ struct Unmarshaller {
             case EBPF_ARGUMENT_TYPE_PTR_TO_UNINIT_MAP_VALUE:
             case EBPF_ARGUMENT_TYPE_PTR_TO_STACK:
             case EBPF_ARGUMENT_TYPE_PTR_TO_CTX:
+            case EBPF_ARGUMENT_TYPE_PTR_TO_FUNC:
                 res.singles.push_back({toArgSingleKind(args[i]), false, Reg{gsl::narrow<uint8_t>(i)}});
                 break;
             case EBPF_ARGUMENT_TYPE_PTR_TO_STACK_OR_NULL:
@@ -538,7 +540,6 @@ struct Unmarshaller {
             case EBPF_ARGUMENT_TYPE_PTR_TO_LONG:
             case EBPF_ARGUMENT_TYPE_PTR_TO_INT:
             case EBPF_ARGUMENT_TYPE_PTR_TO_CONST_STR:
-            case EBPF_ARGUMENT_TYPE_PTR_TO_FUNC:
             case EBPF_ARGUMENT_TYPE_CONST_ALLOC_SIZE_OR_ZERO:
             case EBPF_ARGUMENT_TYPE_PTR_TO_ALLOC_MEM:
             case EBPF_ARGUMENT_TYPE_PTR_TO_TIMER:

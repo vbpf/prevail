@@ -53,7 +53,7 @@ Capability and configuration checks are described in `Notes / Evidence`; they do
 | LDDW map FD pseudo (`src=1`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_MAP_FD`, `LoadMapFd`); `src/elf_loader.cpp`: `try_reloc` |
 | LDDW map value pseudo (`src=2`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_MAP_VALUE`, `LoadMapAddress`); `src/elf_loader.cpp`: `try_reloc` |
 | LDDW variable address pseudo (`src=3`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_VARIABLE_ADDR`, `LoadPseudo`); `src/ir/cfg_builder.cpp`: `resolve_pseudo_load` lowers to scalar `Bin::MOV` |
-| LDDW code address pseudo (`src=4`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_CODE_ADDR`, `LoadPseudo`); `src/ir/cfg_builder.cpp`: `resolve_pseudo_load` lowers to scalar `Bin::MOV` |
+| LDDW code address pseudo (`src=4`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_CODE_ADDR`, `LoadPseudo`); `src/crab/ebpf_transformer.cpp`: `operator()(LoadPseudo)` assigns `T_FUNC` |
 | LDDW map-by-index pseudo (`src=5`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw`; `src/ir/cfg_builder.cpp`: `resolve_pseudo_load` converts to `LoadMapFd` |
 | LDDW map-value-by-index pseudo (`src=6`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw`; `src/ir/cfg_builder.cpp`: `resolve_pseudo_load` converts to `LoadMapAddress` |
 | MEMSX sign-extending loads (`LDXSB/LDXSH/LDXSW`) | Supported | `src/ir/unmarshal.cpp`: `makeMemOp` (`INST_MODE_MEMSX`); `src/crab/ebpf_transformer.cpp`: `operator()(const Mem&)`, `do_load_packet_or_shared` |

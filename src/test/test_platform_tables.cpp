@@ -56,7 +56,8 @@ bool has_unmodeled_argument_type(const ebpf_argument_type_t type) {
     case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL:
     case EBPF_ARGUMENT_TYPE_PTR_TO_STACK:
     case EBPF_ARGUMENT_TYPE_PTR_TO_STACK_OR_NULL:
-    case EBPF_ARGUMENT_TYPE_PTR_TO_CTX_OR_NULL: return false;
+    case EBPF_ARGUMENT_TYPE_PTR_TO_CTX_OR_NULL:
+    case EBPF_ARGUMENT_TYPE_PTR_TO_FUNC: return false;
     default: return true;
     }
 }

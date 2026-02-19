@@ -265,9 +265,28 @@ void EbpfTransformer::operator()(const CallBtf&) {
     assert(false && "CallBtf should be rejected before abstract transformation");
 }
 
-// Rejected before abstract interpretation by cfg_builder::check_instruction_feature_support.
-void EbpfTransformer::operator()(const LoadPseudo&) {
-    assert(false && "LoadPseudo should be rejected before abstract transformation");
+static uint64_t merge_imm32_to_u64(const int32_t lo, const int32_t hi) {
+    return static_cast<uint64_t>(static_cast<uint32_t>(lo)) | (static_cast<uint64_t>(static_cast<uint32_t>(hi)) << 32);
+}
+
+void EbpfTransformer::operator()(const LoadPseudo& pseudo) {
+    switch (pseudo.addr.kind) {
+    case PseudoAddress::Kind::CODE_ADDR: {
+        const auto dst = reg_pack(pseudo.dst);
+        const uint64_t imm64 = merge_imm32_to_u64(pseudo.addr.imm, pseudo.addr.next_imm);
+        dom.state.values.assign(dst.svalue, to_signed(imm64));
+        dom.state.values.assign(dst.uvalue, imm64);
+        dom.state.values->overflow_bounds(dst.uvalue, 64, false);
+        dom.state.assign_type(pseudo.dst, T_FUNC);
+        dom.state.havoc_offsets(pseudo.dst);
+        return;
+    }
+    case PseudoAddress::Kind::VARIABLE_ADDR:
+    case PseudoAddress::Kind::MAP_BY_IDX:
+    case PseudoAddress::Kind::MAP_VALUE_BY_IDX:
+        assert(false && "unexpected LoadPseudo kind during abstract transformation");
+        return;
+    }
 }
 
 // Simple truncation function usable with swap_endianness().
@@ -787,6 +806,7 @@ void EbpfTransformer::operator()(const Call& call) {
         case ArgSingle::Kind::MAP_FD_PROGRAMS:
         case ArgSingle::Kind::PTR_TO_MAP_KEY:
         case ArgSingle::Kind::PTR_TO_MAP_VALUE:
+        case ArgSingle::Kind::PTR_TO_FUNC:
         case ArgSingle::Kind::PTR_TO_CTX:
             // Do nothing. We don't track the content of relevant memory regions
             break;

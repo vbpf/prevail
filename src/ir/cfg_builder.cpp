@@ -426,7 +426,12 @@ static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const bool
             }
             builder.insert(label, it->second);
         } else if (const auto* pseudo = std::get_if<LoadPseudo>(&inst)) {
-            builder.insert(label, resolve_pseudo_load(*pseudo));
+            if (pseudo->addr.kind == PseudoAddress::Kind::CODE_ADDR) {
+                // Keep CODE_ADDR as LoadPseudo so abstract transformation can type it as T_FUNC.
+                builder.insert(label, inst);
+            } else {
+                builder.insert(label, resolve_pseudo_load(*pseudo));
+            }
         } else {
             builder.insert(label, inst);
         }
@@ -646,6 +651,51 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
 
     const Wto wto{builder.prog.cfg()};
     validate_tail_call_chain_depth(builder.prog, wto, *info.platform);
+
+    // Record valid callback targets for PTR_TO_FUNC: top-level concrete instruction labels
+    // (no stack-frame prefix, not synthetic jump labels, and not Exit instructions).
+    thread_local_program_info->callback_target_labels.clear();
+    thread_local_program_info->callback_targets_with_exit.clear();
+    for (const Label& label : builder.prog.labels()) {
+        if (label == Label::entry || label == Label::exit || label.isjump() || !label.stack_frame_prefix.empty()) {
+            continue;
+        }
+        if (std::holds_alternative<Exit>(builder.prog.instruction_at(label))) {
+            continue;
+        }
+        thread_local_program_info->callback_target_labels.insert(label.from);
+    }
+
+    // Basic callback body check: callback target must be able to reach a top-level Exit.
+    const auto has_reachable_top_level_exit = [&](const Label& start) {
+        std::set<Label> seen;
+        std::vector<Label> worklist{start};
+        while (!worklist.empty()) {
+            Label label = worklist.back();
+            worklist.pop_back();
+            if (seen.contains(label)) {
+                continue;
+            }
+            seen.insert(label);
+            if (label == Label::exit) {
+                return true;
+            }
+            if (label != Label::entry && builder.prog.cfg().contains(label) &&
+                std::holds_alternative<Exit>(builder.prog.instruction_at(label)) && label.stack_frame_prefix.empty()) {
+                return true;
+            }
+            for (const Label& child : builder.prog.cfg().children_of(label)) {
+                worklist.push_back(child);
+            }
+        }
+        return false;
+    };
+    for (const int32_t label_num : thread_local_program_info->callback_target_labels) {
+        const Label label{gsl::narrow<int>(label_num)};
+        if (has_reachable_top_level_exit(label)) {
+            thread_local_program_info->callback_targets_with_exit.insert(label_num);
+        }
+    }
 
     // Detect loops using Weak Topological Ordering (WTO) and insert counters at loop entry points. WTO provides a
     // hierarchical decomposition of the CFG that identifies all strongly connected components (cycles) and their entry
