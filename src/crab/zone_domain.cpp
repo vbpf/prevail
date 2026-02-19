@@ -94,7 +94,7 @@ VertId ZoneDomain::get_vert(Variable v) {
     if (vert < rev_map_.size()) {
         rev_map_[vert] = v;
     } else {
-        rev_map_.push_back(v);
+        rev_map_.emplace_back(v);
     }
 
     assert(vert != 0);
@@ -360,7 +360,7 @@ using RevMap = std::vector<std::optional<Variable>>;
 using VertMap = boost::container::flat_map<Variable, VertId>;
 
 [[nodiscard]]
-std::pair<VertMap, RevMap> result_mappings(const RevMap& aligned_vars) {
+std::pair<VertMap, RevMap> result_mappings(const RevMap&& aligned_vars) {
     VertMap vmap;
     RevMap revmap = aligned_vars;
 
@@ -383,7 +383,7 @@ std::tuple<AlignedPair, RevMap> ZoneDomain::make_intersection_alignment(const Zo
         if (auto right_vert = try_at(right.vert_map_, var)) {
             perm_left.push_back(left_vert);
             perm_right.push_back(*right_vert);
-            aligned_vars.push_back(var);
+            aligned_vars.emplace_back(var);
         }
     }
 
@@ -405,7 +405,7 @@ std::tuple<AlignedPair, RevMap> ZoneDomain::make_union_alignment(const ZoneDomai
         var_to_index.emplace(var, perm_left.size());
         perm_left.push_back(left_vert);
         perm_right.push_back(NOT_PRESENT);
-        aligned_vars.push_back(var);
+        aligned_vars.emplace_back(var);
         initial_potentials.push_back(left.core_->potential_at(left_vert) - left.core_->potential_at_zero());
     }
 
@@ -415,7 +415,7 @@ std::tuple<AlignedPair, RevMap> ZoneDomain::make_union_alignment(const ZoneDomai
         } else {
             perm_left.push_back(NOT_PRESENT);
             perm_right.push_back(right_vert);
-            aligned_vars.push_back(var);
+            aligned_vars.emplace_back(var);
             initial_potentials.push_back(right.core_->potential_at(right_vert) - right.core_->potential_at_zero());
         }
     }
@@ -464,7 +464,7 @@ ZoneDomain ZoneDomain::widen(const ZoneDomain& o) const {
     auto result_core = std::make_unique<SplitDBM>(SplitDBM::widen(aligned_pair));
 
     // 3. Build result mappings
-    auto [out_vmap, out_revmap] = result_mappings(aligned_vars);
+    auto [out_vmap, out_revmap] = result_mappings(std::move(aligned_vars));
 
     return ZoneDomain(std::move(out_vmap), std::move(out_revmap), std::move(result_core));
 }
@@ -487,7 +487,7 @@ std::optional<ZoneDomain> ZoneDomain::meet(const ZoneDomain& o) const {
     }
 
     // 3. Build result mappings
-    auto [out_vmap, out_revmap] = result_mappings(aligned_vars);
+    auto [out_vmap, out_revmap] = result_mappings(std::move(aligned_vars));
 
     return ZoneDomain(std::move(out_vmap), std::move(out_revmap), std::make_unique<SplitDBM>(std::move(*meet_result)));
 }
@@ -596,7 +596,7 @@ void ZoneDomain::assign(Variable lhs, const LinearExpression& e) {
 
     assert(vert <= rev_map_.size());
     if (vert == rev_map_.size()) {
-        rev_map_.push_back(lhs);
+        rev_map_.emplace_back(lhs);
     } else {
         rev_map_[vert] = lhs;
     }
@@ -680,7 +680,7 @@ static std::string to_string(const Variable vd, const Variable vs, const Weight&
         } else if (w.operator<(0)) {
             elem << vs << "=" << vd << "+" << -w;
         } else {
-            const auto [left, right] = std::minmax(vs, vd, variable_registry->printing_order);
+            const auto [left, right] = std::minmax(vs, vd, VariableRegistry::printing_order);
             elem << left << "=" << right;
         }
     } else {
@@ -708,7 +708,7 @@ StringInvariant ZoneDomain::to_set() const {
             const Variable vd = *rev_map_.at(d);
             const Weight w = g_excl.edge_val(s, d);
             if (w == 0) {
-                least = std::min(least, vd, variable_registry->printing_order);
+                least = std::min(least, vd, VariableRegistry::printing_order);
             } else {
                 diff_csts.emplace(vd, vs, w);
             }

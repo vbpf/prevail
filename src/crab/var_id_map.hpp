@@ -53,7 +53,7 @@ class VarIdMap {
     void insert(Variable v, const size_t id) {
         var_to_id_[v] = id;
         while (id_to_var_.size() <= id) {
-            id_to_var_.push_back(std::nullopt);
+            id_to_var_.emplace_back(std::nullopt);
         }
         id_to_var_[id] = v;
     }
