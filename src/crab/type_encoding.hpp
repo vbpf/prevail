@@ -23,11 +23,15 @@ enum class DataKind {
     shared_offsets,
     stack_offsets,
     shared_region_sizes,
-    stack_numeric_sizes
+    stack_numeric_sizes,
+    socket_offsets,
+    btf_id_offsets,
+    alloc_mem_offsets,
+    alloc_mem_sizes,
 };
 constexpr auto KIND_MIN = DataKind::types;
 constexpr auto KIND_VALUE_MIN = DataKind::svalues;
-constexpr auto KIND_MAX = DataKind::stack_numeric_sizes;
+constexpr auto KIND_MAX = DataKind::alloc_mem_sizes;
 
 std::string name_of(DataKind kind);
 DataKind regkind(const std::string& s);
@@ -43,9 +47,13 @@ enum class TypeEncoding {
     T_PACKET = 5,
     T_STACK = 6,
     T_SHARED = 7,
+    T_SOCKET = 8,
+    T_BTF_ID = 9,
+    T_ALLOC_MEM = 10,
+    T_FUNC = 11,
 };
 using enum TypeEncoding;
-constexpr size_t NUM_TYPE_ENCODINGS = 8;
+constexpr size_t NUM_TYPE_ENCODINGS = 12;
 
 std::string typeset_to_string(const std::vector<TypeEncoding>& items);
 
@@ -154,6 +162,9 @@ extern const TypeSet TS_MAP;
 extern const TypeSet TS_POINTER;
 extern const TypeSet TS_SINGLETON_PTR;
 extern const TypeSet TS_MEM;
+extern const TypeSet TS_SOCKET;
+extern const TypeSet TS_BTF_ID;
+extern const TypeSet TS_ALLOC_MEM;
 
 // ============================================================================
 // TypeGroup
@@ -169,12 +180,16 @@ enum class TypeGroup {
     stack_or_num,    ///< pointer to the stack or a null
     shared,          ///< pointer to shared memory
     map_fd_programs, ///< reg == T_MAP_PROGRAMS
-    mem,             ///< shared | stack | packet = reg >= T_PACKET
-    mem_or_num,      ///< reg >= T_NUM && reg != T_CTX
-    pointer,         ///< reg >= T_CTX
-    ptr_or_num,      ///< reg >= T_NUM
-    stack_or_packet, ///< reg <= T_STACK && reg >= T_PACKET
-    singleton_ptr,   ///< reg <= T_STACK && reg >= T_CTX
+    mem,             ///< shared | stack | packet
+    mem_or_num,      ///< mem | number
+    pointer,         ///< any pointer type (ctx | packet | stack | shared | socket | btf_id | alloc_mem)
+    ptr_or_num,      ///< pointer | number
+    stack_or_packet, ///< stack | packet
+    singleton_ptr,   ///< ctx | packet | stack (NOT "single region" — see is_singleton_type())
+    socket,          ///< pointer to a socket structure
+    btf_id,          ///< pointer to a BTF-typed kernel object
+    alloc_mem,       ///< pointer to helper-allocated memory
+    func,            ///< pointer to a BPF function (callback)
 };
 
 /// Convert a TypeGroup to its corresponding TypeSet.

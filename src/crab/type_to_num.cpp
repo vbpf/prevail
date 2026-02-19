@@ -19,6 +19,9 @@ std::optional<Variable> get_type_offset_variable(const Reg& reg, const TypeEncod
     case T_PACKET: return r.packet_offset;
     case T_SHARED: return r.shared_offset;
     case T_STACK: return r.stack_offset;
+    case T_SOCKET: return r.socket_offset;
+    case T_BTF_ID: return r.btf_id_offset;
+    case T_ALLOC_MEM: return r.alloc_mem_offset;
     default: return {};
     }
 }
@@ -239,6 +242,10 @@ void TypeToNumDomain::havoc_offsets(const Reg& reg) {
     values.havoc(r.shared_region_size);
     values.havoc(r.stack_offset);
     values.havoc(r.stack_numeric_size);
+    values.havoc(r.socket_offset);
+    values.havoc(r.btf_id_offset);
+    values.havoc(r.alloc_mem_offset);
+    values.havoc(r.alloc_mem_size);
 }
 
 void TypeToNumDomain::havoc_register_except_type(const Reg& reg) {

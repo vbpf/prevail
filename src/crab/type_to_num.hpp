@@ -20,6 +20,10 @@ struct RegPack {
     Variable stack_offset;
     Variable shared_region_size;
     Variable stack_numeric_size;
+    Variable socket_offset;
+    Variable btf_id_offset;
+    Variable alloc_mem_offset;
+    Variable alloc_mem_size;
 };
 
 inline RegPack reg_pack(const int i) {
@@ -34,6 +38,10 @@ inline RegPack reg_pack(const int i) {
         .stack_offset = variable_registry->reg(DataKind::stack_offsets, i),
         .shared_region_size = variable_registry->reg(DataKind::shared_region_sizes, i),
         .stack_numeric_size = variable_registry->reg(DataKind::stack_numeric_sizes, i),
+        .socket_offset = variable_registry->reg(DataKind::socket_offsets, i),
+        .btf_id_offset = variable_registry->reg(DataKind::btf_id_offsets, i),
+        .alloc_mem_offset = variable_registry->reg(DataKind::alloc_mem_offsets, i),
+        .alloc_mem_size = variable_registry->reg(DataKind::alloc_mem_sizes, i),
     };
 }
 inline RegPack reg_pack(const Reg r) { return reg_pack(r.v); }
@@ -46,6 +54,10 @@ inline const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
     {T_SHARED, {DataKind::shared_offsets, DataKind::shared_region_sizes}},
     {T_STACK, {DataKind::stack_offsets, DataKind::stack_numeric_sizes}},
     {T_NUM, {}}, // TODO: DataKind::svalues
+    {T_SOCKET, {DataKind::socket_offsets}},
+    {T_BTF_ID, {DataKind::btf_id_offsets}},
+    {T_ALLOC_MEM, {DataKind::alloc_mem_offsets, DataKind::alloc_mem_sizes}},
+    {T_FUNC, {}},
 };
 
 std::optional<Variable> get_type_offset_variable(const Reg& reg, TypeEncoding type);

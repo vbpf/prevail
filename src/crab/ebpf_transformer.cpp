@@ -540,6 +540,7 @@ void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
         case T_MAP: return;
         case T_MAP_PROGRAMS: return;
         case T_NUM: return;
+        case T_FUNC: return;
         case T_CTX: {
             LinearExpression addr = mem_reg.ctx_offset + offset;
             do_load_ctx(state, target_reg, addr, width);
@@ -557,6 +558,14 @@ void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
         }
         case T_SHARED: {
             LinearExpression addr = mem_reg.shared_offset + offset;
+            do_load_packet_or_shared(state, target_reg, width, b.is_signed);
+            break;
+        }
+        case T_SOCKET:
+        case T_BTF_ID:
+        case T_ALLOC_MEM: {
+            // TODO: implement proper load semantics for these pointer types.
+            // For now, treat like packet/shared (havoc the result).
             do_load_packet_or_shared(state, target_reg, width, b.is_signed);
             break;
         }

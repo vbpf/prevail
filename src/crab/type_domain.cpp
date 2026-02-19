@@ -50,6 +50,9 @@ const TypeSet TS_MAP{T_MAP};
 const TypeSet TS_POINTER{T_CTX, T_PACKET, T_STACK, T_SHARED};
 const TypeSet TS_SINGLETON_PTR{T_CTX, T_PACKET, T_STACK};
 const TypeSet TS_MEM{T_PACKET, T_STACK, T_SHARED};
+const TypeSet TS_SOCKET{T_SOCKET};
+const TypeSet TS_BTF_ID{T_BTF_ID};
+const TypeSet TS_ALLOC_MEM{T_ALLOC_MEM};
 
 // ============================================================================
 // TypeEncoding utilities
@@ -63,6 +66,10 @@ static constexpr auto S_MAP_PROGRAMS = "map_fd_programs";
 static constexpr auto S_MAP = "map_fd";
 static constexpr auto S_NUM = "number";
 static constexpr auto S_SHARED = "shared";
+static constexpr auto S_SOCKET = "socket";
+static constexpr auto S_BTF_ID = "btf_id";
+static constexpr auto S_ALLOC_MEM = "alloc_mem";
+static constexpr auto S_FUNC = "func";
 
 std::string name_of(const DataKind kind) {
     switch (kind) {
@@ -74,6 +81,10 @@ std::string name_of(const DataKind kind) {
     case DataKind::shared_region_sizes: return "shared_region_size";
     case DataKind::stack_numeric_sizes: return "stack_numeric_size";
     case DataKind::stack_offsets: return "stack_offset";
+    case DataKind::socket_offsets: return "socket_offset";
+    case DataKind::btf_id_offsets: return "btf_id_offset";
+    case DataKind::alloc_mem_offsets: return "alloc_mem_offset";
+    case DataKind::alloc_mem_sizes: return "alloc_mem_size";
     case DataKind::svalues: return "svalue";
     case DataKind::types: return "type";
     case DataKind::uvalues: return "uvalue";
@@ -92,6 +103,10 @@ DataKind regkind(const std::string& s) {
         {"stack_offset", DataKind::stack_offsets},
         {"shared_region_size", DataKind::shared_region_sizes},
         {"stack_numeric_size", DataKind::stack_numeric_sizes},
+        {"socket_offset", DataKind::socket_offsets},
+        {"btf_id_offset", DataKind::btf_id_offsets},
+        {"alloc_mem_offset", DataKind::alloc_mem_offsets},
+        {"alloc_mem_size", DataKind::alloc_mem_sizes},
         {"svalue", DataKind::svalues},
         {"uvalue", DataKind::uvalues},
     };
@@ -111,16 +126,28 @@ std::ostream& operator<<(std::ostream& os, const TypeEncoding s) {
     case T_MAP: return os << S_MAP;
     case T_MAP_PROGRAMS: return os << S_MAP_PROGRAMS;
     case T_UNINIT: return os << S_UNINIT;
-    default: CRAB_ERROR("Unsupported type encoding", s);
+    case T_SOCKET: return os << S_SOCKET;
+    case T_BTF_ID: return os << S_BTF_ID;
+    case T_ALLOC_MEM: return os << S_ALLOC_MEM;
+    case T_FUNC: return os << S_FUNC;
     }
+    CRAB_ERROR("Unsupported type encoding");
 }
 
 TypeEncoding string_to_type_encoding(const std::string& s) {
     static std::map<std::string, TypeEncoding> string_to_type{
-        {S_UNINIT, T_UNINIT}, {S_MAP_PROGRAMS, T_MAP_PROGRAMS},
-        {S_MAP, T_MAP},       {S_NUM, T_NUM},
-        {S_CTX, T_CTX},       {S_STACK, T_STACK},
-        {S_PACKET, T_PACKET}, {S_SHARED, T_SHARED},
+        {S_UNINIT, T_UNINIT},
+        {S_MAP_PROGRAMS, T_MAP_PROGRAMS},
+        {S_MAP, T_MAP},
+        {S_NUM, T_NUM},
+        {S_CTX, T_CTX},
+        {S_STACK, T_STACK},
+        {S_PACKET, T_PACKET},
+        {S_SHARED, T_SHARED},
+        {S_SOCKET, T_SOCKET},
+        {S_BTF_ID, T_BTF_ID},
+        {S_ALLOC_MEM, T_ALLOC_MEM},
+        {S_FUNC, T_FUNC},
     };
     if (string_to_type.contains(s)) {
         return string_to_type[s];
@@ -197,18 +224,27 @@ TypeSet to_typeset(const TypeGroup group) {
     case TypeGroup::stack: return TypeSet{T_STACK};
     case TypeGroup::shared: return TypeSet{T_SHARED};
     case TypeGroup::map_fd_programs: return TypeSet{T_MAP_PROGRAMS};
+    case TypeGroup::socket: return TypeSet{T_SOCKET};
+    case TypeGroup::btf_id: return TypeSet{T_BTF_ID};
+    case TypeGroup::alloc_mem: return TypeSet{T_ALLOC_MEM};
+    case TypeGroup::func: return TypeSet{T_FUNC};
     case TypeGroup::ctx_or_num: return TypeSet{T_NUM, T_CTX};
     case TypeGroup::stack_or_num: return TypeSet{T_NUM, T_STACK};
-    case TypeGroup::mem: return TypeSet{T_PACKET, T_STACK, T_SHARED};
-    case TypeGroup::mem_or_num: return TypeSet{T_NUM, T_PACKET, T_STACK, T_SHARED};
-    case TypeGroup::pointer: return TypeSet{T_CTX, T_PACKET, T_STACK, T_SHARED};
-    case TypeGroup::ptr_or_num: return TypeSet{T_NUM, T_CTX, T_PACKET, T_STACK, T_SHARED};
+    case TypeGroup::mem: return TS_MEM;
+    case TypeGroup::mem_or_num: return TS_MEM | TS_NUM;
+    case TypeGroup::pointer: return TS_POINTER;
+    case TypeGroup::ptr_or_num: return TS_POINTER | TS_NUM;
     case TypeGroup::stack_or_packet: return TypeSet{T_STACK, T_PACKET};
-    case TypeGroup::singleton_ptr: return TypeSet{T_CTX, T_PACKET, T_STACK};
-    default: CRAB_ERROR("Unsupported type group", group);
+    case TypeGroup::singleton_ptr: return TS_SINGLETON_PTR;
     }
+    CRAB_ERROR("Unsupported type group");
 }
 
+/// Whether a TypeGroup maps to a single TypeEncoding value (singleton TypeSet),
+/// NOT whether there is a single memory region of that type.
+/// For example, shared is singleton here ({T_SHARED}) even though multiple
+/// shared regions can exist. In contrast, TypeGroup::mem is not singleton
+/// because it maps to {T_PACKET, T_STACK, T_SHARED}.
 bool is_singleton_type(const TypeGroup t) {
     switch (t) {
     case TypeGroup::number:
@@ -217,7 +253,11 @@ bool is_singleton_type(const TypeGroup t) {
     case TypeGroup::ctx:
     case TypeGroup::packet:
     case TypeGroup::stack:
-    case TypeGroup::shared: return true;
+    case TypeGroup::shared:
+    case TypeGroup::socket:
+    case TypeGroup::btf_id:
+    case TypeGroup::alloc_mem:
+    case TypeGroup::func: return true;
     default: return false;
     }
 }
@@ -234,6 +274,10 @@ std::ostream& operator<<(std::ostream& os, const TypeGroup ts) {
         {TypeGroup::stack, S_STACK},
         {TypeGroup::stack_or_num, typeset_to_string({T_NUM, T_STACK})},
         {TypeGroup::shared, S_SHARED},
+        {TypeGroup::socket, S_SOCKET},
+        {TypeGroup::btf_id, S_BTF_ID},
+        {TypeGroup::alloc_mem, S_ALLOC_MEM},
+        {TypeGroup::func, S_FUNC},
         {TypeGroup::mem, typeset_to_string({T_STACK, T_PACKET, T_SHARED})},
         {TypeGroup::pointer, typeset_to_string({T_CTX, T_STACK, T_PACKET, T_SHARED})},
         {TypeGroup::ptr_or_num, typeset_to_string({T_NUM, T_CTX, T_STACK, T_PACKET, T_SHARED})},
@@ -244,7 +288,7 @@ std::ostream& operator<<(std::ostream& os, const TypeGroup ts) {
     if (string_to_type.contains(ts)) {
         return os << string_to_type.at(ts);
     }
-    CRAB_ERROR("Unsupported type group", ts);
+    CRAB_ERROR("Unsupported type group");
 }
 
 // ============================================================================
