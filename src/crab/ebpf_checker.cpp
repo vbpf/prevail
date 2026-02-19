@@ -33,6 +33,7 @@ class EbpfChecker final {
     void operator()(const ValidDivisor&) const;
     void operator()(const TypeConstraint&) const;
     void operator()(const ValidAccess&) const;
+    void operator()(const ValidCallbackTarget&) const;
     void operator()(const ValidMapKeyValue&) const;
     void operator()(const ValidSize&) const;
     void operator()(const ValidStore&) const;
@@ -200,6 +201,22 @@ void EbpfChecker::operator()(const ValidSize& s) const {
     using namespace dsl_syntax;
     const auto r = reg_pack(s.reg);
     require_value(dom.state, s.can_be_zero ? r.svalue >= 0 : r.svalue > 0, "Invalid size");
+}
+
+void EbpfChecker::operator()(const ValidCallbackTarget& s) const {
+    const auto callback_interval = dom.state.values.eval_interval(reg_pack(s.reg).svalue);
+    const auto callback_target = callback_interval.singleton();
+    if (!callback_target.has_value() || !callback_target->fits<int32_t>()) {
+        throw_fail("callback function pointer must be a singleton code address");
+    }
+
+    const int32_t callback_label = callback_target->cast_to<int32_t>();
+    if (!thread_local_program_info->callback_target_labels.contains(callback_label)) {
+        throw_fail("callback function pointer does not reference a valid callback entry");
+    }
+    if (!thread_local_program_info->callback_targets_with_exit.contains(callback_label)) {
+        throw_fail("callback function does not have a reachable exit");
+    }
 }
 
 void EbpfChecker::operator()(const ValidMapKeyValue& s) const {

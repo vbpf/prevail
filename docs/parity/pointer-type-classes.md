@@ -23,7 +23,7 @@ and integration into helper argument/return checking.
 - [ ] `PTR_TO_BTF_ID_SOCK_COMMON` — used by `sk_release`, `tcp_check_syncookie`, socket casting helpers
 - [ ] `PTR_TO_SPIN_LOCK` — used by `spin_lock`, `spin_unlock`
 - [ ] `PTR_TO_TIMER` — used by `timer_init`, `timer_set_callback`, `timer_start`, `timer_cancel`
-- [ ] `PTR_TO_FUNC` — used by `for_each_map_elem`, `loop`, `find_vma`, `timer_set_callback`
+- [x] `PTR_TO_FUNC` — used by `for_each_map_elem`, `loop`, `find_vma`, `timer_set_callback`
 - [ ] `PTR_TO_PERCPU_BTF_ID` — used by `per_cpu_ptr`, `this_cpu_ptr`
 - [ ] `PTR_TO_ALLOC_MEM` — used by `ringbuf_submit`, `ringbuf_discard`
 - [ ] `CONST_ALLOC_SIZE_OR_ZERO` — used by `ringbuf_reserve`

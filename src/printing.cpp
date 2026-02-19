@@ -265,6 +265,7 @@ std::ostream& operator<<(std::ostream& os, const ArgSingle::Kind kind) {
     case ArgSingle::Kind::ANYTHING: return os << "uint64_t";
     case ArgSingle::Kind::PTR_TO_CTX: return os << "ctx";
     case ArgSingle::Kind::PTR_TO_STACK: return os << "stack";
+    case ArgSingle::Kind::PTR_TO_FUNC: return os << "func";
     case ArgSingle::Kind::MAP_FD: return os << "map_fd";
     case ArgSingle::Kind::MAP_FD_PROGRAMS: return os << "map_fd_programs";
     case ArgSingle::Kind::PTR_TO_MAP_KEY: return os << "map_key";
@@ -399,6 +400,8 @@ struct AssertionPrinterVisitor {
     void operator()(ValidMapKeyValue const& a) {
         _os << "within(" << a.access_reg << ":" << (a.key ? "key_size" : "value_size") << "(" << a.map_fd_reg << "))";
     }
+
+    void operator()(ValidCallbackTarget const& a) { _os << "valid_callback_target(" << a.reg << ")"; }
 
     void operator()(ZeroCtxOffset const& a) {
         _os << variable_registry->reg(DataKind::ctx_offsets, a.reg.v) << " == 0";

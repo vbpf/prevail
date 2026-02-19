@@ -46,9 +46,17 @@ class AssertExtractor {
 
     vector<Assertion> operator()(const LoadMapFd&) const { return {}; }
     vector<Assertion> operator()(const LoadMapAddress&) const { return {}; }
-    // Rejected before assertion extraction by cfg_builder::check_instruction_feature_support.
-    vector<Assertion> operator()(const LoadPseudo&) const {
-        assert(false && "LoadPseudo should be rejected before assertion extraction");
+    vector<Assertion> operator()(const LoadPseudo& pseudo) const {
+        switch (pseudo.addr.kind) {
+        case PseudoAddress::Kind::CODE_ADDR:
+            // Type/offset semantics are handled during abstract transformation.
+            return {};
+        case PseudoAddress::Kind::VARIABLE_ADDR:
+        case PseudoAddress::Kind::MAP_BY_IDX:
+        case PseudoAddress::Kind::MAP_VALUE_BY_IDX:
+            assert(false && "unexpected LoadPseudo kind after CFG construction");
+            return {};
+        }
         return {};
     }
 
@@ -92,6 +100,10 @@ class AssertExtractor {
             case ArgSingle::Kind::PTR_TO_STACK:
                 res.emplace_back(TypeConstraint{arg.reg, arg.or_null ? TypeGroup::stack_or_num : TypeGroup::stack});
                 // TODO: check 0 when null
+                break;
+            case ArgSingle::Kind::PTR_TO_FUNC:
+                res.emplace_back(TypeConstraint{arg.reg, TypeGroup::func});
+                res.emplace_back(ValidCallbackTarget{arg.reg});
                 break;
             case ArgSingle::Kind::PTR_TO_CTX:
                 for (const Assertion& a : zero_offset_ctx(arg.reg, arg.or_null)) {

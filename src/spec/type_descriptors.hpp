@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <cstdint>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -60,6 +62,10 @@ struct ProgramInfo {
     EbpfProgramType type{};
     std::map<EquivalenceKey, int> cache{};
     std::map<size_t, btf_line_info_t> line_info{};
+    // Valid top-level instruction labels that can be used as callback entry targets via PTR_TO_FUNC.
+    std::set<int32_t> callback_target_labels{};
+    // Subset of callback_target_labels for which a top-level Exit is reachable in the CFG.
+    std::set<int32_t> callback_targets_with_exit{};
 };
 
 struct RawProgram {

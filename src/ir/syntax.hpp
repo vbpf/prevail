@@ -158,6 +158,7 @@ struct ArgSingle {
         PTR_TO_MAP_VALUE,
         PTR_TO_CTX,
         PTR_TO_STACK,
+        PTR_TO_FUNC,
         ANYTHING,
     } kind{};
     bool or_null{}; ///< true for PTR_TO_CTX_OR_NULL
@@ -355,6 +356,12 @@ struct ValidMapKeyValue {
     constexpr bool operator==(const ValidMapKeyValue&) const = default;
 };
 
+/// Condition check whether a callback target register holds a valid top-level code label.
+struct ValidCallbackTarget {
+    Reg reg;
+    constexpr bool operator==(const ValidCallbackTarget&) const = default;
+};
+
 // "if mem is not stack, val is num"
 struct ValidStore {
     Reg mem;
@@ -389,8 +396,9 @@ struct BoundedLoopCount {
     static constexpr int limit = 100000;
 };
 
-using Assertion = std::variant<Comparable, Addable, ValidDivisor, ValidAccess, ValidStore, ValidSize, ValidMapKeyValue,
-                               TypeConstraint, FuncConstraint, ZeroCtxOffset, BoundedLoopCount>;
+using Assertion =
+    std::variant<Comparable, Addable, ValidDivisor, ValidAccess, ValidStore, ValidSize, ValidMapKeyValue,
+                 ValidCallbackTarget, TypeConstraint, FuncConstraint, ZeroCtxOffset, BoundedLoopCount>;
 
 std::ostream& operator<<(std::ostream& os, Instruction const& ins);
 std::string to_string(Instruction const& ins);
