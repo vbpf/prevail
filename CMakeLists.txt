@@ -207,7 +207,9 @@ if (prevail_ENABLE_TESTS)
   add_executable(run_yaml "${prevail_source_dir}/src/test/run_yaml.cpp")
 
   file(GLOB prevail_TEST_SRC CONFIGURE_DEPENDS "${prevail_source_dir}/src/test/test_*.cpp")
-  add_executable(tests ${prevail_TEST_SRC})
+  add_executable(tests ${prevail_TEST_SRC}
+    "${prevail_source_dir}/src/test/setup_msvc_debug.cpp"
+  )
 
   add_library(ebpf_yaml_lib STATIC "${prevail_source_dir}/src/test/ebpf_yaml.cpp")
   target_link_libraries(ebpf_yaml_lib PRIVATE prevail bpf_conformance_core yaml-cpp::yaml-cpp)
