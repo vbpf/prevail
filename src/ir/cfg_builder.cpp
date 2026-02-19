@@ -476,6 +476,12 @@ static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const bool
 }
 
 static bool is_tail_call_helper(const Call& call, const ebpf_platform_t& platform) {
+    if (call.kind != CallKind::helper) {
+        return false;
+    }
+    if (!platform.is_helper_usable(call.func)) {
+        return false;
+    }
     return platform.get_helper_prototype(call.func).return_type == EBPF_RETURN_TYPE_INTEGER_OR_NO_RETURN_IF_SUCCEED;
 }
 
