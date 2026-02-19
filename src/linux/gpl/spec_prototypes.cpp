@@ -1,5 +1,6 @@
 #include "linux/gpl/spec_type_descriptors.hpp"
 #include "platform.hpp"
+#include <string_view>
 
 namespace prevail {
 // Unsupported or partially supported return types
@@ -900,7 +901,7 @@ static constexpr EbpfHelperPrototype bpf_get_socket_uid_proto = {
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
         },
-    .context_descriptor = nullptr,
+    .context_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_setsockopt_proto = {
@@ -2727,6 +2728,20 @@ bool is_helper_usable_linux(const int32_t n) {
     // Check if explicitly marked as unsupported
     if (prototypes[n].unsupported) {
         return false;
+    }
+
+    // Some helpers support multiple incompatible ctx layouts in Linux.
+    // Until attach-type-level helper gating is modeled, keep a conservative
+    // program-type allowlist here instead of treating them as fully generic.
+    if (n == 46) { // bpf_get_socket_cookie
+        const std::string_view program_type = thread_local_program_info->type.name;
+        const bool allowed = program_type == "socket_filter" || program_type == "sched_act" ||
+                             program_type == "sched_cls" || program_type == "sk_skb" || program_type == "cgroup_skb" ||
+                             program_type == "cgroup_sock" || program_type == "cgroup_sock_addr" ||
+                             program_type == "sock_ops" || program_type == "sk_reuseport" || program_type == "tracing";
+        if (!allowed) {
+            return false;
+        }
     }
 
     // If the helper has a context_descriptor, it must match the hook's context_descriptor.

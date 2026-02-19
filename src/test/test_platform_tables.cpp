@@ -164,6 +164,27 @@ TEST_CASE("helper prototypes with unmodeled ABI classes are conservatively rejec
     REQUIRE(unmodeled_helpers > 0);
 }
 
+TEST_CASE("socket cookie helper availability is not treated as fully context-agnostic", "[platform][tables]") {
+    // Related: #959
+    thread_local_program_info = ProgramInfo{
+        .platform = &g_ebpf_platform_linux,
+        .type = g_ebpf_platform_linux.get_program_type("cgroup/connect4", ""),
+    };
+    REQUIRE(g_ebpf_platform_linux.is_helper_usable(46)); // get_socket_cookie
+
+    thread_local_program_info = ProgramInfo{
+        .platform = &g_ebpf_platform_linux,
+        .type = g_ebpf_platform_linux.get_program_type("xdp", ""),
+    };
+    REQUIRE_FALSE(g_ebpf_platform_linux.is_helper_usable(46));
+
+    thread_local_program_info = ProgramInfo{
+        .platform = &g_ebpf_platform_linux,
+        .type = g_ebpf_platform_linux.get_program_type("cgroup/connect4", ""),
+    };
+    REQUIRE_FALSE(g_ebpf_platform_linux.is_helper_usable(47)); // get_socket_uid remains skb-only
+}
+
 TEST_CASE("new Linux context descriptors keep expected layout constants", "[platform][tables]") {
     REQUIRE(g_sock_addr_descr.size == 72);
     REQUIRE(g_sock_addr_descr.data == -1);
