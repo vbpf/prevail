@@ -5,7 +5,7 @@
 namespace prevail {
 // Most ABI return/argument type constants used below are first-class enum
 // members in spec/ebpf_base.h. Keep only compatibility aliases used by this
-// static prototype table (legacy unsupported-alias comments were removed).
+// static prototype table.
 
 // Treat non-nullable map value return as nullable for compatibility.
 #define EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL
