@@ -5,6 +5,7 @@
 #include <ranges>
 #include <regex>
 #include <sstream>
+#include <type_traits>
 
 #include "crab/ebpf_domain.hpp"
 #include "ir/program.hpp"
@@ -13,6 +14,9 @@
 #include "spec/vm_isa.hpp"
 
 namespace prevail {
+
+template <typename>
+inline constexpr bool always_false_v = false;
 
 // Stream-local storage index for invariant filter
 static int invariant_filter_index() {
@@ -364,8 +368,9 @@ std::set<Reg> extract_assertion_registers(const Assertion& assertion) {
             } else if constexpr (std::is_same_v<T, BoundedLoopCount>) {
                 // Loop counter, not a register
                 return {};
+            } else {
+                static_assert(always_false_v<T>, "Unhandled Assertion type in extract_assertion_registers");
             }
-            return {};
         },
         assertion);
 }

@@ -65,7 +65,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         REQUIRE(bin->is64);
         REQUIRE(bin->lddw);
         REQUIRE(bin->dst == Reg{1});
-        REQUIRE(std::get<Imm>(bin->v).v == 7);
+        const auto* imm = std::get_if<Imm>(&bin->v);
+        REQUIRE(imm != nullptr);
+        REQUIRE(imm->v == 7ULL);
     }
 
     SECTION("lddw code_addr pseudo") {
@@ -81,7 +83,31 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         REQUIRE(bin->is64);
         REQUIRE(bin->lddw);
         REQUIRE(bin->dst == Reg{2});
-        REQUIRE(std::get<Imm>(bin->v).v == 11);
+        const auto* imm = std::get_if<Imm>(&bin->v);
+        REQUIRE(imm != nullptr);
+        REQUIRE(imm->v == 11ULL);
+    }
+
+    SECTION("lddw immediate merges high and low words") {
+        RawProgram raw_prog{
+            "",
+            "",
+            0,
+            "",
+            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 3, .src = 0, .imm = 1}, EbpfInst{.imm = 2}, exit},
+            info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
+        const auto* bin = std::get_if<Bin>(&prog.instruction_at(Label{0}));
+        REQUIRE(bin != nullptr);
+        REQUIRE(bin->op == Bin::Op::MOV);
+        REQUIRE(bin->is64);
+        REQUIRE(bin->lddw);
+        REQUIRE(bin->dst == Reg{3});
+        const auto* imm = std::get_if<Imm>(&bin->v);
+        REQUIRE(imm != nullptr);
+        REQUIRE(imm->v == ((2ULL << 32) | 1ULL));
     }
 
     SECTION("helper id not usable on platform") {
@@ -150,6 +176,7 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
     }
 
     SECTION("tail call cycle does not inflate chain depth") {
+        // No exit instruction is intentional; this checks SCC-based depth accounting, not termination.
         RawProgram raw_prog{"",
                             "",
                             0,

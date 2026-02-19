@@ -51,7 +51,7 @@ class WtoNesting final {
     [[nodiscard]]
     std::optional<Label> outermost_head() const {
         if (_heads.empty()) {
-            return {};
+            return std::nullopt;
         }
         return _heads.back();
     }
