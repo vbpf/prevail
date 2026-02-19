@@ -110,6 +110,31 @@ class AssertExtractor {
                     res.emplace_back(a);
                 }
                 break;
+            case ArgSingle::Kind::PTR_TO_SOCKET:
+                res.emplace_back(TypeConstraint{arg.reg, TypeGroup::socket});
+                break;
+            case ArgSingle::Kind::PTR_TO_BTF_ID:
+                res.emplace_back(TypeConstraint{arg.reg, TypeGroup::btf_id});
+                break;
+            case ArgSingle::Kind::PTR_TO_ALLOC_MEM:
+                res.emplace_back(TypeConstraint{arg.reg, TypeGroup::alloc_mem});
+                break;
+            case ArgSingle::Kind::PTR_TO_SPIN_LOCK:
+            case ArgSingle::Kind::PTR_TO_TIMER:
+                res.emplace_back(TypeConstraint{arg.reg, TypeGroup::mem});
+                break;
+            case ArgSingle::Kind::CONST_SIZE_OR_ZERO:
+                res.emplace_back(TypeConstraint{arg.reg, TypeGroup::number});
+                res.emplace_back(ValidSize{arg.reg, true});
+                break;
+            case ArgSingle::Kind::PTR_TO_WRITABLE_LONG:
+                res.emplace_back(TypeConstraint{arg.reg, TypeGroup::mem});
+                res.emplace_back(make_valid_access(arg.reg, 0, Imm{8}, false, AccessType::write));
+                break;
+            case ArgSingle::Kind::PTR_TO_WRITABLE_INT:
+                res.emplace_back(TypeConstraint{arg.reg, TypeGroup::mem});
+                res.emplace_back(make_valid_access(arg.reg, 0, Imm{4}, false, AccessType::write));
+                break;
             }
         }
         for (ArgPair arg : call.pairs) {

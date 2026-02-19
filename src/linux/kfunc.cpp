@@ -249,11 +249,13 @@ std::optional<Call> make_kfunc_call(const int32_t btf_id, const ProgramInfo* inf
         set_unsupported(why_not, std::string("kfunc prototype is unavailable on this platform: ") + proto.name);
         return std::nullopt;
     }
-    if (proto.return_type != EBPF_RETURN_TYPE_INTEGER &&
-        proto.return_type != EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL) {
+    const auto return_info = classify_call_return_type(proto.return_type);
+    if (!return_info.has_value()) {
         set_unsupported(why_not, std::string("kfunc return type is unsupported on this platform: ") + proto.name);
         return std::nullopt;
     }
+    res.return_ptr_type = return_info->pointer_type;
+    res.return_nullable = return_info->pointer_nullable;
 
     const std::array<ebpf_argument_type_t, 7> args = {
         {EBPF_ARGUMENT_TYPE_DONTCARE, proto.argument_type[0], proto.argument_type[1], proto.argument_type[2],
@@ -308,6 +310,33 @@ std::optional<Call> make_kfunc_call(const int32_t btf_id, const ProgramInfo* inf
             i++;
             break;
         }
+        case EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID_SOCK_COMMON:
+        case EBPF_ARGUMENT_TYPE_PTR_TO_SOCK_COMMON:
+            res.singles.push_back({ArgSingle::Kind::PTR_TO_SOCKET, false, Reg{gsl::narrow<uint8_t>(i)}});
+            break;
+        case EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID:
+        case EBPF_ARGUMENT_TYPE_PTR_TO_PERCPU_BTF_ID:
+            res.singles.push_back({ArgSingle::Kind::PTR_TO_BTF_ID, false, Reg{gsl::narrow<uint8_t>(i)}});
+            break;
+        case EBPF_ARGUMENT_TYPE_PTR_TO_ALLOC_MEM:
+            res.singles.push_back({ArgSingle::Kind::PTR_TO_ALLOC_MEM, false, Reg{gsl::narrow<uint8_t>(i)}});
+            break;
+        case EBPF_ARGUMENT_TYPE_PTR_TO_SPIN_LOCK:
+            res.singles.push_back({ArgSingle::Kind::PTR_TO_SPIN_LOCK, false, Reg{gsl::narrow<uint8_t>(i)}});
+            break;
+        case EBPF_ARGUMENT_TYPE_PTR_TO_TIMER:
+            res.singles.push_back({ArgSingle::Kind::PTR_TO_TIMER, false, Reg{gsl::narrow<uint8_t>(i)}});
+            break;
+        case EBPF_ARGUMENT_TYPE_CONST_ALLOC_SIZE_OR_ZERO:
+            res.singles.push_back({ArgSingle::Kind::CONST_SIZE_OR_ZERO, false, Reg{gsl::narrow<uint8_t>(i)}});
+            break;
+        case EBPF_ARGUMENT_TYPE_PTR_TO_LONG:
+            res.singles.push_back({ArgSingle::Kind::PTR_TO_WRITABLE_LONG, false, Reg{gsl::narrow<uint8_t>(i)}});
+            break;
+        case EBPF_ARGUMENT_TYPE_PTR_TO_INT:
+            res.singles.push_back({ArgSingle::Kind::PTR_TO_WRITABLE_INT, false, Reg{gsl::narrow<uint8_t>(i)}});
+            break;
+        case EBPF_ARGUMENT_TYPE_PTR_TO_CONST_STR:
         default:
             set_unsupported(why_not, std::string("kfunc argument type is unsupported on this platform: ") + proto.name);
             return std::nullopt;

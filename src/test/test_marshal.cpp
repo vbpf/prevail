@@ -833,10 +833,23 @@ TEST_CASE("unmarshal 64bit immediate", "[disasm][marshal]") {
                              EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM}, "0: invalid lddw\n");
     }
 
-    // When src = {1, 3, 4, 5}, next_imm must be 0.
-    // TODO(issue #533): add support for LDDW with src_reg > 1.
+    // For mode-specific LDDW encodings, next_imm is reserved for src={1,3,4,5}.
+    // src=2 (map_value) and src=6 (map_value_by_idx) carry payload in next_imm.
     check_unmarshal_fail(EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .src = 1}, EbpfInst{.imm = 1},
                          "0: lddw uses reserved fields\n");
+    check_unmarshal_fail(EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .src = 3}, EbpfInst{.imm = 1},
+                         "0: lddw uses reserved fields\n");
+    check_unmarshal_fail(EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .src = 4}, EbpfInst{.imm = 1},
+                         "0: lddw uses reserved fields\n");
+    check_unmarshal_fail(EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .src = 5}, EbpfInst{.imm = 1},
+                         "0: lddw uses reserved fields\n");
+
+    compare_unmarshal_marshal(
+        EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 2, .imm = 7}, EbpfInst{.imm = 11},
+        EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 2, .imm = 7}, EbpfInst{.imm = 11});
+    compare_unmarshal_marshal(
+        EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 2, .imm = 7}, EbpfInst{},
+        EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 2, .imm = 7}, EbpfInst{});
 
     compare_unmarshal_marshal(EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 3, .imm = 7}, EbpfInst{},
                               EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 3, .imm = 7},

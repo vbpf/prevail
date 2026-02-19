@@ -808,11 +808,40 @@ void EbpfTransformer::operator()(const Call& call) {
         case ArgSingle::Kind::PTR_TO_MAP_VALUE:
         case ArgSingle::Kind::PTR_TO_FUNC:
         case ArgSingle::Kind::PTR_TO_CTX:
-            // Do nothing. We don't track the content of relevant memory regions
+        case ArgSingle::Kind::PTR_TO_SOCKET:
+        case ArgSingle::Kind::PTR_TO_BTF_ID:
+        case ArgSingle::Kind::PTR_TO_ALLOC_MEM:
+        case ArgSingle::Kind::PTR_TO_SPIN_LOCK:
+        case ArgSingle::Kind::PTR_TO_TIMER:
+        case ArgSingle::Kind::CONST_SIZE_OR_ZERO:
+            // Do nothing. We don't track the content of relevant memory regions.
             break;
         case ArgSingle::Kind::PTR_TO_STACK:
             // Do nothing; the stack is passed as context, not to be modified.
             break;
+        case ArgSingle::Kind::PTR_TO_WRITABLE_LONG:
+        case ArgSingle::Kind::PTR_TO_WRITABLE_INT: {
+            // Fixed-width writable pointer: the helper may store a number at the pointed-to location.
+            const int width = param.kind == ArgSingle::Kind::PTR_TO_WRITABLE_LONG ? 8 : 4;
+            Interval w{width};
+            dom.state = dom.state.join_over_types(param.reg, [&](TypeToNumDomain& state, const TypeEncoding type) {
+                // Branch over possible pointer *types* for this register. This is separate from
+                // uncertainty over regions/offsets within one type (e.g., many shared regions).
+                if (type == T_STACK) {
+                    const auto offset = get_type_offset_variable(param.reg, type);
+                    if (!offset.has_value()) {
+                        return;
+                    }
+                    const Interval addr = state.values.eval_interval(*offset);
+                    for (const DataKind kind : iterate_kinds()) {
+                        stack.havoc(state.values, kind, addr, w);
+                    }
+                    // Keep this scoped to stack-typed pointers only.
+                    stack.store_numbers(addr, w);
+                }
+            });
+            break;
+        }
         }
     }
     for (ArgPair param : call.pairs) {
@@ -874,6 +903,10 @@ void EbpfTransformer::operator()(const Call& call) {
         assign_valid_ptr(r0_reg, true);
         dom.state.values.assign(r0_pack.shared_offset, 0);
         dom.state.assign_type(r0_reg, T_SHARED);
+    } else if (call.return_ptr_type.has_value()) {
+        assign_valid_ptr(r0_reg, call.return_nullable);
+        dom.state.assign_type(r0_reg, *call.return_ptr_type);
+        dom.state.havoc_offsets(r0_reg);
     } else {
         dom.state.havoc_register_except_type(r0_reg);
         dom.state.assign_type(r0_reg, T_NUM);

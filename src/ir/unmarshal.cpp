@@ -499,13 +499,12 @@ struct Unmarshaller {
             res.unsupported_reason = why;
             return res;
         };
-        switch (proto.return_type) {
-        case EBPF_RETURN_TYPE_INTEGER:
-        case EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL:
-        case EBPF_RETURN_TYPE_INTEGER_OR_NO_RETURN_IF_SUCCEED: break;
-        default:
+        const auto return_info = classify_call_return_type(proto.return_type);
+        if (!return_info.has_value()) {
             return mark_unsupported(std::string("helper prototype is unavailable on this platform: ") + proto.name);
         }
+        res.return_ptr_type = return_info->pointer_type;
+        res.return_nullable = return_info->pointer_nullable;
         res.reallocate_packet = proto.reallocate_packet;
         res.is_map_lookup = proto.return_type == EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL;
         const std::array<ebpf_argument_type_t, 7> args = {
@@ -534,16 +533,32 @@ struct Unmarshaller {
                 res.singles.push_back({toArgSingleKind(args[i]), true, Reg{gsl::narrow<uint8_t>(i)}});
                 break;
             case EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID_SOCK_COMMON:
-            case EBPF_ARGUMENT_TYPE_PTR_TO_SPIN_LOCK:
             case EBPF_ARGUMENT_TYPE_PTR_TO_SOCK_COMMON:
+                res.singles.push_back({ArgSingle::Kind::PTR_TO_SOCKET, false, Reg{gsl::narrow<uint8_t>(i)}});
+                break;
             case EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID:
-            case EBPF_ARGUMENT_TYPE_PTR_TO_LONG:
-            case EBPF_ARGUMENT_TYPE_PTR_TO_INT:
-            case EBPF_ARGUMENT_TYPE_PTR_TO_CONST_STR:
-            case EBPF_ARGUMENT_TYPE_CONST_ALLOC_SIZE_OR_ZERO:
-            case EBPF_ARGUMENT_TYPE_PTR_TO_ALLOC_MEM:
-            case EBPF_ARGUMENT_TYPE_PTR_TO_TIMER:
             case EBPF_ARGUMENT_TYPE_PTR_TO_PERCPU_BTF_ID:
+                res.singles.push_back({ArgSingle::Kind::PTR_TO_BTF_ID, false, Reg{gsl::narrow<uint8_t>(i)}});
+                break;
+            case EBPF_ARGUMENT_TYPE_PTR_TO_ALLOC_MEM:
+                res.singles.push_back({ArgSingle::Kind::PTR_TO_ALLOC_MEM, false, Reg{gsl::narrow<uint8_t>(i)}});
+                break;
+            case EBPF_ARGUMENT_TYPE_PTR_TO_SPIN_LOCK:
+                res.singles.push_back({ArgSingle::Kind::PTR_TO_SPIN_LOCK, false, Reg{gsl::narrow<uint8_t>(i)}});
+                break;
+            case EBPF_ARGUMENT_TYPE_PTR_TO_TIMER:
+                res.singles.push_back({ArgSingle::Kind::PTR_TO_TIMER, false, Reg{gsl::narrow<uint8_t>(i)}});
+                break;
+            case EBPF_ARGUMENT_TYPE_CONST_ALLOC_SIZE_OR_ZERO:
+                res.singles.push_back({ArgSingle::Kind::CONST_SIZE_OR_ZERO, false, Reg{gsl::narrow<uint8_t>(i)}});
+                break;
+            case EBPF_ARGUMENT_TYPE_PTR_TO_LONG:
+                res.singles.push_back({ArgSingle::Kind::PTR_TO_WRITABLE_LONG, false, Reg{gsl::narrow<uint8_t>(i)}});
+                break;
+            case EBPF_ARGUMENT_TYPE_PTR_TO_INT:
+                res.singles.push_back({ArgSingle::Kind::PTR_TO_WRITABLE_INT, false, Reg{gsl::narrow<uint8_t>(i)}});
+                break;
+            case EBPF_ARGUMENT_TYPE_PTR_TO_CONST_STR:
                 return mark_unsupported(std::string("helper argument type is unavailable on this platform: ") +
                                         proto.name);
             case EBPF_ARGUMENT_TYPE_CONST_SIZE: {
