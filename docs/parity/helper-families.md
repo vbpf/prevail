@@ -42,4 +42,4 @@ when all its members are semantically functional.
 
 ## Helpers beyond table range
 
-- [ ] **Helpers beyond 0-211 in Linux 6.18** — all helper IDs present in Linux 6.18 beyond 211 have prototype coverage in the verifier tables.
+- [x] **Helpers beyond 0-211 in Linux 6.18** — all helper IDs present in Linux 6.18 beyond 211 have prototype coverage in the verifier tables.

@@ -1,8 +1,8 @@
 # Pointer and Return Type Classes in Helper ABI
 
 The helper prototype table covers helpers 0–211, but many signatures use argument or return
-type classes that map to `UNSUPPORTED`. Until the type system can represent these pointer kinds,
-the affected helpers are dead code.
+type classes that are not yet modeled in verifier call semantics. Until the type system can represent
+these pointer kinds and propagate them through checks/transformers, the affected helpers remain unavailable.
 
 Each item here is a type class that needs representation in the verifier's type system
 and integration into helper argument/return checking.
