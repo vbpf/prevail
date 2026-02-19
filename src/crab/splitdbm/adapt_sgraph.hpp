@@ -30,11 +30,12 @@ class TreeSMap final {
     struct KeyIterator {
         using difference_type = std::ptrdiff_t;
         using value_type = Key;
+        using iterator_concept = std::forward_iterator_tag;
 
         KeyIterator() = default;
         explicit KeyIterator(const col::const_iterator& _e) : e(_e) {}
 
-        Key operator*() const { return e->first; }
+        const Key& operator*() const { return e->first; }
         bool operator==(const KeyIterator& o) const = default;
         KeyIterator& operator++() {
             ++e;
@@ -55,11 +56,6 @@ class TreeSMap final {
         KeyConstRange() : c{&empty_col()} {}
         explicit KeyConstRange(const col& c) : c{&c} {}
 
-        static const col& empty_col() {
-            static const col instance;
-            return instance;
-        }
-
         [[nodiscard]]
         size_t size() const {
             return c->size();
@@ -71,6 +67,12 @@ class TreeSMap final {
         [[nodiscard]]
         KeyIterator end() const {
             return KeyIterator(c->cend());
+        }
+
+      private:
+        static const col& empty_col() {
+            static const col instance;
+            return instance;
         }
 
         const col* c{};
@@ -126,7 +128,7 @@ class AdaptGraph final {
 
     [[nodiscard]]
     auto verts() const {
-        return std::views::iota(VertId{0}, gsl::narrow_cast<VertId>(is_free.size())) |
+        return std::views::iota(VertId{0}, static_cast<VertId>(is_free.size())) |
                std::views::filter([this](const VertId v) { return !is_free[v]; });
     }
 

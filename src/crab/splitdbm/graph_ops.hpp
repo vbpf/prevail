@@ -43,6 +43,10 @@ struct ScratchSpace {
     unsigned int ts = 0;
     unsigned int ts_idx = 0;
 
+    // Initialize a Dijkstra search from src. Uses timestamp-based lazy invalidation:
+    // only entries with dist_ts[v] == ts are "current". Incrementing ts logically
+    // resets all distances without clearing the array. The ts_idx write gradually
+    // refreshes one stale entry per search to prevent unsigned wraparound issues.
     auto init_search(const VertId src) {
         dist_ts.at(ts_idx) = ts++;
         ts_idx = (ts_idx + 1) % dists.size();
