@@ -19,6 +19,35 @@ enum class KfuncFlags : uint32_t {
     destructive = 1u << 4,
 };
 
+constexpr KfuncFlags operator|(const KfuncFlags a, const KfuncFlags b) {
+    return static_cast<KfuncFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+}
+
+constexpr KfuncFlags operator&(const KfuncFlags a, const KfuncFlags b) {
+    return static_cast<KfuncFlags>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b));
+}
+
+constexpr KfuncFlags operator^(const KfuncFlags a, const KfuncFlags b) {
+    return static_cast<KfuncFlags>(static_cast<uint32_t>(a) ^ static_cast<uint32_t>(b));
+}
+
+constexpr KfuncFlags operator~(const KfuncFlags a) { return static_cast<KfuncFlags>(~static_cast<uint32_t>(a)); }
+
+constexpr KfuncFlags& operator|=(KfuncFlags& a, const KfuncFlags b) {
+    a = a | b;
+    return a;
+}
+
+constexpr KfuncFlags& operator&=(KfuncFlags& a, const KfuncFlags b) {
+    a = a & b;
+    return a;
+}
+
+constexpr KfuncFlags& operator^=(KfuncFlags& a, const KfuncFlags b) {
+    a = a ^ b;
+    return a;
+}
+
 // Resolve a Linux kfunc BTF ID to a Call contract used by the verifier.
 // Returns nullopt and populates `why_not` if the ID is unknown or currently unsupported.
 std::optional<Call> make_kfunc_call(int32_t btf_id, const ProgramInfo* info = nullptr, std::string* why_not = nullptr);

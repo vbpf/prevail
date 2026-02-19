@@ -14,7 +14,6 @@
 #include "config.hpp"
 #include "ir/program.hpp"
 #include "ir/syntax.hpp"
-#include "linux/kfunc.hpp"
 #include "platform.hpp"
 
 using std::optional;
@@ -154,6 +153,16 @@ static bool un_requires_base64(const Un& un) {
     }
 }
 
+static std::optional<Call> resolve_kfunc_call(const CallBtf& call_btf, const ProgramInfo& info, std::string* why_not) {
+    if (!info.platform || !info.platform->resolve_kfunc_call) {
+        if (why_not) {
+            *why_not = "kfunc resolution is unavailable on this platform";
+        }
+        return std::nullopt;
+    }
+    return info.platform->resolve_kfunc_call(call_btf.btf_id, &info, why_not);
+}
+
 static std::optional<RejectionReason> check_instruction_feature_support(const Instruction& ins,
                                                                         const ebpf_platform_t& platform) {
     auto reject_not_implemented = [](std::string detail) {
@@ -163,12 +172,6 @@ static std::optional<RejectionReason> check_instruction_feature_support(const In
         return RejectionReason{.kind = RejectKind::Capability, .detail = std::move(detail)};
     };
 
-    if (const auto p = std::get_if<CallBtf>(&ins)) {
-        std::string why_not;
-        if (!make_kfunc_call(p->btf_id, &thread_local_program_info.get(), &why_not)) {
-            return reject_not_implemented(std::move(why_not));
-        }
-    }
     if (const auto p = std::get_if<Call>(&ins)) {
         if (!p->is_supported) {
             return reject_capability(p->unsupported_reason);
@@ -404,7 +407,7 @@ static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const bool
         }
         if (const auto* call_btf = std::get_if<CallBtf>(&inst)) {
             std::string why_not;
-            const auto call = make_kfunc_call(call_btf->btf_id, &thread_local_program_info.get(), &why_not);
+            const auto call = resolve_kfunc_call(*call_btf, thread_local_program_info.get(), &why_not);
             if (!call) {
                 throw InvalidControlFlow{"not implemented: " + why_not + " (at " + to_string(label) + ")"};
             }

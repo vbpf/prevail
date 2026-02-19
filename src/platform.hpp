@@ -7,12 +7,16 @@
 // can use to call platform-specific functions.
 
 #include <bpf_conformance_core/bpf_conformance.h>
+#include <optional>
+#include <string>
 
 #include "config.hpp"
 #include "spec/function_prototypes.hpp"
 #include "spec/type_descriptors.hpp"
 
 namespace prevail {
+struct Call;
+
 typedef EbpfProgramType (*ebpf_get_program_type_fn)(const std::string& section, const std::string& path);
 
 typedef EbpfMapType (*ebpf_get_map_type_fn)(uint32_t platform_specific_type);
@@ -20,6 +24,9 @@ typedef EbpfMapType (*ebpf_get_map_type_fn)(uint32_t platform_specific_type);
 typedef EbpfHelperPrototype (*ebpf_get_helper_prototype_fn)(int32_t n);
 
 typedef bool (*ebpf_is_helper_usable_fn)(int32_t n);
+
+typedef std::optional<Call> (*ebpf_resolve_kfunc_call_fn)(int32_t btf_id, const ProgramInfo* info,
+                                                          std::string* why_not);
 
 #if 0
 // Return an fd for a map created with the given parameters.
@@ -39,6 +46,7 @@ struct ebpf_platform_t {
     ebpf_get_program_type_fn get_program_type;
     ebpf_get_helper_prototype_fn get_helper_prototype;
     ebpf_is_helper_usable_fn is_helper_usable;
+    ebpf_resolve_kfunc_call_fn resolve_kfunc_call;
 
     // Size of a record in the "maps" section of an ELF file.
     size_t map_record_size;
