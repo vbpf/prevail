@@ -9,7 +9,7 @@ BTF section parsing and CO-RE relocations are implemented. What is missing is
 - [x] **kfunc prototype table** — maintain a table of known kfunc signatures (argument types, return types, flags).
 - [x] **kfunc argument type checking** — verify arguments against resolved kfunc prototypes (table-driven subset).
 - [ ] **kfunc return type propagation** — propagate BTF-typed return values into the register state.
-- [ ] **kfunc flags** — handle kfunc behavioral flags (e.g., `KF_ACQUIRE`, `KF_RELEASE`, `KF_TRUSTED_ARGS`, `KF_SLEEPABLE`, `KF_DESTRUCTIVE`).
+- [ ] **kfunc flags** — handle kfunc behavioral flags (e.g., `KF_ACQUIRE`, `KF_RELEASE`, `KF_TRUSTED_ARGS`, `KF_SLEEPABLE`, `KF_DESTRUCTIVE`). Flagged entries are conservatively rejected today.
 
 ## BTF-ID pointer typing
 

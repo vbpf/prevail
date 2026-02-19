@@ -14,9 +14,10 @@ namespace {
 struct KfuncPrototypeEntry {
     int32_t btf_id;
     EbpfHelperPrototype proto;
+    KfuncFlags flags;
 };
 
-static constexpr std::array<KfuncPrototypeEntry, 2> kfunc_prototypes{{
+static constexpr std::array<KfuncPrototypeEntry, 3> kfunc_prototypes{{
     {
         1000,
         EbpfHelperPrototype{
@@ -28,6 +29,7 @@ static constexpr std::array<KfuncPrototypeEntry, 2> kfunc_prototypes{{
             .context_descriptor = nullptr,
             .unsupported = false,
         },
+        KfuncFlags::none,
     },
     {
         1001,
@@ -40,13 +42,28 @@ static constexpr std::array<KfuncPrototypeEntry, 2> kfunc_prototypes{{
             .context_descriptor = nullptr,
             .unsupported = false,
         },
+        KfuncFlags::none,
+    },
+    {
+        1002,
+        EbpfHelperPrototype{
+            .name = "kfunc_test_acquire_flag",
+            .return_type = EBPF_RETURN_TYPE_INTEGER,
+            .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
+                              EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
+            .reallocate_packet = false,
+            .context_descriptor = nullptr,
+            .unsupported = false,
+        },
+        KfuncFlags::acquire,
     },
 }};
 
-static std::optional<EbpfHelperPrototype> lookup_kfunc_prototype(const int32_t btf_id) {
-    for (const auto& [id, proto] : kfunc_prototypes) {
+static std::optional<KfuncPrototypeEntry> lookup_kfunc_prototype(const int32_t btf_id) {
+    for (const auto& entry : kfunc_prototypes) {
+        const auto [id, proto, flags] = entry;
         if (id == btf_id) {
-            return proto;
+            return KfuncPrototypeEntry{id, proto, flags};
         }
     }
     return std::nullopt;
@@ -88,36 +105,41 @@ static void set_unsupported(std::string* why_not, const std::string& reason) {
 } // namespace
 
 std::optional<Call> make_kfunc_call(const int32_t btf_id, std::string* why_not) {
-    const auto proto = lookup_kfunc_prototype(btf_id);
-    if (!proto) {
+    const auto entry = lookup_kfunc_prototype(btf_id);
+    if (!entry) {
         set_unsupported(why_not, "kfunc prototype lookup failed for BTF id " + std::to_string(btf_id));
         return std::nullopt;
     }
+    const auto& proto = entry->proto;
 
     Call res;
     res.func = btf_id;
-    res.name = proto->name;
-    res.reallocate_packet = proto->reallocate_packet;
-    res.is_map_lookup = proto->return_type == EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL;
+    res.name = proto.name;
+    res.reallocate_packet = proto.reallocate_packet;
+    res.is_map_lookup = proto.return_type == EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL;
 
-    if (proto->unsupported || proto->return_type == EBPF_RETURN_TYPE_UNSUPPORTED) {
-        set_unsupported(why_not, std::string("kfunc prototype is unavailable on this platform: ") + proto->name);
+    if (entry->flags != KfuncFlags::none) {
+        set_unsupported(why_not, std::string("kfunc flags are unsupported on this platform: ") + proto.name);
         return std::nullopt;
     }
-    if (proto->return_type != EBPF_RETURN_TYPE_INTEGER) {
-        set_unsupported(why_not, std::string("kfunc return type is unsupported on this platform: ") + proto->name);
+
+    if (proto.unsupported || proto.return_type == EBPF_RETURN_TYPE_UNSUPPORTED) {
+        set_unsupported(why_not, std::string("kfunc prototype is unavailable on this platform: ") + proto.name);
+        return std::nullopt;
+    }
+    if (proto.return_type != EBPF_RETURN_TYPE_INTEGER) {
+        set_unsupported(why_not, std::string("kfunc return type is unsupported on this platform: ") + proto.name);
         return std::nullopt;
     }
 
     const std::array<ebpf_argument_type_t, 7> args = {
-        {EBPF_ARGUMENT_TYPE_DONTCARE, proto->argument_type[0], proto->argument_type[1], proto->argument_type[2],
-         proto->argument_type[3], proto->argument_type[4], EBPF_ARGUMENT_TYPE_DONTCARE}};
+        {EBPF_ARGUMENT_TYPE_DONTCARE, proto.argument_type[0], proto.argument_type[1], proto.argument_type[2],
+         proto.argument_type[3], proto.argument_type[4], EBPF_ARGUMENT_TYPE_DONTCARE}};
     for (size_t i = 1; i < args.size() - 1; i++) {
         switch (args[i]) {
         case EBPF_ARGUMENT_TYPE_DONTCARE: return res;
         case EBPF_ARGUMENT_TYPE_UNSUPPORTED:
-            set_unsupported(why_not,
-                            std::string("kfunc argument type is unavailable on this platform: ") + proto->name);
+            set_unsupported(why_not, std::string("kfunc argument type is unavailable on this platform: ") + proto.name);
             return std::nullopt;
         case EBPF_ARGUMENT_TYPE_ANYTHING:
         case EBPF_ARGUMENT_TYPE_PTR_TO_MAP:
@@ -136,12 +158,12 @@ std::optional<Call> make_kfunc_call(const int32_t btf_id, std::string* why_not) 
             set_unsupported(
                 why_not,
                 std::string("mismatched kfunc EBPF_ARGUMENT_TYPE_PTR_TO* and EBPF_ARGUMENT_TYPE_CONST_SIZE: ") +
-                    proto->name);
+                    proto.name);
             return std::nullopt;
         case EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO:
             set_unsupported(why_not, std::string("mismatched kfunc EBPF_ARGUMENT_TYPE_PTR_TO* and "
                                                  "EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO: ") +
-                                         proto->name);
+                                         proto.name);
             return std::nullopt;
         case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL:
         case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM:
@@ -152,7 +174,7 @@ std::optional<Call> make_kfunc_call(const int32_t btf_id, std::string* why_not) 
                 set_unsupported(why_not,
                                 std::string("kfunc pointer argument not followed by EBPF_ARGUMENT_TYPE_CONST_SIZE or "
                                             "EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO: ") +
-                                    proto->name);
+                                    proto.name);
                 return std::nullopt;
             }
             const bool can_be_zero = (args[i + 1] == EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO);
@@ -164,8 +186,7 @@ std::optional<Call> make_kfunc_call(const int32_t btf_id, std::string* why_not) 
             break;
         }
         default:
-            set_unsupported(why_not,
-                            std::string("kfunc argument type is unsupported on this platform: ") + proto->name);
+            set_unsupported(why_not, std::string("kfunc argument type is unsupported on this platform: ") + proto.name);
             return std::nullopt;
         }
     }
