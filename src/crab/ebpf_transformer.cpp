@@ -398,6 +398,9 @@ void EbpfTransformer::operator()(const Exit& a) {
     // Restore r10.
     constexpr Reg r10_reg{R10_STACK_POINTER};
     add(r10_reg, EBPF_SUBPROGRAM_STACK_SIZE, 64);
+
+    // Scratch r1-r5: the callee may have clobbered them (caller-saved per BPF ABI).
+    scratch_caller_saved_registers();
 }
 
 void EbpfTransformer::operator()(const Jmp&) const {
@@ -897,11 +900,15 @@ void EbpfTransformer::operator()(const Call& call) {
                     dom.state.values.assign(r0_pack.shared_offset, 0);
                     dom.state.values.set(r0_pack.shared_region_size, dom.get_map_value_size(*maybe_fd_reg));
                     dom.state.assign_type(r0_reg, T_SHARED);
+                    goto out;
                 }
             }
         }
+        // Fallthrough: map type unknown or map-in-map with unknown inner fd.
+        // Havoc shared_region_size so stale values from prior lookups don't persist.
         assign_valid_ptr(r0_reg, true);
         dom.state.values.assign(r0_pack.shared_offset, 0);
+        dom.state.values.havoc(r0_pack.shared_region_size);
         dom.state.assign_type(r0_reg, T_SHARED);
     } else if (call.return_ptr_type.has_value()) {
         assign_valid_ptr(r0_reg, call.return_nullable);
