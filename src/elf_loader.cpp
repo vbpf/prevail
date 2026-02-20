@@ -1051,6 +1051,9 @@ void ProgramReader::process_core_relocations(const libbtf::btf_type_data& btf_da
     }
 
     size_t offset = core_relo_start;
+    if (core_relo_end - offset < sizeof(uint32_t)) {
+        throw UnmarshalError("BTF.ext core_relo subsection truncated");
+    }
     const auto core_relo_rec_size =
         read_struct_at<uint32_t>(btf_ext_data, btf_ext_size, offset, "BTF.ext core_relo record size");
     offset += sizeof(uint32_t);
