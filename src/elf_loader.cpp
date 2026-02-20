@@ -155,6 +155,22 @@ get_program_name_and_size(const ELFIO::section& sec, const ELFIO::Elf_Xword star
     return {program_name, size};
 }
 
+std::optional<std::string> find_function_symbol_at_offset(const ELFIO::const_symbol_section_accessor& symbols,
+                                                          const ELFIO::Elf_Half section_index,
+                                                          const ELFIO::Elf_Xword offset) {
+    const ELFIO::Elf_Xword symbol_count = symbols.get_symbols_num();
+    for (ELFIO::Elf_Xword index = 0; index < symbol_count; index++) {
+        const auto symbol = get_symbol_details(symbols, index);
+        if (symbol.section_index != section_index || symbol.type != ELFIO::STT_FUNC || symbol.name.empty()) {
+            continue;
+        }
+        if (symbol.value == offset) {
+            return symbol.name;
+        }
+    }
+    return std::nullopt;
+}
+
 ELFIO::Elf_Xword compute_reachable_program_span(const std::vector<EbpfInst>& section_instructions,
                                                 const ELFIO::Elf_Xword program_offset,
                                                 const ELFIO::Elf_Xword initial_size) {
@@ -239,7 +255,8 @@ std::string bad_reloc_value(const size_t reloc_value) {
 struct FunctionRelocation {
     size_t prog_index{};
     ELFIO::Elf_Xword source_offset{};
-    ELFIO::Elf_Xword relocation_entry_index{};
+    std::optional<ELFIO::Elf_Xword> relocation_entry_index;
+    ELFIO::Elf_Half target_section_index{};
     std::string target_function_name;
 };
 
@@ -934,6 +951,10 @@ class ProgramReader {
 
     int32_t compute_lddw_reloc_offset_imm(ELFIO::Elf_Sxword addend, ELFIO::Elf_Word index,
                                           std::reference_wrapper<EbpfInst> lo_inst) const;
+    [[nodiscard]]
+    bool has_function_relocation(size_t prog_index, size_t source_offset) const;
+    void enqueue_synthetic_local_calls(const std::vector<EbpfInst>& instructions, ELFIO::Elf_Half section_index,
+                                       ELFIO::Elf_Xword program_offset);
 
   public:
     std::vector<RawProgram> raw_programs;
@@ -962,12 +983,13 @@ class ProgramReader {
     ///
     /// @param symbol_name Name of the symbol (maybe empty for unnamed relocations)
     /// @param symbol_section_index Section containing the symbol
+    /// @param symbol_type Symbol type
     /// @param instructions Instruction vector to modify
     /// @param location Instruction index to relocate
     /// @param index Symbol table index for additional lookup
     /// @param addend Additional offset to apply
     /// @return true if relocation succeeded or should be skipped, false if unresolved
-    bool try_reloc(const std::string& symbol_name, ELFIO::Elf_Half symbol_section_index,
+    bool try_reloc(const std::string& symbol_name, ELFIO::Elf_Half symbol_section_index, unsigned char symbol_type,
                    std::vector<EbpfInst>& instructions, size_t location, ELFIO::Elf_Word index,
                    ELFIO::Elf_Sxword addend);
     void process_relocations(std::vector<EbpfInst>& instructions, const ELFIO::const_relocation_section_accessor& reloc,
@@ -1199,6 +1221,60 @@ void ProgramReader::process_core_relocations(const libbtf::btf_type_data& btf_da
     }
 }
 
+bool ProgramReader::has_function_relocation(const size_t prog_index, const size_t source_offset) const {
+    return std::ranges::any_of(function_relocations, [&](const auto& reloc) {
+        return reloc.prog_index == prog_index && reloc.source_offset == source_offset;
+    });
+}
+
+void ProgramReader::enqueue_synthetic_local_calls(const std::vector<EbpfInst>& instructions,
+                                                  const ELFIO::Elf_Half section_index,
+                                                  const ELFIO::Elf_Xword program_offset) {
+    if (section_index >= reader.sections.size()) {
+        throw UnmarshalError("Invalid section index");
+    }
+    const auto* section = reader.sections[section_index];
+    if (!section) {
+        throw UnmarshalError("Invalid section index");
+    }
+
+    const int64_t section_insn_count = gsl::narrow<int64_t>(section->get_size() / sizeof(EbpfInst));
+    const int64_t program_start = gsl::narrow<int64_t>(program_offset / sizeof(EbpfInst));
+    const int64_t program_end = program_start + gsl::narrow<int64_t>(instructions.size());
+
+    for (size_t loc = 0; loc < instructions.size(); ++loc) {
+        const EbpfInst& inst = instructions[loc];
+        if (!(inst.opcode == INST_OP_CALL && inst.src == INST_CALL_LOCAL)) {
+            continue;
+        }
+        if (has_function_relocation(raw_programs.size(), loc)) {
+            continue;
+        }
+
+        const int64_t target = program_start + gsl::narrow<int64_t>(loc) + 1 + inst.imm;
+        if (target >= program_start && target < program_end) {
+            continue;
+        }
+        if (target < 0 || target >= section_insn_count) {
+            throw UnmarshalError("Local call target out of section bounds");
+        }
+
+        const auto target_offset = gsl::narrow<ELFIO::Elf_Xword>(target * sizeof(EbpfInst));
+        const auto target_name = find_function_symbol_at_offset(symbols, section_index, target_offset);
+        if (!target_name) {
+            throw UnmarshalError("Subprogram not found at section offset " + std::to_string(target_offset));
+        }
+
+        function_relocations.emplace_back(FunctionRelocation{
+            .prog_index = raw_programs.size(),
+            .source_offset = loc,
+            .relocation_entry_index = std::nullopt,
+            .target_section_index = section_index,
+            .target_function_name = *target_name,
+        });
+    }
+}
+
 /// @brief Recursively append subprograms to a main program.
 ///
 /// BPF programs can call local functions (subprograms). The linker must:
@@ -1228,14 +1304,14 @@ std::string ProgramReader::append_subprograms(RawProgram& prog) {
             raw_programs[reloc.prog_index].function_name != prog.function_name) {
             continue;
         }
-        if (!subprogram_offsets.contains(reloc.target_function_name)) {
-            subprogram_offsets[reloc.target_function_name] = prog.prog.size();
-            auto sym = get_symbol_details(symbols, reloc.relocation_entry_index);
-            if (sym.section_index >= reader.sections.size()) {
+        const auto& target_function_name = reloc.target_function_name;
+        if (!subprogram_offsets.contains(target_function_name)) {
+            subprogram_offsets[target_function_name] = prog.prog.size();
+            if (reloc.target_section_index >= reader.sections.size()) {
                 throw UnmarshalError("Invalid section index");
             }
-            const auto& sub_sec = *reader.sections[sym.section_index];
-            if (const auto sub = find_subprogram(raw_programs, sub_sec, sym.name)) {
+            const auto& sub_sec = *reader.sections[reloc.target_section_index];
+            if (const auto sub = find_subprogram(raw_programs, sub_sec, target_function_name)) {
                 if (sub == &prog) {
                     throw UnmarshalError("Recursive subprogram call");
                 }
@@ -1243,7 +1319,7 @@ std::string ProgramReader::append_subprograms(RawProgram& prog) {
                 if (!err.empty()) {
                     return err;
                 }
-                const size_t base = subprogram_offsets[reloc.target_function_name];
+                const size_t base = subprogram_offsets[target_function_name];
 
                 // Append subprogram to program
                 prog.prog.insert(prog.prog.end(), sub->prog.begin(), sub->prog.end());
@@ -1256,11 +1332,11 @@ std::string ProgramReader::append_subprograms(RawProgram& prog) {
                     prog.info.builtin_call_offsets.insert(base + builtin_offset);
                 }
             } else {
-                return "Subprogram not found: " + sym.name;
+                return "Subprogram not found: " + target_function_name;
             }
         }
         // BPF uses signed 32-bit immediates: offset = target - (source + 1)
-        const auto target_offset = gsl::narrow<int64_t>(subprogram_offsets[reloc.target_function_name]);
+        const auto target_offset = gsl::narrow<int64_t>(subprogram_offsets[target_function_name]);
         const auto source_offset = gsl::narrow<int64_t>(reloc.source_offset);
         prog.prog[reloc.source_offset].imm = gsl::narrow<int32_t>(target_offset - source_offset - 1);
     }
@@ -1339,8 +1415,49 @@ int32_t ProgramReader::compute_lddw_reloc_offset_imm(const ELFIO::Elf_Sxword add
 }
 
 bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_Half symbol_section_index,
-                              std::vector<EbpfInst>& instructions, const size_t location, const ELFIO::Elf_Word index,
-                              const ELFIO::Elf_Sxword addend) {
+                              const unsigned char symbol_type, std::vector<EbpfInst>& instructions,
+                              const size_t location, const ELFIO::Elf_Word index, const ELFIO::Elf_Sxword addend) {
+    EbpfInst& instruction_to_relocate = instructions[location];
+
+    // Handle local function calls - queue for post-processing.
+    // Builtins such as memset/memcpy may arrive as local calls against SHN_UNDEF symbols;
+    // those are rewritten to static helper calls and gated via builtin_call_offsets.
+    if (instruction_to_relocate.opcode == INST_OP_CALL && instruction_to_relocate.src == INST_CALL_LOCAL) {
+        if (symbol_section_index == ELFIO::SHN_UNDEF && parse_params.platform->resolve_builtin_call) {
+            if (const auto builtin_id = parse_params.platform->resolve_builtin_call(symbol_name)) {
+                instruction_to_relocate.src = INST_CALL_STATIC_HELPER;
+                instruction_to_relocate.imm = *builtin_id;
+                builtin_offsets_for_current_program.insert(location);
+                return true;
+            }
+        }
+
+        std::string target_function_name = symbol_name;
+        if (target_function_name.empty() && symbol_type == ELFIO::STT_SECTION) {
+            const int64_t target_byte_offset =
+                addend != 0 ? addend : (gsl::narrow<int64_t>(instruction_to_relocate.imm) + 1) * sizeof(EbpfInst);
+            if (target_byte_offset < 0 || target_byte_offset % sizeof(EbpfInst) != 0) {
+                throw UnmarshalError("Invalid section-local call target offset");
+            }
+            if (const auto target = find_function_symbol_at_offset(symbols, symbol_section_index,
+                                                                   gsl::narrow<ELFIO::Elf_Xword>(target_byte_offset))) {
+                target_function_name = *target;
+            }
+        }
+
+        if (!target_function_name.empty() && !has_function_relocation(raw_programs.size(), location)) {
+            function_relocations.emplace_back(FunctionRelocation{
+                .prog_index = raw_programs.size(),
+                .source_offset = location,
+                .relocation_entry_index = index,
+                .target_section_index = symbol_section_index,
+                .target_function_name = target_function_name,
+            });
+            return true;
+        }
+        return false;
+    }
+
     // Handle empty symbol names for global variable sections
     // These occur in legacy ELF files where relocations reference
     // section symbols rather than named variable symbols
@@ -1360,24 +1477,6 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
             return true;
         }
         // Empty symbol name in non-variable section - skip it
-        return true;
-    }
-
-    EbpfInst& instruction_to_relocate = instructions[location];
-
-    // Handle local function calls - queue for post-processing.
-    // Builtins such as memset/memcpy may arrive as local calls against SHN_UNDEF symbols;
-    // those are rewritten to static helper calls and gated via builtin_call_offsets.
-    if (instruction_to_relocate.opcode == INST_OP_CALL && instruction_to_relocate.src == INST_CALL_LOCAL) {
-        if (symbol_section_index == ELFIO::SHN_UNDEF && parse_params.platform->resolve_builtin_call) {
-            if (const auto builtin_id = parse_params.platform->resolve_builtin_call(symbol_name)) {
-                instruction_to_relocate.src = INST_CALL_STATIC_HELPER;
-                instruction_to_relocate.imm = *builtin_id;
-                builtin_offsets_for_current_program.insert(location);
-                return true;
-            }
-        }
-        function_relocations.emplace_back(FunctionRelocation{raw_programs.size(), location, index, symbol_name});
         return true;
     }
 
@@ -1438,7 +1537,7 @@ void ProgramReader::process_relocations(std::vector<EbpfInst>& instructions,
             }
             auto sym = get_symbol_details(symbols, idx);
 
-            if (!try_reloc(sym.name, sym.section_index, instructions, loc, idx, addend)) {
+            if (!try_reloc(sym.name, sym.section_index, sym.type, instructions, loc, idx, addend)) {
                 unresolved_symbol_errors.push_back(unresolved_symbol_error_t{
                     .section = section_name,
                     .message = "Unresolved external symbol " + sym.name + " in section " + section_name +
@@ -1483,6 +1582,7 @@ void ProgramReader::read_programs() {
                 process_relocations(instructions, ELFIO::const_relocation_section_accessor{reader, reloc_sec}, sec_name,
                                     offset, extracted_size);
             }
+            enqueue_synthetic_local_calls(instructions, sec->get_index(), offset);
             ProgramInfo program_info{
                 .platform = parse_params.platform,
                 .map_descriptors = global.map_descriptors,

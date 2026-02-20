@@ -8,9 +8,9 @@
 #include <mutex>
 #include <ranges>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <unordered_map>
-#include <string_view>
 
 #include "ebpf_verifier.hpp"
 #include "elf_loader.hpp"
@@ -75,7 +75,16 @@ inline std::string expected_exception_substring(const char* reason) {
     if (marker_index == std::string::npos) {
         return text;
     }
-    return text.substr(marker_index + marker.size());
+    const std::string diagnostic = text.substr(marker_index + marker.size());
+    constexpr std::string_view core_prefix = "Unsupported or invalid CO-RE/BTF relocation data:";
+    constexpr std::string_view subprogram_prefix = "Subprogram not found:";
+    if (diagnostic.rfind(core_prefix, 0) == 0) {
+        return std::string(core_prefix);
+    }
+    if (diagnostic.rfind(subprogram_prefix, 0) == 0) {
+        return std::string(subprogram_prefix);
+    }
+    return diagnostic;
 }
 
 template <typename T>

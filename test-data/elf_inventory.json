@@ -8991,14 +8991,10 @@
             "programs": {
               ".text": {
                 "static_subprog_lock": {
-                  "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 4: jump out of bounds",
-                  "status": "expected_failure"
+                  "status": "pass"
                 },
                 "static_subprog_unlock": {
-                  "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 4: jump out of bounds",
-                  "status": "expected_failure"
+                  "status": "pass"
                 }
               },
               "tc": {
@@ -9008,14 +9004,10 @@
                   "status": "expected_failure"
                 },
                 "lock_static_subprog_lock": {
-                  "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 0: jump to middle of lddw",
-                  "status": "expected_failure"
+                  "status": "pass"
                 },
                 "lock_static_subprog_unlock": {
-                  "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 5: jump out of bounds",
-                  "status": "expected_failure"
+                  "status": "pass"
                 }
               }
             },
