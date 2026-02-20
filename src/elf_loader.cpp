@@ -1656,8 +1656,8 @@ const std::vector<RawProgram>& ElfObject::get_programs(const std::string& desire
         if (!section_it->second.valid) {
             throw UnmarshalError(section_it->second.error);
         }
-        auto [it, _] = query_cache_.emplace(std::move(key),
-                                            filter_section_programs(section_it->second.programs, desired_program));
+        auto [it, _] =
+            query_cache_.emplace(std::move(key), filter_section_programs(section_it->second.programs, desired_program));
         return it->second;
     }
 
