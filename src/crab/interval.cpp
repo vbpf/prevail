@@ -268,35 +268,51 @@ Interval Interval::bitwise_and(const Interval& x) const {
     if (is_bottom() || x.is_bottom()) {
         return bottom();
     }
-    assert(is_top() || lb() >= 0);
-    assert(x.is_top() || x.lb() >= 0);
 
-    if (*this == Interval{0} || x == Interval{0}) {
+    // Bitwise operations are defined over unsigned machine values.
+    // If an interval temporarily carries a signed lower bound (e.g., after
+    // relational joins before re-establishing uvalue>=0), convert it to the
+    // corresponding 64-bit unsigned range conservatively.
+    Interval left = *this;
+    Interval right = x;
+    if (!left.is_top() && left.lb() < 0) {
+        left = left.zero_extend(64);
+    }
+    if (!right.is_top() && right.lb() < 0) {
+        right = right.zero_extend(64);
+    }
+    assert(left.is_top() || left.lb() >= 0);
+    assert(right.is_top() || right.lb() >= 0);
+
+    if (left == Interval{0} || right == Interval{0}) {
         return Interval{0};
     }
 
-    if (const auto right = x.singleton()) {
-        if (const auto left = singleton()) {
-            return Interval{*left & *right};
+    if (const auto right_singleton = right.singleton()) {
+        if (const auto left_singleton = left.singleton()) {
+            return Interval{*left_singleton & *right_singleton};
         }
-        if (right == Number::max_uint(32)) {
-            return zero_extend(32);
+        if (right_singleton == Number::max_uint(64)) {
+            return left.truncate_to<uint64_t>();
         }
-        if (right == Number::max_uint(16)) {
-            return zero_extend(16);
+        if (right_singleton == Number::max_uint(32)) {
+            return left.zero_extend(32);
         }
-        if (right == Number::max_uint(8)) {
-            return zero_extend(8);
+        if (right_singleton == Number::max_uint(16)) {
+            return left.zero_extend(16);
+        }
+        if (right_singleton == Number::max_uint(8)) {
+            return left.zero_extend(8);
         }
     }
-    if (x.contains(std::numeric_limits<uint64_t>::max())) {
-        return truncate_to<uint64_t>();
-    } else if (!is_top() && !x.is_top()) {
-        return Interval{0, std::min(ub(), x.ub())};
-    } else if (!x.is_top()) {
-        return Interval{0, x.ub()};
-    } else if (!is_top()) {
-        return Interval{0, ub()};
+    if (right.contains(std::numeric_limits<uint64_t>::max())) {
+        return Interval{0, left.truncate_to<uint64_t>().ub()};
+    } else if (!left.is_top() && !right.is_top()) {
+        return Interval{0, std::min(left.ub(), right.ub())};
+    } else if (!right.is_top()) {
+        return Interval{0, right.ub()};
+    } else if (!left.is_top()) {
+        return Interval{0, left.ub()};
     } else {
         return top();
     }

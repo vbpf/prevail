@@ -25,6 +25,9 @@ typedef EbpfHelperPrototype (*ebpf_get_helper_prototype_fn)(int32_t n);
 
 typedef bool (*ebpf_is_helper_usable_fn)(int32_t n);
 
+typedef std::optional<int32_t> (*ebpf_resolve_builtin_call_fn)(const std::string& name);
+typedef std::optional<Call> (*ebpf_get_builtin_call_fn)(int32_t id);
+
 typedef std::optional<Call> (*ebpf_resolve_kfunc_call_fn)(int32_t btf_id, const ProgramInfo* info,
                                                           std::string* why_not);
 
@@ -46,6 +49,8 @@ struct ebpf_platform_t {
     ebpf_get_program_type_fn get_program_type;
     ebpf_get_helper_prototype_fn get_helper_prototype;
     ebpf_is_helper_usable_fn is_helper_usable;
+    ebpf_resolve_builtin_call_fn resolve_builtin_call;
+    ebpf_get_builtin_call_fn get_builtin_call;
     ebpf_resolve_kfunc_call_fn resolve_kfunc_call;
 
     // Size of a record in the "maps" section of an ELF file.

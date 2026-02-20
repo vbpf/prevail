@@ -1,7 +1,7 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
-#include <array>
 #include <algorithm>
+#include <array>
 
 #include <catch2/catch_all.hpp>
 
@@ -158,6 +158,36 @@ TEST_CASE("linux map-type table covers post-cpumap map ids", "[platform][tables]
         REQUIRE(type.is_array == expected_is_array);
         REQUIRE(type.value_type == expected_value_type);
     }
+}
+
+TEST_CASE("linux builtin relocation resolver maps known libc builtins", "[platform][tables]") {
+    REQUIRE(g_ebpf_platform_linux.resolve_builtin_call != nullptr);
+    REQUIRE(g_ebpf_platform_linux.get_builtin_call != nullptr);
+
+    const auto resolve = g_ebpf_platform_linux.resolve_builtin_call;
+    const auto get_builtin_call = g_ebpf_platform_linux.get_builtin_call;
+    const auto memset_id = resolve("memset");
+    const auto memcpy_id = resolve("memcpy");
+    const auto memmove_id = resolve("memmove");
+    const auto memcmp_id = resolve("memcmp");
+    REQUIRE(memset_id.has_value());
+    REQUIRE(memcpy_id.has_value());
+    REQUIRE(memmove_id.has_value());
+    REQUIRE(memcmp_id.has_value());
+    const auto memset_call = get_builtin_call(*memset_id);
+    const auto memcpy_call = get_builtin_call(*memcpy_id);
+    const auto memmove_call = get_builtin_call(*memmove_id);
+    const auto memcmp_call = get_builtin_call(*memcmp_id);
+    REQUIRE(memset_call.has_value());
+    REQUIRE(memcpy_call.has_value());
+    REQUIRE(memmove_call.has_value());
+    REQUIRE(memcmp_call.has_value());
+    REQUIRE(memset_call->name == "memset");
+    REQUIRE(memcpy_call->name == "memcpy");
+    REQUIRE(memmove_call->name == "memmove");
+    REQUIRE(memcmp_call->name == "memcmp");
+    REQUIRE_FALSE(resolve("__does_not_exist").has_value());
+    REQUIRE_FALSE(get_builtin_call(-999999).has_value());
 }
 
 TEST_CASE("helper prototypes with unmodeled ABI classes are conservatively rejected", "[platform][tables]") {

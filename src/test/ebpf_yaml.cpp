@@ -45,6 +45,20 @@ static EbpfHelperPrototype ebpf_get_helper_prototype(const int32_t n) {
 
 static bool ebpf_is_helper_usable(const int32_t n) { return g_ebpf_platform_linux.is_helper_usable(n); }
 
+static std::optional<int32_t> ebpf_resolve_builtin_call(const std::string& name) {
+    if (!g_ebpf_platform_linux.resolve_builtin_call) {
+        return std::nullopt;
+    }
+    return g_ebpf_platform_linux.resolve_builtin_call(name);
+}
+
+static std::optional<Call> ebpf_get_builtin_call(const int32_t id) {
+    if (!g_ebpf_platform_linux.get_builtin_call) {
+        return std::nullopt;
+    }
+    return g_ebpf_platform_linux.get_builtin_call(id);
+}
+
 static std::optional<Call> ebpf_resolve_kfunc_call(const int32_t btf_id, const ProgramInfo* info,
                                                    std::string* why_not) {
     if (!g_ebpf_platform_linux.resolve_kfunc_call) {
@@ -68,6 +82,8 @@ static EbpfMapDescriptor& ebpf_get_map_descriptor(int) { return test_map_descrip
 ebpf_platform_t g_platform_test = {.get_program_type = ebpf_get_program_type,
                                    .get_helper_prototype = ebpf_get_helper_prototype,
                                    .is_helper_usable = ebpf_is_helper_usable,
+                                   .resolve_builtin_call = ebpf_resolve_builtin_call,
+                                   .get_builtin_call = ebpf_get_builtin_call,
                                    .resolve_kfunc_call = ebpf_resolve_kfunc_call,
                                    .map_record_size = 0,
                                    .parse_maps_section = ebpf_parse_maps_section,

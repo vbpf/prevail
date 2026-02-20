@@ -146,9 +146,10 @@ const std::vector<EbpfProgramType> linux_program_types = {
     PTYPE("cgroup_sockopt", &g_sockopt_descr, BPF_PROG_TYPE_CGROUP_SOCKOPT,
           {"cgroup/getsockopt" COMMA "cgroup/setsockopt"}),
     PTYPE("sk_msg", &g_sk_msg_md, BPF_PROG_TYPE_SK_MSG, {"sk_msg"}),
-    PTYPE("raw_tracepoint", &g_tracepoint_descr, BPF_PROG_TYPE_RAW_TRACEPOINT, {"raw_tracepoint/" COMMA "raw_tp/"}),
-    PTYPE("raw_tracepoint_writable", &g_tracepoint_descr, BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE,
-          {"raw_tracepoint.w/" COMMA "raw_tp.w/"}),
+    PTYPE_PRIVILEGED("raw_tracepoint", &g_tracepoint_descr, BPF_PROG_TYPE_RAW_TRACEPOINT,
+                     {"raw_tracepoint/" COMMA "raw_tp/"}),
+    PTYPE_PRIVILEGED("raw_tracepoint_writable", &g_tracepoint_descr, BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE,
+                     {"raw_tracepoint.w/" COMMA "raw_tp.w/"}),
     PTYPE("cgroup_sock_addr", &g_sock_addr_descr, BPF_PROG_TYPE_CGROUP_SOCK_ADDR,
           {"cgroup/bind" COMMA "cgroup/post_bind" COMMA "cgroup/connect" COMMA "cgroup/sendmsg" COMMA
            "cgroup/recvmsg" COMMA "cgroup/getpeername" COMMA "cgroup/getsockname"}),
@@ -349,16 +350,75 @@ static std::optional<Call> resolve_kfunc_call_linux(const int32_t btf_id, const 
     return make_kfunc_call(btf_id, info, why_not);
 }
 
+namespace {
+constexpr int32_t LINUX_BUILTIN_CALL_MEMSET = -11;
+constexpr int32_t LINUX_BUILTIN_CALL_MEMCPY = -12;
+constexpr int32_t LINUX_BUILTIN_CALL_MEMMOVE = -13;
+constexpr int32_t LINUX_BUILTIN_CALL_MEMCMP = -14;
+} // namespace
+
+std::optional<int32_t> resolve_builtin_call_linux(const std::string& name) {
+    if (name == "memset") {
+        return LINUX_BUILTIN_CALL_MEMSET;
+    }
+    if (name == "memcpy") {
+        return LINUX_BUILTIN_CALL_MEMCPY;
+    }
+    if (name == "memmove") {
+        return LINUX_BUILTIN_CALL_MEMMOVE;
+    }
+    if (name == "memcmp") {
+        return LINUX_BUILTIN_CALL_MEMCMP;
+    }
+    return std::nullopt;
+}
+
+static std::optional<Call> get_builtin_call_linux(const int32_t id) {
+    switch (id) {
+    case LINUX_BUILTIN_CALL_MEMSET:
+        return Call{
+            .func = id,
+            .name = "memset",
+            .singles = {{ArgSingle::Kind::ANYTHING, false, Reg{2}}},
+            .pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false}},
+        };
+    case LINUX_BUILTIN_CALL_MEMCPY:
+        return Call{
+            .func = id,
+            .name = "memcpy",
+            .pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false},
+                      {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}},
+        };
+    case LINUX_BUILTIN_CALL_MEMMOVE:
+        return Call{
+            .func = id,
+            .name = "memmove",
+            .pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false},
+                      {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}},
+        };
+    case LINUX_BUILTIN_CALL_MEMCMP:
+        return Call{
+            .func = id,
+            .name = "memcmp",
+            .pairs = {{ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{1}, Reg{3}, false},
+                      {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}},
+        };
+    default: return std::nullopt;
+    }
+}
+
 const ebpf_platform_t g_ebpf_platform_linux = {
-    get_program_type_linux,
-    get_helper_prototype_linux,
-    is_helper_usable_linux,
-    resolve_kfunc_call_linux,
-    sizeof(BpfLoadMapDef),
-    parse_maps_section_linux,
-    get_map_descriptor_linux,
-    get_map_type_linux,
-    resolve_inner_map_references_linux,
-    bpf_conformance_groups_t::default_groups | bpf_conformance_groups_t::packet,
+    .get_program_type = get_program_type_linux,
+    .get_helper_prototype = get_helper_prototype_linux,
+    .is_helper_usable = is_helper_usable_linux,
+    .resolve_builtin_call = resolve_builtin_call_linux,
+    .get_builtin_call = get_builtin_call_linux,
+    .resolve_kfunc_call = resolve_kfunc_call_linux,
+    .map_record_size = sizeof(BpfLoadMapDef),
+    .parse_maps_section = parse_maps_section_linux,
+    .get_map_descriptor = get_map_descriptor_linux,
+    .get_map_type = get_map_type_linux,
+    .resolve_inner_map_references = resolve_inner_map_references_linux,
+    .supported_conformance_groups = bpf_conformance_groups_t::default_groups | bpf_conformance_groups_t::packet,
 };
 } // namespace prevail

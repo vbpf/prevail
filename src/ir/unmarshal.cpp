@@ -679,6 +679,17 @@ struct Unmarshaller {
             if (inst.dst != 0) {
                 throw InvalidInstruction(pc, make_opcode_message("nonzero dst for register", inst.opcode));
             }
+            if (info.builtin_call_offsets.contains(pc)) {
+                if (info.platform->get_builtin_call) {
+                    if (const auto builtin_call = info.platform->get_builtin_call(inst.imm)) {
+                        return *builtin_call;
+                    }
+                }
+                return Call{.func = inst.imm,
+                            .name = std::to_string(inst.imm),
+                            .is_supported = false,
+                            .unsupported_reason = "helper function is unavailable on this platform"};
+            }
             if (!info.platform->is_helper_usable(inst.imm)) {
                 std::string name = std::to_string(inst.imm);
                 try {
