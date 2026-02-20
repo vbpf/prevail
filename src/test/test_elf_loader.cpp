@@ -82,8 +82,8 @@ class TempElfFile {
         const auto temp_dir = std::filesystem::temp_directory_path();
         const auto seed = std::random_device{}();
         for (size_t attempt = 0; attempt < 4096; ++attempt) {
-            path_ = temp_dir / ("prevail-" + std::string(tag) + "-" + std::to_string(seed) + "-" +
-                                std::to_string(attempt) + ".o");
+            path_ = temp_dir /
+                    ("prevail-" + std::string(tag) + "-" + std::to_string(seed) + "-" + std::to_string(attempt) + ".o");
             if (std::filesystem::exists(path_)) {
                 continue;
             }
