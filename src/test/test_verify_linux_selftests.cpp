@@ -11,65 +11,6 @@ TEST_PROGRAM("linux-selftests", "atomics.o", "raw_tp/sys_enter", "or", 7)
 TEST_PROGRAM("linux-selftests", "atomics.o", "raw_tp/sys_enter", "sub", 7)
 TEST_PROGRAM("linux-selftests", "atomics.o", "raw_tp/sys_enter", "xchg", 7)
 TEST_PROGRAM("linux-selftests", "atomics.o", "raw_tp/sys_enter", "xor", 7)
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 1: Invalid type (r4.type in {ctx, stack, packet, shared})
-TEST_SECTION_FAIL("linux-selftests", "bloom_filter_map.o", ".text", verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 1: Invalid type (r4.type in {ctx, stack, packet, shared})")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 10: Invalid type (r2.type == func)
-TEST_PROGRAM_FAIL("linux-selftests", "bloom_filter_map.o", "fentry/__x64_sys_getpgid", "check_bloom", 2,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 10: Invalid type (r2.type == func)")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 22: Invalid type (r2.type == func)
-TEST_PROGRAM_FAIL("linux-selftests", "bloom_filter_map.o", "fentry/__x64_sys_getpgid", "inner_map", 2,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 22: Invalid type (r2.type == func)")
-// skipped (ExternalSymbolResolution): Known architectural limitation: unresolved external symbols are not modeled in
-// offline verification. Diagnostic: Unresolved symbols found.
-TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_acked",
-                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
-                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
-                  "verification. Diagnostic: Unresolved symbols found.")
-// skipped (ExternalSymbolResolution): Known architectural limitation: unresolved external symbols are not modeled in
-// offline verification. Diagnostic: Unresolved symbols found.
-TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_cong_avoid",
-                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
-                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
-                  "verification. Diagnostic: Unresolved symbols found.")
-// skipped (ExternalSymbolResolution): Known architectural limitation: unresolved external symbols are not modeled in
-// offline verification. Diagnostic: Unresolved symbols found.
-TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_cwnd_event",
-                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
-                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
-                  "verification. Diagnostic: Unresolved symbols found.")
-// skipped (ExternalSymbolResolution): Known architectural limitation: unresolved external symbols are not modeled in
-// offline verification. Diagnostic: Unresolved symbols found.
-TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_init",
-                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
-                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
-                  "verification. Diagnostic: Unresolved symbols found.")
-// skipped (ExternalSymbolResolution): Known architectural limitation: unresolved external symbols are not modeled in
-// offline verification. Diagnostic: Unresolved symbols found.
-TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_recalc_ssthresh",
-                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
-                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
-                  "verification. Diagnostic: Unresolved symbols found.")
-// skipped (ExternalSymbolResolution): Known architectural limitation: unresolved external symbols are not modeled in
-// offline verification. Diagnostic: Unresolved symbols found.
-TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_state",
-                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
-                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
-                  "verification. Diagnostic: Unresolved symbols found.")
-// skipped (ExternalSymbolResolution): Known architectural limitation: unresolved external symbols are not modeled in
-// offline verification. Diagnostic: Unresolved symbols found.
-TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_undo_cwnd",
-                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
-                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
-                  "verification. Diagnostic: Unresolved symbols found.")
 TEST_PROGRAM("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_cong_avoid", 7)
 TEST_PROGRAM("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_cwnd_event", 7)
 TEST_PROGRAM("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_cwnd_undo", 7)
@@ -79,175 +20,12 @@ TEST_PROGRAM("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_state", 
 TEST_PROGRAM("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_update_alpha", 7)
 TEST_SECTION("linux-selftests", "fexit_sleep.o", "fentry/__x64_sys_nanosleep")
 TEST_SECTION("linux-selftests", "fexit_sleep.o", "fexit/__x64_sys_nanosleep")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 1: Invalid type (r1.type == number)
-TEST_SECTION_FAIL("linux-selftests", "freplace_get_constant.o", "freplace/get_constant",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 1: Invalid type (r1.type == number)")
 TEST_SECTION("linux-selftests", "get_cgroup_id_kern.o", "tracepoint/syscalls/sys_enter_nanosleep")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
-// this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)
-TEST_SECTION_FAIL("linux-selftests", "kfree_skb.o", "fentry/eth_type_trans",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
-// this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)
-TEST_SECTION_FAIL("linux-selftests", "kfree_skb.o", "fexit/eth_type_trans",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
-// this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)
-TEST_SECTION_FAIL("linux-selftests", "kfree_skb.o", "tp_btf/kfree_skb",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)")
 TEST_SECTION("linux-selftests", "loop1.o", "raw_tracepoint/kfree_skb")
 TEST_SECTION("linux-selftests", "loop2.o", "raw_tracepoint/consume_skb")
-// skipped (VerificationTimeout): Known algorithmic limitation: verification did not converge within the configured
-// timeout. Diagnostic: verification timed out after 20s
-TEST_SECTION_SKIP("linux-selftests", "loop3.o", "raw_tracepoint/consume_skb",
-                  verify_test::VerifyIssueKind::VerificationTimeout,
-                  "Known algorithmic limitation: verification did not converge within the configured timeout. "
-                  "Diagnostic: verification timed out after 20s")
 TEST_SECTION("linux-selftests", "loop4.o", "socket")
 TEST_SECTION("linux-selftests", "loop5.o", "socket")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 5: Invalid type (r2.type in {ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 5: Invalid type (r2.type in {ctx, stack, packet, shared})")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 9: Invalid type (r1.type in {number, ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_array_of_maps", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 9: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_cgroup_storage", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_cpumap", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 9/16: Invalid type (r2.type in {ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_default_noinline", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 9/16: Invalid type (r2.type in {ctx, stack, packet, shared})")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_devmap", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_devmap_hash", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 9: Invalid type (r1.type in {number, ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_hash_of_maps", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 9: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_lpm_trie", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_lru_percpu_hash", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_percpu_cgroup_storage", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_queue", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_reuseport_sockarray", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_ringbuf", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_sk_storage", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_sockhash", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_sockmap", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_stack", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_xskmap", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
 TEST_SECTION("linux-selftests", "map_ptr_kern.o", "cgroup_skb/egress")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 10: Invalid type (r2.type == socket)
-TEST_SECTION_FAIL("linux-selftests", "socket_cookie_prog.o", "cgroup/connect6",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 10: Invalid type (r2.type == socket)")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
-// this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+8, width=8) for read)
-TEST_SECTION_FAIL("linux-selftests", "socket_cookie_prog.o", "fexit/inet_stream_connect",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+8, width=8) for read)")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
-// this memory-access proof. Diagnostic: 1: Upper bound must be at most 184 (valid_access(r6.offset+184, width=8) for
-// read)
-TEST_SECTION_FAIL("linux-selftests", "socket_cookie_prog.o", "sockops",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 1: Upper bound must be at most 184 (valid_access(r6.offset+184, width=8) for read)")
 TEST_SECTION("linux-selftests", "sockmap_parse_prog.o", "sk_skb1")
 TEST_SECTION("linux-selftests", "sockmap_verdict_prog.o", "sk_skb2")
 TEST_PROGRAM("linux-selftests", "tailcall1.o", "tc", "classifier_0", 4)
@@ -264,67 +42,287 @@ TEST_PROGRAM("linux-selftests", "tailcall3.o", "tc", "classifier_0", 2)
 TEST_PROGRAM("linux-selftests", "tailcall3.o", "tc", "entry", 2)
 TEST_PROGRAM("linux-selftests", "test_global_func1.o", ".text", "f0", 4)
 TEST_PROGRAM("linux-selftests", "test_global_func1.o", ".text", "f1", 4)
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 1: Invalid type (r1.type == number)
-TEST_PROGRAM_FAIL("linux-selftests", "test_global_func1.o", ".text", "f2", 4,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 1: Invalid type (r1.type == number)")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 0: Invalid type (r3.type == number)
-TEST_PROGRAM_FAIL("linux-selftests", "test_global_func1.o", ".text", "f3", 4,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 0: Invalid type (r3.type == number)")
 TEST_SECTION("linux-selftests", "test_global_func1.o", "tc")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 0: Invalid type (valid_access(r2.offset) for comparison/subtraction)
-TEST_PROGRAM_FAIL("linux-selftests", "test_global_func_args.o", ".text", "bar", 3,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 0: Invalid type (valid_access(r2.offset) for comparison/subtraction)")
 TEST_PROGRAM("linux-selftests", "test_global_func_args.o", ".text", "baz", 3)
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this
-// control-flow pattern. Diagnostic: 0: Invalid type (valid_access(r2.offset) for comparison/subtraction)
-TEST_PROGRAM_FAIL("linux-selftests", "test_global_func_args.o", ".text", "foo", 3,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 0: Invalid type (valid_access(r2.offset) for comparison/subtraction)")
 TEST_SECTION("linux-selftests", "test_global_func_args.o", "cgroup_skb/ingress")
 TEST_PROGRAM("linux-selftests", "test_spin_lock.o", ".text", "static_subprog", 3)
-// expected failure (UnmarshalControlFlow): Known loader limitation: instruction unmarshaling cannot reconstruct this
-// control-flow shape. Diagnostic: unmarshaling error at 4: jump out of bounds
-TEST_PROGRAM_FAIL("linux-selftests", "test_spin_lock.o", ".text", "static_subprog_lock", 3,
-                  verify_test::VerifyIssueKind::UnmarshalControlFlow,
-                  "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. "
-                  "Diagnostic: unmarshaling error at 4: jump out of bounds")
-// expected failure (UnmarshalControlFlow): Known loader limitation: instruction unmarshaling cannot reconstruct this
-// control-flow shape. Diagnostic: unmarshaling error at 4: jump out of bounds
-TEST_PROGRAM_FAIL("linux-selftests", "test_spin_lock.o", ".text", "static_subprog_unlock", 3,
-                  verify_test::VerifyIssueKind::UnmarshalControlFlow,
-                  "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. "
-                  "Diagnostic: unmarshaling error at 4: jump out of bounds")
-// expected failure (VerifierNullability): Known verifier limitation: nullability tracking is too conservative on this
-// path. Diagnostic: 89: Possible null access (valid_access(r7.offset+4, width=4) for read)
-TEST_SECTION_FAIL("linux-selftests", "test_spin_lock.o", "cgroup_skb/ingress",
-                  verify_test::VerifyIssueKind::VerifierNullability,
-                  "Known verifier limitation: nullability tracking is too conservative on this path. Diagnostic: 89: "
-                  "Possible null access (valid_access(r7.offset+4, width=4) for read)")
-// expected failure (VerifierRecursionModeling): Known verifier limitation: subprogram call-graph handling rejects this
-// recursion-shaped pattern. Diagnostic: error: 8: illegal recursion
-TEST_PROGRAM_FAIL("linux-selftests", "test_spin_lock.o", "tc", "lock_static_subprog_call", 3,
-                  verify_test::VerifyIssueKind::VerifierRecursionModeling,
-                  "Known verifier limitation: subprogram call-graph handling rejects this recursion-shaped pattern. "
-                  "Diagnostic: error: 8: illegal recursion")
-// expected failure (UnmarshalControlFlow): Known loader limitation: instruction unmarshaling cannot reconstruct this
-// control-flow shape. Diagnostic: unmarshaling error at 0: jump to middle of lddw
-TEST_PROGRAM_FAIL("linux-selftests", "test_spin_lock.o", "tc", "lock_static_subprog_lock", 3,
-                  verify_test::VerifyIssueKind::UnmarshalControlFlow,
-                  "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. "
-                  "Diagnostic: unmarshaling error at 0: jump to middle of lddw")
-// expected failure (UnmarshalControlFlow): Known loader limitation: instruction unmarshaling cannot reconstruct this
-// control-flow shape. Diagnostic: unmarshaling error at 5: jump out of bounds
-TEST_PROGRAM_FAIL("linux-selftests", "test_spin_lock.o", "tc", "lock_static_subprog_unlock", 3,
-                  verify_test::VerifyIssueKind::UnmarshalControlFlow,
-                  "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. "
-                  "Diagnostic: unmarshaling error at 5: jump out of bounds")
+
+// ===========================================================================
+// Failure Cause Group: VerifierTypeTracking
+// Group size: 28 tests (28 expected_failure, 0 skip).
+// Root cause:
+//   State refinement loses precise register type information across specific control-flow merges, so a pointer or
+//   scalar register is later treated as an incompatible type.
+// Representative example:
+//   test: linux-selftests/bloom_filter_map.o .text
+//   diagnostic: 1: Invalid type (r4.type in {ctx, stack, packet, shared})
+// Addressing direction:
+//   Improve type-domain join or widen logic for pointer classes and preserve key path constraints through merges.
+//   Start from the first failing instruction and inspect predecessor states.
+// ===========================================================================
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 1: Invalid type (r4.type in {ctx, stack, packet, shared})
+TEST_SECTION_FAIL("linux-selftests", "bloom_filter_map.o", ".text", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1: Invalid type (r4.type in {ctx, stack, packet, shared})")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 10: Invalid type (r2.type == func)
+TEST_PROGRAM_FAIL("linux-selftests", "bloom_filter_map.o", "fentry/__x64_sys_getpgid", "check_bloom", 2, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 10: Invalid type (r2.type == func)")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 22: Invalid type (r2.type == func)
+TEST_PROGRAM_FAIL("linux-selftests", "bloom_filter_map.o", "fentry/__x64_sys_getpgid", "inner_map", 2, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 22: Invalid type (r2.type == func)")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 1: Invalid type (r1.type == number)
+TEST_SECTION_FAIL("linux-selftests", "freplace_get_constant.o", "freplace/get_constant", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1: Invalid type (r1.type == number)")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 5: Invalid type (r2.type in {ctx, stack, packet, shared})
+TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 5: Invalid type (r2.type in {ctx, stack, packet, shared})")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 9: Invalid type (r1.type in {number, ctx, stack, packet, shared})
+TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_array_of_maps", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 9: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
+TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_cgroup_storage", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
+TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_cpumap", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 9/16: Invalid type (r2.type in {ctx, stack, packet, shared})
+TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_default_noinline", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 9/16: Invalid type (r2.type in {ctx, stack, packet, shared})")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
+TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_devmap", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
+TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_devmap_hash", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 9: Invalid type (r1.type in {number, ctx, stack, packet, shared})
+TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_hash_of_maps", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 9: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
+TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_lpm_trie", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
+TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_lru_percpu_hash", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
+TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_percpu_cgroup_storage", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
+TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_queue", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
+TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_reuseport_sockarray", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
+TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_ringbuf", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
+TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_sk_storage", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
+TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_sockhash", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
+TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_sockmap", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
+TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_stack", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
+TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_xskmap", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 10: Invalid type (r2.type == socket)
+TEST_SECTION_FAIL("linux-selftests", "socket_cookie_prog.o", "cgroup/connect6", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 10: Invalid type (r2.type == socket)")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 1: Invalid type (r1.type == number)
+TEST_PROGRAM_FAIL("linux-selftests", "test_global_func1.o", ".text", "f2", 4, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1: Invalid type (r1.type == number)")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 0: Invalid type (r3.type == number)
+TEST_PROGRAM_FAIL("linux-selftests", "test_global_func1.o", ".text", "f3", 4, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 0: Invalid type (r3.type == number)")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 0: Invalid type (valid_access(r2.offset) for comparison/subtraction)
+TEST_PROGRAM_FAIL("linux-selftests", "test_global_func_args.o", ".text", "bar", 3, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 0: Invalid type (valid_access(r2.offset) for comparison/subtraction)")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 0: Invalid type (valid_access(r2.offset) for comparison/subtraction)
+TEST_PROGRAM_FAIL("linux-selftests", "test_global_func_args.o", ".text", "foo", 3, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 0: Invalid type (valid_access(r2.offset) for comparison/subtraction)")
+
+// ===========================================================================
+// Failure Cause Group: VerifierBoundsTracking
+// Group size: 5 tests (5 expected_failure, 0 skip).
+// Root cause:
+//   Numeric range reasoning is too coarse for dependent bounds, so safe accesses fail range checks (packet size,
+//   stack window, map value window).
+// Representative example:
+//   test: linux-selftests/kfree_skb.o fentry/eth_type_trans
+//   diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)
+// Addressing direction:
+//   Strengthen interval propagation for correlated predicates and arithmetic-derived offsets, and keep relation
+//   information across branches where possible.
+// ===========================================================================
+// expected failure (VerifierBoundsTracking):
+//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
+//   diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)
+TEST_SECTION_FAIL("linux-selftests", "kfree_skb.o", "fentry/eth_type_trans", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)")
+// expected failure (VerifierBoundsTracking):
+//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
+//   diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)
+TEST_SECTION_FAIL("linux-selftests", "kfree_skb.o", "fexit/eth_type_trans", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)")
+// expected failure (VerifierBoundsTracking):
+//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
+//   diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)
+TEST_SECTION_FAIL("linux-selftests", "kfree_skb.o", "tp_btf/kfree_skb", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)")
+// expected failure (VerifierBoundsTracking):
+//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
+//   diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+8, width=8) for read)
+TEST_SECTION_FAIL("linux-selftests", "socket_cookie_prog.o", "fexit/inet_stream_connect", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+8, width=8) for read)")
+// expected failure (VerifierBoundsTracking):
+//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
+//   diagnostic: 1: Upper bound must be at most 184 (valid_access(r6.offset+184, width=8) for read)
+TEST_SECTION_FAIL("linux-selftests", "socket_cookie_prog.o", "sockops", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 1: Upper bound must be at most 184 (valid_access(r6.offset+184, width=8) for read)")
+
+// ===========================================================================
+// Failure Cause Group: VerifierNullability
+// Group size: 1 tests (1 expected_failure, 0 skip).
+// Root cause:
+//   Null-state tracking is conservative across paths, so values proven non-null on one path are reintroduced as
+//   maybe-null later.
+// Representative example:
+//   test: linux-selftests/test_spin_lock.o cgroup_skb/ingress
+//   diagnostic: 89: Possible null access (valid_access(r7.offset+4, width=4) for read)
+// Addressing direction:
+//   Refine nullability join rules and path-sensitive implication handling for pointer checks before access.
+// ===========================================================================
+// expected failure (VerifierNullability):
+//   reason: Known verifier limitation: nullability tracking is too conservative on this path.
+//   diagnostic: 89: Possible null access (valid_access(r7.offset+4, width=4) for read)
+TEST_SECTION_FAIL("linux-selftests", "test_spin_lock.o", "cgroup_skb/ingress", verify_test::VerifyIssueKind::VerifierNullability, "Known verifier limitation: nullability tracking is too conservative on this path. Diagnostic: 89: Possible null access (valid_access(r7.offset+4, width=4) for read)")
+
+// ===========================================================================
+// Failure Cause Group: VerifierRecursionModeling
+// Group size: 1 tests (1 expected_failure, 0 skip).
+// Root cause:
+//   Call-graph handling flags recursion in patterns that should be accepted after proper subprogram modeling.
+// Representative example:
+//   test: linux-selftests/test_spin_lock.o tc::lock_static_subprog_call
+//   diagnostic: error: 8: illegal recursion
+// Addressing direction:
+//   Adjust call-graph expansion and recursion detection to distinguish legal call structure from true illegal
+//   recursion.
+// ===========================================================================
+// expected failure (VerifierRecursionModeling):
+//   reason: Known verifier limitation: subprogram call-graph handling rejects this recursion-shaped pattern.
+//   diagnostic: error: 8: illegal recursion
+TEST_PROGRAM_FAIL("linux-selftests", "test_spin_lock.o", "tc", "lock_static_subprog_call", 3, verify_test::VerifyIssueKind::VerifierRecursionModeling, "Known verifier limitation: subprogram call-graph handling rejects this recursion-shaped pattern. Diagnostic: error: 8: illegal recursion")
+
+// ===========================================================================
+// Failure Cause Group: UnmarshalControlFlow
+// Group size: 4 tests (4 expected_failure, 0 skip).
+// Root cause:
+//   Instruction unmarshaling cannot reconstruct a valid CFG for the extracted bytecode slice.
+// Representative example:
+//   test: linux-selftests/test_spin_lock.o .text::static_subprog_lock
+//   diagnostic: unmarshaling error at 4: jump out of bounds
+// Addressing direction:
+//   Stabilize extraction and jump target mapping so every emitted instruction stream has valid in-range branch and
+//   call targets.
+// ===========================================================================
+// expected failure (UnmarshalControlFlow):
+//   reason: Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape.
+//   diagnostic: unmarshaling error at 4: jump out of bounds
+TEST_PROGRAM_FAIL("linux-selftests", "test_spin_lock.o", ".text", "static_subprog_lock", 3, verify_test::VerifyIssueKind::UnmarshalControlFlow, "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 4: jump out of bounds")
+// expected failure (UnmarshalControlFlow):
+//   reason: Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape.
+//   diagnostic: unmarshaling error at 4: jump out of bounds
+TEST_PROGRAM_FAIL("linux-selftests", "test_spin_lock.o", ".text", "static_subprog_unlock", 3, verify_test::VerifyIssueKind::UnmarshalControlFlow, "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 4: jump out of bounds")
+// expected failure (UnmarshalControlFlow):
+//   reason: Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape.
+//   diagnostic: unmarshaling error at 0: jump to middle of lddw
+TEST_PROGRAM_FAIL("linux-selftests", "test_spin_lock.o", "tc", "lock_static_subprog_lock", 3, verify_test::VerifyIssueKind::UnmarshalControlFlow, "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 0: jump to middle of lddw")
+// expected failure (UnmarshalControlFlow):
+//   reason: Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape.
+//   diagnostic: unmarshaling error at 5: jump out of bounds
+TEST_PROGRAM_FAIL("linux-selftests", "test_spin_lock.o", "tc", "lock_static_subprog_unlock", 3, verify_test::VerifyIssueKind::UnmarshalControlFlow, "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 5: jump out of bounds")
+
+// ===========================================================================
+// Failure Cause Group: ExternalSymbolResolution
+// Group size: 7 tests (0 expected_failure, 7 skip).
+// Root cause:
+//   Program references external symbols with no offline resolver or model, so linking cannot complete.
+// Representative example:
+//   test: linux-selftests/bpf_cubic.o struct_ops::bpf_cubic_acked
+//   diagnostic: Unresolved symbols found.
+// Addressing direction:
+//   Add explicit platform-level symbol resolution and modeling for required externs, or provide conservative stubs
+//   with sound semantics.
+// ===========================================================================
+// skipped (ExternalSymbolResolution):
+//   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
+//   diagnostic: Unresolved symbols found.
+TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_acked", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
+// skipped (ExternalSymbolResolution):
+//   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
+//   diagnostic: Unresolved symbols found.
+TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_cong_avoid", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
+// skipped (ExternalSymbolResolution):
+//   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
+//   diagnostic: Unresolved symbols found.
+TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_cwnd_event", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
+// skipped (ExternalSymbolResolution):
+//   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
+//   diagnostic: Unresolved symbols found.
+TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_init", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
+// skipped (ExternalSymbolResolution):
+//   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
+//   diagnostic: Unresolved symbols found.
+TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_recalc_ssthresh", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
+// skipped (ExternalSymbolResolution):
+//   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
+//   diagnostic: Unresolved symbols found.
+TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_state", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
+// skipped (ExternalSymbolResolution):
+//   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
+//   diagnostic: Unresolved symbols found.
+TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_undo_cwnd", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
+
+// ===========================================================================
+// Failure Cause Group: VerificationTimeout
+// Group size: 1 tests (0 expected_failure, 1 skip).
+// Root cause:
+//   Analysis does not converge in configured time on this workload.
+// Representative example:
+//   test: linux-selftests/loop3.o raw_tracepoint/consume_skb
+//   diagnostic: verification timed out after 20s
+// Addressing direction:
+//   Profile hot control-flow regions and tighten widening or narrowing strategy while preserving soundness.
+// ===========================================================================
+// skipped (VerificationTimeout):
+//   reason: Known algorithmic limitation: verification did not converge within the configured timeout.
+//   diagnostic: verification timed out after 20s
+TEST_SECTION_SKIP("linux-selftests", "loop3.o", "raw_tracepoint/consume_skb", verify_test::VerifyIssueKind::VerificationTimeout, "Known algorithmic limitation: verification did not converge within the configured timeout. Diagnostic: verification timed out after 20s")

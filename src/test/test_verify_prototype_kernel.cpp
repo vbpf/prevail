@@ -11,10 +11,6 @@ TEST_SECTION("prototype-kernel", "napi_monitor_kern.o", "tracepoint/napi/napi_po
 TEST_SECTION("prototype-kernel", "tc_bench01_redirect_kern.o", "ingress_redirect")
 TEST_SECTION("prototype-kernel", "xdp_bench01_mem_access_cost_kern.o", "xdp_bench01")
 TEST_SECTION("prototype-kernel", "xdp_bench02_drop_pattern_kern.o", "xdp_bench02")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1: Invalid type (r2.type == number)
-TEST_SECTION_FAIL("prototype-kernel", "xdp_ddos01_blacklist_kern.o", ".text", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1: Invalid type (r2.type == number)")
-// expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 112: Invalid type (r1.type == map_fd)
-TEST_SECTION_FAIL("prototype-kernel", "xdp_ddos01_blacklist_kern.o", "xdp_prog", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 112: Invalid type (r1.type == map_fd)")
 TEST_SECTION("prototype-kernel", "xdp_monitor_kern.o", "tracepoint/xdp/xdp_redirect")
 TEST_SECTION("prototype-kernel", "xdp_monitor_kern.o", "tracepoint/xdp/xdp_redirect_err")
 TEST_SECTION("prototype-kernel", "xdp_monitor_kern.o", "tracepoint/xdp/xdp_redirect_map")
@@ -40,3 +36,25 @@ TEST_SECTION("prototype-kernel", "xdp_vlan01_kern.o", "xdp_drop_vlan_4011")
 TEST_SECTION("prototype-kernel", "xdp_vlan01_kern.o", "xdp_vlan_change")
 TEST_SECTION("prototype-kernel", "xdp_vlan01_kern.o", "xdp_vlan_remove_outer")
 TEST_SECTION("prototype-kernel", "xdp_vlan01_kern.o", "xdp_vlan_remove_outer2")
+
+// ===========================================================================
+// Failure Cause Group: VerifierTypeTracking
+// Group size: 2 tests (2 expected_failure, 0 skip).
+// Root cause:
+//   State refinement loses precise register type information across specific control-flow merges, so a pointer or
+//   scalar register is later treated as an incompatible type.
+// Representative example:
+//   test: prototype-kernel/xdp_ddos01_blacklist_kern.o .text
+//   diagnostic: 1: Invalid type (r2.type == number)
+// Addressing direction:
+//   Improve type-domain join or widen logic for pointer classes and preserve key path constraints through merges.
+//   Start from the first failing instruction and inspect predecessor states.
+// ===========================================================================
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 1: Invalid type (r2.type == number)
+TEST_SECTION_FAIL("prototype-kernel", "xdp_ddos01_blacklist_kern.o", ".text", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1: Invalid type (r2.type == number)")
+// expected failure (VerifierTypeTracking):
+//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
+//   diagnostic: 112: Invalid type (r1.type == map_fd)
+TEST_SECTION_FAIL("prototype-kernel", "xdp_ddos01_blacklist_kern.o", "xdp_prog", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 112: Invalid type (r1.type == map_fd)")

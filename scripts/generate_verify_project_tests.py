@@ -6,6 +6,8 @@ import argparse
 import json
 import re
 import sys
+import textwrap
+from collections import defaultdict
 from pathlib import Path
 
 VALID_KINDS = {
@@ -25,6 +27,159 @@ VALID_KINDS = {
     "ElfLegacyMapLayout",
     "VerificationTimeout",
     "LegacyBccBehavior",
+}
+
+KIND_ORDER = [
+    "VerifierTypeTracking",
+    "VerifierBoundsTracking",
+    "VerifierStackInitialization",
+    "VerifierPointerArithmetic",
+    "VerifierMapTyping",
+    "VerifierNullability",
+    "VerifierContextModeling",
+    "VerifierRecursionModeling",
+    "UnmarshalControlFlow",
+    "ExternalSymbolResolution",
+    "PlatformHelperAvailability",
+    "ElfCoreRelocation",
+    "ElfSubprogramResolution",
+    "ElfLegacyMapLayout",
+    "VerificationTimeout",
+    "LegacyBccBehavior",
+]
+
+KIND_GUIDANCE = {
+    "VerifierTypeTracking": {
+        "root": (
+            "State refinement loses precise register type information across specific control-flow merges, "
+            "so a pointer or scalar register is later treated as an incompatible type."
+        ),
+        "fix": (
+            "Improve type-domain join or widen logic for pointer classes and preserve key path constraints "
+            "through merges. Start from the first failing instruction and inspect predecessor states."
+        ),
+    },
+    "VerifierBoundsTracking": {
+        "root": (
+            "Numeric range reasoning is too coarse for dependent bounds, so safe accesses fail range checks "
+            "(packet size, stack window, map value window)."
+        ),
+        "fix": (
+            "Strengthen interval propagation for correlated predicates and arithmetic-derived offsets, and keep "
+            "relation information across branches where possible."
+        ),
+    },
+    "VerifierStackInitialization": {
+        "root": (
+            "Stack byte initialization tracking misses writes or invalidates facts too aggressively, so reads are "
+            "reported as non-numeric or uninitialized."
+        ),
+        "fix": (
+            "Tighten per-byte initialization transfer functions and join behavior for stack slots touched through "
+            "aliases and conditional writes."
+        ),
+    },
+    "VerifierPointerArithmetic": {
+        "root": (
+            "Pointer arithmetic rules are stricter than required for this pattern, rejecting arithmetic that should "
+            "remain safely typed."
+        ),
+        "fix": (
+            "Refine pointer-plus-scalar typing rules and preserve provenance when arithmetic stays within verified "
+            "bounds."
+        ),
+    },
+    "VerifierMapTyping": {
+        "root": (
+            "Map key or value region typing cannot prove scalar compatibility for helper arguments in these flows."
+        ),
+        "fix": (
+            "Improve map region typing and value or key scalarization so helper argument checks can recover precise "
+            "numeric facts."
+        ),
+    },
+    "VerifierNullability": {
+        "root": (
+            "Null-state tracking is conservative across paths, so values proven non-null on one path are reintroduced "
+            "as maybe-null later."
+        ),
+        "fix": (
+            "Refine nullability join rules and path-sensitive implication handling for pointer checks before access."
+        ),
+    },
+    "VerifierContextModeling": {
+        "root": (
+            "Platform context model does not expose offset semantics expected by the program, so accesses are "
+            "rejected."
+        ),
+        "fix": "Extend context layout and offset modeling for the relevant program type.",
+    },
+    "VerifierRecursionModeling": {
+        "root": (
+            "Call-graph handling flags recursion in patterns that should be accepted after proper subprogram "
+            "modeling."
+        ),
+        "fix": (
+            "Adjust call-graph expansion and recursion detection to distinguish legal call structure from true "
+            "illegal recursion."
+        ),
+    },
+    "UnmarshalControlFlow": {
+        "root": "Instruction unmarshaling cannot reconstruct a valid CFG for the extracted bytecode slice.",
+        "fix": (
+            "Stabilize extraction and jump target mapping so every emitted instruction stream has valid in-range "
+            "branch and call targets."
+        ),
+    },
+    "ExternalSymbolResolution": {
+        "root": (
+            "Program references external symbols with no offline resolver or model, so linking cannot complete."
+        ),
+        "fix": (
+            "Add explicit platform-level symbol resolution and modeling for required externs, or provide conservative "
+            "stubs with sound semantics."
+        ),
+    },
+    "PlatformHelperAvailability": {
+        "root": "Sample expects helper availability that differs from the modeled target platform.",
+        "fix": (
+            "Update platform helper matrix or test platform assumptions; keep behavior explicit per target profile."
+        ),
+    },
+    "ElfCoreRelocation": {
+        "root": "CO-RE or BTF relocation payload is malformed or unsupported by current loader expectations.",
+        "fix": (
+            "Harden BTF or CO-RE parser compatibility and validation, or gate unsupported variants with explicit "
+            "diagnostics."
+        ),
+    },
+    "ElfSubprogramResolution": {
+        "root": "Call target symbol cannot be resolved by loader or platform symbol resolution pipeline.",
+        "fix": (
+            "Wire missing symbol resolution path (ELF local or platform external) and ensure resolved target gets "
+            "sound semantics."
+        ),
+    },
+    "ElfLegacyMapLayout": {
+        "root": (
+            "Legacy map symbol layout does not match loader assumptions (record alignment or offset expectations)."
+        ),
+        "fix": (
+            "Support legacy map layout variant or normalize symbol offsets before map descriptor resolution."
+        ),
+    },
+    "VerificationTimeout": {
+        "root": "Analysis does not converge in configured time on this workload.",
+        "fix": (
+            "Profile hot control-flow regions and tighten widening or narrowing strategy while preserving soundness."
+        ),
+    },
+    "LegacyBccBehavior": {
+        "root": "Known historical mismatch in specific BCC sample behavior relative to current verifier model.",
+        "fix": (
+            "Re-validate against intended kernel semantics and update either model assumptions or sample expectation."
+        ),
+    },
 }
 
 
@@ -68,6 +223,63 @@ def is_load_failure_reason(reason: str | None) -> bool:
     )
 
 
+def wrap_comment(
+    text: str, prefix: str = "// ", width: int = 118, continuation_prefix: str | None = None
+) -> list[str]:
+    continuation = continuation_prefix or prefix
+    if not text:
+        return [prefix.rstrip()]
+
+    lines: list[str] = []
+    first_line = True
+    for paragraph in text.splitlines():
+        if not paragraph:
+            lines.append((prefix if first_line else continuation).rstrip())
+            first_line = False
+            continue
+
+        paragraph_prefix = prefix if first_line else continuation
+        wrapped = textwrap.wrap(
+            paragraph,
+            width=width - len(paragraph_prefix),
+            break_long_words=False,
+            break_on_hyphens=False,
+        )
+        for wrapped_line in wrapped:
+            lines.append((prefix if first_line else continuation) + wrapped_line)
+            first_line = False
+
+    return lines if lines else [prefix.rstrip()]
+
+
+def wrap_labeled_comment(label: str, text: str, prefix: str = "//   ", width: int = 118) -> list[str]:
+    first_prefix = f"{prefix}{label}: "
+    continuation_prefix = f"{prefix}{' ' * (len(label) + 2)}"
+    return wrap_comment(text, prefix=first_prefix, continuation_prefix=continuation_prefix, width=width)
+
+
+def split_reason(reason: str | None) -> tuple[str, str]:
+    if not reason:
+        return "No reason provided.", "n/a"
+    marker = "Diagnostic:"
+    index = reason.find(marker)
+    if index == -1:
+        return reason.strip(), "n/a"
+    details = reason[:index].strip()
+    diagnostic = reason[index + len(marker) :].strip()
+    return details or "No reason provided.", diagnostic or "n/a"
+
+
+def render_reason_comment(label: str, kind: str | None, reason: str | None) -> list[str]:
+    reason_text, diagnostic = split_reason(reason)
+    heading = f"{label} ({kind}):"
+    return [
+        f"// {heading}",
+        *wrap_labeled_comment("reason", reason_text),
+        *wrap_labeled_comment("diagnostic", diagnostic),
+    ]
+
+
 def classify_section(obj: dict, section: str, programs: list[dict]) -> tuple[str, str | None, str | None]:
     override = section_override(obj, section)
     if override is not None:
@@ -101,16 +313,19 @@ def render_test(
         return [f'TEST_SECTION("{p}", "{o}", "{s}")']
     if status == "expected_failure":
         return [
-            f"// expected failure ({kind}): {reason}",
+            *render_reason_comment("expected failure", kind, reason),
             f'TEST_SECTION_FAIL("{p}", "{o}", "{s}", {cpp_kind(kind)}, "{reason_text}")',
         ]
     if status == "skip":
         if is_load_failure_reason(reason):
             return [
-                f"// expected load failure ({kind}): {reason}",
+                *render_reason_comment("expected load failure", kind, reason),
                 f'TEST_SECTION_LOAD_FAIL("{p}", "{o}", "{s}", {cpp_kind(kind)}, "{reason_text}")',
             ]
-        return [f'// skipped ({kind}): {reason}', f'TEST_SECTION_SKIP("{p}", "{o}", "{s}", {cpp_kind(kind)}, "{reason_text}")']
+        return [
+            *render_reason_comment("skipped", kind, reason),
+            f'TEST_SECTION_SKIP("{p}", "{o}", "{s}", {cpp_kind(kind)}, "{reason_text}")',
+        ]
     raise ValueError(f"Unsupported status '{status}'")
 
 
@@ -134,11 +349,14 @@ def render_program_test(
         return [f'TEST_PROGRAM("{p}", "{o}", "{s}", "{f}", {section_program_count})']
     if status == "expected_failure":
         return [
-            f"// expected failure ({kind}): {reason}",
+            *render_reason_comment("expected failure", kind, reason),
             f'TEST_PROGRAM_FAIL("{p}", "{o}", "{s}", "{f}", {section_program_count}, {cpp_kind(kind)}, "{reason_text}")',
         ]
     if status == "skip":
-        return [f'// skipped ({kind}): {reason}', f'TEST_PROGRAM_SKIP("{p}", "{o}", "{s}", "{f}", {cpp_kind(kind)}, "{reason_text}")']
+        return [
+            *render_reason_comment("skipped", kind, reason),
+            f'TEST_PROGRAM_SKIP("{p}", "{o}", "{s}", "{f}", {cpp_kind(kind)}, "{reason_text}")',
+        ]
     raise ValueError(f"Unsupported status '{status}'")
 
 
@@ -151,10 +369,38 @@ def generate(inventory: dict, project: str) -> str:
         "// Copyright (c) Prevail Verifier contributors.",
         "// SPDX-License-Identifier: MIT",
         "",
-        "#include \"test_verify.hpp\"",
+        '#include "test_verify.hpp"',
         "",
         f"// Generated by scripts/generate_verify_project_tests.py for project '{project}'.",
     ]
+    pass_lines: list[str] = []
+    grouped_nonpass: dict[str, list[dict]] = defaultdict(list)
+
+    def append_entry(
+        status: str,
+        kind: str | None,
+        reason: str | None,
+        body_lines: list[str],
+        object_name: str,
+        section_name: str,
+        function_name: str | None = None,
+    ) -> None:
+        if status == "pass":
+            pass_lines.extend(body_lines)
+            return
+        if kind is None:
+            raise ValueError(f"Missing failure kind for non-pass entry {project}/{object_name} {section_name}")
+        grouped_nonpass[kind].append(
+            {
+                "status": status,
+                "reason": reason or "",
+                "diagnostic": split_reason(reason)[1],
+                "object_name": object_name,
+                "section_name": section_name,
+                "function_name": function_name,
+                "lines": body_lines,
+            }
+        )
 
     for object_name in sorted(project_entry["objects"].keys()):
         obj = project_entry["objects"][object_name]
@@ -162,7 +408,14 @@ def generate(inventory: dict, project: str) -> str:
             programs = obj["sections"][section_name]
             if len(programs) == 1:
                 status, kind, reason = classify_section(obj, section_name, programs)
-                lines.extend(render_test(project, object_name, section_name, status, kind, reason))
+                append_entry(
+                    status,
+                    kind,
+                    reason,
+                    render_test(project, object_name, section_name, status, kind, reason),
+                    object_name,
+                    section_name,
+                )
                 continue
 
             for program in sorted(programs, key=lambda p: p["function"]):
@@ -189,11 +442,49 @@ def generate(inventory: dict, project: str) -> str:
                     status = "pass"
                     kind = None
                     reason = None
-                lines.extend(
+                append_entry(
+                    status,
+                    kind,
+                    reason,
                     render_program_test(
                         project, object_name, section_name, function_name, len(programs), status, kind, reason
-                    )
+                    ),
+                    object_name,
+                    section_name,
+                    function_name,
                 )
+
+    lines.extend(pass_lines)
+
+    kind_order_index = {kind: index for index, kind in enumerate(KIND_ORDER)}
+    sorted_kinds = sorted(grouped_nonpass, key=lambda name: (kind_order_index.get(name, len(KIND_ORDER)), name))
+    for kind in sorted_kinds:
+        entries = grouped_nonpass[kind]
+        guidance = KIND_GUIDANCE.get(kind, {"root": "Root cause is not yet documented.", "fix": "Fix direction pending."})
+        expected_failure_count = sum(1 for entry in entries if entry["status"] == "expected_failure")
+        skip_count = sum(1 for entry in entries if entry["status"] == "skip")
+        example = entries[0]
+        function_suffix = f"::{example['function_name']}" if example["function_name"] else ""
+        example_target = f"{project}/{example['object_name']} {example['section_name']}{function_suffix}"
+
+        lines.extend(
+            [
+                "",
+                "// ===========================================================================",
+                f"// Failure Cause Group: {kind}",
+                f"// Group size: {len(entries)} tests ({expected_failure_count} expected_failure, {skip_count} skip).",
+                "// Root cause:",
+                *wrap_comment(guidance["root"], prefix="//   "),
+                "// Representative example:",
+                *wrap_labeled_comment("test", example_target),
+                *wrap_labeled_comment("diagnostic", example["diagnostic"]),
+                "// Addressing direction:",
+                *wrap_comment(guidance["fix"], prefix="//   "),
+                "// ===========================================================================",
+            ]
+        )
+        for entry in entries:
+            lines.extend(entry["lines"])
 
     return "\n".join(lines)
 
