@@ -1108,8 +1108,12 @@ void ProgramReader::read_programs() {
                 process_relocations(instructions, ELFIO::const_relocation_section_accessor{reader, reloc_sec}, sec_name,
                                     offset, size);
             }
-            ProgramInfo program_info{parse_params.platform, global.map_descriptors, prog_type};
-            program_info.builtin_call_offsets = builtin_offsets_for_current_program;
+            ProgramInfo program_info{
+                .platform = parse_params.platform,
+                .map_descriptors = global.map_descriptors,
+                .type = prog_type,
+                .builtin_call_offsets = std::move(builtin_offsets_for_current_program),
+            };
             raw_programs.emplace_back(RawProgram{
                 parse_params.path,
                 sec_name,

@@ -408,17 +408,17 @@ static std::optional<Call> get_builtin_call_linux(const int32_t id) {
 }
 
 const ebpf_platform_t g_ebpf_platform_linux = {
-    get_program_type_linux,
-    get_helper_prototype_linux,
-    is_helper_usable_linux,
-    resolve_builtin_call_linux,
-    get_builtin_call_linux,
-    resolve_kfunc_call_linux,
-    sizeof(BpfLoadMapDef),
-    parse_maps_section_linux,
-    get_map_descriptor_linux,
-    get_map_type_linux,
-    resolve_inner_map_references_linux,
-    bpf_conformance_groups_t::default_groups | bpf_conformance_groups_t::packet,
+    .get_program_type = get_program_type_linux,
+    .get_helper_prototype = get_helper_prototype_linux,
+    .is_helper_usable = is_helper_usable_linux,
+    .resolve_builtin_call = resolve_builtin_call_linux,
+    .get_builtin_call = get_builtin_call_linux,
+    .resolve_kfunc_call = resolve_kfunc_call_linux,
+    .map_record_size = sizeof(BpfLoadMapDef),
+    .parse_maps_section = parse_maps_section_linux,
+    .get_map_descriptor = get_map_descriptor_linux,
+    .get_map_type = get_map_type_linux,
+    .resolve_inner_map_references = resolve_inner_map_references_linux,
+    .supported_conformance_groups = bpf_conformance_groups_t::default_groups | bpf_conformance_groups_t::packet,
 };
 } // namespace prevail
