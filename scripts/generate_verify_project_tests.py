@@ -86,10 +86,6 @@ def classify_section(obj: dict, section: str, programs: list[dict]) -> tuple[str
     if len(programs) != 1:
         return "pass", None, None
 
-    if any(program.get("invalid", False) for program in programs):
-        reason = next((program.get("invalid_reason") for program in programs if program.get("invalid_reason")), None)
-        return "skip", "ElfSubprogramResolution", reason or "invalid section in ELF metadata"
-
     return "pass", None, None
 
 

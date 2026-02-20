@@ -13,6 +13,7 @@ from pathlib import Path
 
 TELEMETRY_LINE = re.compile(r"^[01],\d+(?:\.\d+)?,\d+$")
 MANUAL_BCC_REASON_PREFIX = "Known verifier mismatch on BCC "
+FIXABLE_KINDS = {"ElfSubprogramResolution"}
 
 
 def explain(kind: str, diagnostic: str) -> str:
@@ -175,6 +176,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Fail if check reports diagnostics that are not mapped to a known limitation kind.",
     )
+    parser.add_argument(
+        "--allow-fixable-overrides",
+        action="store_true",
+        help="Keep overrides for diagnostics classified as fixable; default drops them so they fail as pass tests.",
+    )
     return parser.parse_args()
 
 
@@ -182,11 +188,7 @@ def classify_invalid_program_from_inventory(program: dict) -> tuple[str, str, st
     if not program.get("invalid", False):
         return None
     diagnostic = program.get("invalid_reason") or "invalid section in ELF metadata"
-    classified = classify_diagnostic(diagnostic)
-    if classified is not None:
-        return classified
-    kind = "ElfSubprogramResolution"
-    return "skip", kind, explain(kind, diagnostic)
+    return classify_diagnostic(diagnostic)
 
 
 def run_check(
@@ -218,8 +220,8 @@ def run_check(
 
 
 def refresh_expectations(
-    inventory: dict, samples_root: Path, check_bin: Path, jobs: int, timeout_seconds: int
-) -> list[tuple[str, str, str, str, str]]:
+    inventory: dict, samples_root: Path, check_bin: Path, jobs: int, timeout_seconds: int, allow_fixable_overrides: bool
+) -> tuple[list[tuple[str, str, str, str, str]], list[tuple[str, str, str, str, str, str]]]:
     tasks: list[tuple[str, str, str, str, int, bool]] = []
     for project, pdata in inventory["projects"].items():
         for object_name, odata in pdata["objects"].items():
@@ -275,6 +277,7 @@ def refresh_expectations(
         return project, object_name, section, function_name, section_program_count, section_scoped, status, kind, reason
 
     unknown_diagnostics: list[tuple[str, str, str, str, str]] = []
+    dropped_fixable: list[tuple[str, str, str, str, str, str]] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
         for (
             project,
@@ -291,6 +294,17 @@ def refresh_expectations(
             test_overrides = odata.setdefault("test_overrides", {})
             section_overrides = test_overrides.setdefault("sections", {})
             program_overrides = test_overrides.setdefault("programs", {})
+            if (
+                not allow_fixable_overrides
+                and status in ("expected_failure", "skip")
+                and kind in FIXABLE_KINDS
+                and reason
+            ):
+                dropped_fixable.append((project, object_name, section, function_name, kind, reason))
+                status = "pass"
+                kind = None
+                reason = ""
+
             if status == "pass" and reason and reason not in ("", "verification failed"):
                 unknown_diagnostics.append((project, object_name, section, function_name, reason))
 
@@ -335,7 +349,7 @@ def refresh_expectations(
             if not test_overrides:
                 odata.pop("test_overrides", None)
 
-    return unknown_diagnostics
+    return unknown_diagnostics, dropped_fixable
 
 
 def main() -> int:
@@ -361,9 +375,22 @@ def main() -> int:
         return 2
 
     inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
-    unknown_diagnostics = refresh_expectations(inventory, samples_root, check_bin, args.jobs, args.timeout_seconds)
+    unknown_diagnostics, dropped_fixable = refresh_expectations(
+        inventory, samples_root, check_bin, args.jobs, args.timeout_seconds, args.allow_fixable_overrides
+    )
     inventory_path.write_text(json.dumps(inventory, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"Wrote {inventory_path}", file=sys.stderr)
+    if dropped_fixable:
+        print(
+            f"info: dropped {len(dropped_fixable)} fixable overrides ({', '.join(sorted(FIXABLE_KINDS))}); "
+            "these tests are now expected to pass.",
+            file=sys.stderr,
+        )
+        for project, object_name, section, function_name, kind, reason in dropped_fixable[:20]:
+            print(
+                f"  fixable: {project}/{object_name} {section}::{function_name} [{kind}] -> {reason}",
+                file=sys.stderr,
+            )
     if unknown_diagnostics:
         print(
             f"warning: {len(unknown_diagnostics)} diagnostics are not mapped to a known limitation kind; "

@@ -648,15 +648,6 @@
                 "invalid_reason": "Subprogram not found: ebpf_map_update_elem"
               }
             ]
-          },
-          "test_overrides": {
-            "sections": {
-              ".text": {
-                "kind": "ElfSubprogramResolution",
-                "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: ebpf_map_update_elem",
-                "status": "skip"
-              }
-            }
           }
         },
         "bounded_loop.o": {
@@ -938,15 +929,6 @@
                 "invalid_reason": "Subprogram not found: bpf_map_lookup_elem"
               }
             ]
-          },
-          "test_overrides": {
-            "sections": {
-              ".text": {
-                "kind": "ElfSubprogramResolution",
-                "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: bpf_map_lookup_elem",
-                "status": "skip"
-              }
-            }
           }
         },
         "global_func.o": {
@@ -3614,27 +3596,6 @@
                 "invalid_reason": "Subprogram not found: invalid_kfunc"
               }
             ]
-          },
-          "test_overrides": {
-            "programs": {
-              "socket": {
-                "poisoned_double": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: invalid_kfunc",
-                  "status": "skip"
-                },
-                "poisoned_kfunc": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: invalid_kfunc",
-                  "status": "skip"
-                },
-                "poisoned_single": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: invalid_kfunc",
-                  "status": "skip"
-                }
-              }
-            }
           }
         },
         "fentry_fexit-el.elf": {
@@ -3702,15 +3663,6 @@
                 "invalid_reason": "Subprogram not found: fwd"
               }
             ]
-          },
-          "test_overrides": {
-            "sections": {
-              "socket": {
-                "kind": "ElfSubprogramResolution",
-                "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: fwd",
-                "status": "skip"
-              }
-            }
           }
         },
         "invalid-kfunc-el.elf": {
@@ -3726,15 +3678,6 @@
                 "invalid_reason": "Subprogram not found: bpf_kfunc_call_test_mem_len_pass1"
               }
             ]
-          },
-          "test_overrides": {
-            "sections": {
-              "tc": {
-                "kind": "ElfSubprogramResolution",
-                "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: bpf_kfunc_call_test_mem_len_pass1",
-                "status": "skip"
-              }
-            }
           }
         },
         "invalid_btf_map_init-el.elf": {
@@ -3870,18 +3813,6 @@
                   "status": "skip"
                 }
               }
-            },
-            "sections": {
-              "fentry/bpf_fentry_test2": {
-                "kind": "ElfSubprogramResolution",
-                "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: bpf_fentry_test1",
-                "status": "skip"
-              },
-              "tc": {
-                "kind": "ElfSubprogramResolution",
-                "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: bpf_skb_ct_lookup",
-                "status": "skip"
-              }
             }
           }
         },
@@ -3898,15 +3829,6 @@
                 "invalid_reason": "Subprogram not found: bpf_testmod_test_mod_kfunc"
               }
             ]
-          },
-          "test_overrides": {
-            "sections": {
-              "tc": {
-                "kind": "ElfSubprogramResolution",
-                "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: bpf_testmod_test_mod_kfunc",
-                "status": "skip"
-              }
-            }
           }
         },
         "ksym-el.elf": {
@@ -4115,32 +4037,6 @@
                 "invalid_reason": "Subprogram not found: l2"
               }
             ]
-          },
-          "test_overrides": {
-            "programs": {
-              "socket": {
-                "entry_l1_s": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: l2",
-                  "status": "skip"
-                },
-                "entry_l1_w": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: l2",
-                  "status": "skip"
-                },
-                "entry_l2": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: l2",
-                  "status": "skip"
-                },
-                "entry_ww": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: l2",
-                  "status": "skip"
-                }
-              }
-            }
           }
         },
         "linked2-el.elf": {
@@ -4189,32 +4085,6 @@
                 "invalid_reason": "Subprogram not found: l1"
               }
             ]
-          },
-          "test_overrides": {
-            "programs": {
-              "socket": {
-                "entry_l1": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: l1",
-                  "status": "skip"
-                },
-                "entry_l1_s": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: l1",
-                  "status": "skip"
-                },
-                "entry_l1_w": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: l1",
-                  "status": "skip"
-                },
-                "entry_ww": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: l1",
-                  "status": "skip"
-                }
-              }
-            }
           }
         },
         "loader-clang-14-el.elf": {
@@ -8456,47 +8326,6 @@
                 "invalid_reason": "Subprogram not found: tcp_reno_cong_avoid"
               }
             ]
-          },
-          "test_overrides": {
-            "programs": {
-              "struct_ops": {
-                "bpf_dctcp_cong_avoid": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid",
-                  "status": "skip"
-                },
-                "bpf_dctcp_cwnd_event": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid",
-                  "status": "skip"
-                },
-                "bpf_dctcp_cwnd_undo": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid",
-                  "status": "skip"
-                },
-                "bpf_dctcp_init": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid",
-                  "status": "skip"
-                },
-                "bpf_dctcp_ssthresh": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid",
-                  "status": "skip"
-                },
-                "bpf_dctcp_state": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid",
-                  "status": "skip"
-                },
-                "bpf_dctcp_update_alpha": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid",
-                  "status": "skip"
-                }
-              }
-            }
           }
         },
         "fexit_sleep.o": {
@@ -8870,13 +8699,6 @@
                   "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
                   "status": "expected_failure"
                 }
-              }
-            },
-            "sections": {
-              "cgroup_skb/egress": {
-                "kind": "ElfSubprogramResolution",
-                "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: bpf_map_sum_elem_count",
-                "status": "skip"
               }
             }
           }

@@ -31,20 +31,13 @@ TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_rec
 TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_state", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
 // skipped (ExternalSymbolResolution): Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.
 TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_undo_cwnd", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
-// skipped (ElfSubprogramResolution): Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid
-TEST_PROGRAM_SKIP("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_cong_avoid", verify_test::VerifyIssueKind::ElfSubprogramResolution, "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid")
-// skipped (ElfSubprogramResolution): Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid
-TEST_PROGRAM_SKIP("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_cwnd_event", verify_test::VerifyIssueKind::ElfSubprogramResolution, "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid")
-// skipped (ElfSubprogramResolution): Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid
-TEST_PROGRAM_SKIP("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_cwnd_undo", verify_test::VerifyIssueKind::ElfSubprogramResolution, "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid")
-// skipped (ElfSubprogramResolution): Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid
-TEST_PROGRAM_SKIP("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_init", verify_test::VerifyIssueKind::ElfSubprogramResolution, "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid")
-// skipped (ElfSubprogramResolution): Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid
-TEST_PROGRAM_SKIP("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_ssthresh", verify_test::VerifyIssueKind::ElfSubprogramResolution, "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid")
-// skipped (ElfSubprogramResolution): Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid
-TEST_PROGRAM_SKIP("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_state", verify_test::VerifyIssueKind::ElfSubprogramResolution, "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid")
-// skipped (ElfSubprogramResolution): Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid
-TEST_PROGRAM_SKIP("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_update_alpha", verify_test::VerifyIssueKind::ElfSubprogramResolution, "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid")
+TEST_PROGRAM("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_cong_avoid", 7)
+TEST_PROGRAM("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_cwnd_event", 7)
+TEST_PROGRAM("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_cwnd_undo", 7)
+TEST_PROGRAM("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_init", 7)
+TEST_PROGRAM("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_ssthresh", 7)
+TEST_PROGRAM("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_state", 7)
+TEST_PROGRAM("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_update_alpha", 7)
 TEST_SECTION("linux-selftests", "fexit_sleep.o", "fentry/__x64_sys_nanosleep")
 TEST_SECTION("linux-selftests", "fexit_sleep.o", "fexit/__x64_sys_nanosleep")
 // expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1: Invalid type (r1.type == number)
@@ -100,8 +93,7 @@ TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_sockmap",
 TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_stack", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})
 TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check_xskmap", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
-// skipped (ElfSubprogramResolution): Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: bpf_map_sum_elem_count
-TEST_SECTION_SKIP("linux-selftests", "map_ptr_kern.o", "cgroup_skb/egress", verify_test::VerifyIssueKind::ElfSubprogramResolution, "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: bpf_map_sum_elem_count")
+TEST_SECTION("linux-selftests", "map_ptr_kern.o", "cgroup_skb/egress")
 // expected failure (VerifierTypeTracking): Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 10: Invalid type (r2.type == socket)
 TEST_SECTION_FAIL("linux-selftests", "socket_cookie_prog.o", "cgroup/connect6", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 10: Invalid type (r2.type == socket)")
 // expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+8, width=8) for read)
