@@ -37,6 +37,17 @@ FAIL_LOAD_ELF("cilium", "bpf_lxc.o", "not-found")
 FAIL_LOAD_ELF("build", "badrelo.o", ".text")
 FAIL_LOAD_ELF("invalid", "badsymsize.o", "xdp_redirect_map")
 
+TEST_CASE("CO-RE relocations are parsed from .BTF.ext core_relo subsection", "[elf][core]") {
+    thread_local_options = {};
+    const auto fentry_progs = read_elf("ebpf-samples/cilium-examples/tcprtt_bpf_bpfel.o", "fentry/tcp_close", "", {},
+                                       &g_ebpf_platform_linux);
+    REQUIRE(fentry_progs.size() == 1);
+
+    const auto sockops_progs =
+        read_elf("ebpf-samples/cilium-examples/tcprtt_sockops_bpf_bpfel.o", "sockops", "", {}, &g_ebpf_platform_linux);
+    REQUIRE(sockops_progs.size() == 1);
+}
+
 #define FAIL_UNMARSHAL(dirname, filename, sectionname)                                                                \
     TEST_CASE("Try unmarshalling bad program: " dirname "/" filename " " sectionname, "[unmarshal]") {                \
         thread_local_options = {};                                                                                    \
