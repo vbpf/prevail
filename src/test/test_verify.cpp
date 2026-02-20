@@ -3,9 +3,10 @@
 #include <catch2/catch_all.hpp>
 #include <cstddef>
 #include <cstdint>
-#include <elfio/elfio.hpp>
+#include <mutex>
 #include <ranges>
 #include <thread>
+#include <unordered_map>
 
 #include "ebpf_verifier.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
@@ -13,649 +14,69 @@
 using namespace prevail;
 
 namespace {
-uint16_t read_le16(const char* data, size_t offset) {
-    const auto* bytes = reinterpret_cast<const uint8_t*>(data + offset);
-    return static_cast<uint16_t>(bytes[0] | (static_cast<uint16_t>(bytes[1]) << 8));
+
+struct ReadElfCacheKey {
+    std::string path;
+    std::string section;
+    std::string program;
+    const ebpf_platform_t* platform;
+
+    bool verbosity_print_line_info;
+    bool verbosity_dump_btf_types_json;
+
+    bool operator==(const ReadElfCacheKey&) const = default;
+};
+
+struct ReadElfCacheKeyHash {
+    size_t operator()(const ReadElfCacheKey& key) const noexcept {
+        size_t seed = std::hash<std::string>{}(key.path);
+        combine(seed, key.section);
+        combine(seed, key.program);
+        combine(seed, key.platform);
+        combine(seed, key.verbosity_print_line_info);
+        combine(seed, key.verbosity_dump_btf_types_json);
+        return seed;
+    }
+
+  private:
+    template <typename T> static void combine(size_t& seed, const T& value) noexcept {
+        seed ^= std::hash<T>{}(value) + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
+    }
+};
+
+const std::vector<RawProgram>& read_elf_cached(const std::string& path, const std::string& desired_section,
+                                               const std::string& desired_program,
+                                               const ebpf_verifier_options_t& options,
+                                               const ebpf_platform_t* platform) {
+    static std::mutex cache_mutex;
+    static std::unordered_map<ReadElfCacheKey, std::vector<RawProgram>, ReadElfCacheKeyHash> cache;
+
+    ReadElfCacheKey key{
+        .path = path,
+        .section = desired_section,
+        .program = desired_program,
+        .platform = platform,
+        .verbosity_print_line_info = options.verbosity_opts.print_line_info,
+        .verbosity_dump_btf_types_json = options.verbosity_opts.dump_btf_types_json,
+    };
+
+    std::lock_guard<std::mutex> lock(cache_mutex);
+    if (auto it = cache.find(key); it != cache.end()) {
+        return it->second;
+    }
+
+    auto [it, _] = cache.emplace(std::move(key), read_elf(path, desired_section, desired_program, options, platform));
+    return it->second;
 }
 
-uint32_t read_le32(const char* data, size_t offset) {
-    const auto* bytes = reinterpret_cast<const uint8_t*>(data + offset);
-    return static_cast<uint32_t>(bytes[0] | (static_cast<uint32_t>(bytes[1]) << 8) |
-                                 (static_cast<uint32_t>(bytes[2]) << 16) | (static_cast<uint32_t>(bytes[3]) << 24));
-}
-
-bool has_nonempty_core_relo_subsection(const std::string& path) {
-    // These offsets mirror btf_ext_header_core_t layout in src/elf_loader.cpp.
-    constexpr size_t btf_magic_offset = 0;
-    constexpr size_t btf_version_offset = 2;
-    constexpr size_t btf_hdr_len_offset = 4;
-    constexpr size_t btf_ext_header_min_len = 32;
-    constexpr size_t btf_core_relo_off_offset = 24;
-    constexpr size_t btf_core_relo_len_offset = 28;
-    constexpr uint16_t btf_magic = 0xeB9F;
-    constexpr uint8_t btf_version = 1;
-
-    ELFIO::elfio reader;
-    if (!reader.load(path)) {
-        throw std::runtime_error("Failed to load ELF: " + path);
-    }
-
-    const auto* btf_ext = reader.sections[".BTF.ext"];
-    if (!btf_ext || !btf_ext->get_data()) {
-        return false;
-    }
-
-    const char* data = btf_ext->get_data();
-    const size_t size = btf_ext->get_size();
-    if (size < btf_ext_header_min_len) {
-        return false;
-    }
-
-    if (read_le16(data, btf_magic_offset) != btf_magic || data[btf_version_offset] != btf_version) {
-        return false;
-    }
-
-    const uint32_t hdr_len = read_le32(data, btf_hdr_len_offset);
-    if (hdr_len < btf_ext_header_min_len || hdr_len > size) {
-        return false;
-    }
-
-    const uint32_t core_relo_off = read_le32(data, btf_core_relo_off_offset);
-    const uint32_t core_relo_len = read_le32(data, btf_core_relo_len_offset);
-    if (core_relo_len == 0) {
-        return false;
-    }
-    if (core_relo_off > size - hdr_len) {
-        return false;
-    }
-
-    const size_t core_relo_start = hdr_len + core_relo_off;
-    return core_relo_len <= size - core_relo_start;
-}
 } // namespace
-
-#define FAIL_LOAD_ELF_BASE(test_name, dirname, filename, sectionname)                                    \
-    TEST_CASE(test_name, "[elf]") {                                                                      \
-        try {                                                                                            \
-            thread_local_options = {};                                                                   \
-            read_elf("ebpf-samples/" dirname "/" filename, sectionname, "", {}, &g_ebpf_platform_linux); \
-            REQUIRE(false);                                                                              \
-        } catch (const std::runtime_error&) {                                                            \
-        }                                                                                                \
-    }
-
-#define FAIL_LOAD_ELF(dirname, filename, sectionname) \
-    FAIL_LOAD_ELF_BASE("Try loading nonexisting program: " dirname "/" filename, dirname, filename, sectionname)
-
-// Like FAIL_LOAD_ELF, but includes sectionname in the test name to avoid collisions
-// when multiple sections of the same file fail to load.
-#define FAIL_LOAD_ELF_SECTION(dirname, filename, sectionname) \
-    FAIL_LOAD_ELF_BASE("Try loading bad section: " dirname "/" filename " " sectionname, dirname, filename, sectionname)
-
-// Some intentional failures
-FAIL_LOAD_ELF("cilium", "not-found.o", "2/1")
-FAIL_LOAD_ELF("cilium", "bpf_lxc.o", "not-found")
-FAIL_LOAD_ELF("build", "badrelo.o", ".text")
-FAIL_LOAD_ELF("invalid", "badsymsize.o", "xdp_redirect_map")
-
-TEST_CASE("CO-RE relocations are parsed from .BTF.ext core_relo subsection", "[elf][core]") {
-    thread_local_options = {};
-    constexpr auto fentry_path = "ebpf-samples/cilium-examples/tcprtt_bpf_bpfel.o";
-    constexpr auto fentry_section = "fentry/tcp_close";
-    REQUIRE(has_nonempty_core_relo_subsection(fentry_path));
-    const auto fentry_progs = read_elf(fentry_path, fentry_section, "", {}, &g_ebpf_platform_linux);
-    REQUIRE(fentry_progs.size() == 1);
-    REQUIRE(fentry_progs[0].core_relocation_count > 0);
-
-    constexpr auto sockops_path = "ebpf-samples/cilium-examples/tcprtt_sockops_bpf_bpfel.o";
-    constexpr auto sockops_section = "sockops";
-    REQUIRE(has_nonempty_core_relo_subsection(sockops_path));
-    const auto sockops_progs = read_elf(sockops_path, sockops_section, "", {}, &g_ebpf_platform_linux);
-    REQUIRE(sockops_progs.size() == 1);
-    REQUIRE(sockops_progs[0].core_relocation_count > 0);
-}
-
-#define FAIL_UNMARSHAL(dirname, filename, sectionname)                                                                \
-    TEST_CASE("Try unmarshalling bad program: " dirname "/" filename " " sectionname, "[unmarshal]") {                \
-        thread_local_options = {};                                                                                    \
-        auto raw_progs = read_elf("ebpf-samples/" dirname "/" filename, sectionname, "", {}, &g_ebpf_platform_linux); \
-        REQUIRE(raw_progs.size() == 1);                                                                               \
-        const RawProgram& raw_prog = raw_progs.back();                                                                \
-        std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, thread_local_options);          \
-        REQUIRE(std::holds_alternative<std::string>(prog_or_error));                                                  \
-    }
-
-// Some intentional unmarshal failures
-FAIL_UNMARSHAL("invalid", "invalid-lddw.o", ".text")
-
-TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
-    constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
-    ebpf_platform_t platform = g_ebpf_platform_linux;
-    ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
-
-    SECTION("unknown kfunc btf id") {
-        RawProgram raw_prog{
-            "", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1}, exit}, info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        REQUIRE_THROWS_WITH(
-            Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
-            Catch::Matchers::ContainsSubstring("not implemented: kfunc prototype lookup failed for BTF id 1") &&
-                Catch::Matchers::ContainsSubstring("(at 0)"));
-    }
-
-    SECTION("kfunc call by BTF id is accepted when prototype is known") {
-        RawProgram raw_prog{
-            "", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1000}, exit}, info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
-        REQUIRE(verify(prog));
-    }
-
-    SECTION("kfunc call in local subprogram does not use helper prototype lookup") {
-        RawProgram raw_prog{"",
-                            "",
-                            0,
-                            "",
-                            {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_LOCAL, .imm = 1}, exit,
-                             EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1000}, exit},
-                            info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
-        REQUIRE(verify(prog));
-    }
-
-    SECTION("kfunc in subprogram is not misclassified when BTF id overlaps helper id") {
-        RawProgram raw_prog{"",
-                            "",
-                            0,
-                            "",
-                            {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_LOCAL, .imm = 1}, exit,
-                             EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 12}, exit},
-                            info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
-        REQUIRE(verify(prog));
-    }
-
-    SECTION("kfunc map-value return is lowered to map-lookup call contract") {
-        constexpr uint8_t mov64_imm = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
-        RawProgram raw_prog{"",
-                            "",
-                            0,
-                            "",
-                            {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1005},
-                             EbpfInst{.opcode = mov64_imm, .dst = 0, .imm = 0}, exit},
-                            info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
-        const auto* call = std::get_if<Call>(&prog.instruction_at(Label{0}));
-        REQUIRE(call != nullptr);
-        REQUIRE(call->is_map_lookup);
-        REQUIRE(verify(prog));
-    }
-
-    SECTION("kfunc with unsupported flags is rejected") {
-        RawProgram raw_prog{
-            "", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1002}, exit}, info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        REQUIRE_THROWS_WITH(
-            Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
-            Catch::Matchers::ContainsSubstring("not implemented: kfunc flags are unsupported on this platform") &&
-                Catch::Matchers::ContainsSubstring("(at 0)"));
-    }
-
-    SECTION("kfunc program type gating is enforced") {
-        RawProgram raw_prog{
-            "", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1003}, exit}, info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        REQUIRE_THROWS_WITH(
-            Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
-            Catch::Matchers::ContainsSubstring("not implemented: kfunc is unavailable for program type") &&
-                Catch::Matchers::ContainsSubstring("(at 0)"));
-
-        ProgramInfo xdp_info{.platform = &platform, .type = platform.get_program_type("xdp", "xdp")};
-        RawProgram xdp_raw_prog{
-            "",      "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1003}, exit},
-            xdp_info};
-        auto xdp_prog_or_error = unmarshal(xdp_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(xdp_prog_or_error));
-        const Program xdp_prog = Program::from_sequence(std::get<InstructionSeq>(xdp_prog_or_error), xdp_info, {});
-        REQUIRE(verify(xdp_prog));
-    }
-
-    SECTION("kfunc privileged gating is enforced") {
-        RawProgram raw_prog{
-            "", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1004}, exit}, info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        REQUIRE_THROWS_WITH(
-            Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
-            Catch::Matchers::ContainsSubstring("not implemented: kfunc requires privileged program type") &&
-                Catch::Matchers::ContainsSubstring("(at 0)"));
-
-        ProgramInfo kprobe_info{
-            .platform = &platform,
-            .type = platform.get_program_type("kprobe/test_prog", ""),
-        };
-        RawProgram kprobe_raw_prog{
-            "",         "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1004}, exit},
-            kprobe_info};
-        auto kprobe_prog_or_error = unmarshal(kprobe_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(kprobe_prog_or_error));
-        const Program kprobe_prog =
-            Program::from_sequence(std::get<InstructionSeq>(kprobe_prog_or_error), kprobe_info, {});
-        REQUIRE(verify(kprobe_prog));
-    }
-
-    SECTION("kfunc argument typing is enforced from prototype table") {
-        constexpr uint8_t mov64_imm = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
-
-        RawProgram good_raw_prog{
-            "", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1001}, exit}, info};
-        auto good_prog_or_error = unmarshal(good_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(good_prog_or_error));
-        const Program good_prog = Program::from_sequence(std::get<InstructionSeq>(good_prog_or_error), info, {});
-        REQUIRE(verify(good_prog));
-
-        RawProgram bad_raw_prog{"",
-                                "",
-                                0,
-                                "",
-                                {EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 0},
-                                 EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1001}, exit},
-                                info};
-        auto bad_prog_or_error = unmarshal(bad_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(bad_prog_or_error));
-        const Program bad_prog = Program::from_sequence(std::get<InstructionSeq>(bad_prog_or_error), info, {});
-        REQUIRE_FALSE(verify(bad_prog));
-    }
-
-    SECTION("kfunc pointer-size argument pairs enforce null and size constraints") {
-        constexpr uint8_t mov64_imm = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
-
-        RawProgram good_raw_prog{"",
-                                 "",
-                                 0,
-                                 "",
-                                 {EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 0},
-                                  EbpfInst{.opcode = mov64_imm, .dst = 2, .imm = 0},
-                                  EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1006}, exit},
-                                 info};
-        auto good_prog_or_error = unmarshal(good_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(good_prog_or_error));
-        const Program good_prog = Program::from_sequence(std::get<InstructionSeq>(good_prog_or_error), info, {});
-        REQUIRE(verify(good_prog));
-
-        RawProgram bad_size_raw_prog{"",
-                                     "",
-                                     0,
-                                     "",
-                                     {EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 0},
-                                      EbpfInst{.opcode = mov64_imm, .dst = 2, .imm = -1},
-                                      EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1006}, exit},
-                                     info};
-        auto bad_size_prog_or_error = unmarshal(bad_size_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(bad_size_prog_or_error));
-        const Program bad_size_prog =
-            Program::from_sequence(std::get<InstructionSeq>(bad_size_prog_or_error), info, {});
-        REQUIRE_FALSE(verify(bad_size_prog));
-
-        RawProgram bad_nullability_raw_prog{
-            "",
-            "",
-            0,
-            "",
-            {EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 1}, EbpfInst{.opcode = mov64_imm, .dst = 2, .imm = 0},
-             EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1006}, exit},
-            info};
-        auto bad_nullability_prog_or_error = unmarshal(bad_nullability_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(bad_nullability_prog_or_error));
-        const Program bad_nullability_prog =
-            Program::from_sequence(std::get<InstructionSeq>(bad_nullability_prog_or_error), info, {});
-        REQUIRE_FALSE(verify(bad_nullability_prog));
-    }
-
-    SECTION("kfunc writable-memory argument pairs enforce writeability and strict size") {
-        constexpr uint8_t mov64_imm = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
-        constexpr uint8_t mov64_reg = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_REG;
-        constexpr uint8_t add64_imm = INST_CLS_ALU64 | INST_ALU_OP_ADD | INST_SRC_IMM;
-
-        RawProgram good_raw_prog{"",
-                                 "",
-                                 0,
-                                 "",
-                                 {EbpfInst{.opcode = mov64_reg, .dst = 1, .src = R10_STACK_POINTER},
-                                  EbpfInst{.opcode = add64_imm, .dst = 1, .imm = -8},
-                                  EbpfInst{.opcode = mov64_imm, .dst = 2, .imm = 4},
-                                  EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1007}, exit},
-                                 info};
-        auto good_prog_or_error = unmarshal(good_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(good_prog_or_error));
-        const Program good_prog = Program::from_sequence(std::get<InstructionSeq>(good_prog_or_error), info, {});
-        REQUIRE(verify(good_prog));
-
-        RawProgram bad_nullability_raw_prog{
-            "",
-            "",
-            0,
-            "",
-            {EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 0}, EbpfInst{.opcode = mov64_imm, .dst = 2, .imm = 4},
-             EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1007}, exit},
-            info};
-        auto bad_nullability_prog_or_error = unmarshal(bad_nullability_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(bad_nullability_prog_or_error));
-        const Program bad_nullability_prog =
-            Program::from_sequence(std::get<InstructionSeq>(bad_nullability_prog_or_error), info, {});
-        REQUIRE_FALSE(verify(bad_nullability_prog));
-
-        RawProgram bad_size_raw_prog{"",
-                                     "",
-                                     0,
-                                     "",
-                                     {EbpfInst{.opcode = mov64_reg, .dst = 1, .src = R10_STACK_POINTER},
-                                      EbpfInst{.opcode = add64_imm, .dst = 1, .imm = -8},
-                                      EbpfInst{.opcode = mov64_imm, .dst = 2, .imm = 0},
-                                      EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1007}, exit},
-                                     info};
-        auto bad_size_prog_or_error = unmarshal(bad_size_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(bad_size_prog_or_error));
-        const Program bad_size_prog =
-            Program::from_sequence(std::get<InstructionSeq>(bad_size_prog_or_error), info, {});
-        REQUIRE_FALSE(verify(bad_size_prog));
-    }
-
-    SECTION("lddw variable_addr pseudo") {
-        RawProgram raw_prog{
-            "",  "", 0, "", {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 1, .src = 3, .imm = 7}, EbpfInst{}, exit},
-            info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
-        const auto* bin = std::get_if<Bin>(&prog.instruction_at(Label{0}));
-        REQUIRE(bin != nullptr);
-        REQUIRE(bin->op == Bin::Op::MOV);
-        REQUIRE(bin->is64);
-        REQUIRE(bin->lddw);
-        REQUIRE(bin->dst == Reg{1});
-        const auto* imm = std::get_if<Imm>(&bin->v);
-        REQUIRE(imm != nullptr);
-        REQUIRE(imm->v == 7ULL);
-    }
-
-    SECTION("lddw code_addr pseudo") {
-        RawProgram raw_prog{
-            "",  "", 0, "", {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = 4, .imm = 11}, EbpfInst{}, exit},
-            info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
-        const auto* pseudo = std::get_if<LoadPseudo>(&prog.instruction_at(Label{0}));
-        REQUIRE(pseudo != nullptr);
-        REQUIRE(pseudo->dst == Reg{2});
-        REQUIRE(pseudo->addr.kind == PseudoAddress::Kind::CODE_ADDR);
-        REQUIRE(pseudo->addr.imm == 11);
-    }
-
-    SECTION("lddw immediate merges high and low words") {
-        RawProgram raw_prog{
-            "",
-            "",
-            0,
-            "",
-            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 3, .src = 0, .imm = 1}, EbpfInst{.imm = 2}, exit},
-            info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
-        const auto* bin = std::get_if<Bin>(&prog.instruction_at(Label{0}));
-        REQUIRE(bin != nullptr);
-        REQUIRE(bin->op == Bin::Op::MOV);
-        REQUIRE(bin->is64);
-        REQUIRE(bin->lddw);
-        REQUIRE(bin->dst == Reg{3});
-        const auto* imm = std::get_if<Imm>(&bin->v);
-        REQUIRE(imm != nullptr);
-        REQUIRE(imm->v == ((2ULL << 32) | 1ULL));
-    }
-
-    SECTION("lddw immediate does not sign-extend low word") {
-        RawProgram raw_prog{
-            "",
-            "",
-            0,
-            "",
-            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 3, .src = 0, .imm = -1}, EbpfInst{.imm = 0}, exit},
-            info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
-        const auto* bin = std::get_if<Bin>(&prog.instruction_at(Label{0}));
-        REQUIRE(bin != nullptr);
-        REQUIRE(bin->op == Bin::Op::MOV);
-        REQUIRE(bin->is64);
-        REQUIRE(bin->lddw);
-        REQUIRE(bin->dst == Reg{3});
-        const auto* imm = std::get_if<Imm>(&bin->v);
-        REQUIRE(imm != nullptr);
-        REQUIRE(imm->v == 0x00000000FFFFFFFFULL);
-    }
-
-    SECTION("lddw code_addr pseudo") {
-        RawProgram raw_prog{
-            "",
-            "",
-            0,
-            "",
-            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 7}, EbpfInst{}, exit},
-            info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
-        const auto* pseudo = std::get_if<LoadPseudo>(&prog.instruction_at(Label{0}));
-        REQUIRE(pseudo != nullptr);
-        REQUIRE(pseudo->addr.kind == PseudoAddress::Kind::CODE_ADDR);
-    }
-
-    SECTION("helper ptr_to_func argument type is accepted for bpf_loop") {
-        constexpr uint8_t mov64_imm = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
-        RawProgram raw_prog{
-            "",
-            "",
-            0,
-            "",
-            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 1}, EbpfInst{},
-             EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 1}, EbpfInst{.opcode = mov64_imm, .dst = 3, .imm = 0},
-             EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0}, EbpfInst{.opcode = INST_OP_CALL, .imm = 181}, exit},
-            info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
-        const auto* call = std::get_if<Call>(&prog.instruction_at(Label{5}));
-        REQUIRE(call != nullptr);
-        REQUIRE(call->is_supported);
-        REQUIRE(std::ranges::any_of(call->singles, [](const ArgSingle& arg) {
-            return arg.kind == ArgSingle::Kind::PTR_TO_FUNC && arg.reg == Reg{2};
-        }));
-    }
-
-    SECTION("ptr_to_func argument enforces function type") {
-        constexpr uint8_t mov64_imm = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
-        RawProgram good_raw_prog{
-            "",
-            "",
-            0,
-            "",
-            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 7}, EbpfInst{},
-             EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 1}, EbpfInst{.opcode = mov64_imm, .dst = 3, .imm = 0},
-             EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0}, EbpfInst{.opcode = INST_OP_CALL, .imm = 181}, exit,
-             EbpfInst{.opcode = mov64_imm, .dst = 0, .imm = 0}, exit},
-            info};
-        auto good_prog_or_error = unmarshal(good_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(good_prog_or_error));
-        const Program good_prog = Program::from_sequence(std::get<InstructionSeq>(good_prog_or_error), info, {});
-        REQUIRE(verify(good_prog));
-
-        RawProgram bad_raw_prog{
-            "",
-            "",
-            0,
-            "",
-            {EbpfInst{.opcode = mov64_imm, .dst = 2, .imm = 7}, EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 1},
-             EbpfInst{.opcode = mov64_imm, .dst = 3, .imm = 0}, EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0},
-             EbpfInst{.opcode = INST_OP_CALL, .imm = 181}, exit},
-            info};
-        auto bad_prog_or_error = unmarshal(bad_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(bad_prog_or_error));
-        const Program bad_prog = Program::from_sequence(std::get<InstructionSeq>(bad_prog_or_error), info, {});
-        REQUIRE_FALSE(verify(bad_prog));
-    }
-
-    SECTION("ptr_to_func callback target must be a valid instruction label") {
-        constexpr uint8_t mov64_imm = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
-        RawProgram good_raw_prog{
-            "",
-            "",
-            0,
-            "",
-            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 7}, EbpfInst{},
-             EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 1}, EbpfInst{.opcode = mov64_imm, .dst = 3, .imm = 0},
-             EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0}, EbpfInst{.opcode = INST_OP_CALL, .imm = 181}, exit,
-             EbpfInst{.opcode = mov64_imm, .dst = 0, .imm = 0}, exit},
-            info};
-        auto good_prog_or_error = unmarshal(good_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(good_prog_or_error));
-        const Program good_prog = Program::from_sequence(std::get<InstructionSeq>(good_prog_or_error), info, {});
-        REQUIRE(verify(good_prog));
-
-        RawProgram bad_raw_prog{
-            "",
-            "",
-            0,
-            "",
-            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 1}, EbpfInst{},
-             EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 1}, EbpfInst{.opcode = mov64_imm, .dst = 3, .imm = 0},
-             EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0}, EbpfInst{.opcode = INST_OP_CALL, .imm = 181}, exit,
-             EbpfInst{.opcode = mov64_imm, .dst = 0, .imm = 0}, exit},
-            info};
-        auto bad_prog_or_error = unmarshal(bad_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(bad_prog_or_error));
-        const Program bad_prog = Program::from_sequence(std::get<InstructionSeq>(bad_prog_or_error), info, {});
-        REQUIRE_FALSE(verify(bad_prog));
-    }
-
-    SECTION("ptr_to_func callback target must have reachable exit") {
-        constexpr uint8_t mov64_imm = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
-        RawProgram bad_raw_prog{
-            "",
-            "",
-            0,
-            "",
-            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 7}, EbpfInst{},
-             EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 1}, EbpfInst{.opcode = mov64_imm, .dst = 3, .imm = 0},
-             EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0}, EbpfInst{.opcode = INST_OP_CALL, .imm = 181}, exit,
-             EbpfInst{.opcode = INST_OP_JA16, .offset = -1}},
-            info};
-        auto bad_prog_or_error = unmarshal(bad_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(bad_prog_or_error));
-        const Program bad_prog = Program::from_sequence(std::get<InstructionSeq>(bad_prog_or_error), info, {});
-        REQUIRE_FALSE(verify(bad_prog));
-    }
-
-    SECTION("helper id not usable on platform") {
-        RawProgram raw_prog{"", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .imm = 0x7fff}, exit}, info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        REQUIRE_THROWS_WITH(
-            Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
-            Catch::Matchers::ContainsSubstring("rejected: helper function is unavailable on this platform") &&
-                Catch::Matchers::ContainsSubstring("(at 0)"));
-    }
-
-    SECTION("be64 requires base64 conformance group") {
-        ebpf_platform_t p = g_ebpf_platform_linux;
-        p.supported_conformance_groups &= ~bpf_conformance_groups_t::base64;
-        ProgramInfo pinfo{.platform = &p, .type = p.get_program_type("unspec", "unspec")};
-        RawProgram raw_prog{"",
-                            "",
-                            0,
-                            "",
-                            {EbpfInst{.opcode = static_cast<uint8_t>(INST_CLS_ALU | INST_ALU_OP_END | INST_END_BE),
-                                      .dst = 1,
-                                      .imm = 64},
-                             exit},
-                            pinfo};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), pinfo, {}),
-                            Catch::Matchers::ContainsSubstring("rejected: requires conformance group base64") &&
-                                Catch::Matchers::ContainsSubstring("(at 0)"));
-    }
-
-    SECTION("call btf cannot use register-call opcode form") {
-        RawProgram raw_prog{
-            "",  "", 0, "", {EbpfInst{.opcode = INST_OP_CALLX, .dst = 0, .src = INST_CALL_BTF_HELPER, .imm = 1}, exit},
-            info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<std::string>(prog_or_error));
-        REQUIRE_THAT(std::get<std::string>(prog_or_error), Catch::Matchers::ContainsSubstring("bad instruction"));
-    }
-
-    SECTION("tail call chain depth above 33 is rejected") {
-        std::vector<EbpfInst> insts;
-        for (size_t i = 0; i < 34; i++) {
-            insts.push_back(EbpfInst{.opcode = INST_OP_CALL, .imm = 12});
-        }
-        insts.push_back(exit);
-        RawProgram raw_prog{"", "", 0, "", std::move(insts), info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
-                            Catch::Matchers::ContainsSubstring("tail call chain depth exceeds 33") &&
-                                Catch::Matchers::ContainsSubstring("(at"));
-    }
-
-    SECTION("tail call chain depth of exactly 33 is accepted") {
-        std::vector<EbpfInst> insts;
-        for (size_t i = 0; i < 33; i++) {
-            insts.push_back(EbpfInst{.opcode = INST_OP_CALL, .imm = 12});
-        }
-        insts.push_back(exit);
-        RawProgram raw_prog{"", "", 0, "", std::move(insts), info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        REQUIRE_NOTHROW(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}));
-    }
-
-    SECTION("tail call cycle does not inflate chain depth") {
-        // No exit instruction is intentional; this checks SCC-based depth accounting, not termination.
-        RawProgram raw_prog{"",
-                            "",
-                            0,
-                            "",
-                            {
-                                EbpfInst{.opcode = INST_OP_CALL, .imm = 12},
-                                EbpfInst{.opcode = INST_OP_JA16, .offset = -2},
-                            },
-                            info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        REQUIRE_NOTHROW(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}));
-    }
-}
 
 // Verify a program in a section that may have multiple programs in it.
 #define VERIFY_PROGRAM(dirname, filename, section_name, program_name, _options, platform, should_pass, count) \
     do {                                                                                                      \
         thread_local_options = _options;                                                                      \
-        const auto raw_progs =                                                                                \
-            read_elf("ebpf-samples/" dirname "/" filename, section_name, "", thread_local_options, platform); \
+        const auto& raw_progs =                                                                                \
+            read_elf_cached("ebpf-samples/" dirname "/" filename, section_name, "", thread_local_options, platform); \
         REQUIRE(raw_progs.size() == count);                                                                   \
         for (const auto& raw_prog : raw_progs) {                                                              \
             if (count == 1 || raw_prog.function_name == program_name) {                                       \
@@ -731,30 +152,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         VERIFY_SECTION(project, filename, section, {}, &g_ebpf_platform_linux, false);                             \
     }
 
-#define TEST_LEGACY(dirname, filename, sectionname)                                                             \
-    TEST_CASE("Unsupported instructions: " dirname "/" filename " " sectionname, "[unmarshal]") {               \
-        ebpf_platform_t platform = g_ebpf_platform_linux;                                                       \
-        platform.supported_conformance_groups &= ~bpf_conformance_groups_t::packet;                             \
-        auto raw_progs = read_elf("ebpf-samples/" dirname "/" filename, sectionname, "", {}, &platform);        \
-        REQUIRE(raw_progs.size() == 1);                                                                         \
-        RawProgram raw_prog = raw_progs.back();                                                                 \
-        std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, {});                      \
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));                                         \
-        REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), raw_prog.info, {}), \
-                            Catch::Matchers::ContainsSubstring("rejected: requires conformance group packet")); \
-    }
-
-#define TEST_SECTION_LEGACY(dirname, filename, sectionname) \
-    TEST_SECTION(dirname, filename, sectionname)            \
-    TEST_LEGACY(dirname, filename, sectionname)
-
-#define TEST_SECTION_LEGACY_SLOW(dirname, filename, sectionname) \
-    TEST_SECTION_SLOW(dirname, filename, sectionname)            \
-    TEST_LEGACY(dirname, filename, sectionname)
-
-#define TEST_SECTION_LEGACY_FAIL(dirname, filename, sectionname) \
-    TEST_SECTION_FAIL(dirname, filename, sectionname)            \
-    TEST_LEGACY(dirname, filename, sectionname)
+#define TEST_SECTION_LEGACY(dirname, filename, sectionname) TEST_SECTION(dirname, filename, sectionname)
+#define TEST_SECTION_LEGACY_SLOW(dirname, filename, sectionname) TEST_SECTION_SLOW(dirname, filename, sectionname)
+#define TEST_SECTION_LEGACY_FAIL(dirname, filename, sectionname) TEST_SECTION_FAIL(dirname, filename, sectionname)
 
 TEST_SECTION_SLOW("bpf_cilium_test", "bpf_lxc_jit.o", "1/0xdc06")
 TEST_SECTION("bpf_cilium_test", "bpf_lxc_jit.o", "2/1")
@@ -1206,9 +606,6 @@ TEST_SECTION("katran", "xdp_root.o", "xdp")
 
 // bcc libbpf-tools
 TEST_SECTION_FAIL("bcc", "bashreadline.bpf.o", "uretprobe/readline")
-// unresolved extern LINUX_KERNEL_VERSION
-FAIL_LOAD_ELF_SECTION("bcc", "capable.bpf.o", "kprobe/cap_capable")
-FAIL_LOAD_ELF_SECTION("bcc", "capable.bpf.o", "kretprobe/cap_capable")
 TEST_SECTION("bcc", "exitsnoop.bpf.o", "tracepoint/sched/sched_process_exit")
 TEST_SECTION_FAIL("bcc", "filelife.bpf.o", "kprobe/vfs_create")
 TEST_SECTION_FAIL("bcc", "filelife.bpf.o", "kprobe/vfs_open")
@@ -1230,9 +627,6 @@ TEST_SECTION_FAIL("libbpf-bootstrap", "fentry.bpf.o", "fentry/do_unlinkat")
 TEST_SECTION_FAIL("libbpf-bootstrap", "fentry.bpf.o", "fexit/do_unlinkat")
 TEST_SECTION("libbpf-bootstrap", "kprobe.bpf.o", "kprobe/do_unlinkat")
 TEST_SECTION("libbpf-bootstrap", "kprobe.bpf.o", "kretprobe/do_unlinkat")
-// unresolved extern LINUX_HAS_SYSCALL_WRAPPER
-FAIL_LOAD_ELF_SECTION("libbpf-bootstrap", "ksyscall.bpf.o", "ksyscall/tgkill")
-FAIL_LOAD_ELF_SECTION("libbpf-bootstrap", "ksyscall.bpf.o", "ksyscall/kill")
 TEST_SECTION_FAIL("libbpf-bootstrap", "lsm.bpf.o", "lsm/bpf")
 TEST_SECTION("libbpf-bootstrap", "minimal.bpf.o", "tp/syscalls/sys_enter_write")
 TEST_SECTION("libbpf-bootstrap", "minimal_legacy.bpf.o", "tp/syscalls/sys_enter_write")
@@ -1245,19 +639,12 @@ TEST_SECTION("libbpf-bootstrap", "uprobe.bpf.o", "uprobe")
 TEST_SECTION("libbpf-bootstrap", "uprobe.bpf.o", "uretprobe")
 TEST_SECTION("libbpf-bootstrap", "uprobe.bpf.o", "uprobe//proc/self/exe:uprobed_sub")
 TEST_SECTION("libbpf-bootstrap", "uprobe.bpf.o", "uretprobe//proc/self/exe:uprobed_sub")
-// unresolved extern LINUX_HAS_BPF_COOKIE
-FAIL_LOAD_ELF_SECTION("libbpf-bootstrap", "usdt.bpf.o", "usdt/libc.so.6:libc:setjmp")
-FAIL_LOAD_ELF_SECTION("libbpf-bootstrap", "usdt.bpf.o", "usdt")
 
 // linux-selftests
 // multi-program section (7 progs)
 // TEST_SECTION("linux-selftests", "atomics.o", "raw_tp/sys_enter") -- 7 programs in section
 // multi-program section (2 progs)
 // TEST_SECTION("linux-selftests", "bloom_filter_map.o", "fentry/__x64_sys_getpgid") -- 2 programs in section
-// unresolved extern CONFIG_HZ
-FAIL_LOAD_ELF_SECTION("linux-selftests", "bpf_cubic.o", "struct_ops")
-// subprogram not found: tcp_reno_cong_avoid (extern kernel function)
-FAIL_LOAD_ELF_SECTION("linux-selftests", "bpf_dctcp.o", "struct_ops")
 TEST_SECTION("linux-selftests", "fexit_sleep.o", "fentry/__x64_sys_nanosleep")
 TEST_SECTION("linux-selftests", "fexit_sleep.o", "fexit/__x64_sys_nanosleep")
 TEST_SECTION_FAIL("linux-selftests", "freplace_get_constant.o", "freplace/get_constant")
@@ -1272,8 +659,6 @@ TEST_SECTION("linux-selftests", "loop2.o", "raw_tracepoint/consume_skb")
 // TEST_SECTION("linux-selftests", "loop3.o", "raw_tracepoint/consume_skb")
 TEST_SECTION("linux-selftests", "loop4.o", "socket")
 TEST_SECTION("linux-selftests", "loop5.o", "socket")
-// subprogram not found: bpf_map_sum_elem_count (extern kernel function)
-FAIL_LOAD_ELF_SECTION("linux-selftests", "map_ptr_kern.o", "cgroup_skb/egress")
 TEST_SECTION_FAIL("linux-selftests", "socket_cookie_prog.o", "cgroup/connect6")
 TEST_SECTION_FAIL("linux-selftests", "socket_cookie_prog.o", "sockops")
 TEST_SECTION_FAIL("linux-selftests", "socket_cookie_prog.o", "fexit/inet_stream_connect")
@@ -1301,69 +686,12 @@ TEST_SECTION_FAIL("linux-selftests", "test_spin_lock.o", "cgroup_skb/ingress")
 TEST_SECTION("cilium-ebpf", "btf_map_init-el.elf", "socket/tail")
 TEST_SECTION("cilium-ebpf", "btf_map_init-el.elf", "socket/main")
 TEST_SECTION("cilium-ebpf", "constants-el.elf", "sk_lookup/")
-// subprogram not found: invalid_kfunc
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "errors-el.elf", "socket")
 TEST_SECTION("cilium-ebpf", "fentry_fexit-el.elf", "fentry/target")
 TEST_SECTION("cilium-ebpf", "fentry_fexit-el.elf", "fexit/target")
 TEST_SECTION("cilium-ebpf", "fentry_fexit-el.elf", "tc")
 TEST_SECTION("cilium-ebpf", "freplace-el.elf", "raw_tracepoint/sched_process_exec")
 TEST_SECTION("cilium-ebpf", "freplace-el.elf", "freplace/subprog")
-// subprogram not found: fwd (forward-declared function)
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "fwd_decl-el.elf", "socket")
-// subprogram not found: bpf_kfunc_call_test_mem_len_pass1
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "invalid-kfunc-el.elf", "tc")
 TEST_SECTION_FAIL("cilium-ebpf", "invalid_map_static-el.elf", "xdp")
-// unresolved extern LINUX_KERNEL_VERSION, CONFIG_HZ, etc.
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "kconfig-el.elf", "socket")
-// unresolved extern symbols in tp_btf/task_newtask section
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "kfunc-el.elf", "tc")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "kfunc-el.elf", "fentry/bpf_fentry_test2")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "kfunc-el.elf", "tp_btf/task_newtask")
-// subprogram not found: bpf_testmod_test_mod_kfunc
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "kfunc-kmod-el.elf", "tc")
-// unresolved extern symbols
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "ksym-el.elf", "socket")
-// invalid legacy map symbol offset / subprogram not found
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "linked-el.elf", "socket")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "linked1-el.elf", "socket")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "linked2-el.elf", "socket")
-// unresolved extern hash_map, hash_map2, MY_CONST
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "static")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "other")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "xdp")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "socket")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "socket/2")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "socket/3")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "socket/4")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "static")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "other")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "xdp")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "socket")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "socket/2")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "socket/3")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "socket/4")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "static")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "other")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "xdp")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "socket")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "socket/2")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "socket/3")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "socket/4")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "static")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "other")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "xdp")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "socket")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "socket/2")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "socket/3")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "socket/4")
-// unresolved extern MY_CONST
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "static")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "other")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "xdp")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "socket")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "socket/2")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "socket/3")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "socket/4")
 TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea0")
 TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea1")
 TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea2")
@@ -1527,7 +855,8 @@ static void test_analyze_thread(const Program* prog, const ProgramInfo* info, bo
 
 // Test multithreading
 TEST_CASE("multithreading", "[verify][multithreading]") {
-    auto raw_progs1 = read_elf("ebpf-samples/bpf_cilium_test/bpf_netdev.o", "2/1", "", {}, &g_ebpf_platform_linux);
+    const auto& raw_progs1 =
+        read_elf_cached("ebpf-samples/bpf_cilium_test/bpf_netdev.o", "2/1", "", {}, &g_ebpf_platform_linux);
     REQUIRE(raw_progs1.size() == 1);
     RawProgram raw_prog1 = raw_progs1.back();
     auto prog_or_error1 = unmarshal(raw_prog1, {});
@@ -1535,7 +864,8 @@ TEST_CASE("multithreading", "[verify][multithreading]") {
     REQUIRE(inst_seq1);
     const Program prog1 = Program::from_sequence(*inst_seq1, raw_prog1.info, {});
 
-    auto raw_progs2 = read_elf("ebpf-samples/bpf_cilium_test/bpf_netdev.o", "2/2", "", {}, &g_ebpf_platform_linux);
+    const auto& raw_progs2 =
+        read_elf_cached("ebpf-samples/bpf_cilium_test/bpf_netdev.o", "2/2", "", {}, &g_ebpf_platform_linux);
     REQUIRE(raw_progs2.size() == 1);
     RawProgram raw_prog2 = raw_progs2.back();
     auto prog_or_error2 = unmarshal(raw_prog2, {});
