@@ -128,12 +128,12 @@ const std::vector<RawProgram>& read_elf_cached(const std::string& path, const st
             full_programs = &inserted_it->second;
         }
 
-        auto [query_it, _] =
-            query_cache.emplace(std::move(query_key), filter_raw_programs(*full_programs, desired_section, desired_program));
+        auto [query_it, _] = query_cache.emplace(std::move(query_key),
+                                                 filter_raw_programs(*full_programs, desired_section, desired_program));
         return query_it->second;
     } catch (const std::runtime_error&) {
-        auto [query_it, _] = query_cache.emplace(
-            std::move(query_key), read_elf(path, desired_section, desired_program, options, platform));
+        auto [query_it, _] = query_cache.emplace(std::move(query_key),
+                                                 read_elf(path, desired_section, desired_program, options, platform));
         return query_it->second;
     }
 }
