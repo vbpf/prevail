@@ -141,9 +141,5 @@ TEST_SECTION("linux", "xdpsock_kern.o", "xdp_sock")
 //   Start from the first failing instruction and inspect predecessor states.
 // ===========================================================================
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 80: Invalid type (r1.type == map_fd)
-TEST_SECTION_FAIL("linux", "test_map_in_map_kern.o", "kprobe/sys_connect",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 80: Invalid type (r1.type == map_fd)")
+TEST_SECTION_FAIL("linux", "test_map_in_map_kern.o", "kprobe/sys_connect", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 80: Invalid type (r1.type == map_fd)")

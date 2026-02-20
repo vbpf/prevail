@@ -95,254 +95,113 @@ TEST_PROGRAM("cilium-core", "bpf_xdp.o", "xdp/tail", "tail_drop_notify", 12)
 //   Start from the first failing instruction and inspect predecessor states.
 // ===========================================================================
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 3: Invalid type (r0.type == number)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", ".text", "__check_device_mtu", 2,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 3: Invalid type (r0.type == number)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", ".text", "__check_device_mtu", 2, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 3: Invalid type (r0.type == number)")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 3: Invalid type (r0.type == number)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", ".text", "__check_eth_header_length", 2,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 3: Invalid type (r0.type == number)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", ".text", "__check_eth_header_length", 2, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 3: Invalid type (r0.type == number)")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 328: Invalid type (r4.type in {ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_ipv4_cont_from_host", 28,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 328: Invalid type (r4.type in {ctx, stack, packet, shared})")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_ipv4_cont_from_host", 28, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 328: Invalid type (r4.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 299: Invalid type (r3.type in {ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_ipv4_cont_from_netdev", 28,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 299: Invalid type (r3.type in {ctx, stack, packet, shared})")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_ipv4_cont_from_netdev", 28, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 299: Invalid type (r3.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 203: Invalid type (r3.type in {ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_ipv6_cont_from_host", 28,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 203: Invalid type (r3.type in {ctx, stack, packet, shared})")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_ipv6_cont_from_host", 28, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 203: Invalid type (r3.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 134: Invalid type (r7.type == number)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_ipv6_cont_from_netdev", 28,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 134: Invalid type (r7.type == number)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_ipv6_cont_from_netdev", 28, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 134: Invalid type (r7.type == number)")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 46: Invalid type (r2.type == number)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_ipv6_from_host", 28,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 46: Invalid type (r2.type == number)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_ipv6_from_host", 28, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 46: Invalid type (r2.type == number)")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 42: Invalid type (r2.type == number)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_ipv6_from_netdev", 28,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 42: Invalid type (r2.type == number)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_ipv6_from_netdev", 28, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 42: Invalid type (r2.type == number)")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 669: Invalid type (r2.type in {ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_snat_fwd_ipv4", 28,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 669: Invalid type (r2.type in {ctx, stack, packet, shared})")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_snat_fwd_ipv4", 28, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 669: Invalid type (r2.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 840: Invalid type (r3.type in {ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_ipv4_host_policy_ingress", 28,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 840: Invalid type (r3.type in {ctx, stack, packet, shared})")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_ipv4_host_policy_ingress", 28, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 840: Invalid type (r3.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 296: Invalid type (r9.type in {ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_ipv6_host_policy_ingress", 28,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 296: Invalid type (r9.type in {ctx, stack, packet, shared})")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_ipv6_host_policy_ingress", 28, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 296: Invalid type (r9.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 689: Invalid type (r3.type in {ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_nodeport_nat_ingress_ipv4", 28,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 689: Invalid type (r3.type in {ctx, stack, packet, shared})")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_nodeport_nat_ingress_ipv4", 28, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 689: Invalid type (r3.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 1239: Invalid type (r8.type in {ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_nodeport_nat_ingress_ipv6", 28,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 1239: Invalid type (r8.type in {ctx, stack, packet, shared})")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_nodeport_nat_ingress_ipv6", 28, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1239: Invalid type (r8.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 3: Invalid type (r0.type == number)
-TEST_SECTION_FAIL("cilium-core", "bpf_lxc.o", ".text", verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 3: Invalid type (r0.type == number)")
+TEST_SECTION_FAIL("cilium-core", "bpf_lxc.o", ".text", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 3: Invalid type (r0.type == number)")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 495: Invalid type (r3.type in {ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_handle_ipv4_cont", 30,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 495: Invalid type (r3.type in {ctx, stack, packet, shared})")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_handle_ipv4_cont", 30, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 495: Invalid type (r3.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 29: Invalid type (r2.type == number)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_handle_ipv6", 30,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 29: Invalid type (r2.type == number)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_handle_ipv6", 30, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 29: Invalid type (r2.type == number)")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 444: Invalid type (valid_access(r3.offset) for comparison/subtraction)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_handle_ipv6_cont", 30,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 444: Invalid type (valid_access(r3.offset) for comparison/subtraction)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_handle_ipv6_cont", 30, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 444: Invalid type (valid_access(r3.offset) for comparison/subtraction)")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 464: Invalid type (r3.type in {ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv4_policy", 30,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 464: Invalid type (r3.type in {ctx, stack, packet, shared})")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv4_policy", 30, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 464: Invalid type (r3.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 521: Invalid type (r1.type in {ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv4_to_endpoint", 30,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 521: Invalid type (r1.type in {ctx, stack, packet, shared})")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv4_to_endpoint", 30, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 521: Invalid type (r1.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 51: Invalid type (r2.type == number)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv6_policy", 30,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 51: Invalid type (r2.type == number)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv6_policy", 30, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 51: Invalid type (r2.type == number)")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 625: Invalid type (r3.type in {ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv6_to_endpoint", 30,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 625: Invalid type (r3.type in {ctx, stack, packet, shared})")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv6_to_endpoint", 30, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 625: Invalid type (r3.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 670: Invalid type (r4.type in {ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_nodeport_nat_ingress_ipv4", 30,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 670: Invalid type (r4.type in {ctx, stack, packet, shared})")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_nodeport_nat_ingress_ipv4", 30, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 670: Invalid type (r4.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 1175: Invalid type (r7.type in {ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_nodeport_nat_ingress_ipv6", 30,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 1175: Invalid type (r7.type in {ctx, stack, packet, shared})")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_nodeport_nat_ingress_ipv6", 30, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1175: Invalid type (r7.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 3: Invalid type (r0.type == number)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_overlay.o", ".text", "__check_device_mtu", 2,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 3: Invalid type (r0.type == number)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_overlay.o", ".text", "__check_device_mtu", 2, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 3: Invalid type (r0.type == number)")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 9: Invalid type (valid_access(r3.offset) for comparison/subtraction)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_overlay.o", ".text", "__mcast_ep_delivery", 2,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 9: Invalid type (valid_access(r3.offset) for comparison/subtraction)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_overlay.o", ".text", "__mcast_ep_delivery", 2, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 9: Invalid type (valid_access(r3.offset) for comparison/subtraction)")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 32: Invalid type (r4.type == number)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_overlay.o", "tc/tail", "tail_handle_ipv6", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 32: Invalid type (r4.type == number)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_overlay.o", "tc/tail", "tail_handle_ipv6", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 32: Invalid type (r4.type == number)")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 1618: Invalid type (r0.type in {ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("cilium-core", "bpf_overlay.o", "tc/tail", "tail_handle_snat_fwd_ipv4", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 1618: Invalid type (r0.type in {ctx, stack, packet, shared})")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_overlay.o", "tc/tail", "tail_handle_snat_fwd_ipv4", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1618: Invalid type (r0.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 2349: Invalid type (r5.type in {ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("cilium-core", "bpf_overlay.o", "tc/tail", "tail_handle_snat_fwd_ipv6", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 2349: Invalid type (r5.type in {ctx, stack, packet, shared})")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_overlay.o", "tc/tail", "tail_handle_snat_fwd_ipv6", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2349: Invalid type (r5.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 40: Invalid type (r2.type == func)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_overlay.o", "tc/tail", "tail_mcast_ep_delivery", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 40: Invalid type (r2.type == func)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_overlay.o", "tc/tail", "tail_mcast_ep_delivery", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 40: Invalid type (r2.type == func)")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 668: Invalid type (r4.type in {ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("cilium-core", "bpf_overlay.o", "tc/tail", "tail_nodeport_nat_ingress_ipv4", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 668: Invalid type (r4.type in {ctx, stack, packet, shared})")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_overlay.o", "tc/tail", "tail_nodeport_nat_ingress_ipv4", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 668: Invalid type (r4.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 1172: Invalid type (r7.type in {ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("cilium-core", "bpf_overlay.o", "tc/tail", "tail_nodeport_nat_ingress_ipv6", 19,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 1172: Invalid type (r7.type in {ctx, stack, packet, shared})")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_overlay.o", "tc/tail", "tail_nodeport_nat_ingress_ipv6", 19, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1172: Invalid type (r7.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 3: Invalid type (r0.type == number)
-TEST_SECTION_FAIL("cilium-core", "bpf_wireguard.o", ".text", verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 3: Invalid type (r0.type == number)")
+TEST_SECTION_FAIL("cilium-core", "bpf_wireguard.o", ".text", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 3: Invalid type (r0.type == number)")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 32: Invalid type (r5.type == number)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_handle_ipv6", 17,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 32: Invalid type (r5.type == number)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_handle_ipv6", 17, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 32: Invalid type (r5.type == number)")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 668: Invalid type (r9.type in {ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_nodeport_nat_ingress_ipv4", 17,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 668: Invalid type (r9.type in {ctx, stack, packet, shared})")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_nodeport_nat_ingress_ipv4", 17, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 668: Invalid type (r9.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 1143: Invalid type (r9.type in {ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_nodeport_nat_ingress_ipv6", 17,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 1143: Invalid type (r9.type in {ctx, stack, packet, shared})")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_nodeport_nat_ingress_ipv6", 17, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1143: Invalid type (r9.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 3: Invalid type (r0.type == number)
-TEST_SECTION_FAIL("cilium-core", "bpf_xdp.o", ".text", verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 3: Invalid type (r0.type == number)")
+TEST_SECTION_FAIL("cilium-core", "bpf_xdp.o", ".text", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 3: Invalid type (r0.type == number)")
 
 // ===========================================================================
 // Failure Cause Group: VerifierBoundsTracking
@@ -358,160 +217,71 @@ TEST_SECTION_FAIL("cilium-core", "bpf_xdp.o", ".text", verify_test::VerifyIssueK
 //   information across branches where possible.
 // ===========================================================================
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 27: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)
-TEST_PROGRAM_FAIL(
-    "cilium-core", "bpf_host.o", "tc/entry", "cil_from_host", 5, verify_test::VerifyIssueKind::VerifierBoundsTracking,
-    "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: "
-    "27: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/entry", "cil_from_host", 5, verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 27: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 27: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)
-TEST_PROGRAM_FAIL(
-    "cilium-core", "bpf_host.o", "tc/entry", "cil_from_netdev", 5, verify_test::VerifyIssueKind::VerifierBoundsTracking,
-    "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: "
-    "27: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/entry", "cil_from_netdev", 5, verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 27: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 18: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)
-TEST_PROGRAM_FAIL(
-    "cilium-core", "bpf_host.o", "tc/entry", "cil_host_policy", 5, verify_test::VerifyIssueKind::VerifierBoundsTracking,
-    "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: "
-    "18: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/entry", "cil_host_policy", 5, verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 18: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 21: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)
-TEST_PROGRAM_FAIL(
-    "cilium-core", "bpf_host.o", "tc/entry", "cil_to_host", 5, verify_test::VerifyIssueKind::VerifierBoundsTracking,
-    "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: "
-    "21: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/entry", "cil_to_host", 5, verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 21: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 29: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)
-TEST_PROGRAM_FAIL(
-    "cilium-core", "bpf_host.o", "tc/entry", "cil_to_netdev", 5, verify_test::VerifyIssueKind::VerifierBoundsTracking,
-    "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: "
-    "29: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/entry", "cil_to_netdev", 5, verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 29: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 70: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)
-TEST_PROGRAM_FAIL(
-    "cilium-core", "bpf_host.o", "tc/tail", "tail_srv6_encap", 28, verify_test::VerifyIssueKind::VerifierBoundsTracking,
-    "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: "
-    "70: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_srv6_encap", 28, verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 70: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 228: Upper bound must be at most 144 (valid_access(r4.offset+160, width=4) for read)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_overlay.o", "tc/entry", "cil_to_overlay", 2,
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 228: Upper bound must be at most 144 (valid_access(r4.offset+160, width=4) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_overlay.o", "tc/entry", "cil_to_overlay", 2, verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 228: Upper bound must be at most 144 (valid_access(r4.offset+160, width=4) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 2122: Upper bound must be at most 144 (valid_access(r6.offset+160, width=4) for read)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_overlay.o", "tc/tail", "tail_handle_ipv4", 19,
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 2122: Upper bound must be at most 144 (valid_access(r6.offset+160, width=4) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_overlay.o", "tc/tail", "tail_handle_ipv4", 19, verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 2122: Upper bound must be at most 144 (valid_access(r6.offset+160, width=4) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 8: Upper bound must be at most 48 (valid_access(r6.offset+52, width=4) for read)
-TEST_SECTION_FAIL("cilium-core", "bpf_sock.o", "cgroup/sock_release",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 8: Upper bound must be at most 48 (valid_access(r6.offset+52, width=4) for read)")
+TEST_SECTION_FAIL("cilium-core", "bpf_sock.o", "cgroup/sock_release", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 8: Upper bound must be at most 48 (valid_access(r6.offset+52, width=4) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 2096: Upper bound must be at most 144 (valid_access(r6.offset+160, width=4) for read)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_handle_ipv4", 17,
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 2096: Upper bound must be at most 144 (valid_access(r6.offset+160, width=4) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_handle_ipv4", 17, verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 2096: Upper bound must be at most 144 (valid_access(r6.offset+160, width=4) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 51: Upper bound must be at most packet_size (valid_access(r5.offset, width=1) for read)
-TEST_SECTION_FAIL("cilium-core", "bpf_xdp.o", "xdp/entry", verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 51: Upper bound must be at most packet_size (valid_access(r5.offset, width=1) for read)")
+TEST_SECTION_FAIL("cilium-core", "bpf_xdp.o", "xdp/entry", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 51: Upper bound must be at most packet_size (valid_access(r5.offset, width=1) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 170: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)
-TEST_PROGRAM_FAIL(
-    "cilium-core", "bpf_xdp.o", "xdp/tail", "tail_lb_ipv4", 12, verify_test::VerifyIssueKind::VerifierBoundsTracking,
-    "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: "
-    "170: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_xdp.o", "xdp/tail", "tail_lb_ipv4", 12, verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 170: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 66: Upper bound must be at most packet_size (valid_access(r3.offset, width=2) for read)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_xdp.o", "xdp/tail", "tail_lb_ipv6", 12,
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 66: Upper bound must be at most packet_size (valid_access(r3.offset, width=2) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_xdp.o", "xdp/tail", "tail_lb_ipv6", 12, verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 66: Upper bound must be at most packet_size (valid_access(r3.offset, width=2) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 283: Upper bound must be at most packet_size (valid_access(r0.offset, width=2) for read)
-TEST_PROGRAM_FAIL(
-    "cilium-core", "bpf_xdp.o", "xdp/tail", "tail_nodeport_ipv4_dsr", 12,
-    verify_test::VerifyIssueKind::VerifierBoundsTracking,
-    "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: "
-    "283: Upper bound must be at most packet_size (valid_access(r0.offset, width=2) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_xdp.o", "xdp/tail", "tail_nodeport_ipv4_dsr", 12, verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 283: Upper bound must be at most packet_size (valid_access(r0.offset, width=2) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 76: Upper bound must be at most packet_size (valid_access(r3.offset, width=2) for read)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_xdp.o", "xdp/tail", "tail_nodeport_ipv6_dsr", 12,
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 76: Upper bound must be at most packet_size (valid_access(r3.offset, width=2) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_xdp.o", "xdp/tail", "tail_nodeport_ipv6_dsr", 12, verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 76: Upper bound must be at most packet_size (valid_access(r3.offset, width=2) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 97: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_xdp.o", "xdp/tail", "tail_nodeport_nat_egress_ipv4", 12,
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 97: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_xdp.o", "xdp/tail", "tail_nodeport_nat_egress_ipv4", 12, verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 97: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 74: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_xdp.o", "xdp/tail", "tail_nodeport_nat_egress_ipv6", 12,
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 74: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_xdp.o", "xdp/tail", "tail_nodeport_nat_egress_ipv6", 12, verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 74: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 82: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_xdp.o", "xdp/tail", "tail_nodeport_nat_ingress_ipv4", 12,
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 82: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_xdp.o", "xdp/tail", "tail_nodeport_nat_ingress_ipv4", 12, verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 82: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 47: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_xdp.o", "xdp/tail", "tail_nodeport_nat_ingress_ipv6", 12,
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 47: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_xdp.o", "xdp/tail", "tail_nodeport_nat_ingress_ipv6", 12, verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 47: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 60: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_xdp.o", "xdp/tail", "tail_nodeport_rev_dnat_egress_ipv6", 12,
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 60: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_xdp.o", "xdp/tail", "tail_nodeport_rev_dnat_egress_ipv6", 12, verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 60: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 60: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_xdp.o", "xdp/tail", "tail_nodeport_rev_dnat_ingress_ipv6", 12,
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 60: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_xdp.o", "xdp/tail", "tail_nodeport_rev_dnat_ingress_ipv6", 12, verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 60: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 139: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)
-TEST_PROGRAM_FAIL(
-    "cilium-core", "bpf_xdp.o", "xdp/tail", "tail_nodeport_rev_dnat_ipv4", 12,
-    verify_test::VerifyIssueKind::VerifierBoundsTracking,
-    "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: "
-    "139: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_xdp.o", "xdp/tail", "tail_nodeport_rev_dnat_ipv4", 12, verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 139: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)")
 
 // ===========================================================================
 // Failure Cause Group: VerifierStackInitialization
@@ -527,33 +297,17 @@ TEST_PROGRAM_FAIL(
 //   conditional writes.
 // ===========================================================================
 // expected failure (VerifierStackInitialization):
-//   reason: Known verifier limitation: stack initialization tracking is too coarse for this access path.
 //   diagnostic: 1026: Stack content is not numeric (valid_access(r2.offset+32, width=4) for read)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_nodeport_nat_egress_ipv4", 28,
-                  verify_test::VerifyIssueKind::VerifierStackInitialization,
-                  "Known verifier limitation: stack initialization tracking is too coarse for this access path. "
-                  "Diagnostic: 1026: Stack content is not numeric (valid_access(r2.offset+32, width=4) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_nodeport_nat_egress_ipv4", 28, verify_test::VerifyIssueKind::VerifierStackInitialization, "Known verifier limitation: stack initialization tracking is too coarse for this access path. Diagnostic: 1026: Stack content is not numeric (valid_access(r2.offset+32, width=4) for read)")
 // expected failure (VerifierStackInitialization):
-//   reason: Known verifier limitation: stack initialization tracking is too coarse for this access path.
 //   diagnostic: 1011: Stack content is not numeric (valid_access(r2.offset+32, width=4) for read)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_nodeport_nat_egress_ipv4", 30,
-                  verify_test::VerifyIssueKind::VerifierStackInitialization,
-                  "Known verifier limitation: stack initialization tracking is too coarse for this access path. "
-                  "Diagnostic: 1011: Stack content is not numeric (valid_access(r2.offset+32, width=4) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_nodeport_nat_egress_ipv4", 30, verify_test::VerifyIssueKind::VerifierStackInitialization, "Known verifier limitation: stack initialization tracking is too coarse for this access path. Diagnostic: 1011: Stack content is not numeric (valid_access(r2.offset+32, width=4) for read)")
 // expected failure (VerifierStackInitialization):
-//   reason: Known verifier limitation: stack initialization tracking is too coarse for this access path.
 //   diagnostic: 1010: Stack content is not numeric (valid_access(r2.offset+32, width=4) for read)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_overlay.o", "tc/tail", "tail_nodeport_nat_egress_ipv4", 19,
-                  verify_test::VerifyIssueKind::VerifierStackInitialization,
-                  "Known verifier limitation: stack initialization tracking is too coarse for this access path. "
-                  "Diagnostic: 1010: Stack content is not numeric (valid_access(r2.offset+32, width=4) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_overlay.o", "tc/tail", "tail_nodeport_nat_egress_ipv4", 19, verify_test::VerifyIssueKind::VerifierStackInitialization, "Known verifier limitation: stack initialization tracking is too coarse for this access path. Diagnostic: 1010: Stack content is not numeric (valid_access(r2.offset+32, width=4) for read)")
 // expected failure (VerifierStackInitialization):
-//   reason: Known verifier limitation: stack initialization tracking is too coarse for this access path.
 //   diagnostic: 1009: Stack content is not numeric (valid_access(r2.offset+32, width=4) for read)
-TEST_PROGRAM_FAIL("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_nodeport_nat_egress_ipv4", 17,
-                  verify_test::VerifyIssueKind::VerifierStackInitialization,
-                  "Known verifier limitation: stack initialization tracking is too coarse for this access path. "
-                  "Diagnostic: 1009: Stack content is not numeric (valid_access(r2.offset+32, width=4) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_nodeport_nat_egress_ipv4", 17, verify_test::VerifyIssueKind::VerifierStackInitialization, "Known verifier limitation: stack initialization tracking is too coarse for this access path. Diagnostic: 1009: Stack content is not numeric (valid_access(r2.offset+32, width=4) for read)")
 
 // ===========================================================================
 // Failure Cause Group: VerifierMapTyping
@@ -568,12 +322,8 @@ TEST_PROGRAM_FAIL("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_nodeport_na
 //   facts.
 // ===========================================================================
 // expected failure (VerifierMapTyping):
-//   reason: Known verifier limitation: map value/key typing and scalarization are too conservative here.
 //   diagnostic: 303: Illegal map update with a non-numerical value [4048-4072) (within(r2:key_size(r1)))
-TEST_SECTION_FAIL(
-    "cilium-core", "bpf_sock.o", "cgroup/recvmsg6", verify_test::VerifyIssueKind::VerifierMapTyping,
-    "Known verifier limitation: map value/key typing and scalarization are too conservative here. Diagnostic: 303: "
-    "Illegal map update with a non-numerical value [4048-4072) (within(r2:key_size(r1)))")
+TEST_SECTION_FAIL("cilium-core", "bpf_sock.o", "cgroup/recvmsg6", verify_test::VerifyIssueKind::VerifierMapTyping, "Known verifier limitation: map value/key typing and scalarization are too conservative here. Diagnostic: 303: Illegal map update with a non-numerical value [4048-4072) (within(r2:key_size(r1)))")
 
 // ===========================================================================
 // Failure Cause Group: VerifierNullability
@@ -589,11 +339,6 @@ TEST_SECTION_FAIL(
 //   Refine nullability join rules and path-sensitive implication handling for pointer checks before access.
 // ===========================================================================
 // expected failure (VerifierNullability):
-//   reason: Known verifier limitation: nullability tracking is too conservative on this path.
 //   diagnostic: 927: Non-null number ((r2.type == number and r2.value == 0) or valid_access(r2.offset, width=r3) for
 //               read)
-TEST_PROGRAM_FAIL(
-    "cilium-core", "bpf_host.o", "tc/tail", "tail_handle_snat_fwd_ipv6", 28,
-    verify_test::VerifyIssueKind::VerifierNullability,
-    "Known verifier limitation: nullability tracking is too conservative on this path. Diagnostic: 927: Non-null "
-    "number ((r2.type == number and r2.value == 0) or valid_access(r2.offset, width=r3) for read)")
+TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_snat_fwd_ipv6", 28, verify_test::VerifyIssueKind::VerifierNullability, "Known verifier limitation: nullability tracking is too conservative on this path. Diagnostic: 927: Non-null number ((r2.type == number and r2.value == 0) or valid_access(r2.offset, width=r3) for read)")

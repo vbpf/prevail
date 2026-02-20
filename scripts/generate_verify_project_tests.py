@@ -272,12 +272,9 @@ def split_reason(reason: str | None) -> tuple[str, str]:
 
 def render_reason_comment(label: str, kind: str | None, reason: str | None) -> list[str]:
     reason_text, diagnostic = split_reason(reason)
-    heading = f"{label} ({kind}):"
-    return [
-        f"// {heading}",
-        *wrap_labeled_comment("reason", reason_text),
-        *wrap_labeled_comment("diagnostic", diagnostic),
-    ]
+    if diagnostic != "n/a":
+        return [f"// {label} ({kind}):", *wrap_labeled_comment("diagnostic", diagnostic)]
+    return [f"// {label} ({kind}):", *wrap_labeled_comment("note", reason_text)]
 
 
 def classify_section(obj: dict, section: str, programs: list[dict]) -> tuple[str, str | None, str | None]:

@@ -27,19 +27,11 @@ TEST_SECTION("cilium-examples", "xdp_bpf_bpfel.o", "xdp")
 //   Start from the first failing instruction and inspect predecessor states.
 // ===========================================================================
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 9: Invalid type (r0.type in {ctx, stack, packet, shared})
-TEST_SECTION_FAIL("cilium-examples", "ringbuffer_bpf_bpfel.o", "kprobe/sys_execve",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 9: Invalid type (r0.type in {ctx, stack, packet, shared})")
+TEST_SECTION_FAIL("cilium-examples", "ringbuffer_bpf_bpfel.o", "kprobe/sys_execve", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 9: Invalid type (r0.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 7: Invalid type (r3.type == number)
-TEST_SECTION_FAIL("cilium-examples", "uretprobe_bpf_x86_bpfel.o", "uretprobe/bash_readline",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 7: Invalid type (r3.type == number)")
+TEST_SECTION_FAIL("cilium-examples", "uretprobe_bpf_x86_bpfel.o", "uretprobe/bash_readline", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r3.type == number)")
 
 // ===========================================================================
 // Failure Cause Group: VerifierBoundsTracking
@@ -55,23 +47,11 @@ TEST_SECTION_FAIL("cilium-examples", "uretprobe_bpf_x86_bpfel.o", "uretprobe/bas
 //   information across branches where possible.
 // ===========================================================================
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)
-TEST_SECTION_FAIL("cilium-examples", "fentry_bpf_bpfel.o", "fentry/tcp_connect",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)")
+TEST_SECTION_FAIL("cilium-examples", "fentry_bpf_bpfel.o", "fentry/tcp_connect", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)
-TEST_SECTION_FAIL("cilium-examples", "tcprtt_bpf_bpfel.o", "fentry/tcp_close",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)")
+TEST_SECTION_FAIL("cilium-examples", "tcprtt_bpf_bpfel.o", "fentry/tcp_close", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 61: Lower bound must be at least 0 (valid_access(r0.offset) for comparison/subtraction)
-TEST_SECTION_FAIL("cilium-examples", "tcprtt_sockops_bpf_bpfel.o", "sockops",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 61: Lower bound must be at least 0 (valid_access(r0.offset) for comparison/subtraction)")
+TEST_SECTION_FAIL("cilium-examples", "tcprtt_sockops_bpf_bpfel.o", "sockops", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 61: Lower bound must be at least 0 (valid_access(r0.offset) for comparison/subtraction)")

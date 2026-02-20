@@ -30,25 +30,14 @@ TEST_SECTION("libbpf-bootstrap", "uprobe.bpf.o", "uretprobe//proc/self/exe:uprob
 //   Start from the first failing instruction and inspect predecessor states.
 // ===========================================================================
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 70: Invalid type (r3.type == number)
-TEST_SECTION_FAIL("libbpf-bootstrap", "bootstrap_legacy.bpf.o", "tp/sched/sched_process_exec",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 70: Invalid type (r3.type == number)")
+TEST_SECTION_FAIL("libbpf-bootstrap", "bootstrap_legacy.bpf.o", "tp/sched/sched_process_exec", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 70: Invalid type (r3.type == number)")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 4/33: Invalid type (r1.type in {ctx, stack, packet, shared})
-TEST_SECTION_FAIL("libbpf-bootstrap", "usdt.bpf.o", "usdt", verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 4/33: Invalid type (r1.type in {ctx, stack, packet, shared})")
+TEST_SECTION_FAIL("libbpf-bootstrap", "usdt.bpf.o", "usdt", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 4/33: Invalid type (r1.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
-//   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 4/40: Invalid type (r1.type in {ctx, stack, packet, shared})
-TEST_SECTION_FAIL("libbpf-bootstrap", "usdt.bpf.o", "usdt/libc.so.6:libc:setjmp",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 4/40: Invalid type (r1.type in {ctx, stack, packet, shared})")
+TEST_SECTION_FAIL("libbpf-bootstrap", "usdt.bpf.o", "usdt/libc.so.6:libc:setjmp", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 4/40: Invalid type (r1.type in {ctx, stack, packet, shared})")
 
 // ===========================================================================
 // Failure Cause Group: VerifierBoundsTracking
@@ -64,60 +53,29 @@ TEST_SECTION_FAIL("libbpf-bootstrap", "usdt.bpf.o", "usdt/libc.so.6:libc:setjmp"
 //   information across branches where possible.
 // ===========================================================================
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 24: Lower bound must be at least 0 (valid_access(r7.offset) for comparison/subtraction)
-TEST_SECTION_FAIL("libbpf-bootstrap", "bootstrap.bpf.o", "tp/sched/sched_process_exec",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 24: Lower bound must be at least 0 (valid_access(r7.offset) for comparison/subtraction)")
+TEST_SECTION_FAIL("libbpf-bootstrap", "bootstrap.bpf.o", "tp/sched/sched_process_exec", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 24: Lower bound must be at least 0 (valid_access(r7.offset) for comparison/subtraction)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 39: Lower bound must be at least 0 (valid_access(r6.offset) for comparison/subtraction)
-TEST_SECTION_FAIL("libbpf-bootstrap", "bootstrap.bpf.o", "tp/sched/sched_process_exit",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 39: Lower bound must be at least 0 (valid_access(r6.offset) for comparison/subtraction)")
+TEST_SECTION_FAIL("libbpf-bootstrap", "bootstrap.bpf.o", "tp/sched/sched_process_exit", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 39: Lower bound must be at least 0 (valid_access(r6.offset) for comparison/subtraction)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+8, width=8) for read)
-TEST_SECTION_FAIL("libbpf-bootstrap", "fentry.bpf.o", "fentry/do_unlinkat",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+8, width=8) for read)")
+TEST_SECTION_FAIL("libbpf-bootstrap", "fentry.bpf.o", "fentry/do_unlinkat", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+8, width=8) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+16, width=8) for read)
-TEST_SECTION_FAIL("libbpf-bootstrap", "fentry.bpf.o", "fexit/do_unlinkat",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+16, width=8) for read)")
+TEST_SECTION_FAIL("libbpf-bootstrap", "fentry.bpf.o", "fexit/do_unlinkat", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+16, width=8) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+24, width=8) for read)
-TEST_SECTION_FAIL("libbpf-bootstrap", "lsm.bpf.o", "lsm/bpf", verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+24, width=8) for read)")
+TEST_SECTION_FAIL("libbpf-bootstrap", "lsm.bpf.o", "lsm/bpf", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+24, width=8) for read)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 12: Lower bound must be at least 0 (valid_access(r7.offset) for comparison/subtraction)
-TEST_SECTION_FAIL("libbpf-bootstrap", "profile.bpf.o", "perf_event",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 12: Lower bound must be at least 0 (valid_access(r7.offset) for comparison/subtraction)")
+TEST_SECTION_FAIL("libbpf-bootstrap", "profile.bpf.o", "perf_event", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 12: Lower bound must be at least 0 (valid_access(r7.offset) for comparison/subtraction)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 27: Lower bound must be at least 0 (valid_access(r7.offset) for comparison/subtraction)
-TEST_SECTION_FAIL("libbpf-bootstrap", "sockfilter.bpf.o", "socket",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 27: Lower bound must be at least 0 (valid_access(r7.offset) for comparison/subtraction)")
+TEST_SECTION_FAIL("libbpf-bootstrap", "sockfilter.bpf.o", "socket", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 27: Lower bound must be at least 0 (valid_access(r7.offset) for comparison/subtraction)")
 // expected failure (VerifierBoundsTracking):
-//   reason: Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof.
 //   diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)
-TEST_SECTION_FAIL("libbpf-bootstrap", "task_iter.bpf.o", "iter/task",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)")
+TEST_SECTION_FAIL("libbpf-bootstrap", "task_iter.bpf.o", "iter/task", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)")
 
 // ===========================================================================
 // Failure Cause Group: ExternalSymbolResolution
@@ -132,37 +90,17 @@ TEST_SECTION_FAIL("libbpf-bootstrap", "task_iter.bpf.o", "iter/task",
 //   with sound semantics.
 // ===========================================================================
 // skipped (ExternalSymbolResolution):
-//   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
 //   diagnostic: Unresolved symbols found.
-TEST_SECTION_SKIP("libbpf-bootstrap", "ksyscall.bpf.o", "ksyscall/kill",
-                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
-                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
-                  "verification. Diagnostic: Unresolved symbols found.")
+TEST_SECTION_SKIP("libbpf-bootstrap", "ksyscall.bpf.o", "ksyscall/kill", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
 // skipped (ExternalSymbolResolution):
-//   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
 //   diagnostic: Unresolved symbols found.
-TEST_SECTION_SKIP("libbpf-bootstrap", "ksyscall.bpf.o", "ksyscall/tgkill",
-                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
-                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
-                  "verification. Diagnostic: Unresolved symbols found.")
+TEST_SECTION_SKIP("libbpf-bootstrap", "ksyscall.bpf.o", "ksyscall/tgkill", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
 // skipped (ExternalSymbolResolution):
-//   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
 //   diagnostic: Unresolved symbols found.
-TEST_PROGRAM_SKIP("libbpf-bootstrap", "usdt.bpf.o", ".text", "bpf_usdt_arg",
-                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
-                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
-                  "verification. Diagnostic: Unresolved symbols found.")
+TEST_PROGRAM_SKIP("libbpf-bootstrap", "usdt.bpf.o", ".text", "bpf_usdt_arg", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
 // skipped (ExternalSymbolResolution):
-//   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
 //   diagnostic: Unresolved symbols found.
-TEST_PROGRAM_SKIP("libbpf-bootstrap", "usdt.bpf.o", ".text", "bpf_usdt_arg_cnt",
-                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
-                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
-                  "verification. Diagnostic: Unresolved symbols found.")
+TEST_PROGRAM_SKIP("libbpf-bootstrap", "usdt.bpf.o", ".text", "bpf_usdt_arg_cnt", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
 // skipped (ExternalSymbolResolution):
-//   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
 //   diagnostic: Unresolved symbols found.
-TEST_PROGRAM_SKIP("libbpf-bootstrap", "usdt.bpf.o", ".text", "bpf_usdt_cookie",
-                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
-                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
-                  "verification. Diagnostic: Unresolved symbols found.")
+TEST_PROGRAM_SKIP("libbpf-bootstrap", "usdt.bpf.o", ".text", "bpf_usdt_cookie", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
