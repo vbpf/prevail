@@ -759,6 +759,11 @@ core_field_resolution_t resolve_core_field(const libbtf::btf_type_data& btf_data
         }
         case libbtf::BTF_KIND_ARRAY: {
             const auto a = btf_data.get_kind_type<libbtf::btf_kind_array>(result.type_id);
+            if (index >= a.count_of_elements) {
+                throw UnmarshalError("CO-RE: array index " + std::to_string(index) + " out of bounds (size " +
+                                     std::to_string(a.count_of_elements) + ") for access path " +
+                                     std::string(access_string));
+            }
             result.offset_bits += static_cast<uint64_t>(index) * btf_data.get_size(a.element_type) * 8;
             result.member_offset_encoding.reset();
             result.type_id = a.element_type;
@@ -911,6 +916,7 @@ void ProgramReader::apply_core_relocation(RawProgram& prog, const bpf_core_relo&
         }
         return *resolved_field;
     };
+    prog.core_relocation_count++;
 
     switch (relo.kind) {
     case BPF_CORE_FIELD_BYTE_OFFSET: {
@@ -949,7 +955,7 @@ void ProgramReader::apply_core_relocation(RawProgram& prog, const bpf_core_relo&
         const auto& field = get_field();
         const auto field_bit_width = core_field_bit_width(btf_data, field);
         const uint32_t bit_offset_in_byte = static_cast<uint32_t>(field.offset_bits % 8);
-        if (field_bit_width > 64 || bit_offset_in_byte + field_bit_width > 64) {
+        if (field_bit_width == 0 || field_bit_width > 64 || bit_offset_in_byte + field_bit_width > 64) {
             throw UnmarshalError("CO-RE field bit width exceeds 64 bits");
         }
         inst.imm = gsl::narrow<int32_t>(64 - (bit_offset_in_byte + field_bit_width));
@@ -957,7 +963,7 @@ void ProgramReader::apply_core_relocation(RawProgram& prog, const bpf_core_relo&
     }
     case BPF_CORE_FIELD_RSHIFT_U64: {
         const auto field_bit_width = core_field_bit_width(btf_data, get_field());
-        if (field_bit_width > 64) {
+        if (field_bit_width == 0 || field_bit_width > 64) {
             throw UnmarshalError("CO-RE field bit width exceeds 64 bits");
         }
         inst.imm = gsl::narrow<int32_t>(64 - field_bit_width);

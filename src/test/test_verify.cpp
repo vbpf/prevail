@@ -3,7 +3,6 @@
 #include <catch2/catch_all.hpp>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <elfio/elfio.hpp>
 #include <ranges>
 #include <thread>
@@ -26,6 +25,16 @@ uint32_t read_le32(const char* data, size_t offset) {
 }
 
 bool has_nonempty_core_relo_subsection(const std::string& path) {
+    // These offsets mirror btf_ext_header_core_t layout in src/elf_loader.cpp.
+    constexpr size_t btf_magic_offset = 0;
+    constexpr size_t btf_version_offset = 2;
+    constexpr size_t btf_hdr_len_offset = 4;
+    constexpr size_t btf_ext_header_min_len = 32;
+    constexpr size_t btf_core_relo_off_offset = 24;
+    constexpr size_t btf_core_relo_len_offset = 28;
+    constexpr uint16_t btf_magic = 0xeB9F;
+    constexpr uint8_t btf_version = 1;
+
     ELFIO::elfio reader;
     if (!reader.load(path)) {
         throw std::runtime_error("Failed to load ELF: " + path);
@@ -38,22 +47,21 @@ bool has_nonempty_core_relo_subsection(const std::string& path) {
 
     const char* data = btf_ext->get_data();
     const size_t size = btf_ext->get_size();
-    if (size < 32) {
+    if (size < btf_ext_header_min_len) {
         return false;
     }
 
-    constexpr uint16_t btf_magic = 0xeB9F;
-    if (read_le16(data, 0) != btf_magic || data[2] != 1) {
+    if (read_le16(data, btf_magic_offset) != btf_magic || data[btf_version_offset] != btf_version) {
         return false;
     }
 
-    const uint32_t hdr_len = read_le32(data, 4);
-    if (hdr_len < 32 || hdr_len > size) {
+    const uint32_t hdr_len = read_le32(data, btf_hdr_len_offset);
+    if (hdr_len < btf_ext_header_min_len || hdr_len > size) {
         return false;
     }
 
-    const uint32_t core_relo_off = read_le32(data, 24);
-    const uint32_t core_relo_len = read_le32(data, 28);
+    const uint32_t core_relo_off = read_le32(data, btf_core_relo_off_offset);
+    const uint32_t core_relo_len = read_le32(data, btf_core_relo_len_offset);
     if (core_relo_len == 0) {
         return false;
     }
@@ -92,15 +100,19 @@ FAIL_LOAD_ELF("invalid", "badsymsize.o", "xdp_redirect_map")
 
 TEST_CASE("CO-RE relocations are parsed from .BTF.ext core_relo subsection", "[elf][core]") {
     thread_local_options = {};
-    REQUIRE(has_nonempty_core_relo_subsection("ebpf-samples/cilium-examples/tcprtt_bpf_bpfel.o"));
-    const auto fentry_progs =
-        read_elf("ebpf-samples/cilium-examples/tcprtt_bpf_bpfel.o", "fentry/tcp_close", "", {}, &g_ebpf_platform_linux);
+    constexpr auto fentry_path = "ebpf-samples/cilium-examples/tcprtt_bpf_bpfel.o";
+    constexpr auto fentry_section = "fentry/tcp_close";
+    REQUIRE(has_nonempty_core_relo_subsection(fentry_path));
+    const auto fentry_progs = read_elf(fentry_path, fentry_section, "", {}, &g_ebpf_platform_linux);
     REQUIRE(fentry_progs.size() == 1);
+    REQUIRE(fentry_progs[0].core_relocation_count > 0);
 
-    REQUIRE(has_nonempty_core_relo_subsection("ebpf-samples/cilium-examples/tcprtt_sockops_bpf_bpfel.o"));
-    const auto sockops_progs =
-        read_elf("ebpf-samples/cilium-examples/tcprtt_sockops_bpf_bpfel.o", "sockops", "", {}, &g_ebpf_platform_linux);
+    constexpr auto sockops_path = "ebpf-samples/cilium-examples/tcprtt_sockops_bpf_bpfel.o";
+    constexpr auto sockops_section = "sockops";
+    REQUIRE(has_nonempty_core_relo_subsection(sockops_path));
+    const auto sockops_progs = read_elf(sockops_path, sockops_section, "", {}, &g_ebpf_platform_linux);
     REQUIRE(sockops_progs.size() == 1);
+    REQUIRE(sockops_progs[0].core_relocation_count > 0);
 }
 
 #define FAIL_UNMARSHAL(dirname, filename, sectionname)                                                                \

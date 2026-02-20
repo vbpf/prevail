@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <set>
@@ -77,6 +78,7 @@ struct RawProgram {
     std::string function_name{};
     std::vector<EbpfInst> prog{};
     ProgramInfo info{};
+    size_t core_relocation_count{}; // Number of CO-RE relocation records applied to this program.
 };
 
 void print_map_descriptors(const std::vector<EbpfMapDescriptor>& descriptors, std::ostream& o);
