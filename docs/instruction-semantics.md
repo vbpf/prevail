@@ -10,19 +10,22 @@ eBPF instructions are represented as a variant type:
 
 ```cpp
 using Instruction = std::variant<
+    Undefined,            // Unknown/unimplemented instruction
     Bin,                  // Binary operations
     Un,                   // Unary operations
-    Mem,                  // Memory operations
-    Jmp,                  // Jump (control flow)
+    LoadMapFd,            // Load map file descriptor
+    LoadMapAddress,       // Load map address
+    LoadPseudo,           // LDDW pseudo forms (src=3,4,5,6)
     Call,                 // Helper function call
     CallLocal,            // Local function call
     Callx,                // Indirect call
+    CallBtf,              // Call helper by BTF ID (src=2)
     Exit,                 // Program exit
+    Jmp,                  // Jump (control flow)
+    Mem,                  // Memory operations
     Packet,               // Legacy packet access
     Atomic,               // Atomic memory operations
     Assume,               // Branch condition assumption
-    LoadMapFd,            // Load map file descriptor
-    LoadMapAddress,       // Load map address
     IncrementLoopCounter  // Loop termination tracking
 >;
 ```
@@ -387,15 +390,27 @@ Each register (R0-R10) is tracked with multiple variables:
 
 ```cpp
 struct RegPack {
-    Var svalue;              // Signed 64-bit value
-    Var uvalue;              // Unsigned 64-bit value
-    Var ctx_offset;          // Offset if CTX pointer
-    Var stack_offset;        // Offset if STACK pointer
-    Var packet_offset;       // Offset if PACKET pointer
-    Var shared_offset;       // Offset if SHARED pointer
-    Var shared_region_size;  // Size of shared region
-    Var map_fd;              // Map FD if MAP_FD type
-    Var stack_numeric_size;  // Stack numeric tracking
+    // Common to all types
+    Var svalue;              // Signed interpretation
+    Var uvalue;              // Unsigned interpretation
+
+    // Type-specific offsets
+    Var ctx_offset;          // For T_CTX
+    Var stack_offset;        // For T_STACK
+    Var packet_offset;       // For T_PACKET
+    Var shared_offset;       // For T_SHARED
+    Var socket_offset;       // For T_SOCKET
+    Var btf_id_offset;       // For T_BTF_ID
+    Var alloc_mem_offset;    // For T_ALLOC_MEM
+
+    // Size tracking
+    Var shared_region_size;  // For T_SHARED
+    Var stack_numeric_size;  // For T_STACK spills
+    Var alloc_mem_size;      // For T_ALLOC_MEM
+
+    // Map-related
+    Var map_fd;              // For T_MAP_FD
+    Var map_value_size;      // For T_MAP
 };
 ```
 

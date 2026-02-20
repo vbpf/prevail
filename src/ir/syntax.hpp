@@ -85,7 +85,7 @@ struct Un {
 };
 
 /// This instruction is encoded similarly to LDDW.
-/// See comment in makeLddw() at asm_unmarshal.cpp
+/// See comment in makeLddw() at unmarshal.cpp
 struct LoadMapFd {
     Reg dst;
     int32_t mapfd{};

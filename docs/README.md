@@ -52,7 +52,7 @@ Prevail verifies that eBPF programs:
                                  ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    ELF Loader & Unmarshaller                    │
-│              (elf_loader.cpp, asm_unmarshal.cpp)                │
+│              (elf_loader.cpp, unmarshal.cpp)                    │
 └─────────────────────────────────────────────────────────────────┘
                                  │
                                  ▼

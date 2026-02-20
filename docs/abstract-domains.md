@@ -81,6 +81,10 @@ Each register has multiple associated variables:
 | `packet_offset` | type = PACKET | Offset into packet buffer |
 | `shared_offset` | type = SHARED | Offset into shared memory |
 | `map_fd` | type = MAP_FD | Map file descriptor |
+| `socket_offset` | type = SOCKET | Offset into socket structure |
+| `btf_id_offset` | type = BTF_ID | Offset into BTF-typed kernel object |
+| `alloc_mem_offset` | type = ALLOC_MEM | Offset into helper-allocated memory |
+| `alloc_mem_size` | type = ALLOC_MEM | Size of helper-allocated memory region |
 
 ### Type-Aware Domain Operations
 
@@ -120,23 +124,24 @@ disjoint-set union (DSU) with per-class type set annotations.
 enum class TypeEncoding {
     T_UNINIT = 0, T_MAP_PROGRAMS = 1, T_MAP = 2, T_NUM = 3,
     T_CTX = 4, T_PACKET = 5, T_STACK = 6, T_SHARED = 7,
+    T_SOCKET = 8, T_BTF_ID = 9, T_ALLOC_MEM = 10, T_FUNC = 11,
 };
 ```
 
 ### Representation
 
 Each type variable maps to a DSU element. The DSU partitions variables into equivalence
-classes (must-equal groups). Each class has a `TypeSet` -- a `std::bitset<8>` recording
+classes (must-equal groups). Each class has a `TypeSet` -- a `std::bitset<12>` recording
 the set of types that the class might have.
 
 ```text
-Top:    each variable is its own class, TypeSet = all 8 types
+Top:    each variable is its own class, TypeSet = all 12 types
 Bottom: state_ == nullptr (contradiction detected)
 ```
 
 ### Sentinel-Merging Invariant
 
-The DSU pre-allocates 8 sentinel elements (IDs 0..7), one per TypeEncoding value.
+The DSU pre-allocates 12 sentinel elements (IDs 0..11), one per TypeEncoding value.
 Whenever a class's TypeSet narrows to a singleton `{te}`, the class is merged with
 the sentinel for `te`. This guarantees that all variables known to have the same
 singleton type are in the same equivalence class, making equality queries a single
@@ -412,20 +417,22 @@ ZoneDomain widen(ZoneDomain old, ZoneDomain new) {
 
 ### Variable Packing
 
-Registers pack multiple variables:
+Registers pack multiple variables (illustrative subset):
 
 ```cpp
 struct RegPack {
     Var svalue;           // Signed value
-    Var uvalue;           // Unsigned value  
+    Var uvalue;           // Unsigned value
     Var ctx_offset;       // CTX offset
     Var stack_offset;     // Stack offset
     Var packet_offset;    // Packet offset
     Var shared_offset;    // Shared offset
     Var map_fd;           // Map FD
-    // ... more
+    // ... additional fields for socket, BTF, alloc_mem, sizes
 };
 ```
+
+> See [instruction-semantics.md](instruction-semantics.md#register-packing) for the complete RegPack definition.
 
 This is managed by a thread-local variable registry.
 
