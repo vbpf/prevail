@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstring>
 #include <deque>
+#include <filesystem>
 #include <functional>
 #include <iostream>
 #include <limits>
@@ -450,6 +451,29 @@ ELFIO::elfio load_elf(std::istream& input_stream, const std::string& path) {
     if (!reader.load(input_stream)) {
         throw UnmarshalError("Can't process ELF file " + path);
     }
+
+    // Accept EM_NONE for compatibility with older toolchains that emit eBPF
+    // objects without setting e_machine, but reject all non-BPF architectures.
+    if (reader.get_machine() != ELFIO::EM_BPF && reader.get_machine() != ELFIO::EM_NONE) {
+        throw UnmarshalError("Unsupported ELF machine in file " + path + ": expected EM_BPF");
+    }
+
+    std::error_code ec;
+    const std::uintmax_t file_size = std::filesystem::file_size(path, ec);
+    if (!ec) {
+        for (const auto& section : reader.sections) {
+            if (!section || section->get_type() == ELFIO::SHT_NOBITS) {
+                continue;
+            }
+
+            const std::uintmax_t offset = section->get_offset();
+            const std::uintmax_t size = section->get_size();
+            if (offset > file_size || size > file_size - offset) {
+                throw UnmarshalError("ELF section '" + section->get_name() + "' has out-of-bounds file range");
+            }
+        }
+    }
+
     return reader;
 }
 
@@ -660,10 +684,15 @@ ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO
         }
 
         const size_t base_index = global.map_descriptors.size();
-        const size_t map_record_size = s->get_size() / map_count;
+        if (s->get_data() == nullptr || s->get_size() % gsl::narrow<size_t>(map_count) != 0) {
+            throw UnmarshalError("Malformed legacy maps section: " + s->get_name());
+        }
+        const size_t map_record_size = s->get_size() / gsl::narrow<size_t>(map_count);
 
         // Validate section structure
-        if (s->get_data() == nullptr || map_record_size == 0 || s->get_size() % map_record_size != 0) {
+        // Legacy map records must contain at least the required base fields
+        // (type/key_size/value_size/max_entries) and keep 32-bit field alignment.
+        if (map_record_size < 4 * sizeof(uint32_t) || map_record_size % sizeof(uint32_t) != 0) {
             throw UnmarshalError("Malformed legacy maps section: " + s->get_name());
         }
 
