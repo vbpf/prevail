@@ -971,6 +971,8 @@ void ProgramReader::apply_core_relocation(RawProgram& prog, const bpf_core_relo&
     }
     case BPF_CORE_TYPE_ID_LOCAL:
     case BPF_CORE_TYPE_ID_TARGET: inst.imm = gsl::narrow<int32_t>(strip_type_modifiers(btf_data, relo.type_id)); break;
+    // Prevail is a static verifier without target-kernel BTF, so existence/match predicates
+    // are resolved against local BTF only and therefore fold to true.
     case BPF_CORE_TYPE_EXISTS:
     case BPF_CORE_TYPE_MATCHES: inst.imm = 1; break;
     case BPF_CORE_TYPE_SIZE:
