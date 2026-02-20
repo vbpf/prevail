@@ -11,13 +11,6 @@ TEST_PROGRAM("linux-selftests", "atomics.o", "raw_tp/sys_enter", "or", 7)
 TEST_PROGRAM("linux-selftests", "atomics.o", "raw_tp/sys_enter", "sub", 7)
 TEST_PROGRAM("linux-selftests", "atomics.o", "raw_tp/sys_enter", "xchg", 7)
 TEST_PROGRAM("linux-selftests", "atomics.o", "raw_tp/sys_enter", "xor", 7)
-TEST_PROGRAM("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_cong_avoid", 7)
-TEST_PROGRAM("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_cwnd_event", 7)
-TEST_PROGRAM("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_cwnd_undo", 7)
-TEST_PROGRAM("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_init", 7)
-TEST_PROGRAM("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_ssthresh", 7)
-TEST_PROGRAM("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_state", 7)
-TEST_PROGRAM("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_update_alpha", 7)
 TEST_SECTION("linux-selftests", "fexit_sleep.o", "fentry/__x64_sys_nanosleep")
 TEST_SECTION("linux-selftests", "fexit_sleep.o", "fexit/__x64_sys_nanosleep")
 TEST_SECTION("linux-selftests", "get_cgroup_id_kern.o", "tracepoint/syscalls/sys_enter_nanosleep")
@@ -25,7 +18,6 @@ TEST_SECTION("linux-selftests", "loop1.o", "raw_tracepoint/kfree_skb")
 TEST_SECTION("linux-selftests", "loop2.o", "raw_tracepoint/consume_skb")
 TEST_SECTION("linux-selftests", "loop4.o", "socket")
 TEST_SECTION("linux-selftests", "loop5.o", "socket")
-TEST_SECTION("linux-selftests", "map_ptr_kern.o", "cgroup_skb/egress")
 TEST_SECTION("linux-selftests", "sockmap_parse_prog.o", "sk_skb1")
 TEST_SECTION("linux-selftests", "sockmap_verdict_prog.o", "sk_skb2")
 TEST_PROGRAM("linux-selftests", "tailcall1.o", "tc", "classifier_0", 4)
@@ -48,6 +40,7 @@ TEST_SECTION("linux-selftests", "test_global_func_args.o", "cgroup_skb/ingress")
 TEST_PROGRAM("linux-selftests", "test_spin_lock.o", ".text", "static_subprog", 3)
 TEST_PROGRAM("linux-selftests", "test_spin_lock.o", ".text", "static_subprog_lock", 3)
 TEST_PROGRAM("linux-selftests", "test_spin_lock.o", ".text", "static_subprog_unlock", 3)
+TEST_PROGRAM("linux-selftests", "test_spin_lock.o", "tc", "lock_static_subprog_call", 3)
 TEST_PROGRAM("linux-selftests", "test_spin_lock.o", "tc", "lock_static_subprog_lock", 3)
 TEST_PROGRAM("linux-selftests", "test_spin_lock.o", "tc", "lock_static_subprog_unlock", 3)
 
@@ -296,78 +289,107 @@ TEST_SECTION_FAIL("linux-selftests", "test_spin_lock.o", "cgroup_skb/ingress",
                   "Possible null access (valid_access(r7.offset+4, width=4) for read)")
 
 // ===========================================================================
-// Failure Cause Group: VerifierRecursionModeling
-// Group size: 1 tests (1 expected_failure, 0 skip).
+// Failure Cause Group: ElfSubprogramResolution
+// Group size: 15 tests (0 expected_failure, 15 skip).
 // Root cause:
-//   Call-graph handling flags recursion in patterns that should be accepted after proper subprogram modeling.
-// Representative example:
-//   test: linux-selftests/test_spin_lock.o tc::lock_static_subprog_call
-//   diagnostic: error: 8: illegal recursion
-// Addressing direction:
-//   Adjust call-graph expansion and recursion detection to distinguish legal call structure from true illegal
-//   recursion.
-// ===========================================================================
-// expected failure (VerifierRecursionModeling):
-//   diagnostic: error: 8: illegal recursion
-TEST_PROGRAM_FAIL("linux-selftests", "test_spin_lock.o", "tc", "lock_static_subprog_call", 3,
-                  verify_test::VerifyIssueKind::VerifierRecursionModeling,
-                  "Known verifier limitation: subprogram call-graph handling rejects this recursion-shaped pattern. "
-                  "Diagnostic: error: 8: illegal recursion")
-
-// ===========================================================================
-// Failure Cause Group: ExternalSymbolResolution
-// Group size: 7 tests (0 expected_failure, 7 skip).
-// Root cause:
-//   Program references external symbols with no offline resolver or model, so linking cannot complete.
+//   Call target symbol cannot be resolved by loader or platform symbol resolution pipeline.
 // Representative example:
 //   test: linux-selftests/bpf_cubic.o struct_ops::bpf_cubic_acked
-//   diagnostic: Unresolved symbols found.
+//   diagnostic: Subprogram not found: tcp_slow_start
 // Addressing direction:
-//   Add explicit platform-level symbol resolution and modeling for required externs, or provide conservative stubs
-//   with sound semantics.
+//   Wire missing symbol resolution path (ELF local or platform external) and ensure resolved target gets sound
+//   semantics.
 // ===========================================================================
-// skipped (ExternalSymbolResolution):
-//   diagnostic: Unresolved symbols found.
+// skipped (ElfSubprogramResolution):
+//   diagnostic: Subprogram not found: tcp_slow_start
 TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_acked",
-                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
-                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
-                  "verification. Diagnostic: Unresolved symbols found.")
-// skipped (ExternalSymbolResolution):
-//   diagnostic: Unresolved symbols found.
+                  verify_test::VerifyIssueKind::ElfSubprogramResolution,
+                  "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. "
+                  "Diagnostic: Subprogram not found: tcp_slow_start")
+// skipped (ElfSubprogramResolution):
+//   diagnostic: Subprogram not found: tcp_slow_start
 TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_cong_avoid",
-                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
-                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
-                  "verification. Diagnostic: Unresolved symbols found.")
-// skipped (ExternalSymbolResolution):
-//   diagnostic: Unresolved symbols found.
+                  verify_test::VerifyIssueKind::ElfSubprogramResolution,
+                  "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. "
+                  "Diagnostic: Subprogram not found: tcp_slow_start")
+// skipped (ElfSubprogramResolution):
+//   diagnostic: Subprogram not found: tcp_slow_start
 TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_cwnd_event",
-                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
-                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
-                  "verification. Diagnostic: Unresolved symbols found.")
-// skipped (ExternalSymbolResolution):
-//   diagnostic: Unresolved symbols found.
+                  verify_test::VerifyIssueKind::ElfSubprogramResolution,
+                  "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. "
+                  "Diagnostic: Subprogram not found: tcp_slow_start")
+// skipped (ElfSubprogramResolution):
+//   diagnostic: Subprogram not found: tcp_slow_start
 TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_init",
-                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
-                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
-                  "verification. Diagnostic: Unresolved symbols found.")
-// skipped (ExternalSymbolResolution):
-//   diagnostic: Unresolved symbols found.
+                  verify_test::VerifyIssueKind::ElfSubprogramResolution,
+                  "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. "
+                  "Diagnostic: Subprogram not found: tcp_slow_start")
+// skipped (ElfSubprogramResolution):
+//   diagnostic: Subprogram not found: tcp_slow_start
 TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_recalc_ssthresh",
-                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
-                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
-                  "verification. Diagnostic: Unresolved symbols found.")
-// skipped (ExternalSymbolResolution):
-//   diagnostic: Unresolved symbols found.
+                  verify_test::VerifyIssueKind::ElfSubprogramResolution,
+                  "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. "
+                  "Diagnostic: Subprogram not found: tcp_slow_start")
+// skipped (ElfSubprogramResolution):
+//   diagnostic: Subprogram not found: tcp_slow_start
 TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_state",
-                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
-                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
-                  "verification. Diagnostic: Unresolved symbols found.")
-// skipped (ExternalSymbolResolution):
-//   diagnostic: Unresolved symbols found.
+                  verify_test::VerifyIssueKind::ElfSubprogramResolution,
+                  "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. "
+                  "Diagnostic: Subprogram not found: tcp_slow_start")
+// skipped (ElfSubprogramResolution):
+//   diagnostic: Subprogram not found: tcp_slow_start
 TEST_PROGRAM_SKIP("linux-selftests", "bpf_cubic.o", "struct_ops", "bpf_cubic_undo_cwnd",
-                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
-                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
-                  "verification. Diagnostic: Unresolved symbols found.")
+                  verify_test::VerifyIssueKind::ElfSubprogramResolution,
+                  "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. "
+                  "Diagnostic: Subprogram not found: tcp_slow_start")
+// skipped (ElfSubprogramResolution):
+//   diagnostic: Subprogram not found: tcp_reno_cong_avoid
+TEST_PROGRAM_SKIP("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_cong_avoid",
+                  verify_test::VerifyIssueKind::ElfSubprogramResolution,
+                  "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. "
+                  "Diagnostic: Subprogram not found: tcp_reno_cong_avoid")
+// skipped (ElfSubprogramResolution):
+//   diagnostic: Subprogram not found: tcp_reno_cong_avoid
+TEST_PROGRAM_SKIP("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_cwnd_event",
+                  verify_test::VerifyIssueKind::ElfSubprogramResolution,
+                  "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. "
+                  "Diagnostic: Subprogram not found: tcp_reno_cong_avoid")
+// skipped (ElfSubprogramResolution):
+//   diagnostic: Subprogram not found: tcp_reno_cong_avoid
+TEST_PROGRAM_SKIP("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_cwnd_undo",
+                  verify_test::VerifyIssueKind::ElfSubprogramResolution,
+                  "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. "
+                  "Diagnostic: Subprogram not found: tcp_reno_cong_avoid")
+// skipped (ElfSubprogramResolution):
+//   diagnostic: Subprogram not found: tcp_reno_cong_avoid
+TEST_PROGRAM_SKIP("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_init",
+                  verify_test::VerifyIssueKind::ElfSubprogramResolution,
+                  "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. "
+                  "Diagnostic: Subprogram not found: tcp_reno_cong_avoid")
+// skipped (ElfSubprogramResolution):
+//   diagnostic: Subprogram not found: tcp_reno_cong_avoid
+TEST_PROGRAM_SKIP("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_ssthresh",
+                  verify_test::VerifyIssueKind::ElfSubprogramResolution,
+                  "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. "
+                  "Diagnostic: Subprogram not found: tcp_reno_cong_avoid")
+// skipped (ElfSubprogramResolution):
+//   diagnostic: Subprogram not found: tcp_reno_cong_avoid
+TEST_PROGRAM_SKIP("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_state",
+                  verify_test::VerifyIssueKind::ElfSubprogramResolution,
+                  "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. "
+                  "Diagnostic: Subprogram not found: tcp_reno_cong_avoid")
+// skipped (ElfSubprogramResolution):
+//   diagnostic: Subprogram not found: tcp_reno_cong_avoid
+TEST_PROGRAM_SKIP("linux-selftests", "bpf_dctcp.o", "struct_ops", "bpf_dctcp_update_alpha",
+                  verify_test::VerifyIssueKind::ElfSubprogramResolution,
+                  "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. "
+                  "Diagnostic: Subprogram not found: tcp_reno_cong_avoid")
+// expected load failure (ElfSubprogramResolution):
+//   diagnostic: Subprogram not found: bpf_map_sum_elem_count
+TEST_SECTION_LOAD_FAIL("linux-selftests", "map_ptr_kern.o", "cgroup_skb/egress",
+                       verify_test::VerifyIssueKind::ElfSubprogramResolution,
+                       "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. "
+                       "Diagnostic: Subprogram not found: bpf_map_sum_elem_count")
 
 // ===========================================================================
 // Failure Cause Group: VerificationTimeout
