@@ -1,6 +1,10 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
 #include <catch2/catch_all.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <elfio/elfio.hpp>
 #include <ranges>
 #include <thread>
 
@@ -9,8 +13,61 @@
 
 using namespace prevail;
 
-#define FAIL_LOAD_ELF(dirname, filename, sectionname)                                                    \
-    TEST_CASE("Try loading nonexisting program: " dirname "/" filename, "[elf]") {                       \
+namespace {
+uint16_t read_le16(const char* data, size_t offset) {
+    const auto* bytes = reinterpret_cast<const uint8_t*>(data + offset);
+    return static_cast<uint16_t>(bytes[0] | (static_cast<uint16_t>(bytes[1]) << 8));
+}
+
+uint32_t read_le32(const char* data, size_t offset) {
+    const auto* bytes = reinterpret_cast<const uint8_t*>(data + offset);
+    return static_cast<uint32_t>(bytes[0] | (static_cast<uint32_t>(bytes[1]) << 8) |
+                                 (static_cast<uint32_t>(bytes[2]) << 16) | (static_cast<uint32_t>(bytes[3]) << 24));
+}
+
+bool has_nonempty_core_relo_subsection(const std::string& path) {
+    ELFIO::elfio reader;
+    if (!reader.load(path)) {
+        throw std::runtime_error("Failed to load ELF: " + path);
+    }
+
+    const auto* btf_ext = reader.sections[".BTF.ext"];
+    if (!btf_ext || !btf_ext->get_data()) {
+        return false;
+    }
+
+    const char* data = btf_ext->get_data();
+    const size_t size = btf_ext->get_size();
+    if (size < 32) {
+        return false;
+    }
+
+    constexpr uint16_t btf_magic = 0xeB9F;
+    if (read_le16(data, 0) != btf_magic || data[2] != 1) {
+        return false;
+    }
+
+    const uint32_t hdr_len = read_le32(data, 4);
+    if (hdr_len < 32 || hdr_len > size) {
+        return false;
+    }
+
+    const uint32_t core_relo_off = read_le32(data, 24);
+    const uint32_t core_relo_len = read_le32(data, 28);
+    if (core_relo_len == 0) {
+        return false;
+    }
+    if (core_relo_off > size - hdr_len) {
+        return false;
+    }
+
+    const size_t core_relo_start = hdr_len + core_relo_off;
+    return core_relo_len <= size - core_relo_start;
+}
+} // namespace
+
+#define FAIL_LOAD_ELF_BASE(test_name, dirname, filename, sectionname)                                    \
+    TEST_CASE(test_name, "[elf]") {                                                                       \
         try {                                                                                            \
             thread_local_options = {};                                                                   \
             read_elf("ebpf-samples/" dirname "/" filename, sectionname, "", {}, &g_ebpf_platform_linux); \
@@ -19,17 +76,13 @@ using namespace prevail;
         }                                                                                                \
     }
 
+#define FAIL_LOAD_ELF(dirname, filename, sectionname) \
+    FAIL_LOAD_ELF_BASE("Try loading nonexisting program: " dirname "/" filename, dirname, filename, sectionname)
+
 // Like FAIL_LOAD_ELF, but includes sectionname in the test name to avoid collisions
 // when multiple sections of the same file fail to load.
-#define FAIL_LOAD_ELF_SECTION(dirname, filename, sectionname)                                            \
-    TEST_CASE("Try loading bad section: " dirname "/" filename " " sectionname, "[elf]") {               \
-        try {                                                                                            \
-            thread_local_options = {};                                                                   \
-            read_elf("ebpf-samples/" dirname "/" filename, sectionname, "", {}, &g_ebpf_platform_linux); \
-            REQUIRE(false);                                                                              \
-        } catch (const std::runtime_error&) {                                                            \
-        }                                                                                                \
-    }
+#define FAIL_LOAD_ELF_SECTION(dirname, filename, sectionname)                                              \
+    FAIL_LOAD_ELF_BASE("Try loading bad section: " dirname "/" filename " " sectionname, dirname, filename, sectionname)
 
 // Some intentional failures
 FAIL_LOAD_ELF("cilium", "not-found.o", "2/1")
@@ -39,10 +92,12 @@ FAIL_LOAD_ELF("invalid", "badsymsize.o", "xdp_redirect_map")
 
 TEST_CASE("CO-RE relocations are parsed from .BTF.ext core_relo subsection", "[elf][core]") {
     thread_local_options = {};
+    REQUIRE(has_nonempty_core_relo_subsection("ebpf-samples/cilium-examples/tcprtt_bpf_bpfel.o"));
     const auto fentry_progs = read_elf("ebpf-samples/cilium-examples/tcprtt_bpf_bpfel.o", "fentry/tcp_close", "", {},
                                        &g_ebpf_platform_linux);
     REQUIRE(fentry_progs.size() == 1);
 
+    REQUIRE(has_nonempty_core_relo_subsection("ebpf-samples/cilium-examples/tcprtt_sockops_bpf_bpfel.o"));
     const auto sockops_progs =
         read_elf("ebpf-samples/cilium-examples/tcprtt_sockops_bpf_bpfel.o", "sockops", "", {}, &g_ebpf_platform_linux);
     REQUIRE(sockops_progs.size() == 1);

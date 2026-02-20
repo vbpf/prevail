@@ -612,6 +612,8 @@ struct bpf_core_relo {
     bpf_core_relo_kind kind;
 };
 
+// This type is used only for offsetof() lookups of core_relo fields in
+// extended BTF.ext headers; it is never instantiated.
 struct btf_ext_header_core_t {
     uint16_t magic;
     uint8_t version;
@@ -835,8 +837,8 @@ class ProgramReader {
     /// @param relo CO-RE relocation descriptor (from .BTF.ext section)
     /// @param btf_data BTF type information for offset calculations
     /// @throws UnmarshalError if relocation is invalid or unsupported
-    void apply_core_relocation(RawProgram& prog, const bpf_core_relo& relo, std::string_view access_string,
-                               const libbtf::btf_type_data& btf_data) const;
+    static void apply_core_relocation(RawProgram& prog, const bpf_core_relo& relo, std::string_view access_string,
+                                      const libbtf::btf_type_data& btf_data);
     void process_core_relocations(const libbtf::btf_type_data& btf_data);
 
     int32_t compute_lddw_reloc_offset_imm(ELFIO::Elf_Sxword addend, ELFIO::Elf_Word index,
@@ -885,7 +887,7 @@ class ProgramReader {
 };
 
 void ProgramReader::apply_core_relocation(RawProgram& prog, const bpf_core_relo& relo, std::string_view access_string,
-                                          const libbtf::btf_type_data& btf_data) const {
+                                          const libbtf::btf_type_data& btf_data) {
     if (relo.insn_off < prog.insn_off) {
         throw UnmarshalError("CO-RE relocation offset before program start");
     }
@@ -909,16 +911,17 @@ void ProgramReader::apply_core_relocation(RawProgram& prog, const bpf_core_relo&
 
     switch (relo.kind) {
     case BPF_CORE_FIELD_BYTE_OFFSET: {
-        const auto byte_offset = gsl::narrow<int64_t>(get_field().offset_bits / 8);
+        const auto core_field_byte_offset = gsl::narrow<int64_t>(get_field().offset_bits / 8);
         // CO-RE FIELD_BYTE_OFFSET targets instruction-dependent storage:
         // memory ops use 16-bit inst.offset, while ALU/other forms use inst.imm.
         if (core_field_offset_uses_offset_field(inst)) {
-            if (byte_offset < std::numeric_limits<int16_t>::min() || byte_offset > std::numeric_limits<int16_t>::max()) {
+            if (core_field_byte_offset < std::numeric_limits<int16_t>::min() ||
+                core_field_byte_offset > std::numeric_limits<int16_t>::max()) {
                 throw UnmarshalError("CO-RE field offset does not fit instruction offset field");
             }
-            inst.offset = gsl::narrow<int16_t>(byte_offset);
+            inst.offset = gsl::narrow<int16_t>(core_field_byte_offset);
         } else {
-            inst.imm = gsl::narrow<int32_t>(byte_offset);
+            inst.imm = gsl::narrow<int32_t>(core_field_byte_offset);
         }
         break;
     }
@@ -987,6 +990,7 @@ void ProgramReader::apply_core_relocation(RawProgram& prog, const bpf_core_relo&
             if (enum_member_index >= e.members.size()) {
                 throw UnmarshalError("CO-RE enum64 member index out of bounds");
             }
+            // eBPF instruction immediates are 32-bit, so enum64 values must be narrowed (checked via gsl::narrow).
             inst.imm = relo.kind == BPF_CORE_ENUMVAL_EXISTS
                            ? 1
                            : gsl::narrow<int32_t>(e.members[enum_member_index].value);
@@ -1056,6 +1060,9 @@ void ProgramReader::process_core_relocations(const libbtf::btf_type_data& btf_da
     for (; offset < core_relo_end;) {
         const auto section = read_struct_at<btf_ext_info_sec_t>(btf_ext_data, btf_ext_size, offset, "CO-RE section info");
         offset += sizeof(btf_ext_info_sec_t);
+        if (offset > core_relo_end) {
+            throw UnmarshalError("CO-RE section records out of bounds");
+        }
 
         if (section.num_info != 0 && core_relo_rec_size > (core_relo_end - offset) / section.num_info) {
             throw UnmarshalError("CO-RE section records out of bounds");
