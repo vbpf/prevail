@@ -9,39 +9,51 @@
 #include <unordered_map>
 
 #include "ebpf_verifier.hpp"
+#include "elf_loader.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
 
 using namespace prevail;
 
 namespace {
 
-struct ReadElfCacheKey {
-    std::string path;
-    std::string section;
-    std::string program;
-    const ebpf_platform_t* platform;
+template <typename T>
+void hash_combine(size_t& seed, const T& value) noexcept {
+    seed ^= std::hash<T>{}(value) + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
+}
 
+struct ReadElfFullCacheKey {
+    std::string path;
+    const ebpf_platform_t* platform;
     bool verbosity_print_line_info;
     bool verbosity_dump_btf_types_json;
 
-    bool operator==(const ReadElfCacheKey&) const = default;
+    bool operator==(const ReadElfFullCacheKey&) const = default;
 };
 
-struct ReadElfCacheKeyHash {
-    size_t operator()(const ReadElfCacheKey& key) const noexcept {
+struct ReadElfQueryCacheKey {
+    ReadElfFullCacheKey full_key;
+    std::string section;
+    std::string program;
+
+    bool operator==(const ReadElfQueryCacheKey&) const = default;
+};
+
+struct ReadElfFullCacheKeyHash {
+    size_t operator()(const ReadElfFullCacheKey& key) const noexcept {
         size_t seed = std::hash<std::string>{}(key.path);
-        combine(seed, key.section);
-        combine(seed, key.program);
-        combine(seed, key.platform);
-        combine(seed, key.verbosity_print_line_info);
-        combine(seed, key.verbosity_dump_btf_types_json);
+        hash_combine(seed, key.platform);
+        hash_combine(seed, key.verbosity_print_line_info);
+        hash_combine(seed, key.verbosity_dump_btf_types_json);
         return seed;
     }
+};
 
-  private:
-    template <typename T>
-    static void combine(size_t& seed, const T& value) noexcept {
-        seed ^= std::hash<T>{}(value) + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
+struct ReadElfQueryCacheKeyHash {
+    size_t operator()(const ReadElfQueryCacheKey& key) const noexcept {
+        size_t seed = ReadElfFullCacheKeyHash{}(key.full_key);
+        hash_combine(seed, key.section);
+        hash_combine(seed, key.program);
+        return seed;
     }
 };
 
@@ -49,25 +61,81 @@ const std::vector<RawProgram>& read_elf_cached(const std::string& path, const st
                                                const std::string& desired_program,
                                                const ebpf_verifier_options_t& options,
                                                const ebpf_platform_t* platform) {
-    static std::mutex cache_mutex;
-    static std::unordered_map<ReadElfCacheKey, std::vector<RawProgram>, ReadElfCacheKeyHash> cache;
+    auto filter_raw_programs = [](const std::vector<RawProgram>& raw_programs, const std::string& section,
+                                  const std::string& program) -> std::vector<RawProgram> {
+        std::vector<RawProgram> section_programs;
+        if (section.empty()) {
+            section_programs = raw_programs;
+        } else {
+            for (const auto& raw_prog : raw_programs) {
+                if (raw_prog.section_name == section) {
+                    section_programs.push_back(raw_prog);
+                }
+            }
+            if (section_programs.empty()) {
+                throw UnmarshalError("Section not found");
+            }
+        }
 
-    ReadElfCacheKey key{
+        if (program.empty()) {
+            return section_programs;
+        }
+
+        std::vector<RawProgram> program_selection;
+        for (const auto& raw_prog : section_programs) {
+            if (raw_prog.function_name == program) {
+                program_selection.push_back(raw_prog);
+            }
+        }
+        return program_selection.empty() ? section_programs : program_selection;
+    };
+
+    static std::mutex cache_mutex;
+    static std::unordered_map<ReadElfFullCacheKey, std::vector<RawProgram>, ReadElfFullCacheKeyHash> full_cache;
+    static std::unordered_map<ReadElfQueryCacheKey, std::vector<RawProgram>, ReadElfQueryCacheKeyHash> query_cache;
+
+    ReadElfFullCacheKey full_key{
         .path = path,
-        .section = desired_section,
-        .program = desired_program,
         .platform = platform,
         .verbosity_print_line_info = options.verbosity_opts.print_line_info,
         .verbosity_dump_btf_types_json = options.verbosity_opts.dump_btf_types_json,
     };
+    ReadElfQueryCacheKey query_key{
+        .full_key = full_key,
+        .section = desired_section,
+        .program = desired_program,
+    };
 
     std::lock_guard<std::mutex> lock(cache_mutex);
-    if (auto it = cache.find(key); it != cache.end()) {
+    if (desired_section.empty() && desired_program.empty()) {
+        if (auto it = full_cache.find(full_key); it != full_cache.end()) {
+            return it->second;
+        }
+        auto [it, _] = full_cache.emplace(full_key, read_elf(path, "", "", options, platform));
         return it->second;
     }
 
-    auto [it, _] = cache.emplace(std::move(key), read_elf(path, desired_section, desired_program, options, platform));
-    return it->second;
+    if (auto it = query_cache.find(query_key); it != query_cache.end()) {
+        return it->second;
+    }
+
+    try {
+        const std::vector<RawProgram>* full_programs{};
+        if (auto full_it = full_cache.find(full_key); full_it != full_cache.end()) {
+            full_programs = &full_it->second;
+        } else {
+            auto [inserted_it, _] = full_cache.emplace(full_key, read_elf(path, "", "", options, platform));
+            full_programs = &inserted_it->second;
+        }
+
+        auto [query_it, _] =
+            query_cache.emplace(std::move(query_key), filter_raw_programs(*full_programs, desired_section, desired_program));
+        return query_it->second;
+    } catch (const std::runtime_error&) {
+        auto [query_it, _] = query_cache.emplace(
+            std::move(query_key), read_elf(path, desired_section, desired_program, options, platform));
+        return query_it->second;
+    }
 }
 
 } // namespace
