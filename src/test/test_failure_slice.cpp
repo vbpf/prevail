@@ -17,7 +17,8 @@ static std::vector<FailureSlice> get_failure_slices(const std::string& filename,
     ebpf_verifier_options_t options{};
     options.verbosity_opts.collect_instruction_deps = true;
 
-    auto raw_progs = read_elf(filename, section, "", options, &g_ebpf_platform_linux);
+    ElfObject elf{filename, options, &g_ebpf_platform_linux};
+    const auto& raw_progs = elf.get_programs(section);
     REQUIRE(raw_progs.size() == 1);
 
     const RawProgram& raw_prog = raw_progs.back();
@@ -177,7 +178,8 @@ TEST_CASE("print_failure_slices produces structured output", "[failure_slice][pr
     ebpf_verifier_options_t options{};
     options.verbosity_opts.collect_instruction_deps = true;
 
-    auto raw_progs = read_elf(sample, "test", "", options, &g_ebpf_platform_linux);
+    ElfObject elf{sample, options, &g_ebpf_platform_linux};
+    const auto& raw_progs = elf.get_programs("test");
     REQUIRE(raw_progs.size() == 1);
 
     const RawProgram& raw_prog = raw_progs.back();
@@ -211,7 +213,8 @@ TEST_CASE("passing program produces no failure slices", "[failure_slice][integra
     ebpf_verifier_options_t options{};
     options.verbosity_opts.collect_instruction_deps = true;
 
-    auto raw_progs = read_elf(sample, ".text", "", options, &g_ebpf_platform_linux);
+    ElfObject elf{sample, options, &g_ebpf_platform_linux};
+    const auto& raw_progs = elf.get_programs(".text");
     REQUIRE(raw_progs.size() == 1);
 
     const RawProgram& raw_prog = raw_progs.back();
@@ -246,7 +249,8 @@ TEST_CASE("assume guard registers become relevant in slice", "[failure_slice][in
     // (the guard condition that determines reachability of the failing label)
     ebpf_verifier_options_t options{};
     options.verbosity_opts.collect_instruction_deps = true;
-    auto raw_progs = read_elf(sample, "xdp", "", options, &g_ebpf_platform_linux);
+    ElfObject elf{sample, options, &g_ebpf_platform_linux};
+    const auto& raw_progs = elf.get_programs("xdp");
     REQUIRE(raw_progs.size() == 1);
     auto prog_or_error = unmarshal(raw_progs.back(), options);
     auto inst_seq = std::get_if<InstructionSeq>(&prog_or_error);

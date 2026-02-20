@@ -818,12 +818,17 @@ std::vector<uint32_t> parse_core_access_string(const std::string_view s) {
 }
 
 class ProgramReader {
+    struct unresolved_symbol_error_t {
+        std::string section;
+        std::string message;
+    };
+
     const parse_params_t& parse_params;
     const ELFIO::elfio& reader;
     const ELFIO::const_symbol_section_accessor& symbols;
     const ElfGlobalData& global;
     std::vector<FunctionRelocation> function_relocations;
-    std::vector<std::string> unresolved_symbol_errors;
+    std::vector<unresolved_symbol_error_t> unresolved_symbol_errors;
     std::set<size_t> builtin_offsets_for_current_program;
 
     // loop detection for recursive subprogram resolution
@@ -1356,8 +1361,11 @@ void ProgramReader::process_relocations(std::vector<EbpfInst>& instructions,
             auto sym = get_symbol_details(symbols, idx);
 
             if (!try_reloc(sym.name, sym.section_index, instructions, loc, idx, addend)) {
-                unresolved_symbol_errors.push_back("Unresolved external symbol " + sym.name + " in section " +
-                                                   section_name + " at location " + std::to_string(loc));
+                unresolved_symbol_errors.push_back(unresolved_symbol_error_t{
+                    .section = section_name,
+                    .message = "Unresolved external symbol " + sym.name + " in section " + section_name +
+                               " at location " + std::to_string(loc),
+                });
             }
         }
     }
@@ -1421,10 +1429,15 @@ void ProgramReader::read_programs() {
         }
     }
 
-    if (!unresolved_symbol_errors.empty()) {
-        for (const auto& err : unresolved_symbol_errors) {
-            std::cerr << err << std::endl;
+    bool has_relevant_unresolved_symbols = false;
+    for (const auto& err : unresolved_symbol_errors) {
+        if (!parse_params.desired_section.empty() && err.section != parse_params.desired_section) {
+            continue;
         }
+        has_relevant_unresolved_symbols = true;
+        std::cerr << err.message << std::endl;
+    }
+    if (has_relevant_unresolved_symbols) {
         throw UnmarshalError("Unresolved symbols found.");
     }
 
@@ -1517,6 +1530,161 @@ std::vector<RawProgram> read_elf(const std::string& path, const std::string& des
         throw UnmarshalError(std::string(strerror(errno)) + " opening " + path);
     }
     throw UnmarshalError("Can't process ELF file " + path);
+}
+
+size_t ElfObject::QueryKeyHash::operator()(const QueryKey& key) const noexcept {
+    size_t seed = std::hash<std::string>{}(key.section);
+    seed ^= std::hash<std::string>{}(key.program) + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
+    return seed;
+}
+
+ElfObject::ElfObject(std::string path, ebpf_verifier_options_t options, const ebpf_platform_t* platform)
+    : path_(std::move(path)), options_(std::move(options)), platform_(platform) {}
+
+const std::string& ElfObject::path() const noexcept {
+    return path_;
+}
+
+void ElfObject::discover_programs() {
+    if (catalog_loaded_) {
+        return;
+    }
+
+    if (std::ifstream stream{path_, std::ios::in | std::ios::binary}) {
+        auto reader = load_elf(stream, path_);
+        auto symbols = read_and_validate_symbol_section(reader, path_);
+
+        for (const auto& section : reader.sections) {
+            if (!(section->get_flags() & ELFIO::SHF_EXECINSTR) || !section->get_size() || !section->get_data()) {
+                continue;
+            }
+
+            const std::string section_name = section->get_name();
+            if (!section_cache_.contains(section_name)) {
+                section_order_.push_back(section_name);
+                section_cache_.emplace(section_name, SectionCacheEntry{});
+            }
+
+            for (ELFIO::Elf_Xword offset = 0; offset < section->get_size();) {
+                auto [function_name, size] = get_program_name_and_size(*section, offset, symbols);
+                programs_.push_back(ElfProgramInfo{
+                    .section_name = section_name,
+                    .function_name = function_name,
+                    .section_offset = gsl::narrow<uint32_t>(offset),
+                });
+                section_program_indices_[section_name].push_back(programs_.size() - 1);
+                offset += size;
+            }
+        }
+
+        catalog_loaded_ = true;
+        if (programs_.empty()) {
+            throw UnmarshalError("No executable sections");
+        }
+        return;
+    }
+
+    struct stat st; // NOLINT(*-pro-type-member-init)
+    if (stat(path_.c_str(), &st)) {
+        throw UnmarshalError(std::string(strerror(errno)) + " opening " + path_);
+    }
+    throw UnmarshalError("Can't process ELF file " + path_);
+}
+
+void ElfObject::mark_section_validity(const std::string& section_name, const bool valid, const std::string& reason) {
+    if (!section_program_indices_.contains(section_name)) {
+        return;
+    }
+    for (const size_t index : section_program_indices_.at(section_name)) {
+        programs_[index].invalid = !valid;
+        programs_[index].invalid_reason = valid ? std::string{} : reason;
+    }
+}
+
+void ElfObject::load_section(const std::string& section_name) {
+    discover_programs();
+    auto section_it = section_cache_.find(section_name);
+    if (section_it == section_cache_.end()) {
+        throw UnmarshalError("Section not found");
+    }
+
+    SectionCacheEntry& cache_entry = section_it->second;
+    if (cache_entry.loaded) {
+        return;
+    }
+
+    cache_entry.loaded = true;
+    try {
+        cache_entry.programs = read_elf(path_, section_name, "", options_, platform_);
+        cache_entry.valid = true;
+        cache_entry.error.clear();
+        mark_section_validity(section_name, true, "");
+    } catch (const std::runtime_error& e) {
+        cache_entry.valid = false;
+        cache_entry.error = e.what();
+        cache_entry.programs.clear();
+        mark_section_validity(section_name, false, cache_entry.error);
+    }
+}
+
+std::vector<RawProgram> ElfObject::filter_section_programs(const std::vector<RawProgram>& programs,
+                                                           const std::string& desired_program) const {
+    if (desired_program.empty()) {
+        return programs;
+    }
+
+    for (const RawProgram& program : programs) {
+        if (program.function_name == desired_program) {
+            return {program};
+        }
+    }
+    return programs;
+}
+
+const std::vector<RawProgram>& ElfObject::get_programs(const std::string& desired_section,
+                                                       const std::string& desired_program) {
+    discover_programs();
+    QueryKey key{.section = desired_section, .program = desired_program};
+    if (const auto cached = query_cache_.find(key); cached != query_cache_.end()) {
+        return cached->second;
+    }
+
+    if (!desired_section.empty()) {
+        load_section(desired_section);
+        const auto section_it = section_cache_.find(desired_section);
+        if (section_it == section_cache_.end()) {
+            throw UnmarshalError("Section not found");
+        }
+        if (!section_it->second.valid) {
+            throw UnmarshalError(section_it->second.error);
+        }
+        auto [inserted, _] =
+            query_cache_.emplace(std::move(key), filter_section_programs(section_it->second.programs, desired_program));
+        return inserted->second;
+    }
+
+    std::vector<RawProgram> all_programs;
+    for (const auto& section_name : section_order_) {
+        load_section(section_name);
+        const auto& cache_entry = section_cache_.at(section_name);
+        if (cache_entry.valid) {
+            all_programs.insert(all_programs.end(), cache_entry.programs.begin(), cache_entry.programs.end());
+        }
+    }
+    if (all_programs.empty()) {
+        throw UnmarshalError("No executable sections");
+    }
+
+    auto [inserted, _] = query_cache_.emplace(std::move(key), filter_section_programs(all_programs, desired_program));
+    return inserted->second;
+}
+
+const std::vector<ElfProgramInfo>& ElfObject::list_programs() {
+    discover_programs();
+    for (const auto& section_name : section_order_) {
+        load_section(section_name);
+    }
+    return programs_;
 }
 
 } // namespace prevail

@@ -21,25 +21,17 @@ void hash_combine(size_t& seed, const T& value) noexcept {
     seed ^= std::hash<T>{}(value) + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
 }
 
-struct ReadElfFullCacheKey {
+struct ElfObjectCacheKey {
     std::string path;
     const ebpf_platform_t* platform;
     bool verbosity_print_line_info;
     bool verbosity_dump_btf_types_json;
 
-    bool operator==(const ReadElfFullCacheKey&) const = default;
+    bool operator==(const ElfObjectCacheKey&) const = default;
 };
 
-struct ReadElfQueryCacheKey {
-    ReadElfFullCacheKey full_key;
-    std::string section;
-    std::string program;
-
-    bool operator==(const ReadElfQueryCacheKey&) const = default;
-};
-
-struct ReadElfFullCacheKeyHash {
-    size_t operator()(const ReadElfFullCacheKey& key) const noexcept {
+struct ElfObjectCacheKeyHash {
+    size_t operator()(const ElfObjectCacheKey& key) const noexcept {
         size_t seed = std::hash<std::string>{}(key.path);
         hash_combine(seed, key.platform);
         hash_combine(seed, key.verbosity_print_line_info);
@@ -48,94 +40,26 @@ struct ReadElfFullCacheKeyHash {
     }
 };
 
-struct ReadElfQueryCacheKeyHash {
-    size_t operator()(const ReadElfQueryCacheKey& key) const noexcept {
-        size_t seed = ReadElfFullCacheKeyHash{}(key.full_key);
-        hash_combine(seed, key.section);
-        hash_combine(seed, key.program);
-        return seed;
-    }
-};
-
 const std::vector<RawProgram>& read_elf_cached(const std::string& path, const std::string& desired_section,
                                                const std::string& desired_program,
                                                const ebpf_verifier_options_t& options,
                                                const ebpf_platform_t* platform) {
-    auto filter_raw_programs = [](const std::vector<RawProgram>& raw_programs, const std::string& section,
-                                  const std::string& program) -> std::vector<RawProgram> {
-        std::vector<RawProgram> section_programs;
-        if (section.empty()) {
-            section_programs = raw_programs;
-        } else {
-            for (const auto& raw_prog : raw_programs) {
-                if (raw_prog.section_name == section) {
-                    section_programs.push_back(raw_prog);
-                }
-            }
-            if (section_programs.empty()) {
-                throw UnmarshalError("Section not found");
-            }
-        }
-
-        if (program.empty()) {
-            return section_programs;
-        }
-
-        std::vector<RawProgram> program_selection;
-        for (const auto& raw_prog : section_programs) {
-            if (raw_prog.function_name == program) {
-                program_selection.push_back(raw_prog);
-            }
-        }
-        return program_selection.empty() ? section_programs : program_selection;
-    };
-
     static std::mutex cache_mutex;
-    static std::unordered_map<ReadElfFullCacheKey, std::vector<RawProgram>, ReadElfFullCacheKeyHash> full_cache;
-    static std::unordered_map<ReadElfQueryCacheKey, std::vector<RawProgram>, ReadElfQueryCacheKeyHash> query_cache;
+    static std::unordered_map<ElfObjectCacheKey, ElfObject, ElfObjectCacheKeyHash> object_cache;
 
-    ReadElfFullCacheKey full_key{
+    ElfObjectCacheKey key{
         .path = path,
         .platform = platform,
         .verbosity_print_line_info = options.verbosity_opts.print_line_info,
         .verbosity_dump_btf_types_json = options.verbosity_opts.dump_btf_types_json,
     };
-    ReadElfQueryCacheKey query_key{
-        .full_key = full_key,
-        .section = desired_section,
-        .program = desired_program,
-    };
+    ebpf_verifier_options_t loader_options{};
+    loader_options.verbosity_opts.print_line_info = options.verbosity_opts.print_line_info;
+    loader_options.verbosity_opts.dump_btf_types_json = options.verbosity_opts.dump_btf_types_json;
 
     std::lock_guard<std::mutex> lock(cache_mutex);
-    if (desired_section.empty() && desired_program.empty()) {
-        if (auto it = full_cache.find(full_key); it != full_cache.end()) {
-            return it->second;
-        }
-        auto [it, _] = full_cache.emplace(full_key, read_elf(path, "", "", options, platform));
-        return it->second;
-    }
-
-    if (auto it = query_cache.find(query_key); it != query_cache.end()) {
-        return it->second;
-    }
-
-    try {
-        const std::vector<RawProgram>* full_programs{};
-        if (auto full_it = full_cache.find(full_key); full_it != full_cache.end()) {
-            full_programs = &full_it->second;
-        } else {
-            auto [inserted_it, _] = full_cache.emplace(full_key, read_elf(path, "", "", options, platform));
-            full_programs = &inserted_it->second;
-        }
-
-        auto [query_it, _] = query_cache.emplace(std::move(query_key),
-                                                 filter_raw_programs(*full_programs, desired_section, desired_program));
-        return query_it->second;
-    } catch (const std::runtime_error&) {
-        auto [query_it, _] = query_cache.emplace(std::move(query_key),
-                                                 read_elf(path, desired_section, desired_program, options, platform));
-        return query_it->second;
-    }
+    auto [it, _] = object_cache.try_emplace(key, path, loader_options, platform);
+    return it->second.get_programs(desired_section, desired_program);
 }
 
 } // namespace

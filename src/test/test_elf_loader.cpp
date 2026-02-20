@@ -14,7 +14,7 @@ using namespace prevail;
     TEST_CASE(test_name, "[elf]") {                                                                      \
         try {                                                                                            \
             thread_local_options = {};                                                                   \
-            read_elf("ebpf-samples/" dirname "/" filename, sectionname, "", {}, &g_ebpf_platform_linux); \
+            ElfObject{"ebpf-samples/" dirname "/" filename, {}, &g_ebpf_platform_linux}.get_programs(sectionname); \
             REQUIRE(false);                                                                              \
         } catch (const std::runtime_error&) {                                                            \
         }                                                                                                \
@@ -33,12 +33,9 @@ FAIL_LOAD_ELF("cilium", "not-found.o", "2/1")
 FAIL_LOAD_ELF("cilium", "bpf_lxc.o", "not-found")
 FAIL_LOAD_ELF("build", "badrelo.o", ".text")
 FAIL_LOAD_ELF("invalid", "badsymsize.o", "xdp_redirect_map")
-FAIL_LOAD_ELF_SECTION("bcc", "capable.bpf.o", "kprobe/cap_capable")
 FAIL_LOAD_ELF_SECTION("bcc", "capable.bpf.o", "kretprobe/cap_capable")
 FAIL_LOAD_ELF_SECTION("libbpf-bootstrap", "ksyscall.bpf.o", "ksyscall/tgkill")
 FAIL_LOAD_ELF_SECTION("libbpf-bootstrap", "ksyscall.bpf.o", "ksyscall/kill")
-FAIL_LOAD_ELF_SECTION("libbpf-bootstrap", "usdt.bpf.o", "usdt/libc.so.6:libc:setjmp")
-FAIL_LOAD_ELF_SECTION("libbpf-bootstrap", "usdt.bpf.o", "usdt")
 FAIL_LOAD_ELF_SECTION("linux-selftests", "bpf_cubic.o", "struct_ops")
 FAIL_LOAD_ELF_SECTION("linux-selftests", "bpf_dctcp.o", "struct_ops")
 FAIL_LOAD_ELF_SECTION("linux-selftests", "map_ptr_kern.o", "cgroup_skb/egress")
@@ -54,54 +51,30 @@ FAIL_LOAD_ELF_SECTION("cilium-ebpf", "ksym-el.elf", "socket")
 FAIL_LOAD_ELF_SECTION("cilium-ebpf", "linked-el.elf", "socket")
 FAIL_LOAD_ELF_SECTION("cilium-ebpf", "linked1-el.elf", "socket")
 FAIL_LOAD_ELF_SECTION("cilium-ebpf", "linked2-el.elf", "socket")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "static")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "other")
 FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "xdp")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "socket")
 FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "socket/2")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "socket/3")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "socket/4")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "static")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "other")
 FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "xdp")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "socket")
 FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "socket/2")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "socket/3")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "socket/4")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "static")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "other")
 FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "xdp")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "socket")
 FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "socket/2")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "socket/3")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "socket/4")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "static")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "other")
 FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "xdp")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "socket")
 FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "socket/2")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "socket/3")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "socket/4")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "static")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "other")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "xdp")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "socket")
 FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "socket/2")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "socket/3")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "socket/4")
 
 TEST_CASE("CO-RE relocations are parsed from .BTF.ext core_relo subsection", "[elf][core]") {
     thread_local_options = {};
 
     constexpr auto fentry_path = "ebpf-samples/cilium-examples/tcprtt_bpf_bpfel.o";
     constexpr auto fentry_section = "fentry/tcp_close";
-    const auto fentry_progs = read_elf(fentry_path, fentry_section, "", {}, &g_ebpf_platform_linux);
+    ElfObject fentry_elf{fentry_path, {}, &g_ebpf_platform_linux};
+    const auto& fentry_progs = fentry_elf.get_programs(fentry_section);
     REQUIRE(fentry_progs.size() == 1);
     REQUIRE(fentry_progs[0].core_relocation_count > 0);
 
     constexpr auto sockops_path = "ebpf-samples/cilium-examples/tcprtt_sockops_bpf_bpfel.o";
     constexpr auto sockops_section = "sockops";
-    const auto sockops_progs = read_elf(sockops_path, sockops_section, "", {}, &g_ebpf_platform_linux);
+    ElfObject sockops_elf{sockops_path, {}, &g_ebpf_platform_linux};
+    const auto& sockops_progs = sockops_elf.get_programs(sockops_section);
     REQUIRE(sockops_progs.size() == 1);
     REQUIRE(sockops_progs[0].core_relocation_count > 0);
 }
