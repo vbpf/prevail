@@ -5872,23 +5872,23 @@
             "sections": {
               "cgroup/connect4": {
                 "kind": "ElfCoreRelocation",
-                "reason": "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
-                "status": "skip"
+                "reason": "Known loader bug (fixable): CO-RE/BTF relocation handling rejects this object variant. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
+                "status": "expected_failure"
               },
               "cgroup/connect6": {
                 "kind": "ElfCoreRelocation",
-                "reason": "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
-                "status": "skip"
+                "reason": "Known loader bug (fixable): CO-RE/BTF relocation handling rejects this object variant. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
+                "status": "expected_failure"
               },
               "cgroup/recv_accept4": {
                 "kind": "ElfCoreRelocation",
-                "reason": "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
-                "status": "skip"
+                "reason": "Known loader bug (fixable): CO-RE/BTF relocation handling rejects this object variant. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
+                "status": "expected_failure"
               },
               "cgroup/recv_accept6": {
                 "kind": "ElfCoreRelocation",
-                "reason": "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
-                "status": "skip"
+                "reason": "Known loader bug (fixable): CO-RE/BTF relocation handling rejects this object variant. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
+                "status": "expected_failure"
               }
             }
           }
@@ -5965,23 +5965,23 @@
             "sections": {
               "cgroup/connect4": {
                 "kind": "ElfCoreRelocation",
-                "reason": "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
-                "status": "skip"
+                "reason": "Known loader bug (fixable): CO-RE/BTF relocation handling rejects this object variant. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
+                "status": "expected_failure"
               },
               "cgroup/connect6": {
                 "kind": "ElfCoreRelocation",
-                "reason": "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
-                "status": "skip"
+                "reason": "Known loader bug (fixable): CO-RE/BTF relocation handling rejects this object variant. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
+                "status": "expected_failure"
               },
               "cgroup/recv_accept4": {
                 "kind": "ElfCoreRelocation",
-                "reason": "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
-                "status": "skip"
+                "reason": "Known loader bug (fixable): CO-RE/BTF relocation handling rejects this object variant. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
+                "status": "expected_failure"
               },
               "cgroup/recv_accept6": {
                 "kind": "ElfCoreRelocation",
-                "reason": "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
-                "status": "skip"
+                "reason": "Known loader bug (fixable): CO-RE/BTF relocation handling rejects this object variant. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
+                "status": "expected_failure"
               }
             }
           }

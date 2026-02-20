@@ -125,7 +125,10 @@ KIND_GUIDANCE = {
         ),
     },
     "UnmarshalControlFlow": {
-        "root": "Instruction unmarshaling cannot reconstruct a valid CFG for the extracted bytecode slice.",
+        "root": (
+            "Instruction unmarshaling has a loader bug: it cannot reconstruct a valid CFG for this extracted "
+            "bytecode slice."
+        ),
         "fix": (
             "Stabilize extraction and jump target mapping so every emitted instruction stream has valid in-range "
             "branch and call targets."
@@ -147,7 +150,10 @@ KIND_GUIDANCE = {
         ),
     },
     "ElfCoreRelocation": {
-        "root": "CO-RE or BTF relocation payload is malformed or unsupported by current loader expectations.",
+        "root": (
+            "CO-RE or BTF relocation handling has a loader bug for this input variant: relocation or BTF payload is "
+            "rejected by current parser expectations."
+        ),
         "fix": (
             "Harden BTF or CO-RE parser compatibility and validation, or gate unsupported variants with explicit "
             "diagnostics."
@@ -218,8 +224,9 @@ def program_override(obj: dict, section: str, function_name: str) -> dict | None
 def is_load_failure_reason(reason: str | None) -> bool:
     if reason is None:
         return False
-    return reason.startswith("Unsupported or invalid CO-RE/BTF relocation data:") or reason.startswith(
-        "Subprogram not found:"
+    return (
+        "Unsupported or invalid CO-RE/BTF relocation data:" in reason
+        or "Subprogram not found:" in reason
     )
 
 
@@ -309,6 +316,11 @@ def render_test(
     if status == "pass":
         return [f'TEST_SECTION("{p}", "{o}", "{s}")']
     if status == "expected_failure":
+        if is_load_failure_reason(reason):
+            return [
+                *render_reason_comment("expected load failure", kind, reason),
+                f'TEST_SECTION_LOAD_FAIL("{p}", "{o}", "{s}", {cpp_kind(kind)}, "{reason_text}")',
+            ]
         return [
             *render_reason_comment("expected failure", kind, reason),
             f'TEST_SECTION_FAIL("{p}", "{o}", "{s}", {cpp_kind(kind)}, "{reason_text}")',

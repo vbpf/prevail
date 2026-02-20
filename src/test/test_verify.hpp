@@ -10,6 +10,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <string_view>
 
 #include "ebpf_verifier.hpp"
 #include "elf_loader.hpp"
@@ -62,6 +63,19 @@ inline const char* to_string(VerifyIssueKind kind) noexcept {
 
 inline std::string format_issue(VerifyIssueKind kind, const char* reason) {
     return std::string(to_string(kind)) + ": " + reason;
+}
+
+inline std::string expected_exception_substring(const char* reason) {
+    if (reason == nullptr) {
+        return {};
+    }
+    const std::string text{reason};
+    constexpr std::string_view marker = "Diagnostic: ";
+    const auto marker_index = text.find(marker);
+    if (marker_index == std::string::npos) {
+        return text;
+    }
+    return text.substr(marker_index + marker.size());
 }
 
 template <typename T>
@@ -204,7 +218,7 @@ inline std::vector<RawProgram> read_elf_cached(const std::string& path, const st
                                 (void)verify_test::read_elf_cached("ebpf-samples/" project "/" filename, section, "", \
                                                                    {}, &g_ebpf_platform_linux);                       \
                             }()),                                                                                     \
-                            Catch::Matchers::ContainsSubstring(reason));                                              \
+                            Catch::Matchers::ContainsSubstring(verify_test::expected_exception_substring(reason)));   \
     }
 
 #define TEST_SECTION_FAIL_SLOW(project, filename, section, kind, reason)              \

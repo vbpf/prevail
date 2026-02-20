@@ -210,7 +210,7 @@ TEST_PROGRAM_FAIL("linux-selftests", "test_spin_lock.o", "tc", "lock_static_subp
 // Failure Cause Group: UnmarshalControlFlow
 // Group size: 4 tests (4 expected_failure, 0 skip).
 // Root cause:
-//   Instruction unmarshaling cannot reconstruct a valid CFG for the extracted bytecode slice.
+//   Instruction unmarshaling has a loader bug: it cannot reconstruct a valid CFG for this extracted bytecode slice.
 // Representative example:
 //   test: linux-selftests/test_spin_lock.o .text::static_subprog_lock
 //   diagnostic: unmarshaling error at 4: jump out of bounds

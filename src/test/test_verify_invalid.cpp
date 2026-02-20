@@ -156,7 +156,7 @@ TEST_SECTION_FAIL("invalid", "662b334a22904023c13f11008e072076a4f4d215", "xdp", 
 // Failure Cause Group: UnmarshalControlFlow
 // Group size: 1 tests (1 expected_failure, 0 skip).
 // Root cause:
-//   Instruction unmarshaling cannot reconstruct a valid CFG for the extracted bytecode slice.
+//   Instruction unmarshaling has a loader bug: it cannot reconstruct a valid CFG for this extracted bytecode slice.
 // Representative example:
 //   test: invalid/invalid-lddw.o .text
 //   diagnostic: unmarshaling error at 1: incomplete lddw
@@ -170,36 +170,37 @@ TEST_SECTION_FAIL("invalid", "invalid-lddw.o", ".text", verify_test::VerifyIssue
 
 // ===========================================================================
 // Failure Cause Group: ElfCoreRelocation
-// Group size: 8 tests (0 expected_failure, 8 skip).
+// Group size: 8 tests (8 expected_failure, 0 skip).
 // Root cause:
-//   CO-RE or BTF relocation payload is malformed or unsupported by current loader expectations.
+//   CO-RE or BTF relocation handling has a loader bug for this input variant: relocation or BTF payload is rejected
+//   by current parser expectations.
 // Representative example:
 //   test: invalid/58087ea4ff41695f3186d628a3250b26dc8d237a cgroup/connect4
 //   diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0
 // Addressing direction:
 //   Harden BTF or CO-RE parser compatibility and validation, or gate unsupported variants with explicit diagnostics.
 // ===========================================================================
-// skipped (ElfCoreRelocation):
+// expected load failure (ElfCoreRelocation):
 //   diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0
-TEST_SECTION_SKIP("invalid", "58087ea4ff41695f3186d628a3250b26dc8d237a", "cgroup/connect4", verify_test::VerifyIssueKind::ElfCoreRelocation, "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0")
-// skipped (ElfCoreRelocation):
+TEST_SECTION_LOAD_FAIL("invalid", "58087ea4ff41695f3186d628a3250b26dc8d237a", "cgroup/connect4", verify_test::VerifyIssueKind::ElfCoreRelocation, "Known loader bug (fixable): CO-RE/BTF relocation handling rejects this object variant. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0")
+// expected load failure (ElfCoreRelocation):
 //   diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0
-TEST_SECTION_SKIP("invalid", "58087ea4ff41695f3186d628a3250b26dc8d237a", "cgroup/connect6", verify_test::VerifyIssueKind::ElfCoreRelocation, "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0")
-// skipped (ElfCoreRelocation):
+TEST_SECTION_LOAD_FAIL("invalid", "58087ea4ff41695f3186d628a3250b26dc8d237a", "cgroup/connect6", verify_test::VerifyIssueKind::ElfCoreRelocation, "Known loader bug (fixable): CO-RE/BTF relocation handling rejects this object variant. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0")
+// expected load failure (ElfCoreRelocation):
 //   diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0
-TEST_SECTION_SKIP("invalid", "58087ea4ff41695f3186d628a3250b26dc8d237a", "cgroup/recv_accept4", verify_test::VerifyIssueKind::ElfCoreRelocation, "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0")
-// skipped (ElfCoreRelocation):
+TEST_SECTION_LOAD_FAIL("invalid", "58087ea4ff41695f3186d628a3250b26dc8d237a", "cgroup/recv_accept4", verify_test::VerifyIssueKind::ElfCoreRelocation, "Known loader bug (fixable): CO-RE/BTF relocation handling rejects this object variant. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0")
+// expected load failure (ElfCoreRelocation):
 //   diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0
-TEST_SECTION_SKIP("invalid", "58087ea4ff41695f3186d628a3250b26dc8d237a", "cgroup/recv_accept6", verify_test::VerifyIssueKind::ElfCoreRelocation, "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0")
-// skipped (ElfCoreRelocation):
+TEST_SECTION_LOAD_FAIL("invalid", "58087ea4ff41695f3186d628a3250b26dc8d237a", "cgroup/recv_accept6", verify_test::VerifyIssueKind::ElfCoreRelocation, "Known loader bug (fixable): CO-RE/BTF relocation handling rejects this object variant. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0")
+// expected load failure (ElfCoreRelocation):
 //   diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0
-TEST_SECTION_SKIP("invalid", "ab3408afd06d68dd7e73bf21bde38350d9751a78", "cgroup/connect4", verify_test::VerifyIssueKind::ElfCoreRelocation, "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0")
-// skipped (ElfCoreRelocation):
+TEST_SECTION_LOAD_FAIL("invalid", "ab3408afd06d68dd7e73bf21bde38350d9751a78", "cgroup/connect4", verify_test::VerifyIssueKind::ElfCoreRelocation, "Known loader bug (fixable): CO-RE/BTF relocation handling rejects this object variant. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0")
+// expected load failure (ElfCoreRelocation):
 //   diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0
-TEST_SECTION_SKIP("invalid", "ab3408afd06d68dd7e73bf21bde38350d9751a78", "cgroup/connect6", verify_test::VerifyIssueKind::ElfCoreRelocation, "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0")
-// skipped (ElfCoreRelocation):
+TEST_SECTION_LOAD_FAIL("invalid", "ab3408afd06d68dd7e73bf21bde38350d9751a78", "cgroup/connect6", verify_test::VerifyIssueKind::ElfCoreRelocation, "Known loader bug (fixable): CO-RE/BTF relocation handling rejects this object variant. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0")
+// expected load failure (ElfCoreRelocation):
 //   diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0
-TEST_SECTION_SKIP("invalid", "ab3408afd06d68dd7e73bf21bde38350d9751a78", "cgroup/recv_accept4", verify_test::VerifyIssueKind::ElfCoreRelocation, "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0")
-// skipped (ElfCoreRelocation):
+TEST_SECTION_LOAD_FAIL("invalid", "ab3408afd06d68dd7e73bf21bde38350d9751a78", "cgroup/recv_accept4", verify_test::VerifyIssueKind::ElfCoreRelocation, "Known loader bug (fixable): CO-RE/BTF relocation handling rejects this object variant. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0")
+// expected load failure (ElfCoreRelocation):
 //   diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0
-TEST_SECTION_SKIP("invalid", "ab3408afd06d68dd7e73bf21bde38350d9751a78", "cgroup/recv_accept6", verify_test::VerifyIssueKind::ElfCoreRelocation, "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0")
+TEST_SECTION_LOAD_FAIL("invalid", "ab3408afd06d68dd7e73bf21bde38350d9751a78", "cgroup/recv_accept6", verify_test::VerifyIssueKind::ElfCoreRelocation, "Known loader bug (fixable): CO-RE/BTF relocation handling rejects this object variant. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0")
