@@ -67,7 +67,7 @@ bool has_nonempty_core_relo_subsection(const std::string& path) {
 } // namespace
 
 #define FAIL_LOAD_ELF_BASE(test_name, dirname, filename, sectionname)                                    \
-    TEST_CASE(test_name, "[elf]") {                                                                       \
+    TEST_CASE(test_name, "[elf]") {                                                                      \
         try {                                                                                            \
             thread_local_options = {};                                                                   \
             read_elf("ebpf-samples/" dirname "/" filename, sectionname, "", {}, &g_ebpf_platform_linux); \
@@ -81,7 +81,7 @@ bool has_nonempty_core_relo_subsection(const std::string& path) {
 
 // Like FAIL_LOAD_ELF, but includes sectionname in the test name to avoid collisions
 // when multiple sections of the same file fail to load.
-#define FAIL_LOAD_ELF_SECTION(dirname, filename, sectionname)                                              \
+#define FAIL_LOAD_ELF_SECTION(dirname, filename, sectionname) \
     FAIL_LOAD_ELF_BASE("Try loading bad section: " dirname "/" filename " " sectionname, dirname, filename, sectionname)
 
 // Some intentional failures
@@ -93,8 +93,8 @@ FAIL_LOAD_ELF("invalid", "badsymsize.o", "xdp_redirect_map")
 TEST_CASE("CO-RE relocations are parsed from .BTF.ext core_relo subsection", "[elf][core]") {
     thread_local_options = {};
     REQUIRE(has_nonempty_core_relo_subsection("ebpf-samples/cilium-examples/tcprtt_bpf_bpfel.o"));
-    const auto fentry_progs = read_elf("ebpf-samples/cilium-examples/tcprtt_bpf_bpfel.o", "fentry/tcp_close", "", {},
-                                       &g_ebpf_platform_linux);
+    const auto fentry_progs =
+        read_elf("ebpf-samples/cilium-examples/tcprtt_bpf_bpfel.o", "fentry/tcp_close", "", {}, &g_ebpf_platform_linux);
     REQUIRE(fentry_progs.size() == 1);
 
     REQUIRE(has_nonempty_core_relo_subsection("ebpf-samples/cilium-examples/tcprtt_sockops_bpf_bpfel.o"));

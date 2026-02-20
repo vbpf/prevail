@@ -679,7 +679,8 @@ btf_string_table_view_t parse_btf_string_table(const ELFIO::section& btf_section
     return {btf_data + str_start, str_end - str_start};
 }
 
-std::string_view btf_string_at(const btf_string_table_view_t& strings, uint32_t string_offset, const std::string& name) {
+std::string_view btf_string_at(const btf_string_table_view_t& strings, uint32_t string_offset,
+                               const std::string& name) {
     if (string_offset >= strings.size) {
         throw UnmarshalError("Invalid BTF string offset for " + name);
     }
@@ -700,9 +701,7 @@ uint32_t strip_type_modifiers(const libbtf::btf_type_data& btf_data, uint32_t ty
         }
 
         switch (btf_data.get_kind_index(type_id)) {
-        case libbtf::BTF_KIND_TYPEDEF:
-            type_id = btf_data.get_kind_type<libbtf::btf_kind_typedef>(type_id).type;
-            break;
+        case libbtf::BTF_KIND_TYPEDEF: type_id = btf_data.get_kind_type<libbtf::btf_kind_typedef>(type_id).type; break;
         case libbtf::BTF_KIND_CONST: type_id = btf_data.get_kind_type<libbtf::btf_kind_const>(type_id).type; break;
         case libbtf::BTF_KIND_VOLATILE:
             type_id = btf_data.get_kind_type<libbtf::btf_kind_volatile>(type_id).type;
@@ -710,7 +709,9 @@ uint32_t strip_type_modifiers(const libbtf::btf_type_data& btf_data, uint32_t ty
         case libbtf::BTF_KIND_RESTRICT:
             type_id = btf_data.get_kind_type<libbtf::btf_kind_restrict>(type_id).type;
             break;
-        case libbtf::BTF_KIND_TYPE_TAG: type_id = btf_data.get_kind_type<libbtf::btf_kind_type_tag>(type_id).type; break;
+        case libbtf::BTF_KIND_TYPE_TAG:
+            type_id = btf_data.get_kind_type<libbtf::btf_kind_type_tag>(type_id).type;
+            break;
         default: return type_id;
         }
     }
@@ -734,7 +735,8 @@ core_field_resolution_t resolve_core_field(const libbtf::btf_type_data& btf_data
             const auto s = btf_data.get_kind_type<libbtf::btf_kind_struct>(result.type_id);
             if (index >= s.members.size()) {
                 throw UnmarshalError("CO-RE: struct member index " + std::to_string(index) + " out of bounds (size " +
-                                     std::to_string(s.members.size()) + ") for access path " + std::string(access_string));
+                                     std::to_string(s.members.size()) + ") for access path " +
+                                     std::string(access_string));
             }
             const auto& member = s.members[index];
             result.offset_bits += BTF_MEMBER_BIT_OFFSET(member.offset_from_start_in_bits);
@@ -746,7 +748,8 @@ core_field_resolution_t resolve_core_field(const libbtf::btf_type_data& btf_data
             const auto u = btf_data.get_kind_type<libbtf::btf_kind_union>(result.type_id);
             if (index >= u.members.size()) {
                 throw UnmarshalError("CO-RE: union member index " + std::to_string(index) + " out of bounds (size " +
-                                     std::to_string(u.members.size()) + ") for access path " + std::string(access_string));
+                                     std::to_string(u.members.size()) + ") for access path " +
+                                     std::string(access_string));
             }
             const auto& member = u.members[index];
             result.offset_bits += BTF_MEMBER_BIT_OFFSET(member.offset_from_start_in_bits);
@@ -982,7 +985,8 @@ void ProgramReader::apply_core_relocation(RawProgram& prog, const bpf_core_relo&
             if (enum_member_index >= e.members.size()) {
                 throw UnmarshalError("CO-RE enum member index out of bounds");
             }
-            inst.imm = relo.kind == BPF_CORE_ENUMVAL_EXISTS ? 1 : gsl::narrow<int32_t>(e.members[enum_member_index].value);
+            inst.imm =
+                relo.kind == BPF_CORE_ENUMVAL_EXISTS ? 1 : gsl::narrow<int32_t>(e.members[enum_member_index].value);
             break;
         }
         case libbtf::BTF_KIND_ENUM64: {
@@ -991,9 +995,8 @@ void ProgramReader::apply_core_relocation(RawProgram& prog, const bpf_core_relo&
                 throw UnmarshalError("CO-RE enum64 member index out of bounds");
             }
             // eBPF instruction immediates are 32-bit, so enum64 values must be narrowed (checked via gsl::narrow).
-            inst.imm = relo.kind == BPF_CORE_ENUMVAL_EXISTS
-                           ? 1
-                           : gsl::narrow<int32_t>(e.members[enum_member_index].value);
+            inst.imm =
+                relo.kind == BPF_CORE_ENUMVAL_EXISTS ? 1 : gsl::narrow<int32_t>(e.members[enum_member_index].value);
             break;
         }
         default: throw UnmarshalError("CO-RE enum relocation target is not enum/enum64");
@@ -1028,15 +1031,13 @@ void ProgramReader::process_core_relocations(const libbtf::btf_type_data& btf_da
     if (btf_ext_header.hdr_len < offsetof(btf_ext_header_core_t, core_relo_len) + sizeof(uint32_t)) {
         return;
     }
-    const auto core_relo_off = read_struct_at<uint32_t>(btf_ext_data, btf_ext_size,
-                                                        offsetof(btf_ext_header_core_t, core_relo_off),
-                                                        "BTF.ext core_relo_off");
-    const auto core_relo_len = read_struct_at<uint32_t>(btf_ext_data, btf_ext_size,
-                                                        offsetof(btf_ext_header_core_t, core_relo_len),
-                                                        "BTF.ext core_relo_len");
+    const auto core_relo_off = read_struct_at<uint32_t>(
+        btf_ext_data, btf_ext_size, offsetof(btf_ext_header_core_t, core_relo_off), "BTF.ext core_relo_off");
+    const auto core_relo_len = read_struct_at<uint32_t>(
+        btf_ext_data, btf_ext_size, offsetof(btf_ext_header_core_t, core_relo_len), "BTF.ext core_relo_len");
 
-    const size_t core_relo_start = checked_add(btf_ext_header.hdr_len, core_relo_off, btf_ext_size,
-                                               "BTF.ext core_relo subsection");
+    const size_t core_relo_start =
+        checked_add(btf_ext_header.hdr_len, core_relo_off, btf_ext_size, "BTF.ext core_relo subsection");
     const size_t core_relo_end =
         checked_add(core_relo_start, core_relo_len, btf_ext_size, "BTF.ext core_relo subsection");
     if (core_relo_start == core_relo_end) {
@@ -1058,7 +1059,8 @@ void ProgramReader::process_core_relocations(const libbtf::btf_type_data& btf_da
     }
 
     for (; offset < core_relo_end;) {
-        const auto section = read_struct_at<btf_ext_info_sec_t>(btf_ext_data, btf_ext_size, offset, "CO-RE section info");
+        const auto section =
+            read_struct_at<btf_ext_info_sec_t>(btf_ext_data, btf_ext_size, offset, "CO-RE section info");
         offset += sizeof(btf_ext_info_sec_t);
         if (offset > core_relo_end) {
             throw UnmarshalError("CO-RE section records out of bounds");
@@ -1079,7 +1081,8 @@ void ProgramReader::process_core_relocations(const libbtf::btf_type_data& btf_da
 
         for (size_t i = 0; i < section.num_info; ++i) {
             const size_t record_offset = offset + i * core_relo_rec_size;
-            const auto reloc = read_struct_at<bpf_core_relo>(btf_ext_data, btf_ext_size, record_offset, "CO-RE relocation");
+            const auto reloc =
+                read_struct_at<bpf_core_relo>(btf_ext_data, btf_ext_size, record_offset, "CO-RE relocation");
             const auto access_string = btf_string_at(strings, reloc.access_str_off, "CO-RE access string");
 
             bool applied = false;
