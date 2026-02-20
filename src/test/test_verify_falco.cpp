@@ -11,15 +11,23 @@ TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/proc_startupdate_3")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sched_drop")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sched_switch_e")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_accept4_e")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 675: Invalid size (r2.value >= 0)
-TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_accept_x", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 675: Invalid size (r2.value >= 0)")
+// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
+// this memory-access proof. Diagnostic: 675: Invalid size (r2.value >= 0)
+TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_accept_x",
+                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
+                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
+                  "Diagnostic: 675: Invalid size (r2.value >= 0)")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_access_e")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_autofill")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_bpf_x")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_brk_munmap_mmap_x")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_chmod_x")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 507: Invalid size (r2.value >= 0)
-TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_connect_x", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 507: Invalid size (r2.value >= 0)")
+// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
+// this memory-access proof. Diagnostic: 507: Invalid size (r2.value >= 0)
+TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_connect_x",
+                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
+                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
+                  "Diagnostic: 507: Invalid size (r2.value >= 0)")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_creat_x")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_empty")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_eventfd_e")
@@ -33,26 +41,51 @@ TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_generic")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_getresuid_and_gid_x")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_getrlimit_setrlimit_e")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_getrlimit_setrlrimit_x")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 1825: Lower bound must be at least 0 (valid_access(r0.offset, width=4) for write)
-TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_getsockopt_x", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 1825: Lower bound must be at least 0 (valid_access(r0.offset, width=4) for write)")
+// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
+// this memory-access proof. Diagnostic: 1825: Lower bound must be at least 0 (valid_access(r0.offset, width=4) for
+// write)
+TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_getsockopt_x",
+                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
+                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
+                  "Diagnostic: 1825: Lower bound must be at least 0 (valid_access(r0.offset, width=4) for write)")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_linkat_x")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_llseek_e")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_lseek_e")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_mkdirat_x")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_mmap_e")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_mount_e")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 260: Lower bound must be at least 0 (valid_access(r1.offset, width=8) for write)
-TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_nanosleep_e", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 260: Lower bound must be at least 0 (valid_access(r1.offset, width=8) for write)")
+// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
+// this memory-access proof. Diagnostic: 260: Lower bound must be at least 0 (valid_access(r1.offset, width=8) for
+// write)
+TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_nanosleep_e",
+                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
+                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
+                  "Diagnostic: 260: Lower bound must be at least 0 (valid_access(r1.offset, width=8) for write)")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_open_x")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_openat_x")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_pagefault_e")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_pipe_x")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 311: Lower bound must be at least 0 (valid_access(r3.offset+10, width=2) for write)
-TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_poll_e", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 311: Lower bound must be at least 0 (valid_access(r3.offset+10, width=2) for write)")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 457: Lower bound must be at least 0 (valid_access(r3.offset+10, width=2) for write)
-TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_poll_x", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 457: Lower bound must be at least 0 (valid_access(r3.offset+10, width=2) for write)")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 302: Lower bound must be at least 0 (valid_access(r3.offset+10, width=2) for write)
-TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_ppoll_e", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 302: Lower bound must be at least 0 (valid_access(r3.offset+10, width=2) for write)")
+// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
+// this memory-access proof. Diagnostic: 311: Lower bound must be at least 0 (valid_access(r3.offset+10, width=2) for
+// write)
+TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_poll_e",
+                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
+                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
+                  "Diagnostic: 311: Lower bound must be at least 0 (valid_access(r3.offset+10, width=2) for write)")
+// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
+// this memory-access proof. Diagnostic: 457: Lower bound must be at least 0 (valid_access(r3.offset+10, width=2) for
+// write)
+TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_poll_x",
+                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
+                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
+                  "Diagnostic: 457: Lower bound must be at least 0 (valid_access(r3.offset+10, width=2) for write)")
+// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
+// this memory-access proof. Diagnostic: 302: Lower bound must be at least 0 (valid_access(r3.offset+10, width=2) for
+// write)
+TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_ppoll_e",
+                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
+                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
+                  "Diagnostic: 302: Lower bound must be at least 0 (valid_access(r3.offset+10, width=2) for write)")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_pread64_e")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_preadv64_e")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_prlimit_e")
@@ -64,53 +97,105 @@ TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_pwrite64_e")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_pwritev_e")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_quotactl_e")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_quotactl_x")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 1094: Invalid size (r2.value >= 0)
-TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_read_x", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 1094: Invalid size (r2.value >= 0)")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 2093: Invalid size (r2.value >= 0)
-TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_readv_preadv_x", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 2093: Invalid size (r2.value >= 0)")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 908: Invalid size (r2.value >= 0)
-TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_recv_x", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 908: Invalid size (r2.value >= 0)")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 937: Invalid size (r2.value >= 0)
-TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_recvfrom_x", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 937: Invalid size (r2.value >= 0)")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 2187: Invalid size (r2.value >= 0)
-TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_recvmsg_x", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 2187: Invalid size (r2.value >= 0)")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 228: Invalid size (r2.value >= 0)
-TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_recvmsg_x_2", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 228: Invalid size (r2.value >= 0)")
+// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
+// this memory-access proof. Diagnostic: 1094: Invalid size (r2.value >= 0)
+TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_read_x",
+                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
+                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
+                  "Diagnostic: 1094: Invalid size (r2.value >= 0)")
+// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
+// this memory-access proof. Diagnostic: 2093: Invalid size (r2.value >= 0)
+TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_readv_preadv_x",
+                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
+                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
+                  "Diagnostic: 2093: Invalid size (r2.value >= 0)")
+// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
+// this memory-access proof. Diagnostic: 908: Invalid size (r2.value >= 0)
+TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_recv_x",
+                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
+                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
+                  "Diagnostic: 908: Invalid size (r2.value >= 0)")
+// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
+// this memory-access proof. Diagnostic: 937: Invalid size (r2.value >= 0)
+TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_recvfrom_x",
+                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
+                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
+                  "Diagnostic: 937: Invalid size (r2.value >= 0)")
+// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
+// this memory-access proof. Diagnostic: 2187: Invalid size (r2.value >= 0)
+TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_recvmsg_x",
+                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
+                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
+                  "Diagnostic: 2187: Invalid size (r2.value >= 0)")
+// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
+// this memory-access proof. Diagnostic: 228: Invalid size (r2.value >= 0)
+TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_recvmsg_x_2",
+                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
+                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
+                  "Diagnostic: 228: Invalid size (r2.value >= 0)")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_renameat2_x")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_renameat_x")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_semctl_e")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_semget_e")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_semop_x")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_send_e")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 908: Invalid size (r2.value >= 0)
-TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_send_x", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 908: Invalid size (r2.value >= 0)")
+// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
+// this memory-access proof. Diagnostic: 908: Invalid size (r2.value >= 0)
+TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_send_x",
+                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
+                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
+                  "Diagnostic: 908: Invalid size (r2.value >= 0)")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_sendfile_e")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_sendfile_x")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 563: Invalid size (r2.value >= 0)
-TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_sendmsg_e", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 563: Invalid size (r2.value >= 0)")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 2049: Invalid size (r2.value >= 0)
-TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_sendmsg_x", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 2049: Invalid size (r2.value >= 0)")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 849: Invalid size (r2.value >= 0)
-TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_sendto_e", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 849: Invalid size (r2.value >= 0)")
+// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
+// this memory-access proof. Diagnostic: 563: Invalid size (r2.value >= 0)
+TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_sendmsg_e",
+                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
+                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
+                  "Diagnostic: 563: Invalid size (r2.value >= 0)")
+// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
+// this memory-access proof. Diagnostic: 2049: Invalid size (r2.value >= 0)
+TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_sendmsg_x",
+                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
+                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
+                  "Diagnostic: 2049: Invalid size (r2.value >= 0)")
+// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
+// this memory-access proof. Diagnostic: 849: Invalid size (r2.value >= 0)
+TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_sendto_e",
+                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
+                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
+                  "Diagnostic: 849: Invalid size (r2.value >= 0)")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_setns_e")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_setsockopt_x")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_shutdown_e")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_signaldeliver_e")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_single")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_single_x")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 480: Invalid size (r2.value >= 0)
-TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_socket_bind_x", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 480: Invalid size (r2.value >= 0)")
+// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
+// this memory-access proof. Diagnostic: 480: Invalid size (r2.value >= 0)
+TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_socket_bind_x",
+                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
+                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
+                  "Diagnostic: 480: Invalid size (r2.value >= 0)")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_socket_x")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_socketpair_x")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_symlinkat_x")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_sysdigevent_e")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_unlinkat_x")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_unshare_e")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 1105: Invalid size (r2.value >= 0)
-TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_write_x", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 1105: Invalid size (r2.value >= 0)")
+// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
+// this memory-access proof. Diagnostic: 1105: Invalid size (r2.value >= 0)
+TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_write_x",
+                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
+                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
+                  "Diagnostic: 1105: Invalid size (r2.value >= 0)")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/sys_writev_e")
-// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 2260: Invalid size (r2.value >= 0)
-TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_writev_pwritev_x", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 2260: Invalid size (r2.value >= 0)")
+// expected failure (VerifierBoundsTracking): Known verifier limitation: interval/bounds refinement loses precision for
+// this memory-access proof. Diagnostic: 2260: Invalid size (r2.value >= 0)
+TEST_SECTION_FAIL("falco", "probe.o", "raw_tracepoint/filler/sys_writev_pwritev_x",
+                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
+                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
+                  "Diagnostic: 2260: Invalid size (r2.value >= 0)")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/filler/terminate_filler")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/page_fault_kernel")
 TEST_SECTION("falco", "probe.o", "raw_tracepoint/page_fault_user")

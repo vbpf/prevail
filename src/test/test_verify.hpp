@@ -40,38 +40,22 @@ enum class VerifyIssueKind {
 
 inline const char* to_string(VerifyIssueKind kind) noexcept {
     switch (kind) {
-    case VerifyIssueKind::VerifierTypeTracking:
-        return "VerifierTypeTracking";
-    case VerifyIssueKind::VerifierBoundsTracking:
-        return "VerifierBoundsTracking";
-    case VerifyIssueKind::VerifierStackInitialization:
-        return "VerifierStackInitialization";
-    case VerifyIssueKind::VerifierPointerArithmetic:
-        return "VerifierPointerArithmetic";
-    case VerifyIssueKind::VerifierMapTyping:
-        return "VerifierMapTyping";
-    case VerifyIssueKind::VerifierNullability:
-        return "VerifierNullability";
-    case VerifyIssueKind::VerifierContextModeling:
-        return "VerifierContextModeling";
-    case VerifyIssueKind::VerifierRecursionModeling:
-        return "VerifierRecursionModeling";
-    case VerifyIssueKind::UnmarshalControlFlow:
-        return "UnmarshalControlFlow";
-    case VerifyIssueKind::ExternalSymbolResolution:
-        return "ExternalSymbolResolution";
-    case VerifyIssueKind::PlatformHelperAvailability:
-        return "PlatformHelperAvailability";
-    case VerifyIssueKind::ElfCoreRelocation:
-        return "ElfCoreRelocation";
-    case VerifyIssueKind::ElfSubprogramResolution:
-        return "ElfSubprogramResolution";
-    case VerifyIssueKind::ElfLegacyMapLayout:
-        return "ElfLegacyMapLayout";
-    case VerifyIssueKind::VerificationTimeout:
-        return "VerificationTimeout";
-    case VerifyIssueKind::LegacyBccBehavior:
-        return "LegacyBccBehavior";
+    case VerifyIssueKind::VerifierTypeTracking: return "VerifierTypeTracking";
+    case VerifyIssueKind::VerifierBoundsTracking: return "VerifierBoundsTracking";
+    case VerifyIssueKind::VerifierStackInitialization: return "VerifierStackInitialization";
+    case VerifyIssueKind::VerifierPointerArithmetic: return "VerifierPointerArithmetic";
+    case VerifyIssueKind::VerifierMapTyping: return "VerifierMapTyping";
+    case VerifyIssueKind::VerifierNullability: return "VerifierNullability";
+    case VerifyIssueKind::VerifierContextModeling: return "VerifierContextModeling";
+    case VerifyIssueKind::VerifierRecursionModeling: return "VerifierRecursionModeling";
+    case VerifyIssueKind::UnmarshalControlFlow: return "UnmarshalControlFlow";
+    case VerifyIssueKind::ExternalSymbolResolution: return "ExternalSymbolResolution";
+    case VerifyIssueKind::PlatformHelperAvailability: return "PlatformHelperAvailability";
+    case VerifyIssueKind::ElfCoreRelocation: return "ElfCoreRelocation";
+    case VerifyIssueKind::ElfSubprogramResolution: return "ElfSubprogramResolution";
+    case VerifyIssueKind::ElfLegacyMapLayout: return "ElfLegacyMapLayout";
+    case VerifyIssueKind::VerificationTimeout: return "VerificationTimeout";
+    case VerifyIssueKind::LegacyBccBehavior: return "LegacyBccBehavior";
     }
     return "Unknown";
 }
@@ -165,11 +149,11 @@ inline std::vector<RawProgram> read_elf_cached(const std::string& path, const st
         VERIFY_PROGRAM(project, filename, section_name, program_name, {}, &g_ebpf_platform_linux, true, count); \
     }
 
-#define TEST_PROGRAM_FAIL(project, filename, section_name, program_name, count, kind, reason)                    \
-    TEST_CASE(project "/" filename " " program_name, "[!shouldfail][verify][samples][" project "]") {            \
-        INFO("issue_kind=" << verify_test::to_string(kind));                                                      \
-        INFO("issue_reason=" << reason);                                                                           \
-        VERIFY_PROGRAM(project, filename, section_name, program_name, {}, &g_ebpf_platform_linux, true, count);  \
+#define TEST_PROGRAM_FAIL(project, filename, section_name, program_name, count, kind, reason)                   \
+    TEST_CASE(project "/" filename " " program_name, "[!shouldfail][verify][samples][" project "]") {           \
+        INFO("issue_kind=" << verify_test::to_string(kind));                                                    \
+        INFO("issue_reason=" << reason);                                                                        \
+        VERIFY_PROGRAM(project, filename, section_name, program_name, {}, &g_ebpf_platform_linux, true, count); \
     }
 
 #define TEST_PROGRAM_REJECT(project, filename, section_name, program_name, count)                                \
@@ -198,37 +182,36 @@ inline std::vector<RawProgram> read_elf_cached(const std::string& path, const st
 #define TEST_SECTION_FAIL(project, filename, section, kind, reason)                                                \
     TEST_CASE("expect failure " project "/" filename " " section, "[!shouldfail][verify][samples][" project "]") { \
         INFO("issue_kind=" << verify_test::to_string(kind));                                                       \
-        INFO("issue_reason=" << reason);                                                                            \
+        INFO("issue_reason=" << reason);                                                                           \
         VERIFY_SECTION(project, filename, section, {}, &g_ebpf_platform_linux, true);                              \
     }
 
-#define TEST_SECTION_SKIP(project, filename, section, kind, reason)                                                \
-    TEST_CASE(project "/" filename " " section, "[verify][samples][" project "]") {                               \
-        SKIP(verify_test::format_issue(kind, reason));                                                             \
+#define TEST_SECTION_SKIP(project, filename, section, kind, reason)                 \
+    TEST_CASE(project "/" filename " " section, "[verify][samples][" project "]") { \
+        SKIP(verify_test::format_issue(kind, reason));                              \
     }
 
-#define TEST_PROGRAM_SKIP(project, filename, section_name, program_name, kind, reason)                           \
-    TEST_CASE(project "/" filename " " program_name, "[verify][samples][" project "]") {                         \
-        SKIP(verify_test::format_issue(kind, reason));                                                            \
+#define TEST_PROGRAM_SKIP(project, filename, section_name, program_name, kind, reason)   \
+    TEST_CASE(project "/" filename " " program_name, "[verify][samples][" project "]") { \
+        SKIP(verify_test::format_issue(kind, reason));                                   \
     }
 
-#define TEST_SECTION_LOAD_FAIL(project, filename, section, kind, reason)                                           \
-    TEST_CASE("expect load failure " project "/" filename " " section, "[verify][samples][" project "]") {        \
-        INFO("issue_kind=" << verify_test::to_string(kind));                                                       \
-        INFO("issue_reason=" << reason);                                                                            \
-        REQUIRE_THROWS_WITH(                                                                                        \
-            ([&]() {                                                                                                \
-                (void)verify_test::read_elf_cached("ebpf-samples/" project "/" filename, section, "", {},         \
-                                                   &g_ebpf_platform_linux);                                         \
-            }()),                                                                                                   \
-            Catch::Matchers::ContainsSubstring(reason));                                                            \
+#define TEST_SECTION_LOAD_FAIL(project, filename, section, kind, reason)                                              \
+    TEST_CASE("expect load failure " project "/" filename " " section, "[verify][samples][" project "]") {            \
+        INFO("issue_kind=" << verify_test::to_string(kind));                                                          \
+        INFO("issue_reason=" << reason);                                                                              \
+        REQUIRE_THROWS_WITH(([&]() {                                                                                  \
+                                (void)verify_test::read_elf_cached("ebpf-samples/" project "/" filename, section, "", \
+                                                                   {}, &g_ebpf_platform_linux);                       \
+                            }()),                                                                                     \
+                            Catch::Matchers::ContainsSubstring(reason));                                              \
     }
 
 #define TEST_SECTION_FAIL_SLOW(project, filename, section, kind, reason)              \
     TEST_CASE("expect failure " project "/" filename " " section,                     \
               "[!shouldfail][verify][samples][slow][" project "]") {                  \
         INFO("issue_kind=" << verify_test::to_string(kind));                          \
-        INFO("issue_reason=" << reason);                                               \
+        INFO("issue_reason=" << reason);                                              \
         VERIFY_SECTION(project, filename, section, {}, &g_ebpf_platform_linux, true); \
     }
 
