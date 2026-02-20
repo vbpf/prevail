@@ -39,7 +39,8 @@ struct ReadElfCacheKeyHash {
     }
 
   private:
-    template <typename T> static void combine(size_t& seed, const T& value) noexcept {
+    template <typename T>
+    static void combine(size_t& seed, const T& value) noexcept {
         seed ^= std::hash<T>{}(value) + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
     }
 };
@@ -72,21 +73,21 @@ const std::vector<RawProgram>& read_elf_cached(const std::string& path, const st
 } // namespace
 
 // Verify a program in a section that may have multiple programs in it.
-#define VERIFY_PROGRAM(dirname, filename, section_name, program_name, _options, platform, should_pass, count) \
-    do {                                                                                                      \
-        thread_local_options = _options;                                                                      \
-        const auto& raw_progs =                                                                                \
+#define VERIFY_PROGRAM(dirname, filename, section_name, program_name, _options, platform, should_pass, count)        \
+    do {                                                                                                             \
+        thread_local_options = _options;                                                                             \
+        const auto& raw_progs =                                                                                      \
             read_elf_cached("ebpf-samples/" dirname "/" filename, section_name, "", thread_local_options, platform); \
-        REQUIRE(raw_progs.size() == count);                                                                   \
-        for (const auto& raw_prog : raw_progs) {                                                              \
-            if (count == 1 || raw_prog.function_name == program_name) {                                       \
-                const auto prog_or_error = unmarshal(raw_prog, thread_local_options);                         \
-                const auto inst_seq = std::get_if<InstructionSeq>(&prog_or_error);                            \
-                REQUIRE(inst_seq);                                                                            \
-                const Program prog = Program::from_sequence(*inst_seq, raw_prog.info, thread_local_options);  \
-                REQUIRE(verify(prog) == should_pass);                                                         \
-            }                                                                                                 \
-        }                                                                                                     \
+        REQUIRE(raw_progs.size() == count);                                                                          \
+        for (const auto& raw_prog : raw_progs) {                                                                     \
+            if (count == 1 || raw_prog.function_name == program_name) {                                              \
+                const auto prog_or_error = unmarshal(raw_prog, thread_local_options);                                \
+                const auto inst_seq = std::get_if<InstructionSeq>(&prog_or_error);                                   \
+                REQUIRE(inst_seq);                                                                                   \
+                const Program prog = Program::from_sequence(*inst_seq, raw_prog.info, thread_local_options);         \
+                REQUIRE(verify(prog) == should_pass);                                                                \
+            }                                                                                                        \
+        }                                                                                                            \
     } while (0)
 
 // Verify a section with only one program in it.

@@ -930,15 +930,15 @@ TEST_CASE("unmarshal builtin calls only when relocation-gated", "[disasm][marsha
     REQUIRE(has_assertion(assertions, ValidSize{Reg{3}, false}));
     REQUIRE(has_assertion(assertions, ValidAccess{1, Reg{1}, 0, Value{Reg{3}}, false, AccessType::write}));
 }
-#define FAIL_UNMARSHAL(dirname, filename, sectionname)                                                                \
-    TEST_CASE("Try unmarshalling bad program: " dirname "/" filename " " sectionname, "[unmarshal]") {                \
-        thread_local_options = {};                                                                                    \
-        const auto& raw_progs =                                                                                       \
-            read_elf("ebpf-samples/" dirname "/" filename, sectionname, "", {}, &g_ebpf_platform_linux);      \
-        REQUIRE(raw_progs.size() == 1);                                                                               \
-        const RawProgram& raw_prog = raw_progs.back();                                                                \
-        std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, thread_local_options);          \
-        REQUIRE(std::holds_alternative<std::string>(prog_or_error));                                                  \
+#define FAIL_UNMARSHAL(dirname, filename, sectionname)                                                       \
+    TEST_CASE("Try unmarshalling bad program: " dirname "/" filename " " sectionname, "[unmarshal]") {       \
+        thread_local_options = {};                                                                           \
+        const auto& raw_progs =                                                                              \
+            read_elf("ebpf-samples/" dirname "/" filename, sectionname, "", {}, &g_ebpf_platform_linux);     \
+        REQUIRE(raw_progs.size() == 1);                                                                      \
+        const RawProgram& raw_prog = raw_progs.back();                                                       \
+        std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, thread_local_options); \
+        REQUIRE(std::holds_alternative<std::string>(prog_or_error));                                         \
     }
 
 // Some intentional unmarshal failures
@@ -1470,7 +1470,7 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
     TEST_CASE("Unsupported instructions: " dirname "/" filename " " sectionname, "[unmarshal]") {               \
         ebpf_platform_t platform = g_ebpf_platform_linux;                                                       \
         platform.supported_conformance_groups &= ~bpf_conformance_groups_t::packet;                             \
-        const auto raw_progs = read_elf("ebpf-samples/" dirname "/" filename, sectionname, "", {}, &platform); \
+        const auto raw_progs = read_elf("ebpf-samples/" dirname "/" filename, sectionname, "", {}, &platform);  \
         REQUIRE(raw_progs.size() == 1);                                                                         \
         RawProgram raw_prog = raw_progs.back();                                                                 \
         std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, {});                      \
