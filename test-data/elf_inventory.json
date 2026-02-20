@@ -15,6 +15,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "uretprobe/readline": {
+                "reason": "Known verifier mismatch on uretprobe return-path semantics for this sample.",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "capable.bpf.o": {
@@ -38,6 +46,14 @@
                 "invalid_reason": "Unresolved symbols found."
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "kretprobe/cap_capable": {
+                "reason": "Unresolved symbols found.",
+                "status": "skip"
+              }
+            }
           }
         },
         "exitsnoop.bpf.o": {
@@ -90,6 +106,26 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "kprobe/security_inode_create": {
+                "reason": "Known verifier mismatch on BCC filelife sample path sensitivity.",
+                "status": "expected_failure"
+              },
+              "kprobe/vfs_create": {
+                "reason": "Known verifier mismatch on BCC filelife sample path sensitivity.",
+                "status": "expected_failure"
+              },
+              "kprobe/vfs_open": {
+                "reason": "Known verifier mismatch on BCC filelife sample path sensitivity.",
+                "status": "expected_failure"
+              },
+              "kretprobe/vfs_unlink": {
+                "reason": "Known verifier mismatch on BCC kretprobe return-value handling.",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "oomkill.bpf.o": {
@@ -104,6 +140,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "kprobe/oom_kill_process": {
+                "reason": "Known verifier mismatch on BCC oomkill sample.",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "tcpconnect.bpf.o": {
@@ -136,6 +180,18 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "kretprobe/tcp_v4_connect": {
+                "reason": "Known verifier mismatch on BCC kretprobe return-value handling.",
+                "status": "expected_failure"
+              },
+              "kretprobe/tcp_v6_connect": {
+                "reason": "Known verifier mismatch on BCC kretprobe return-value handling.",
+                "status": "expected_failure"
+              }
+            }
           }
         }
       }
@@ -536,6 +592,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "check exit 1: 0,0.000452691,5600",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "badmapptr.o": {
@@ -550,6 +614,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "test": {
+                "reason": "check exit 1: 0,0.000270188,5440",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "badrelo.o": {
@@ -565,6 +637,14 @@
                 "invalid_reason": "Subprogram not found: ebpf_map_update_elem"
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "Subprogram not found: ebpf_map_update_elem",
+                "status": "skip"
+              }
+            }
           }
         },
         "bounded_loop.o": {
@@ -603,6 +683,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "multi-program section (2 programs)",
+                "status": "skip"
+              }
+            }
           }
         },
         "bpf_loop_helper.o": {
@@ -623,6 +711,18 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "check exit 1: 0,0.000551208,5600",
+                "status": "expected_failure"
+              },
+              "xdp": {
+                "reason": "check exit 1: 0,0.000356817,5600",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "byteswap.o": {
@@ -651,6 +751,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "xdp": {
+                "reason": "check exit 1: 0,0.00119015,6080",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "correlated_branch2.o": {
@@ -665,6 +773,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "socket_filter": {
+                "reason": "check exit 1: 0,0.00219839,6720",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "cpumap.o": {
@@ -693,6 +809,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "sockops": {
+                "reason": "check exit 1: 0,0.000384967,5760",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "dependent_read.o": {
@@ -707,6 +831,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "xdp": {
+                "reason": "check exit 1: 0,0.000690502,5600",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "devmap.o": {
@@ -749,6 +881,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "check exit 1: 0,0.000394879,5760",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "exposeptr2.o": {
@@ -763,6 +903,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "check exit 1: 0,0.000375482,5920",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "externalfunction.o": {
@@ -778,6 +926,14 @@
                 "invalid_reason": "Subprogram not found: bpf_map_lookup_elem"
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "Subprogram not found: bpf_map_lookup_elem",
+                "status": "skip"
+              }
+            }
           }
         },
         "global_func.o": {
@@ -802,6 +958,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "multi-program section (2 programs)",
+                "status": "skip"
+              }
+            }
           }
         },
         "global_variable.o": {
@@ -872,6 +1036,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "check exit 1: 0,0.000852341,5760",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "loop.o": {
@@ -886,6 +1058,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "test_md": {
+                "reason": "check exit 1: 0,0.00426658,6560",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "lpm_trie.o": {
@@ -998,6 +1178,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "check exit 1: 0,0.000477452,5920",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "nullmapref.o": {
@@ -1012,6 +1200,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "test": {
+                "reason": "check exit 1: 0,0.000356177,5600",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "packet_access.o": {
@@ -1040,6 +1236,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "xdp": {
+                "reason": "check exit 1: 0,0.000342057,5760",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "packet_reallocate.o": {
@@ -1054,6 +1258,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "socket_filter": {
+                "reason": "check exit 1: 0,0.000699083,5920",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "packet_start_ok.o": {
@@ -1110,6 +1322,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "xdp": {
+                "reason": "check exit 1: 0,0.000546048,5920",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "prog_array.o": {
@@ -1140,6 +1360,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "multi-program section (5 programs)",
+                "status": "skip"
+              }
+            }
           }
         },
         "ptr_arith.o": {
@@ -1154,6 +1382,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "xdp": {
+                "reason": "check exit 1: 0,0.000269968,5760",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "queue_stack.o": {
@@ -1168,6 +1404,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "check exit 1: 0,0.000999423,6240",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "ringbuf_in_map.o": {
@@ -1182,6 +1426,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "check exit 1: 0,0.00099032,6240",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "ringbuf_uninit.o": {
@@ -1196,6 +1448,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "check exit 1: 0,0.000259753,5600",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "sockmap.o": {
@@ -1278,6 +1538,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "xdp_prog": {
+                "reason": "check exit 1: 0,0.000208416,5600",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "twomaps.o": {
@@ -1348,6 +1616,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "xdp": {
+                "reason": "check exit 1: error: rejected: helper function is unavailable on this platform (at 7)",
+                "status": "expected_failure"
+              }
+            }
           }
         }
       }
@@ -1641,6 +1917,50 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "2/10": {
+                "reason": "check exit 1: 0,0.237792,112172",
+                "status": "expected_failure"
+              },
+              "2/15": {
+                "reason": "check exit 1: 0,0.0698688,52960",
+                "status": "expected_failure"
+              },
+              "2/16": {
+                "reason": "check exit 1: 0,0.0577298,52008",
+                "status": "expected_failure"
+              },
+              "2/17": {
+                "reason": "check exit 1: 0,0.144319,69208",
+                "status": "expected_failure"
+              },
+              "2/18": {
+                "reason": "check exit 1: 0,0.126262,51768",
+                "status": "expected_failure"
+              },
+              "2/19": {
+                "reason": "check exit 1: 0,0.0317744,39064",
+                "status": "expected_failure"
+              },
+              "2/20": {
+                "reason": "check exit 1: 0,0.0782665,34008",
+                "status": "expected_failure"
+              },
+              "2/21": {
+                "reason": "check exit 1: 0,0.0863048,40084",
+                "status": "expected_failure"
+              },
+              "2/24": {
+                "reason": "check exit 1: 0,0.0360737,41328",
+                "status": "expected_failure"
+              },
+              "2/7": {
+                "reason": "check exit 1: 0,0.326605,115928",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "bpf_xdp_dsr_linux_v1.o": {
@@ -1721,6 +2041,50 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "2/10": {
+                "reason": "check exit 1: 0,0.275209,112244",
+                "status": "expected_failure"
+              },
+              "2/15": {
+                "reason": "check exit 1: 0,0.0615763,52904",
+                "status": "expected_failure"
+              },
+              "2/16": {
+                "reason": "check exit 1: 0,0.0694554,51892",
+                "status": "expected_failure"
+              },
+              "2/17": {
+                "reason": "check exit 1: 0,0.180935,69204",
+                "status": "expected_failure"
+              },
+              "2/18": {
+                "reason": "check exit 1: 0,0.12634,51928",
+                "status": "expected_failure"
+              },
+              "2/19": {
+                "reason": "check exit 1: 0,0.0466989,38960",
+                "status": "expected_failure"
+              },
+              "2/20": {
+                "reason": "check exit 1: 0,0.0716047,34168",
+                "status": "expected_failure"
+              },
+              "2/21": {
+                "reason": "check exit 1: 0,0.0875445,40216",
+                "status": "expected_failure"
+              },
+              "2/24": {
+                "reason": "check exit 1: 0,0.0452014,41084",
+                "status": "expected_failure"
+              },
+              "2/7": {
+                "reason": "check exit 1: 0,0.288354,115624",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "bpf_xdp_dsr_linux_v1_1.o": {
@@ -1801,6 +2165,50 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "2/10": {
+                "reason": "check exit 1: 0,0.298515,118908",
+                "status": "expected_failure"
+              },
+              "2/15": {
+                "reason": "check exit 1: 0,0.0668992,56812",
+                "status": "expected_failure"
+              },
+              "2/16": {
+                "reason": "check exit 1: 0,0.059517,55388",
+                "status": "expected_failure"
+              },
+              "2/17": {
+                "reason": "check exit 1: 0,0.165251,73132",
+                "status": "expected_failure"
+              },
+              "2/18": {
+                "reason": "check exit 1: 0,0.130894,54828",
+                "status": "expected_failure"
+              },
+              "2/19": {
+                "reason": "check exit 1: 0,0.037208,41052",
+                "status": "expected_failure"
+              },
+              "2/20": {
+                "reason": "check exit 1: 0,0.0761184,36748",
+                "status": "expected_failure"
+              },
+              "2/21": {
+                "reason": "check exit 1: 0,0.12024,42188",
+                "status": "expected_failure"
+              },
+              "2/24": {
+                "reason": "check exit 1: 0,0.0413188,44092",
+                "status": "expected_failure"
+              },
+              "2/7": {
+                "reason": "check exit 1: 0,0.31442,133000",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "bpf_xdp_snat_linux.o": {
@@ -1869,6 +2277,42 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "2/10": {
+                "reason": "check exit 1: 0,0.329919,125960",
+                "status": "expected_failure"
+              },
+              "2/15": {
+                "reason": "check exit 1: 0,0.0624522,53252",
+                "status": "expected_failure"
+              },
+              "2/16": {
+                "reason": "check exit 1: 0,0.056948,51972",
+                "status": "expected_failure"
+              },
+              "2/17": {
+                "reason": "check exit 1: 0,0.187462,69320",
+                "status": "expected_failure"
+              },
+              "2/18": {
+                "reason": "check exit 1: 0,0.146491,51980",
+                "status": "expected_failure"
+              },
+              "2/19": {
+                "reason": "check exit 1: 0,0.045757,38848",
+                "status": "expected_failure"
+              },
+              "2/24": {
+                "reason": "check exit 1: 0,0.0410928,41568",
+                "status": "expected_failure"
+              },
+              "2/7": {
+                "reason": "check exit 1: 0,0.366283,136348",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "bpf_xdp_snat_linux_v1.o": {
@@ -1937,6 +2381,42 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "2/10": {
+                "reason": "check exit 1: 0,0.340861,126040",
+                "status": "expected_failure"
+              },
+              "2/15": {
+                "reason": "check exit 1: 0,0.0610335,53088",
+                "status": "expected_failure"
+              },
+              "2/16": {
+                "reason": "check exit 1: 0,0.0546895,51924",
+                "status": "expected_failure"
+              },
+              "2/17": {
+                "reason": "check exit 1: 0,0.180866,69164",
+                "status": "expected_failure"
+              },
+              "2/18": {
+                "reason": "check exit 1: 0,0.122882,52044",
+                "status": "expected_failure"
+              },
+              "2/19": {
+                "reason": "check exit 1: 0,0.0301179,39164",
+                "status": "expected_failure"
+              },
+              "2/24": {
+                "reason": "check exit 1: 0,0.0332354,41388",
+                "status": "expected_failure"
+              },
+              "2/7": {
+                "reason": "check exit 1: 0,0.355269,136524",
+                "status": "expected_failure"
+              }
+            }
           }
         }
       }
@@ -1960,6 +2440,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "tc/tail": {
+                "reason": "multi-program section (2 programs)",
+                "status": "skip"
+              }
+            }
           }
         },
         "bpf_host.o": {
@@ -2114,6 +2602,22 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "multi-program section (2 programs)",
+                "status": "skip"
+              },
+              "tc/entry": {
+                "reason": "multi-program section (5 programs)",
+                "status": "skip"
+              },
+              "tc/tail": {
+                "reason": "multi-program section (28 programs)",
+                "status": "skip"
+              }
+            }
           }
         },
         "bpf_lxc.o": {
@@ -2268,6 +2772,22 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "check exit 1: 0,0.000323527,7684",
+                "status": "expected_failure"
+              },
+              "tc/entry": {
+                "reason": "multi-program section (4 programs)",
+                "status": "skip"
+              },
+              "tc/tail": {
+                "reason": "multi-program section (30 programs)",
+                "status": "skip"
+              }
+            }
           }
         },
         "bpf_network.o": {
@@ -2394,6 +2914,22 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "multi-program section (2 programs)",
+                "status": "skip"
+              },
+              "tc/entry": {
+                "reason": "multi-program section (2 programs)",
+                "status": "skip"
+              },
+              "tc/tail": {
+                "reason": "multi-program section (19 programs)",
+                "status": "skip"
+              }
+            }
           }
         },
         "bpf_sock.o": {
@@ -2456,6 +2992,18 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "cgroup/recvmsg6": {
+                "reason": "check exit 1: 0,0.0566652,24480",
+                "status": "expected_failure"
+              },
+              "cgroup/sock_release": {
+                "reason": "check exit 1: 0,0.00110536,6240",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "bpf_wireguard.o": {
@@ -2550,6 +3098,22 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "check exit 1: 0,0.000404942,7136",
+                "status": "expected_failure"
+              },
+              "tc/entry": {
+                "reason": "multi-program section (2 programs)",
+                "status": "skip"
+              },
+              "tc/tail": {
+                "reason": "multi-program section (17 programs)",
+                "status": "skip"
+              }
+            }
           }
         },
         "bpf_xdp.o": {
@@ -2620,6 +3184,22 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "check exit 1: 0,0.000674721,7148",
+                "status": "expected_failure"
+              },
+              "xdp/entry": {
+                "reason": "check exit 1: 0,0.0237994,16096",
+                "status": "expected_failure"
+              },
+              "xdp/tail": {
+                "reason": "multi-program section (12 programs)",
+                "status": "skip"
+              }
+            }
           }
         }
       }
@@ -2694,6 +3274,14 @@
                 "invalid_reason": "Subprogram not found: invalid_kfunc"
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "socket": {
+                "reason": "multi-program section (3 programs)",
+                "status": "skip"
+              }
+            }
           }
         },
         "fentry_fexit-el.elf": {
@@ -2761,6 +3349,14 @@
                 "invalid_reason": "Subprogram not found: fwd"
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "socket": {
+                "reason": "Subprogram not found: fwd",
+                "status": "skip"
+              }
+            }
           }
         },
         "invalid-kfunc-el.elf": {
@@ -2776,6 +3372,14 @@
                 "invalid_reason": "Subprogram not found: bpf_kfunc_call_test_mem_len_pass1"
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "tc": {
+                "reason": "Subprogram not found: bpf_kfunc_call_test_mem_len_pass1",
+                "status": "skip"
+              }
+            }
           }
         },
         "invalid_btf_map_init-el.elf": {
@@ -2810,6 +3414,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "xdp": {
+                "reason": "check exit 1: 0,0.000322139,5440",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "iproute2_map_compat-el.elf": {
@@ -2841,6 +3453,14 @@
                 "invalid_reason": "Unresolved symbols found."
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "socket": {
+                "reason": "Unresolved symbols found.",
+                "status": "skip"
+              }
+            }
           }
         },
         "kfunc-el.elf": {
@@ -2878,6 +3498,22 @@
                 "invalid_reason": "Unresolved symbols found."
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "fentry/bpf_fentry_test2": {
+                "reason": "Subprogram not found: bpf_fentry_test1",
+                "status": "skip"
+              },
+              "tc": {
+                "reason": "Subprogram not found: bpf_skb_ct_lookup",
+                "status": "skip"
+              },
+              "tp_btf/task_newtask": {
+                "reason": "multi-program section (2 programs)",
+                "status": "skip"
+              }
+            }
           }
         },
         "kfunc-kmod-el.elf": {
@@ -2893,6 +3529,14 @@
                 "invalid_reason": "Subprogram not found: bpf_testmod_test_mod_kfunc"
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "tc": {
+                "reason": "Subprogram not found: bpf_testmod_test_mod_kfunc",
+                "status": "skip"
+              }
+            }
           }
         },
         "ksym-el.elf": {
@@ -2917,6 +3561,14 @@
                 "invalid_reason": "Unresolved symbols found."
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "socket": {
+                "reason": "multi-program section (2 programs)",
+                "status": "skip"
+              }
+            }
           }
         },
         "linked-el.elf": {
@@ -2979,6 +3631,18 @@
                 "invalid_reason": "Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds"
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "multi-program section (5 programs)",
+                "status": "skip"
+              },
+              "socket": {
+                "reason": "multi-program section (5 programs)",
+                "status": "skip"
+              }
+            }
           }
         },
         "linked1-el.elf": {
@@ -3027,6 +3691,18 @@
                 "invalid_reason": "Subprogram not found: l2"
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "multi-program section (4 programs)",
+                "status": "skip"
+              },
+              "socket": {
+                "reason": "multi-program section (4 programs)",
+                "status": "skip"
+              }
+            }
           }
         },
         "linked2-el.elf": {
@@ -3075,6 +3751,18 @@
                 "invalid_reason": "Subprogram not found: l1"
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "multi-program section (4 programs)",
+                "status": "skip"
+              },
+              "socket": {
+                "reason": "multi-program section (4 programs)",
+                "status": "skip"
+              }
+            }
           }
         },
         "loader-clang-14-el.elf": {
@@ -3142,6 +3830,30 @@
                 "invalid_reason": "Unresolved symbols found."
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "multi-program section (2 programs)",
+                "status": "skip"
+              },
+              "other": {
+                "reason": "check exit 1: 0,0.000375326,5760",
+                "status": "expected_failure"
+              },
+              "socket/2": {
+                "reason": "Unresolved symbols found.",
+                "status": "skip"
+              },
+              "static": {
+                "reason": "check exit 1: 0,0.000417115,5440",
+                "status": "expected_failure"
+              },
+              "xdp": {
+                "reason": "Unresolved symbols found.",
+                "status": "skip"
+              }
+            }
           }
         },
         "loader-clang-17-el.elf": {
@@ -3209,6 +3921,30 @@
                 "invalid_reason": "Unresolved symbols found."
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "multi-program section (2 programs)",
+                "status": "skip"
+              },
+              "other": {
+                "reason": "check exit 1: 0,0.0001889,5600",
+                "status": "expected_failure"
+              },
+              "socket/2": {
+                "reason": "Unresolved symbols found.",
+                "status": "skip"
+              },
+              "static": {
+                "reason": "check exit 1: 0,0.000230933,5440",
+                "status": "expected_failure"
+              },
+              "xdp": {
+                "reason": "Unresolved symbols found.",
+                "status": "skip"
+              }
+            }
           }
         },
         "loader-clang-20-el.elf": {
@@ -3276,6 +4012,30 @@
                 "invalid_reason": "Unresolved symbols found."
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "multi-program section (2 programs)",
+                "status": "skip"
+              },
+              "other": {
+                "reason": "check exit 1: 0,0.00022598,5440",
+                "status": "expected_failure"
+              },
+              "socket/2": {
+                "reason": "Unresolved symbols found.",
+                "status": "skip"
+              },
+              "static": {
+                "reason": "check exit 1: 0,0.000214258,5600",
+                "status": "expected_failure"
+              },
+              "xdp": {
+                "reason": "Unresolved symbols found.",
+                "status": "skip"
+              }
+            }
           }
         },
         "loader-el.elf": {
@@ -3343,6 +4103,30 @@
                 "invalid_reason": "Unresolved symbols found."
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "multi-program section (2 programs)",
+                "status": "skip"
+              },
+              "other": {
+                "reason": "check exit 1: 0,0.000264274,5600",
+                "status": "expected_failure"
+              },
+              "socket/2": {
+                "reason": "Unresolved symbols found.",
+                "status": "skip"
+              },
+              "static": {
+                "reason": "check exit 1: 0,0.000219431,5600",
+                "status": "expected_failure"
+              },
+              "xdp": {
+                "reason": "Unresolved symbols found.",
+                "status": "skip"
+              }
+            }
           }
         },
         "loader_nobtf-el.elf": {
@@ -3406,6 +4190,30 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "multi-program section (2 programs)",
+                "status": "skip"
+              },
+              "other": {
+                "reason": "check exit 1: 0,0.000412997,5440",
+                "status": "expected_failure"
+              },
+              "socket/2": {
+                "reason": "Unresolved symbols found.",
+                "status": "skip"
+              },
+              "static": {
+                "reason": "check exit 1: 0,0.000235583,5760",
+                "status": "expected_failure"
+              },
+              "xdp": {
+                "reason": "check exit 1: error: 18: illegal recursion",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "manyprogs-el.elf": {
@@ -3666,6 +4474,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "xdp": {
+                "reason": "check exit 1: 0,0.000711393,6080",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "variables-el.elf": {
@@ -3708,6 +4524,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "socket": {
+                "reason": "multi-program section (8 programs)",
+                "status": "skip"
+              }
+            }
           }
         }
       }
@@ -3741,6 +4565,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "fentry/tcp_connect": {
+                "reason": "check exit 1: 0,0.000216776,5920",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "kprobe_bpf_bpfel.o": {
@@ -3797,6 +4629,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "kprobe/sys_execve": {
+                "reason": "check exit 1: 0,0.000450109,5760",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "tcprtt_bpf_bpfel.o": {
@@ -3811,6 +4651,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "fentry/tcp_close": {
+                "reason": "check exit 1: 0,0.000256982,5600",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "tcprtt_sockops_bpf_bpfel.o": {
@@ -3825,6 +4673,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "sockops": {
+                "reason": "check exit 1: 0,0.00350142,7520",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "tcx_bpf_bpfel.o": {
@@ -3843,6 +4699,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "tc": {
+                "reason": "multi-program section (2 programs)",
+                "status": "skip"
+              }
+            }
           }
         },
         "tracepoint_in_c_bpf_bpfel.o": {
@@ -3871,6 +4735,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "uretprobe/bash_readline": {
+                "reason": "check exit 1: 0,0.000407425,5440",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "xdp_bpf_bpfel.o": {
@@ -4468,6 +5340,90 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "raw_tracepoint/filler/sys_accept_x": {
+                "reason": "check exit 1: 0,0.238297,89548",
+                "status": "expected_failure"
+              },
+              "raw_tracepoint/filler/sys_connect_x": {
+                "reason": "check exit 1: 0,0.163646,72996",
+                "status": "expected_failure"
+              },
+              "raw_tracepoint/filler/sys_getsockopt_x": {
+                "reason": "check exit 1: 0,0.207192,95360",
+                "status": "expected_failure"
+              },
+              "raw_tracepoint/filler/sys_nanosleep_e": {
+                "reason": "check exit 1: 0,0.0138149,12516",
+                "status": "expected_failure"
+              },
+              "raw_tracepoint/filler/sys_poll_e": {
+                "reason": "check exit 1: 0,0.115736,43680",
+                "status": "expected_failure"
+              },
+              "raw_tracepoint/filler/sys_poll_x": {
+                "reason": "check exit 1: 0,0.226801,92204",
+                "status": "expected_failure"
+              },
+              "raw_tracepoint/filler/sys_ppoll_e": {
+                "reason": "check exit 1: 0,0.0661275,34280",
+                "status": "expected_failure"
+              },
+              "raw_tracepoint/filler/sys_read_x": {
+                "reason": "check exit 1: 0,0.289784,107124",
+                "status": "expected_failure"
+              },
+              "raw_tracepoint/filler/sys_readv_preadv_x": {
+                "reason": "check exit 1: 0,0.428821,161368",
+                "status": "expected_failure"
+              },
+              "raw_tracepoint/filler/sys_recv_x": {
+                "reason": "check exit 1: 0,0.301933,106088",
+                "status": "expected_failure"
+              },
+              "raw_tracepoint/filler/sys_recvfrom_x": {
+                "reason": "check exit 1: 0,0.459311,162956",
+                "status": "expected_failure"
+              },
+              "raw_tracepoint/filler/sys_recvmsg_x": {
+                "reason": "check exit 1: 0,0.467808,165364",
+                "status": "expected_failure"
+              },
+              "raw_tracepoint/filler/sys_recvmsg_x_2": {
+                "reason": "check exit 1: 0,0.0549325,24412",
+                "status": "expected_failure"
+              },
+              "raw_tracepoint/filler/sys_send_x": {
+                "reason": "check exit 1: 0,0.250142,106196",
+                "status": "expected_failure"
+              },
+              "raw_tracepoint/filler/sys_sendmsg_e": {
+                "reason": "check exit 1: 0,0.0793531,42976",
+                "status": "expected_failure"
+              },
+              "raw_tracepoint/filler/sys_sendmsg_x": {
+                "reason": "check exit 1: 0,0.467185,174396",
+                "status": "expected_failure"
+              },
+              "raw_tracepoint/filler/sys_sendto_e": {
+                "reason": "check exit 1: 0,0.263687,100488",
+                "status": "expected_failure"
+              },
+              "raw_tracepoint/filler/sys_socket_bind_x": {
+                "reason": "check exit 1: 0,0.108348,50728",
+                "status": "expected_failure"
+              },
+              "raw_tracepoint/filler/sys_write_x": {
+                "reason": "check exit 1: 0,0.252161,108560",
+                "status": "expected_failure"
+              },
+              "raw_tracepoint/filler/sys_writev_pwritev_x": {
+                "reason": "check exit 1: 0,0.362411,159996",
+                "status": "expected_failure"
+              }
+            }
           }
         }
       }
@@ -4509,6 +5465,26 @@
                 "invalid_reason": "Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0"
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "cgroup/connect4": {
+                "reason": "Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
+                "status": "skip"
+              },
+              "cgroup/connect6": {
+                "reason": "Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
+                "status": "skip"
+              },
+              "cgroup/recv_accept4": {
+                "reason": "Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
+                "status": "skip"
+              },
+              "cgroup/recv_accept6": {
+                "reason": "Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
+                "status": "skip"
+              }
+            }
           }
         },
         "662b334a22904023c13f11008e072076a4f4d215": {
@@ -4523,6 +5499,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "xdp": {
+                "reason": "check exit 1: 0,0.000857302,5920",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "806cc077e56f0ec32236c99055714f63649e7a38": {
@@ -4569,6 +5553,26 @@
                 "invalid_reason": "Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0"
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "cgroup/connect4": {
+                "reason": "Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
+                "status": "skip"
+              },
+              "cgroup/connect6": {
+                "reason": "Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
+                "status": "skip"
+              },
+              "cgroup/recv_accept4": {
+                "reason": "Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
+                "status": "skip"
+              },
+              "cgroup/recv_accept6": {
+                "reason": "Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
+                "status": "skip"
+              }
+            }
           }
         },
         "af99e766f6ba44fd7f2135c3e325c817224b99a3": {
@@ -4583,6 +5587,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "xdp_prog": {
+                "reason": "check exit 1: 0,0.000625535,6080",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "badsymsize.o": {
@@ -4621,6 +5633,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "bind": {
+                "reason": "check exit 1: 0,0.0078959,8640",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "ef2e42c0bfcf4dab6b9c3926759365b6dfa73634": {
@@ -4649,6 +5669,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "check exit 1: unmarshaling error at 1: incomplete lddw",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "timeout-29db93548c671165313b314d4f83a3eefa24df37": {
@@ -4873,6 +5901,154 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "bind": {
+                "reason": "check exit 1: 0,0.000613432,5920",
+                "status": "expected_failure"
+              },
+              "bind/0": {
+                "reason": "check exit 1: 0,0.00148721,6880",
+                "status": "expected_failure"
+              },
+              "bind/1": {
+                "reason": "check exit 1: 0,0.00147774,6720",
+                "status": "expected_failure"
+              },
+              "bind/10": {
+                "reason": "check exit 1: 0,0.00135264,6560",
+                "status": "expected_failure"
+              },
+              "bind/11": {
+                "reason": "check exit 1: 0,0.00150479,6720",
+                "status": "expected_failure"
+              },
+              "bind/12": {
+                "reason": "check exit 1: 0,0.00148999,6720",
+                "status": "expected_failure"
+              },
+              "bind/13": {
+                "reason": "check exit 1: 0,0.00146089,6720",
+                "status": "expected_failure"
+              },
+              "bind/14": {
+                "reason": "check exit 1: 0,0.00148259,6720",
+                "status": "expected_failure"
+              },
+              "bind/15": {
+                "reason": "check exit 1: 0,0.00149265,6720",
+                "status": "expected_failure"
+              },
+              "bind/16": {
+                "reason": "check exit 1: 0,0.00144562,6560",
+                "status": "expected_failure"
+              },
+              "bind/17": {
+                "reason": "check exit 1: 0,0.00141163,6240",
+                "status": "expected_failure"
+              },
+              "bind/18": {
+                "reason": "check exit 1: 0,0.00137354,6560",
+                "status": "expected_failure"
+              },
+              "bind/19": {
+                "reason": "check exit 1: 0,0.00146723,6560",
+                "status": "expected_failure"
+              },
+              "bind/2": {
+                "reason": "check exit 1: 0,0.00146562,6560",
+                "status": "expected_failure"
+              },
+              "bind/20": {
+                "reason": "check exit 1: 0,0.00143148,6560",
+                "status": "expected_failure"
+              },
+              "bind/21": {
+                "reason": "check exit 1: 0,0.00151853,6560",
+                "status": "expected_failure"
+              },
+              "bind/22": {
+                "reason": "check exit 1: 0,0.00165074,6720",
+                "status": "expected_failure"
+              },
+              "bind/23": {
+                "reason": "check exit 1: 0,0.001439,6560",
+                "status": "expected_failure"
+              },
+              "bind/24": {
+                "reason": "check exit 1: 0,0.00142574,6720",
+                "status": "expected_failure"
+              },
+              "bind/25": {
+                "reason": "check exit 1: 0,0.00143288,6560",
+                "status": "expected_failure"
+              },
+              "bind/26": {
+                "reason": "check exit 1: 0,0.00146502,6720",
+                "status": "expected_failure"
+              },
+              "bind/27": {
+                "reason": "check exit 1: 0,0.00151092,6560",
+                "status": "expected_failure"
+              },
+              "bind/28": {
+                "reason": "check exit 1: 0,0.00138598,6560",
+                "status": "expected_failure"
+              },
+              "bind/29": {
+                "reason": "check exit 1: 0,0.00138095,6400",
+                "status": "expected_failure"
+              },
+              "bind/3": {
+                "reason": "check exit 1: 0,0.00155026,6560",
+                "status": "expected_failure"
+              },
+              "bind/30": {
+                "reason": "check exit 1: 0,0.00145247,6560",
+                "status": "expected_failure"
+              },
+              "bind/31": {
+                "reason": "check exit 1: 0,0.0017359,6560",
+                "status": "expected_failure"
+              },
+              "bind/32": {
+                "reason": "check exit 1: 0,0.00162887,6720",
+                "status": "expected_failure"
+              },
+              "bind/33": {
+                "reason": "check exit 1: 0,0.00145282,6560",
+                "status": "expected_failure"
+              },
+              "bind/34": {
+                "reason": "check exit 1: 0,0.000489861,5760",
+                "status": "expected_failure"
+              },
+              "bind/4": {
+                "reason": "check exit 1: 0,0.00143513,6560",
+                "status": "expected_failure"
+              },
+              "bind/5": {
+                "reason": "check exit 1: 0,0.00140039,6720",
+                "status": "expected_failure"
+              },
+              "bind/6": {
+                "reason": "check exit 1: 0,0.00142489,6560",
+                "status": "expected_failure"
+              },
+              "bind/7": {
+                "reason": "check exit 1: 0,0.00148781,6720",
+                "status": "expected_failure"
+              },
+              "bind/8": {
+                "reason": "check exit 1: 0,0.0013985,6240",
+                "status": "expected_failure"
+              },
+              "bind/9": {
+                "reason": "check exit 1: 0,0.00140423,6720",
+                "status": "expected_failure"
+              }
+            }
           }
         }
       }
@@ -4917,6 +6093,18 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "tp/sched/sched_process_exec": {
+                "reason": "check exit 1: 0,0.000795768,6400",
+                "status": "expected_failure"
+              },
+              "tp/sched/sched_process_exit": {
+                "reason": "check exit 1: 0,0.00154251,6400",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "bootstrap_legacy.bpf.o": {
@@ -4937,6 +6125,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "tp/sched/sched_process_exec": {
+                "reason": "check exit 1: 0,0.00400046,8160",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "fentry.bpf.o": {
@@ -4957,6 +6153,18 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "fentry/do_unlinkat": {
+                "reason": "check exit 1: 0,0.000191491,5760",
+                "status": "expected_failure"
+              },
+              "fexit/do_unlinkat": {
+                "reason": "check exit 1: 0,0.000161764,5600",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "kprobe.bpf.o": {
@@ -5002,6 +6210,18 @@
                 "invalid_reason": "Unresolved symbols found."
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "ksyscall/kill": {
+                "reason": "Unresolved symbols found.",
+                "status": "skip"
+              },
+              "ksyscall/tgkill": {
+                "reason": "Unresolved symbols found.",
+                "status": "skip"
+              }
+            }
           }
         },
         "lsm.bpf.o": {
@@ -5016,6 +6236,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "lsm/bpf": {
+                "reason": "check exit 1: 0,0.000207624,5440",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "minimal.bpf.o": {
@@ -5072,6 +6300,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "perf_event": {
+                "reason": "check exit 1: 0,0.000653402,6080",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "sockfilter.bpf.o": {
@@ -5086,6 +6322,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "socket": {
+                "reason": "check exit 1: 0,0.00128552,6400",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "task_iter.bpf.o": {
@@ -5100,6 +6344,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "iter/task": {
+                "reason": "check exit 1: 0,0.000251085,6120",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "tc.bpf.o": {
@@ -5187,6 +6439,22 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "multi-program section (3 programs)",
+                "status": "skip"
+              },
+              "usdt": {
+                "reason": "check exit 1: 0,0.0020695,7680",
+                "status": "expected_failure"
+              },
+              "usdt/libc.so.6:libc:setjmp": {
+                "reason": "check exit 1: 0,0.00204419,7680",
+                "status": "expected_failure"
+              }
+            }
           }
         }
       }
@@ -5782,6 +7050,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "kprobe/sys_connect": {
+                "reason": "check exit 1: 0,0.00316741,7360",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "test_overhead_kprobe_kern.o": {
@@ -6389,6 +7665,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "raw_tp/sys_enter": {
+                "reason": "multi-program section (7 programs)",
+                "status": "skip"
+              }
+            }
           }
         },
         "bloom_filter_map.o": {
@@ -6413,6 +7697,18 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "check exit 1: 0,0.000216032,5600",
+                "status": "expected_failure"
+              },
+              "fentry/__x64_sys_getpgid": {
+                "reason": "multi-program section (2 programs)",
+                "status": "skip"
+              }
+            }
           }
         },
         "bpf_cubic.o": {
@@ -6462,6 +7758,14 @@
                 "invalid_reason": "Unresolved symbols found."
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "struct_ops": {
+                "reason": "multi-program section (7 programs)",
+                "status": "skip"
+              }
+            }
           }
         },
         "bpf_dctcp.o": {
@@ -6507,6 +7811,14 @@
                 "invalid_reason": "Subprogram not found: tcp_reno_cong_avoid"
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "struct_ops": {
+                "reason": "multi-program section (7 programs)",
+                "status": "skip"
+              }
+            }
           }
         },
         "fexit_sleep.o": {
@@ -6541,6 +7853,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "freplace/get_constant": {
+                "reason": "check exit 1: 0,0.00018251,5600",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "get_cgroup_id_kern.o": {
@@ -6581,6 +7901,22 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "fentry/eth_type_trans": {
+                "reason": "check exit 1: 0,0.000181165,5440",
+                "status": "expected_failure"
+              },
+              "fexit/eth_type_trans": {
+                "reason": "check exit 1: 0,0.000182927,5600",
+                "status": "expected_failure"
+              },
+              "tp_btf/kfree_skb": {
+                "reason": "check exit 1: 0,0.000373669,6080",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "loop1.o": {
@@ -6623,6 +7959,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "raw_tracepoint/consume_skb": {
+                "reason": "verification timed out after 20s",
+                "status": "skip"
+              }
+            }
           }
         },
         "loop4.o": {
@@ -6744,6 +8088,18 @@
                 "invalid_reason": "Subprogram not found: bpf_map_sum_elem_count"
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "multi-program section (19 programs)",
+                "status": "skip"
+              },
+              "cgroup_skb/egress": {
+                "reason": "Subprogram not found: bpf_map_sum_elem_count",
+                "status": "skip"
+              }
+            }
           }
         },
         "socket_cookie_prog.o": {
@@ -6770,6 +8126,22 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "cgroup/connect6": {
+                "reason": "check exit 1: 0,0.000509801,5600",
+                "status": "expected_failure"
+              },
+              "fexit/inet_stream_connect": {
+                "reason": "check exit 1: 0,0.000206388,6228",
+                "status": "expected_failure"
+              },
+              "sockops": {
+                "reason": "check exit 1: 0,0.000253494,6228",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "sockmap_parse_prog.o": {
@@ -6824,6 +8196,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "tc": {
+                "reason": "multi-program section (4 programs)",
+                "status": "skip"
+              }
+            }
           }
         },
         "tailcall2.o": {
@@ -6858,6 +8238,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "tc": {
+                "reason": "multi-program section (6 programs)",
+                "status": "skip"
+              }
+            }
           }
         },
         "tailcall3.o": {
@@ -6876,6 +8264,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "tc": {
+                "reason": "multi-program section (2 programs)",
+                "status": "skip"
+              }
+            }
           }
         },
         "test_global_func1.o": {
@@ -6908,6 +8304,18 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "multi-program section (4 programs)",
+                "status": "skip"
+              },
+              "tc": {
+                "reason": "check exit 1: 0,0.00400499,10720",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "test_global_func_args.o": {
@@ -6936,6 +8344,14 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "multi-program section (3 programs)",
+                "status": "skip"
+              }
+            }
           }
         },
         "test_spin_lock.o": {
@@ -6978,6 +8394,22 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "multi-program section (3 programs)",
+                "status": "skip"
+              },
+              "cgroup_skb/ingress": {
+                "reason": "check exit 1: 0,0.00508756,8160",
+                "status": "expected_failure"
+              },
+              "tc": {
+                "reason": "multi-program section (3 programs)",
+                "status": "skip"
+              }
+            }
           }
         }
       }
@@ -7417,6 +8849,18 @@
                 "invalid": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "reason": "check exit 1: 0,0.000394007,5760",
+                "status": "expected_failure"
+              },
+              "xdp_prog": {
+                "reason": "check exit 1: 0,0.00913415,8800",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "xdp_monitor_kern.o": {
