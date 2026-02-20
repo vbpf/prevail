@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "ebpf_verifier.hpp"
+#include "elf_loader.hpp"
 #ifdef _WIN32
 #include "memsize_windows.hpp"
 #else
@@ -190,7 +191,7 @@ int main(int argc, char** argv) {
     if (!list) {
         try {
             raw_progs = elf.get_programs(desired_section, desired_program);
-        } catch (std::runtime_error& e) {
+        } catch (const std::runtime_error& e) {
             load_error = e.what();
         }
     }

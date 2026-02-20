@@ -4,8 +4,12 @@
 #include "test_verify.hpp"
 
 static void test_analyze_thread(const Program* prog, const ProgramInfo* info, bool* res) {
-    thread_local_program_info.set(*info);
-    *res = verify(*prog);
+    try {
+        thread_local_program_info.set(*info);
+        *res = verify(*prog);
+    } catch (...) {
+        *res = false;
+    }
 }
 
 // Test multithreading
@@ -28,7 +32,8 @@ TEST_CASE("multithreading", "[verify][multithreading]") {
     REQUIRE(inst_seq2);
     const Program prog2 = Program::from_sequence(*inst_seq2, raw_prog2.info, {});
 
-    bool res1, res2;
+    bool res1 = false;
+    bool res2 = false;
     std::thread a(test_analyze_thread, &prog1, &raw_prog1.info, &res1);
     std::thread b(test_analyze_thread, &prog2, &raw_prog2.info, &res2);
     a.join();

@@ -8,9 +8,36 @@ import re
 import sys
 from pathlib import Path
 
+VALID_KINDS = {
+    "VerifierTypeTracking",
+    "VerifierBoundsTracking",
+    "VerifierStackInitialization",
+    "VerifierPointerArithmetic",
+    "VerifierMapTyping",
+    "VerifierNullability",
+    "VerifierContextModeling",
+    "VerifierRecursionModeling",
+    "UnmarshalControlFlow",
+    "ExternalSymbolResolution",
+    "PlatformHelperAvailability",
+    "ElfCoreRelocation",
+    "ElfSubprogramResolution",
+    "ElfLegacyMapLayout",
+    "VerificationTimeout",
+    "LegacyBccBehavior",
+}
+
 
 def cpp_string(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def cpp_kind(kind: str | None) -> str:
+    if kind is None:
+        raise ValueError("Missing required failure kind")
+    if kind not in VALID_KINDS:
+        raise ValueError(f"Unsupported kind '{kind}'")
+    return f"verify_test::VerifyIssueKind::{kind}"
 
 
 def parse_args() -> argparse.Namespace:
@@ -29,28 +56,46 @@ def section_override(obj: dict, section: str) -> dict | None:
     return obj.get("test_overrides", {}).get("sections", {}).get(section)
 
 
-def classify_section(obj: dict, section: str, programs: list[dict]) -> tuple[str, str | None]:
+def program_override(obj: dict, section: str, function_name: str) -> dict | None:
+    return obj.get("test_overrides", {}).get("programs", {}).get(section, {}).get(function_name)
+
+
+def is_load_failure_reason(reason: str | None) -> bool:
+    if reason is None:
+        return False
+    return reason.startswith("Unsupported or invalid CO-RE/BTF relocation data:") or reason.startswith(
+        "Subprogram not found:"
+    )
+
+
+def classify_section(obj: dict, section: str, programs: list[dict]) -> tuple[str, str | None, str | None]:
     override = section_override(obj, section)
     if override is not None:
         status = override.get("status")
+        kind = override.get("kind")
         reason = override.get("reason")
         if status not in ("pass", "expected_failure", "skip"):
             raise ValueError(f"Unsupported status '{status}' for section '{section}'")
-        if status in ("expected_failure", "skip") and not reason:
-            raise ValueError(f"Missing reason for section '{section}' with status '{status}'")
-        return status, reason
+        if status in ("expected_failure", "skip"):
+            if not kind:
+                raise ValueError(f"Missing kind for section '{section}' with status '{status}'")
+            if not reason:
+                raise ValueError(f"Missing reason for section '{section}' with status '{status}'")
+        return status, kind, reason
 
     if len(programs) != 1:
-        return "skip", f"multi-program section ({len(programs)} programs)"
+        return "pass", None, None
 
     if any(program.get("invalid", False) for program in programs):
         reason = next((program.get("invalid_reason") for program in programs if program.get("invalid_reason")), None)
-        return "skip", reason or "invalid section in ELF metadata"
+        return "skip", "ElfSubprogramResolution", reason or "invalid section in ELF metadata"
 
-    return "pass", None
+    return "pass", None, None
 
 
-def render_test(project: str, object_name: str, section_name: str, status: str, reason: str | None) -> list[str]:
+def render_test(
+    project: str, object_name: str, section_name: str, status: str, kind: str | None, reason: str | None
+) -> list[str]:
     p = cpp_string(project)
     o = cpp_string(object_name)
     s = cpp_string(section_name)
@@ -59,13 +104,45 @@ def render_test(project: str, object_name: str, section_name: str, status: str, 
     if status == "pass":
         return [f'TEST_SECTION("{p}", "{o}", "{s}")']
     if status == "expected_failure":
-        return [f"// expected failure: {reason}", f'TEST_SECTION_FAIL("{p}", "{o}", "{s}")']
-    if status == "skip":
         return [
-            f'TEST_CASE("{p}/{o} {s}", "[verify][samples][{p}]") {{',
-            f'    SKIP("{reason_text}");',
-            "}",
+            f"// expected failure ({kind}): {reason}",
+            f'TEST_SECTION_FAIL("{p}", "{o}", "{s}", {cpp_kind(kind)}, "{reason_text}")',
         ]
+    if status == "skip":
+        if is_load_failure_reason(reason):
+            return [
+                f"// expected load failure ({kind}): {reason}",
+                f'TEST_SECTION_LOAD_FAIL("{p}", "{o}", "{s}", {cpp_kind(kind)}, "{reason_text}")',
+            ]
+        return [f'// skipped ({kind}): {reason}', f'TEST_SECTION_SKIP("{p}", "{o}", "{s}", {cpp_kind(kind)}, "{reason_text}")']
+    raise ValueError(f"Unsupported status '{status}'")
+
+
+def render_program_test(
+    project: str,
+    object_name: str,
+    section_name: str,
+    function_name: str,
+    section_program_count: int,
+    status: str,
+    kind: str | None,
+    reason: str | None,
+) -> list[str]:
+    p = cpp_string(project)
+    o = cpp_string(object_name)
+    s = cpp_string(section_name)
+    f = cpp_string(function_name)
+    reason_text = cpp_string(reason or "")
+
+    if status == "pass":
+        return [f'TEST_PROGRAM("{p}", "{o}", "{s}", "{f}", {section_program_count})']
+    if status == "expected_failure":
+        return [
+            f"// expected failure ({kind}): {reason}",
+            f'TEST_PROGRAM_FAIL("{p}", "{o}", "{s}", "{f}", {section_program_count}, {cpp_kind(kind)}, "{reason_text}")',
+        ]
+    if status == "skip":
+        return [f'// skipped ({kind}): {reason}', f'TEST_PROGRAM_SKIP("{p}", "{o}", "{s}", "{f}", {cpp_kind(kind)}, "{reason_text}")']
     raise ValueError(f"Unsupported status '{status}'")
 
 
@@ -87,10 +164,41 @@ def generate(inventory: dict, project: str) -> str:
         obj = project_entry["objects"][object_name]
         for section_name in sorted(obj["sections"].keys()):
             programs = obj["sections"][section_name]
-            status, reason = classify_section(obj, section_name, programs)
-            lines.extend(render_test(project, object_name, section_name, status, reason))
+            if len(programs) == 1:
+                status, kind, reason = classify_section(obj, section_name, programs)
+                lines.extend(render_test(project, object_name, section_name, status, kind, reason))
+                continue
 
-    lines.append("")
+            for program in sorted(programs, key=lambda p: p["function"]):
+                function_name = program["function"]
+                override = program_override(obj, section_name, function_name)
+                if override is not None:
+                    status = override.get("status")
+                    kind = override.get("kind")
+                    reason = override.get("reason")
+                    if status not in ("pass", "expected_failure", "skip"):
+                        raise ValueError(
+                            f"Unsupported status '{status}' for program '{function_name}' in section '{section_name}'"
+                        )
+                    if status in ("expected_failure", "skip"):
+                        if not kind:
+                            raise ValueError(
+                                f"Missing kind for program '{function_name}' in section '{section_name}' with status '{status}'"
+                            )
+                        if not reason:
+                            raise ValueError(
+                                f"Missing reason for program '{function_name}' in section '{section_name}' with status '{status}'"
+                            )
+                else:
+                    status = "pass"
+                    kind = None
+                    reason = None
+                lines.extend(
+                    render_program_test(
+                        project, object_name, section_name, function_name, len(programs), status, kind, reason
+                    )
+                )
+
     return "\n".join(lines)
 
 

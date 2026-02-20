@@ -75,7 +75,7 @@ def inspect_object(check_bin: Path, root: Path, elf_path: Path, timeout_seconds:
     program_count = sum(len(programs) for programs in sections.values())
 
     project = rel.parts[0] if len(rel.parts) >= 2 else "_root"
-    object_name = rel.name
+    object_name = Path(*rel.parts[1:]).as_posix() if len(rel.parts) >= 2 else rel.as_posix()
 
     return project, object_name, {
         "exit_code": completed.returncode,
