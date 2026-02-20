@@ -1541,9 +1541,7 @@ size_t ElfObject::QueryKeyHash::operator()(const QueryKey& key) const noexcept {
 ElfObject::ElfObject(std::string path, ebpf_verifier_options_t options, const ebpf_platform_t* platform)
     : path_(std::move(path)), options_(std::move(options)), platform_(platform) {}
 
-const std::string& ElfObject::path() const noexcept {
-    return path_;
-}
+const std::string& ElfObject::path() const noexcept { return path_; }
 
 void ElfObject::discover_programs() {
     if (catalog_loaded_) {

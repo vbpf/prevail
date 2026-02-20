@@ -1,6 +1,7 @@
 # This file uses regular expressions, not shell globs!
 vcpkg.json
 vcpkg-configuration.json
+test-data/elf_inventory.json
 
 # File extensions that don't support embedding license info
 .*\.a$

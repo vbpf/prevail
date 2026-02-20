@@ -933,7 +933,7 @@ TEST_CASE("unmarshal builtin calls only when relocation-gated", "[disasm][marsha
 #define FAIL_UNMARSHAL(dirname, filename, sectionname)                                                       \
     TEST_CASE("Try unmarshalling bad program: " dirname "/" filename " " sectionname, "[unmarshal]") {       \
         thread_local_options = {};                                                                           \
-        ElfObject elf{"ebpf-samples/" dirname "/" filename, {}, &g_ebpf_platform_linux};                    \
+        ElfObject elf{"ebpf-samples/" dirname "/" filename, {}, &g_ebpf_platform_linux};                     \
         const auto& raw_progs = elf.get_programs(sectionname);                                               \
         REQUIRE(raw_progs.size() == 1);                                                                      \
         const RawProgram& raw_prog = raw_progs.back();                                                       \
