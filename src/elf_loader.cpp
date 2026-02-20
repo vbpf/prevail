@@ -4,6 +4,7 @@
 #include <cerrno>
 #include <cstddef>
 #include <cstring>
+#include <deque>
 #include <functional>
 #include <iostream>
 #include <limits>
@@ -152,6 +153,83 @@ get_program_name_and_size(const ELFIO::section& sec, const ELFIO::Elf_Xword star
         }
     }
     return {program_name, size};
+}
+
+ELFIO::Elf_Xword compute_reachable_program_span(const std::vector<EbpfInst>& section_instructions,
+                                                const ELFIO::Elf_Xword program_offset,
+                                                const ELFIO::Elf_Xword initial_size) {
+    if (section_instructions.empty()) {
+        return initial_size;
+    }
+
+    const size_t total = section_instructions.size();
+    const size_t start = program_offset / sizeof(EbpfInst);
+    size_t initial_end = (program_offset + initial_size) / sizeof(EbpfInst);
+    if (start >= total || initial_end <= start) {
+        return initial_size;
+    }
+    initial_end = std::min(initial_end, total);
+
+    auto mark = [&](const int64_t index, std::vector<bool>& seen, std::deque<size_t>& work) {
+        if (index < 0 || index >= gsl::narrow<int64_t>(total)) {
+            return;
+        }
+        const size_t idx = gsl::narrow<size_t>(index);
+        if (seen[idx]) {
+            return;
+        }
+        seen[idx] = true;
+        work.push_back(idx);
+    };
+
+    std::vector<bool> seen(total, false);
+    std::deque<size_t> work;
+    mark(gsl::narrow<int64_t>(start), seen, work);
+
+    size_t max_reachable = initial_end - 1;
+    while (!work.empty()) {
+        const size_t pc = work.front();
+        work.pop_front();
+        max_reachable = std::max(max_reachable, pc);
+
+        const EbpfInst& inst = section_instructions[pc];
+        const bool is_lddw = inst.opcode == INST_OP_LDDW_IMM;
+        const size_t fallthrough = pc + (is_lddw ? 2 : 1);
+
+        // LDDW is a two-slot instruction, so keep the high slot in range.
+        if (is_lddw && pc + 1 < total) {
+            mark(gsl::narrow<int64_t>(pc + 1), seen, work);
+            max_reachable = std::max(max_reachable, pc + 1);
+        }
+
+        const uint8_t cls = inst.opcode & INST_CLS_MASK;
+        if (cls == INST_CLS_JMP || cls == INST_CLS_JMP32) {
+            const uint8_t op = (inst.opcode >> 4) & 0xF;
+            if (op == INST_EXIT) {
+                continue;
+            }
+            if (op == INST_CALL) {
+                if (inst.opcode == INST_OP_CALL && inst.src == INST_CALL_LOCAL) {
+                    const int64_t target = gsl::narrow<int64_t>(pc) + 1 + inst.imm;
+                    mark(target, seen, work);
+                }
+                mark(gsl::narrow<int64_t>(fallthrough), seen, work);
+                continue;
+            }
+
+            const int64_t target = gsl::narrow<int64_t>(pc) + 1 + inst.offset;
+            mark(target, seen, work);
+            if (op != INST_JA) {
+                mark(gsl::narrow<int64_t>(fallthrough), seen, work);
+            }
+            continue;
+        }
+
+        mark(gsl::narrow<int64_t>(fallthrough), seen, work);
+    }
+
+    const size_t span_end = std::max(initial_end, max_reachable + 1);
+    return gsl::narrow<ELFIO::Elf_Xword>((span_end - start) * sizeof(EbpfInst));
 }
 
 std::string bad_reloc_value(const size_t reloc_value) {
@@ -1393,15 +1471,17 @@ void ProgramReader::read_programs() {
         if (!(sec->get_flags() & ELFIO::SHF_EXECINSTR) || !sec->get_size() || !sec->get_data()) {
             continue;
         }
+        auto section_instructions = vector_of<EbpfInst>(*sec);
         const auto& sec_name = sec->get_name();
         const auto prog_type = parse_params.platform->get_program_type(sec_name, parse_params.path);
         for (ELFIO::Elf_Xword offset = 0; offset < sec->get_size();) {
             builtin_offsets_for_current_program.clear();
-            auto [name, size] = get_program_name_and_size(*sec, offset, symbols);
-            auto instructions = vector_of<EbpfInst>(sec->get_data() + offset, size);
+            auto [name, symbol_size] = get_program_name_and_size(*sec, offset, symbols);
+            const auto extracted_size = compute_reachable_program_span(section_instructions, offset, symbol_size);
+            auto instructions = vector_of<EbpfInst>(sec->get_data() + offset, extracted_size);
             if (const auto reloc_sec = get_relocation_section(sec_name)) {
                 process_relocations(instructions, ELFIO::const_relocation_section_accessor{reader, reloc_sec}, sec_name,
-                                    offset, size);
+                                    offset, extracted_size);
             }
             ProgramInfo program_info{
                 .platform = parse_params.platform,
@@ -1417,7 +1497,7 @@ void ProgramReader::read_programs() {
                 std::move(instructions),
                 std::move(program_info),
             });
-            offset += size;
+            offset += symbol_size;
         }
     }
 

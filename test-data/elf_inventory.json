@@ -8781,93 +8781,93 @@
                   "status": "expected_failure"
                 },
                 "check_array_of_maps": {
-                  "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 15: jump out of bounds",
+                  "kind": "VerifierTypeTracking",
+                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 9: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
                   "status": "expected_failure"
                 },
                 "check_cgroup_storage": {
-                  "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 13: jump out of bounds",
+                  "kind": "VerifierTypeTracking",
+                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
                   "status": "expected_failure"
                 },
                 "check_cpumap": {
-                  "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 13: jump out of bounds",
+                  "kind": "VerifierTypeTracking",
+                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
                   "status": "expected_failure"
                 },
                 "check_default_noinline": {
-                  "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 9: jump out of bounds",
+                  "kind": "VerifierTypeTracking",
+                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 9/16: Invalid type (r2.type in {ctx, stack, packet, shared})",
                   "status": "expected_failure"
                 },
                 "check_devmap": {
-                  "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 13: jump out of bounds",
+                  "kind": "VerifierTypeTracking",
+                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
                   "status": "expected_failure"
                 },
                 "check_devmap_hash": {
-                  "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 13: jump out of bounds",
+                  "kind": "VerifierTypeTracking",
+                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
                   "status": "expected_failure"
                 },
                 "check_hash_of_maps": {
-                  "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 15: jump out of bounds",
+                  "kind": "VerifierTypeTracking",
+                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 9: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
                   "status": "expected_failure"
                 },
                 "check_lpm_trie": {
-                  "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 13: jump out of bounds",
+                  "kind": "VerifierTypeTracking",
+                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
                   "status": "expected_failure"
                 },
                 "check_lru_percpu_hash": {
-                  "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 13: jump out of bounds",
+                  "kind": "VerifierTypeTracking",
+                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
                   "status": "expected_failure"
                 },
                 "check_percpu_cgroup_storage": {
-                  "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 13: jump out of bounds",
+                  "kind": "VerifierTypeTracking",
+                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
                   "status": "expected_failure"
                 },
                 "check_queue": {
-                  "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 13: jump out of bounds",
+                  "kind": "VerifierTypeTracking",
+                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
                   "status": "expected_failure"
                 },
                 "check_reuseport_sockarray": {
-                  "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 13: jump out of bounds",
+                  "kind": "VerifierTypeTracking",
+                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
                   "status": "expected_failure"
                 },
                 "check_ringbuf": {
-                  "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 15: jump out of bounds",
+                  "kind": "VerifierTypeTracking",
+                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
                   "status": "expected_failure"
                 },
                 "check_sk_storage": {
-                  "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 13: jump out of bounds",
+                  "kind": "VerifierTypeTracking",
+                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
                   "status": "expected_failure"
                 },
                 "check_sockhash": {
-                  "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 13: jump out of bounds",
+                  "kind": "VerifierTypeTracking",
+                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
                   "status": "expected_failure"
                 },
                 "check_sockmap": {
-                  "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 13: jump out of bounds",
+                  "kind": "VerifierTypeTracking",
+                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
                   "status": "expected_failure"
                 },
                 "check_stack": {
-                  "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 13: jump out of bounds",
+                  "kind": "VerifierTypeTracking",
+                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
                   "status": "expected_failure"
                 },
                 "check_xskmap": {
-                  "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 13: jump out of bounds",
+                  "kind": "VerifierTypeTracking",
+                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
                   "status": "expected_failure"
                 }
               }
@@ -9066,11 +9066,6 @@
           "test_overrides": {
             "programs": {
               ".text": {
-                "f1": {
-                  "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 39: jump out of bounds",
-                  "status": "expected_failure"
-                },
                 "f2": {
                   "kind": "VerifierTypeTracking",
                   "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1: Invalid type (r1.type == number)",
@@ -9081,13 +9076,6 @@
                   "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 0: Invalid type (r3.type == number)",
                   "status": "expected_failure"
                 }
-              }
-            },
-            "sections": {
-              "tc": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1/57/63: Invalid type (r1.type == number)",
-                "status": "expected_failure"
               }
             }
           }
@@ -9199,7 +9187,7 @@
                 },
                 "lock_static_subprog_lock": {
                   "kind": "UnmarshalControlFlow",
-                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 0: jump out of bounds",
+                  "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 0: jump to middle of lddw",
                   "status": "expected_failure"
                 },
                 "lock_static_subprog_unlock": {
