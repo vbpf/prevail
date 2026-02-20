@@ -19,6 +19,18 @@ using namespace prevail;
         }                                                                                                \
     }
 
+// Like FAIL_LOAD_ELF, but includes sectionname in the test name to avoid collisions
+// when multiple sections of the same file fail to load.
+#define FAIL_LOAD_ELF_SECTION(dirname, filename, sectionname)                                            \
+    TEST_CASE("Try loading bad section: " dirname "/" filename " " sectionname, "[elf]") {               \
+        try {                                                                                            \
+            thread_local_options = {};                                                                   \
+            read_elf("ebpf-samples/" dirname "/" filename, sectionname, "", {}, &g_ebpf_platform_linux); \
+            REQUIRE(false);                                                                              \
+        } catch (const std::runtime_error&) {                                                            \
+        }                                                                                                \
+    }
+
 // Some intentional failures
 FAIL_LOAD_ELF("cilium", "not-found.o", "2/1")
 FAIL_LOAD_ELF("cilium", "bpf_lxc.o", "not-found")
@@ -1089,6 +1101,227 @@ TEST_SECTION_REJECT("build", "packet_overflow.o", "xdp")
 TEST_SECTION_REJECT("build", "packet_reallocate.o", "socket_filter")
 TEST_SECTION_REJECT("build", "tail_call_bad.o", "xdp_prog")
 TEST_SECTION_REJECT("build", "ringbuf_uninit.o", ".text");
+// Intentional OOB access in else branch
+TEST_SECTION_REJECT("build", "invalid_map_access.o", ".text")
+
+TEST_SECTION("build", "twomaps_btf.o", ".text")
+// bpf_loop callback not supported
+TEST_SECTION_FAIL("build", "bpf_loop_helper.o", "xdp")
+TEST_SECTION("build", "cpumap.o", "xdp")
+TEST_SECTION("build", "devmap.o", "xdp")
+TEST_SECTION("build", "hash_of_maps.o", ".text")
+TEST_SECTION("build", "lpm_trie.o", "xdp")
+TEST_SECTION("build", "percpu_array.o", "xdp")
+TEST_SECTION("build", "percpu_hash.o", "xdp")
+// perf_event_output helper not modeled
+TEST_SECTION_FAIL("build", "perf_event_array.o", "xdp")
+// queue/stack pop helper not modeled
+TEST_SECTION_FAIL("build", "queue_stack.o", ".text")
+TEST_SECTION("build", "sockmap.o", "sk_skb/stream_verdict")
+TEST_SECTION("build", "global_func.o", "xdp")
+// global subprograms verified standalone fail (no calling context)
+TEST_PROGRAM_FAIL("build", "global_func.o", ".text", "add_and_store", 2)
+TEST_PROGRAM_FAIL("build", "global_func.o", ".text", "process_entry", 2)
+
+// katran
+TEST_SECTION("katran", "xdp_root.o", "xdp")
+
+// bcc libbpf-tools
+TEST_SECTION_FAIL("bcc", "bashreadline.bpf.o", "uretprobe/readline")
+// unresolved extern LINUX_KERNEL_VERSION
+FAIL_LOAD_ELF_SECTION("bcc", "capable.bpf.o", "kprobe/cap_capable")
+FAIL_LOAD_ELF_SECTION("bcc", "capable.bpf.o", "kretprobe/cap_capable")
+TEST_SECTION("bcc", "exitsnoop.bpf.o", "tracepoint/sched/sched_process_exit")
+TEST_SECTION_FAIL("bcc", "filelife.bpf.o", "kprobe/vfs_create")
+TEST_SECTION_FAIL("bcc", "filelife.bpf.o", "kprobe/vfs_open")
+TEST_SECTION_FAIL("bcc", "filelife.bpf.o", "kprobe/security_inode_create")
+TEST_SECTION("bcc", "filelife.bpf.o", "kprobe/vfs_unlink")
+TEST_SECTION_FAIL("bcc", "filelife.bpf.o", "kretprobe/vfs_unlink")
+TEST_SECTION_FAIL("bcc", "oomkill.bpf.o", "kprobe/oom_kill_process")
+TEST_SECTION("bcc", "tcpconnect.bpf.o", "kprobe/tcp_v4_connect")
+TEST_SECTION_FAIL("bcc", "tcpconnect.bpf.o", "kretprobe/tcp_v4_connect")
+TEST_SECTION("bcc", "tcpconnect.bpf.o", "kprobe/tcp_v6_connect")
+TEST_SECTION_FAIL("bcc", "tcpconnect.bpf.o", "kretprobe/tcp_v6_connect")
+
+// libbpf-bootstrap
+TEST_SECTION_FAIL("libbpf-bootstrap", "bootstrap.bpf.o", "tp/sched/sched_process_exec")
+TEST_SECTION_FAIL("libbpf-bootstrap", "bootstrap.bpf.o", "tp/sched/sched_process_exit")
+TEST_SECTION_FAIL("libbpf-bootstrap", "bootstrap_legacy.bpf.o", "tp/sched/sched_process_exec")
+TEST_SECTION("libbpf-bootstrap", "bootstrap_legacy.bpf.o", "tp/sched/sched_process_exit")
+TEST_SECTION_FAIL("libbpf-bootstrap", "fentry.bpf.o", "fentry/do_unlinkat")
+TEST_SECTION_FAIL("libbpf-bootstrap", "fentry.bpf.o", "fexit/do_unlinkat")
+TEST_SECTION("libbpf-bootstrap", "kprobe.bpf.o", "kprobe/do_unlinkat")
+TEST_SECTION("libbpf-bootstrap", "kprobe.bpf.o", "kretprobe/do_unlinkat")
+// unresolved extern LINUX_HAS_SYSCALL_WRAPPER
+FAIL_LOAD_ELF_SECTION("libbpf-bootstrap", "ksyscall.bpf.o", "ksyscall/tgkill")
+FAIL_LOAD_ELF_SECTION("libbpf-bootstrap", "ksyscall.bpf.o", "ksyscall/kill")
+TEST_SECTION_FAIL("libbpf-bootstrap", "lsm.bpf.o", "lsm/bpf")
+TEST_SECTION("libbpf-bootstrap", "minimal.bpf.o", "tp/syscalls/sys_enter_write")
+TEST_SECTION("libbpf-bootstrap", "minimal_legacy.bpf.o", "tp/syscalls/sys_enter_write")
+TEST_SECTION("libbpf-bootstrap", "minimal_ns.bpf.o", "tp/syscalls/sys_enter_write")
+TEST_SECTION_FAIL("libbpf-bootstrap", "profile.bpf.o", "perf_event")
+TEST_SECTION_FAIL("libbpf-bootstrap", "sockfilter.bpf.o", "socket")
+TEST_SECTION_FAIL("libbpf-bootstrap", "task_iter.bpf.o", "iter/task")
+TEST_SECTION("libbpf-bootstrap", "tc.bpf.o", "tc")
+TEST_SECTION("libbpf-bootstrap", "uprobe.bpf.o", "uprobe")
+TEST_SECTION("libbpf-bootstrap", "uprobe.bpf.o", "uretprobe")
+TEST_SECTION("libbpf-bootstrap", "uprobe.bpf.o", "uprobe//proc/self/exe:uprobed_sub")
+TEST_SECTION("libbpf-bootstrap", "uprobe.bpf.o", "uretprobe//proc/self/exe:uprobed_sub")
+// unresolved extern LINUX_HAS_BPF_COOKIE
+FAIL_LOAD_ELF_SECTION("libbpf-bootstrap", "usdt.bpf.o", "usdt/libc.so.6:libc:setjmp")
+FAIL_LOAD_ELF_SECTION("libbpf-bootstrap", "usdt.bpf.o", "usdt")
+
+// linux-selftests
+// multi-program section (7 progs)
+// TEST_SECTION("linux-selftests", "atomics.o", "raw_tp/sys_enter") -- 7 programs in section
+// multi-program section (2 progs)
+// TEST_SECTION("linux-selftests", "bloom_filter_map.o", "fentry/__x64_sys_getpgid") -- 2 programs in section
+// unresolved extern CONFIG_HZ
+FAIL_LOAD_ELF_SECTION("linux-selftests", "bpf_cubic.o", "struct_ops")
+// subprogram not found: tcp_reno_cong_avoid (extern kernel function)
+FAIL_LOAD_ELF_SECTION("linux-selftests", "bpf_dctcp.o", "struct_ops")
+TEST_SECTION("linux-selftests", "fexit_sleep.o", "fentry/__x64_sys_nanosleep")
+TEST_SECTION("linux-selftests", "fexit_sleep.o", "fexit/__x64_sys_nanosleep")
+TEST_SECTION_FAIL("linux-selftests", "freplace_get_constant.o", "freplace/get_constant")
+TEST_SECTION("linux-selftests", "get_cgroup_id_kern.o", "tracepoint/syscalls/sys_enter_nanosleep")
+// BTF-typed arguments not modeled
+TEST_SECTION_FAIL("linux-selftests", "kfree_skb.o", "tp_btf/kfree_skb")
+TEST_SECTION_FAIL("linux-selftests", "kfree_skb.o", "fentry/eth_type_trans")
+TEST_SECTION_FAIL("linux-selftests", "kfree_skb.o", "fexit/eth_type_trans")
+TEST_SECTION("linux-selftests", "loop1.o", "raw_tracepoint/kfree_skb")
+TEST_SECTION("linux-selftests", "loop2.o", "raw_tracepoint/consume_skb")
+// loop3 hangs (analysis does not terminate)
+// TEST_SECTION("linux-selftests", "loop3.o", "raw_tracepoint/consume_skb")
+TEST_SECTION("linux-selftests", "loop4.o", "socket")
+TEST_SECTION("linux-selftests", "loop5.o", "socket")
+// subprogram not found: bpf_map_sum_elem_count (extern kernel function)
+FAIL_LOAD_ELF_SECTION("linux-selftests", "map_ptr_kern.o", "cgroup_skb/egress")
+TEST_SECTION_FAIL("linux-selftests", "socket_cookie_prog.o", "cgroup/connect6")
+TEST_SECTION_FAIL("linux-selftests", "socket_cookie_prog.o", "sockops")
+TEST_SECTION_FAIL("linux-selftests", "socket_cookie_prog.o", "fexit/inet_stream_connect")
+TEST_SECTION("linux-selftests", "sockmap_parse_prog.o", "sk_skb1")
+TEST_SECTION("linux-selftests", "sockmap_verdict_prog.o", "sk_skb2")
+// multi-program tc sections (tailcall programs)
+// TEST_SECTION("linux-selftests", "tailcall1.o", "tc") -- 4 programs in section
+// TEST_SECTION("linux-selftests", "tailcall2.o", "tc") -- 6 programs in section
+// TEST_SECTION("linux-selftests", "tailcall3.o", "tc") -- 2 programs in section
+// global subprograms verified standalone fail (no calling context)
+TEST_SECTION_FAIL("linux-selftests", "test_global_func1.o", "tc")
+TEST_PROGRAM("linux-selftests", "test_global_func1.o", ".text", "f0", 4)
+TEST_PROGRAM_FAIL("linux-selftests", "test_global_func1.o", ".text", "f1", 4)
+TEST_PROGRAM_FAIL("linux-selftests", "test_global_func1.o", ".text", "f2", 4)
+TEST_PROGRAM_FAIL("linux-selftests", "test_global_func1.o", ".text", "f3", 4)
+TEST_SECTION("linux-selftests", "test_global_func_args.o", "cgroup_skb/ingress")
+TEST_PROGRAM_FAIL("linux-selftests", "test_global_func_args.o", ".text", "foo", 3)
+TEST_PROGRAM_FAIL("linux-selftests", "test_global_func_args.o", ".text", "bar", 3)
+TEST_PROGRAM("linux-selftests", "test_global_func_args.o", ".text", "baz", 3)
+TEST_SECTION_FAIL("linux-selftests", "test_spin_lock.o", "cgroup_skb/ingress")
+// multi-program tc section (3 programs)
+// TEST_SECTION("linux-selftests", "test_spin_lock.o", "tc") -- 3 programs in section
+
+// cilium-ebpf
+TEST_SECTION("cilium-ebpf", "btf_map_init-el.elf", "socket/tail")
+TEST_SECTION("cilium-ebpf", "btf_map_init-el.elf", "socket/main")
+TEST_SECTION("cilium-ebpf", "constants-el.elf", "sk_lookup/")
+// subprogram not found: invalid_kfunc
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "errors-el.elf", "socket")
+TEST_SECTION("cilium-ebpf", "fentry_fexit-el.elf", "fentry/target")
+TEST_SECTION("cilium-ebpf", "fentry_fexit-el.elf", "fexit/target")
+TEST_SECTION("cilium-ebpf", "fentry_fexit-el.elf", "tc")
+TEST_SECTION("cilium-ebpf", "freplace-el.elf", "raw_tracepoint/sched_process_exec")
+TEST_SECTION("cilium-ebpf", "freplace-el.elf", "freplace/subprog")
+// subprogram not found: fwd (forward-declared function)
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "fwd_decl-el.elf", "socket")
+// subprogram not found: bpf_kfunc_call_test_mem_len_pass1
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "invalid-kfunc-el.elf", "tc")
+TEST_SECTION_FAIL("cilium-ebpf", "invalid_map_static-el.elf", "xdp")
+// unresolved extern LINUX_KERNEL_VERSION, CONFIG_HZ, etc.
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "kconfig-el.elf", "socket")
+// unresolved extern symbols in tp_btf/task_newtask section
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "kfunc-el.elf", "tc")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "kfunc-el.elf", "fentry/bpf_fentry_test2")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "kfunc-el.elf", "tp_btf/task_newtask")
+// subprogram not found: bpf_testmod_test_mod_kfunc
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "kfunc-kmod-el.elf", "tc")
+// unresolved extern symbols
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "ksym-el.elf", "socket")
+// invalid legacy map symbol offset / subprogram not found
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "linked-el.elf", "socket")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "linked1-el.elf", "socket")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "linked2-el.elf", "socket")
+// unresolved extern hash_map, hash_map2, MY_CONST
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "static")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "other")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "xdp")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "socket")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "socket/2")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "socket/3")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "socket/4")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "static")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "other")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "xdp")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "socket")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "socket/2")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "socket/3")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "socket/4")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "static")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "other")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "xdp")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "socket")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "socket/2")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "socket/3")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "socket/4")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "static")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "other")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "xdp")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "socket")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "socket/2")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "socket/3")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "socket/4")
+// unresolved extern MY_CONST
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "static")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "other")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "xdp")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "socket")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "socket/2")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "socket/3")
+FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "socket/4")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea0")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea1")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea2")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea3")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea4")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea5")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea6")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea7")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea8")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea9")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea10")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea11")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea12")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea13")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea14")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea15")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea16")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea17")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea18")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea19")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea20")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea21")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea22")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea23")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea24")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea25")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea26")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea27")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea28")
+TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea29")
+TEST_SECTION("cilium-ebpf", "raw_tracepoint-el.elf", "raw_tracepoint/sched_process_exec")
+TEST_SECTION("cilium-ebpf", "strings-el.elf", "xdp")
+TEST_SECTION("cilium-ebpf", "struct_ops-el.elf", "struct_ops/test_1")
+TEST_SECTION_FAIL("cilium-ebpf", "subprog_reloc-el.elf", "xdp")
+// multi-program socket section (8 programs)
+// TEST_SECTION("cilium-ebpf", "variables-el.elf", "socket") -- 8 programs in section
 
 // The following eBPF programs currently fail verification.
 // If the verifier is later updated to accept them, these should
