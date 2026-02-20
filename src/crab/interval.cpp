@@ -292,6 +292,9 @@ Interval Interval::bitwise_and(const Interval& x) const {
         if (const auto left_singleton = left.singleton()) {
             return Interval{*left_singleton & *right_singleton};
         }
+        if (right_singleton == Number::max_uint(64)) {
+            return left.truncate_to<uint64_t>();
+        }
         if (right_singleton == Number::max_uint(32)) {
             return left.zero_extend(32);
         }
@@ -303,7 +306,7 @@ Interval Interval::bitwise_and(const Interval& x) const {
         }
     }
     if (right.contains(std::numeric_limits<uint64_t>::max())) {
-        return left.truncate_to<uint64_t>();
+        return Interval{0, left.truncate_to<uint64_t>().ub()};
     } else if (!left.is_top() && !right.is_top()) {
         return Interval{0, std::min(left.ub(), right.ub())};
     } else if (!right.is_top()) {
