@@ -66,6 +66,8 @@ struct ProgramInfo {
     std::set<int32_t> callback_target_labels{};
     // Subset of callback_target_labels for which a top-level Exit is reachable in the CFG.
     std::set<int32_t> callback_targets_with_exit{};
+    // Raw per-program instruction indices rewritten from builtin relocations.
+    std::set<size_t> builtin_call_offsets{};
 };
 
 struct RawProgram {

@@ -1,8 +1,11 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
+#include <algorithm>
+
 #include <catch2/catch_all.hpp>
 
 #include "ir/marshal.hpp"
+#include "ir/program.hpp"
 #include "ir/unmarshal.hpp"
 
 using namespace prevail;
@@ -333,6 +336,25 @@ static void check_unmarshal_fail(EbpfInst inst1, EbpfInst inst2, const std::stri
     auto* error_message = std::get_if<std::string>(&result);
     REQUIRE(error_message != nullptr);
     REQUIRE(*error_message == expected_error_message);
+}
+
+static Call unmarshal_single_call(const EbpfInst& call_inst, const ProgramInfo& info) {
+    constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
+    const auto parsed = unmarshal(RawProgram{"", "", 0, "", {call_inst, exit, exit}, info}, thread_local_options);
+    auto* inst_seq = std::get_if<InstructionSeq>(&parsed);
+    REQUIRE(inst_seq != nullptr);
+    REQUIRE(inst_seq->size() == 3);
+    auto* call = std::get_if<Call>(&std::get<1>((*inst_seq)[0]));
+    REQUIRE(call != nullptr);
+    return *call;
+}
+
+template <typename T>
+static bool has_assertion(const std::vector<Assertion>& assertions, const T& expected) {
+    return std::any_of(assertions.begin(), assertions.end(), [&](const Assertion& assertion) {
+        const auto* typed = std::get_if<T>(&assertion);
+        return typed != nullptr && *typed == expected;
+    });
 }
 
 static constexpr auto ws = {1, 2, 4, 8};
@@ -868,4 +890,40 @@ TEST_CASE("unmarshal 64bit immediate", "[disasm][marshal]") {
 TEST_CASE("unmarshal call-btf-id", "[disasm][marshal]") {
     compare_unmarshal_marshal(EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 17},
                               EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 17});
+}
+
+TEST_CASE("unmarshal builtin calls only when relocation-gated", "[disasm][marshal]") {
+    REQUIRE(g_ebpf_platform_linux.resolve_builtin_call != nullptr);
+    const auto memset_id = g_ebpf_platform_linux.resolve_builtin_call("memset");
+    REQUIRE(memset_id.has_value());
+
+    const EbpfInst call_memset{
+        .opcode = INST_OP_CALL,
+        .src = INST_CALL_STATIC_HELPER,
+        .imm = *memset_id,
+    };
+
+    const EbpfProgramType type = g_ebpf_platform_linux.get_program_type("unspec", "");
+    ProgramInfo info{.platform = &g_ebpf_platform_linux, .type = type};
+
+    const Call ungated = unmarshal_single_call(call_memset, info);
+    REQUIRE_FALSE(ungated.is_supported);
+    REQUIRE(ungated.unsupported_reason == "helper function is unavailable on this platform");
+
+    info.builtin_call_offsets.insert(0);
+    const Call gated = unmarshal_single_call(call_memset, info);
+    REQUIRE(gated.is_supported);
+    REQUIRE(gated.name == "memset");
+    REQUIRE(gated.func == *memset_id);
+    REQUIRE(gated.singles.size() == 1);
+    REQUIRE(gated.pairs.size() == 1);
+    REQUIRE(gated.singles[0] == ArgSingle{ArgSingle::Kind::ANYTHING, false, Reg{2}});
+    REQUIRE(gated.pairs[0] == ArgPair{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false});
+
+    const auto assertions = get_assertions(gated, info, Label{0});
+    REQUIRE(has_assertion(assertions, TypeConstraint{Reg{1}, TypeGroup::mem}));
+    REQUIRE(has_assertion(assertions, TypeConstraint{Reg{2}, TypeGroup::number}));
+    REQUIRE(has_assertion(assertions, TypeConstraint{Reg{3}, TypeGroup::number}));
+    REQUIRE(has_assertion(assertions, ValidSize{Reg{3}, false}));
+    REQUIRE(has_assertion(assertions, ValidAccess{1, Reg{1}, 0, Value{Reg{3}}, false, AccessType::write}));
 }

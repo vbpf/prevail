@@ -634,6 +634,7 @@ class ProgramReader {
     const ElfGlobalData& global;
     std::vector<FunctionRelocation> function_relocations;
     std::vector<std::string> unresolved_symbol_errors;
+    std::set<size_t> builtin_offsets_for_current_program;
 
     // loop detection for recursive subprogram resolution
     std::map<const RawProgram*, bool> resolved_subprograms;
@@ -881,6 +882,9 @@ std::string ProgramReader::append_subprograms(RawProgram& prog) {
                         prog.info.line_info[base + k] = info;
                     }
                 }
+                for (const size_t builtin_offset : sub->info.builtin_call_offsets) {
+                    prog.info.builtin_call_offsets.insert(base + builtin_offset);
+                }
             } else {
                 return "Subprogram not found: " + sym.name;
             }
@@ -991,8 +995,18 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
 
     EbpfInst& instruction_to_relocate = instructions[location];
 
-    // Handle local function calls - queue for post-processing
+    // Handle local function calls - queue for post-processing.
+    // Builtins such as memset/memcpy may arrive as local calls against SHN_UNDEF symbols;
+    // those are rewritten to static helper calls and gated via builtin_call_offsets.
     if (instruction_to_relocate.opcode == INST_OP_CALL && instruction_to_relocate.src == INST_CALL_LOCAL) {
+        if (symbol_section_index == ELFIO::SHN_UNDEF && parse_params.platform->resolve_builtin_call) {
+            if (const auto builtin_id = parse_params.platform->resolve_builtin_call(symbol_name)) {
+                instruction_to_relocate.src = INST_CALL_STATIC_HELPER;
+                instruction_to_relocate.imm = *builtin_id;
+                builtin_offsets_for_current_program.insert(location);
+                return true;
+            }
+        }
         function_relocations.emplace_back(FunctionRelocation{raw_programs.size(), location, index, symbol_name});
         return true;
     }
@@ -1087,19 +1101,22 @@ void ProgramReader::read_programs() {
         const auto& sec_name = sec->get_name();
         const auto prog_type = parse_params.platform->get_program_type(sec_name, parse_params.path);
         for (ELFIO::Elf_Xword offset = 0; offset < sec->get_size();) {
+            builtin_offsets_for_current_program.clear();
             auto [name, size] = get_program_name_and_size(*sec, offset, symbols);
             auto instructions = vector_of<EbpfInst>(sec->get_data() + offset, size);
             if (const auto reloc_sec = get_relocation_section(sec_name)) {
                 process_relocations(instructions, ELFIO::const_relocation_section_accessor{reader, reloc_sec}, sec_name,
                                     offset, size);
             }
+            ProgramInfo program_info{parse_params.platform, global.map_descriptors, prog_type};
+            program_info.builtin_call_offsets = builtin_offsets_for_current_program;
             raw_programs.emplace_back(RawProgram{
                 parse_params.path,
                 sec_name,
                 gsl::narrow<uint32_t>(offset),
                 name,
                 std::move(instructions),
-                {parse_params.platform, global.map_descriptors, prog_type},
+                std::move(program_info),
             });
             offset += size;
         }
