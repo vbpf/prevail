@@ -34,6 +34,10 @@ enum class Type {
     T_MAP,        // Map value pointer
     T_MAP_FD,     // Map file descriptor
     T_MAP_PROG,   // Map programs array
+    T_SOCKET,     // Socket structure pointer
+    T_BTF_ID,     // BTF-typed kernel object pointer
+    T_ALLOC_MEM,  // Helper-allocated memory pointer
+    T_FUNC,       // BPF function pointer (callback)
     T_TOP,        // Unknown type (any of the above)
     T_BOTTOM,     // Contradiction (unreachable)
 };
@@ -109,6 +113,12 @@ Each pointer type has associated numeric variables:
 | T_SHARED | shared_offset, shared_region_size |
 | T_MAP | map_value_size |
 | T_MAP_FD | map_fd |
+| T_SOCKET | socket_offset |
+| T_BTF_ID | btf_id_offset |
+| T_ALLOC_MEM | alloc_mem_offset, alloc_mem_size |
+| T_FUNC | *(none)* |
+
+> **Note:** `T_FUNC` intentionally has no associated offset or size variables. Function pointers (callback targets) are treated as opaque numeric values; see the empty mapping in `src/crab/type_to_num.hpp`.
 
 ### Register Pack
 
@@ -123,10 +133,14 @@ struct RegPack {
     Var stack_offset;        // For T_STACK
     Var packet_offset;       // For T_PACKET
     Var shared_offset;       // For T_SHARED
+    Var socket_offset;       // For T_SOCKET
+    Var btf_id_offset;       // For T_BTF_ID
+    Var alloc_mem_offset;    // For T_ALLOC_MEM
     
     // Size tracking
     Var shared_region_size;  // For T_SHARED
     Var stack_numeric_size;  // For T_STACK spills
+    Var alloc_mem_size;      // For T_ALLOC_MEM
     
     // Map-related
     Var map_fd;              // For T_MAP_FD

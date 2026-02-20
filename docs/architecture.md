@@ -12,7 +12,7 @@ ELF Binary -> Unmarshal -> Build CFG -> Abstract Interpretation -> Result
 
 ### Stage 1: ELF Loading and Unmarshalling
 
-**Files**: `src/elf_loader.cpp`, `src/ir/asm_unmarshal.cpp`
+**Files**: `src/elf_loader.cpp`, `src/ir/unmarshal.cpp`
 
 1. **ELF Parsing**: Extract eBPF bytecode sections from ELF files
 2. **Instruction Decoding**: Convert raw bytes to structured instructions
