@@ -10,14 +10,14 @@
 
 using namespace prevail;
 
-#define FAIL_LOAD_ELF_BASE(test_name, dirname, filename, sectionname)                                              \
-    TEST_CASE(test_name, "[elf]") {                                                                                \
-        try {                                                                                                      \
-            thread_local_options = {};                                                                             \
-            ElfObject{"ebpf-samples/" dirname "/" filename, {}, &g_ebpf_platform_linux}.get_programs(sectionname); \
-            REQUIRE(false);                                                                                        \
-        } catch (const std::runtime_error&) {                                                                      \
-        }                                                                                                          \
+#define FAIL_LOAD_ELF_BASE(test_name, dirname, filename, sectionname)                                             \
+    TEST_CASE(test_name, "[elf]") {                                                                               \
+        thread_local_options = {};                                                                                \
+        REQUIRE_THROWS_AS(([&]() {                                                                                \
+                              ElfObject{"ebpf-samples/" dirname "/" filename, {}, &g_ebpf_platform_linux}        \
+                                  .get_programs(sectionname);                                                     \
+                          }()),                                                                                   \
+                          std::runtime_error);                                                                    \
     }
 
 #define FAIL_LOAD_ELF(dirname, filename, sectionname) \

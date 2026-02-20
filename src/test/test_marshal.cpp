@@ -1205,7 +1205,7 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         REQUIRE(imm->v == 7ULL);
     }
 
-    SECTION("lddw code_addr pseudo") {
+    SECTION("lddw code_addr pseudo via INST_LD_MODE_CODE_ADDR") {
         RawProgram raw_prog{
             "",  "", 0, "", {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = 4, .imm = 11}, EbpfInst{}, exit},
             info};

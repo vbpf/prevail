@@ -1656,9 +1656,9 @@ const std::vector<RawProgram>& ElfObject::get_programs(const std::string& desire
         if (!section_it->second.valid) {
             throw UnmarshalError(section_it->second.error);
         }
-        auto [inserted, _] =
-            query_cache_.emplace(std::move(key), filter_section_programs(section_it->second.programs, desired_program));
-        return inserted->second;
+        auto [it, _] = query_cache_.emplace(std::move(key),
+                                            filter_section_programs(section_it->second.programs, desired_program));
+        return it->second;
     }
 
     std::vector<RawProgram> all_programs;
@@ -1673,8 +1673,8 @@ const std::vector<RawProgram>& ElfObject::get_programs(const std::string& desire
         throw UnmarshalError("No executable sections");
     }
 
-    auto [inserted, _] = query_cache_.emplace(std::move(key), filter_section_programs(all_programs, desired_program));
-    return inserted->second;
+    auto [it, _] = query_cache_.emplace(std::move(key), filter_section_programs(all_programs, desired_program));
+    return it->second;
 }
 
 const std::vector<ElfProgramInfo>& ElfObject::list_programs() {

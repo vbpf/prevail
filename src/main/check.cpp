@@ -203,12 +203,17 @@ int main(int argc, char** argv) {
             std::cout << "please specify a program\n";
             std::cout << "available programs:\n";
         }
-        for (const ElfProgramInfo& prog : elf.list_programs()) {
-            std::cout << "section=" << prog.section_name << " function=" << prog.function_name;
-            if (prog.invalid) {
-                std::cout << " [invalid: " << prog.invalid_reason << "]";
+        try {
+            for (const ElfProgramInfo& prog : elf.list_programs()) {
+                std::cout << "section=" << prog.section_name << " function=" << prog.function_name;
+                if (prog.invalid) {
+                    std::cout << " [invalid: " << prog.invalid_reason << "]";
+                }
+                std::cout << std::endl;
             }
-            std::cout << std::endl;
+        } catch (const std::runtime_error& e) {
+            std::cerr << "error listing programs: " << e.what() << std::endl;
+            return 1;
         }
         std::cout << "\n";
         if (list) {

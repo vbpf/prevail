@@ -42,10 +42,10 @@ struct ElfObjectCacheKeyHash {
     }
 };
 
-inline const std::vector<RawProgram>& read_elf_cached(const std::string& path, const std::string& desired_section,
-                                                      const std::string& desired_program,
-                                                      const ebpf_verifier_options_t& options,
-                                                      const ebpf_platform_t* platform) {
+inline std::vector<RawProgram> read_elf_cached(const std::string& path, const std::string& desired_section,
+                                               const std::string& desired_program,
+                                               const ebpf_verifier_options_t& options,
+                                               const ebpf_platform_t* platform) {
     static std::mutex cache_mutex;
     static std::unordered_map<ElfObjectCacheKey, ElfObject, ElfObjectCacheKeyHash> object_cache;
 
