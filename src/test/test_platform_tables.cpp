@@ -1,7 +1,7 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
-#include <array>
 #include <algorithm>
+#include <array>
 
 #include <catch2/catch_all.hpp>
 
