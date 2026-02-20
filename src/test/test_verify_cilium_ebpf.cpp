@@ -111,71 +111,110 @@ TEST_PROGRAM("cilium-ebpf", "variables-el.elf", "socket", "set_vars", 8)
 // expected failure (VerifierTypeTracking):
 //   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 6: Invalid type (r1.type == map_fd)
-TEST_SECTION_FAIL("cilium-ebpf", "invalid_map_static-el.elf", "xdp", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 6: Invalid type (r1.type == map_fd)")
+TEST_SECTION_FAIL("cilium-ebpf", "invalid_map_static-el.elf", "xdp", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 6: Invalid type (r1.type == map_fd)")
 // expected failure (VerifierTypeTracking):
 //   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 2: Invalid type (r0.type == number)
-TEST_PROGRAM_FAIL("cilium-ebpf", "loader-clang-14-el.elf", ".text", "global_fn2", 2, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)")
+TEST_PROGRAM_FAIL("cilium-ebpf", "loader-clang-14-el.elf", ".text", "global_fn2", 2,
+                  verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 2: Invalid type (r0.type == number)")
 // expected failure (VerifierTypeTracking):
 //   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 2: Invalid type (r0.type == number)
-TEST_SECTION_FAIL("cilium-ebpf", "loader-clang-14-el.elf", "other", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)")
+TEST_SECTION_FAIL("cilium-ebpf", "loader-clang-14-el.elf", "other", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 2: Invalid type (r0.type == number)")
 // expected failure (VerifierTypeTracking):
 //   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 2: Invalid type (r0.type == number)
-TEST_SECTION_FAIL("cilium-ebpf", "loader-clang-14-el.elf", "static", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)")
+TEST_SECTION_FAIL("cilium-ebpf", "loader-clang-14-el.elf", "static", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 2: Invalid type (r0.type == number)")
 // expected failure (VerifierTypeTracking):
 //   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 2: Invalid type (r0.type == number)
-TEST_PROGRAM_FAIL("cilium-ebpf", "loader-clang-17-el.elf", ".text", "global_fn2", 2, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)")
+TEST_PROGRAM_FAIL("cilium-ebpf", "loader-clang-17-el.elf", ".text", "global_fn2", 2,
+                  verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 2: Invalid type (r0.type == number)")
 // expected failure (VerifierTypeTracking):
 //   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 2: Invalid type (r0.type == number)
-TEST_SECTION_FAIL("cilium-ebpf", "loader-clang-17-el.elf", "other", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)")
+TEST_SECTION_FAIL("cilium-ebpf", "loader-clang-17-el.elf", "other", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 2: Invalid type (r0.type == number)")
 // expected failure (VerifierTypeTracking):
 //   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 2: Invalid type (r0.type == number)
-TEST_SECTION_FAIL("cilium-ebpf", "loader-clang-17-el.elf", "static", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)")
+TEST_SECTION_FAIL("cilium-ebpf", "loader-clang-17-el.elf", "static", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 2: Invalid type (r0.type == number)")
 // expected failure (VerifierTypeTracking):
 //   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 2: Invalid type (r0.type == number)
-TEST_PROGRAM_FAIL("cilium-ebpf", "loader-clang-20-el.elf", ".text", "global_fn2", 2, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)")
+TEST_PROGRAM_FAIL("cilium-ebpf", "loader-clang-20-el.elf", ".text", "global_fn2", 2,
+                  verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 2: Invalid type (r0.type == number)")
 // expected failure (VerifierTypeTracking):
 //   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 2: Invalid type (r0.type == number)
-TEST_SECTION_FAIL("cilium-ebpf", "loader-clang-20-el.elf", "other", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)")
+TEST_SECTION_FAIL("cilium-ebpf", "loader-clang-20-el.elf", "other", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 2: Invalid type (r0.type == number)")
 // expected failure (VerifierTypeTracking):
 //   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 2: Invalid type (r0.type == number)
-TEST_SECTION_FAIL("cilium-ebpf", "loader-clang-20-el.elf", "static", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)")
+TEST_SECTION_FAIL("cilium-ebpf", "loader-clang-20-el.elf", "static", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 2: Invalid type (r0.type == number)")
 // expected failure (VerifierTypeTracking):
 //   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 2: Invalid type (r0.type == number)
-TEST_PROGRAM_FAIL("cilium-ebpf", "loader-el.elf", ".text", "global_fn2", 2, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)")
+TEST_PROGRAM_FAIL("cilium-ebpf", "loader-el.elf", ".text", "global_fn2", 2,
+                  verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 2: Invalid type (r0.type == number)")
 // expected failure (VerifierTypeTracking):
 //   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 2: Invalid type (r0.type == number)
-TEST_SECTION_FAIL("cilium-ebpf", "loader-el.elf", "other", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)")
+TEST_SECTION_FAIL("cilium-ebpf", "loader-el.elf", "other", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 2: Invalid type (r0.type == number)")
 // expected failure (VerifierTypeTracking):
 //   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 2: Invalid type (r0.type == number)
-TEST_SECTION_FAIL("cilium-ebpf", "loader-el.elf", "static", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)")
+TEST_SECTION_FAIL("cilium-ebpf", "loader-el.elf", "static", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 2: Invalid type (r0.type == number)")
 // expected failure (VerifierTypeTracking):
 //   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 2: Invalid type (r0.type == number)
-TEST_PROGRAM_FAIL("cilium-ebpf", "loader_nobtf-el.elf", ".text", "global_fn2", 2, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)")
+TEST_PROGRAM_FAIL("cilium-ebpf", "loader_nobtf-el.elf", ".text", "global_fn2", 2,
+                  verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 2: Invalid type (r0.type == number)")
 // expected failure (VerifierTypeTracking):
 //   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 2: Invalid type (r0.type == number)
-TEST_SECTION_FAIL("cilium-ebpf", "loader_nobtf-el.elf", "other", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)")
+TEST_SECTION_FAIL("cilium-ebpf", "loader_nobtf-el.elf", "other", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 2: Invalid type (r0.type == number)")
 // expected failure (VerifierTypeTracking):
 //   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 2: Invalid type (r0.type == number)
-TEST_SECTION_FAIL("cilium-ebpf", "loader_nobtf-el.elf", "static", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)")
+TEST_SECTION_FAIL("cilium-ebpf", "loader_nobtf-el.elf", "static", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 2: Invalid type (r0.type == number)")
 // expected failure (VerifierTypeTracking):
 //   reason: Known verifier limitation: register type refinement is too imprecise in this control-flow pattern.
 //   diagnostic: 19: Invalid type (r2.type == func)
-TEST_SECTION_FAIL("cilium-ebpf", "subprog_reloc-el.elf", "xdp", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 19: Invalid type (r2.type == func)")
+TEST_SECTION_FAIL("cilium-ebpf", "subprog_reloc-el.elf", "xdp", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 19: Invalid type (r2.type == func)")
 
 // ===========================================================================
 // Failure Cause Group: VerifierRecursionModeling
@@ -192,27 +231,44 @@ TEST_SECTION_FAIL("cilium-ebpf", "subprog_reloc-el.elf", "xdp", verify_test::Ver
 // expected failure (VerifierRecursionModeling):
 //   reason: Known verifier limitation: subprogram call-graph handling rejects this recursion-shaped pattern.
 //   diagnostic: error: 1: illegal recursion
-TEST_PROGRAM_FAIL("cilium-ebpf", "loader-clang-14-el.elf", ".text", "global_fn", 2, verify_test::VerifyIssueKind::VerifierRecursionModeling, "Known verifier limitation: subprogram call-graph handling rejects this recursion-shaped pattern. Diagnostic: error: 1: illegal recursion")
+TEST_PROGRAM_FAIL("cilium-ebpf", "loader-clang-14-el.elf", ".text", "global_fn", 2,
+                  verify_test::VerifyIssueKind::VerifierRecursionModeling,
+                  "Known verifier limitation: subprogram call-graph handling rejects this recursion-shaped pattern. "
+                  "Diagnostic: error: 1: illegal recursion")
 // expected failure (VerifierRecursionModeling):
 //   reason: Known verifier limitation: subprogram call-graph handling rejects this recursion-shaped pattern.
 //   diagnostic: error: 1: illegal recursion
-TEST_PROGRAM_FAIL("cilium-ebpf", "loader-clang-17-el.elf", ".text", "global_fn", 2, verify_test::VerifyIssueKind::VerifierRecursionModeling, "Known verifier limitation: subprogram call-graph handling rejects this recursion-shaped pattern. Diagnostic: error: 1: illegal recursion")
+TEST_PROGRAM_FAIL("cilium-ebpf", "loader-clang-17-el.elf", ".text", "global_fn", 2,
+                  verify_test::VerifyIssueKind::VerifierRecursionModeling,
+                  "Known verifier limitation: subprogram call-graph handling rejects this recursion-shaped pattern. "
+                  "Diagnostic: error: 1: illegal recursion")
 // expected failure (VerifierRecursionModeling):
 //   reason: Known verifier limitation: subprogram call-graph handling rejects this recursion-shaped pattern.
 //   diagnostic: error: 1: illegal recursion
-TEST_PROGRAM_FAIL("cilium-ebpf", "loader-clang-20-el.elf", ".text", "global_fn", 2, verify_test::VerifyIssueKind::VerifierRecursionModeling, "Known verifier limitation: subprogram call-graph handling rejects this recursion-shaped pattern. Diagnostic: error: 1: illegal recursion")
+TEST_PROGRAM_FAIL("cilium-ebpf", "loader-clang-20-el.elf", ".text", "global_fn", 2,
+                  verify_test::VerifyIssueKind::VerifierRecursionModeling,
+                  "Known verifier limitation: subprogram call-graph handling rejects this recursion-shaped pattern. "
+                  "Diagnostic: error: 1: illegal recursion")
 // expected failure (VerifierRecursionModeling):
 //   reason: Known verifier limitation: subprogram call-graph handling rejects this recursion-shaped pattern.
 //   diagnostic: error: 1: illegal recursion
-TEST_PROGRAM_FAIL("cilium-ebpf", "loader-el.elf", ".text", "global_fn", 2, verify_test::VerifyIssueKind::VerifierRecursionModeling, "Known verifier limitation: subprogram call-graph handling rejects this recursion-shaped pattern. Diagnostic: error: 1: illegal recursion")
+TEST_PROGRAM_FAIL("cilium-ebpf", "loader-el.elf", ".text", "global_fn", 2,
+                  verify_test::VerifyIssueKind::VerifierRecursionModeling,
+                  "Known verifier limitation: subprogram call-graph handling rejects this recursion-shaped pattern. "
+                  "Diagnostic: error: 1: illegal recursion")
 // expected failure (VerifierRecursionModeling):
 //   reason: Known verifier limitation: subprogram call-graph handling rejects this recursion-shaped pattern.
 //   diagnostic: error: 1: illegal recursion
-TEST_PROGRAM_FAIL("cilium-ebpf", "loader_nobtf-el.elf", ".text", "global_fn", 2, verify_test::VerifyIssueKind::VerifierRecursionModeling, "Known verifier limitation: subprogram call-graph handling rejects this recursion-shaped pattern. Diagnostic: error: 1: illegal recursion")
+TEST_PROGRAM_FAIL("cilium-ebpf", "loader_nobtf-el.elf", ".text", "global_fn", 2,
+                  verify_test::VerifyIssueKind::VerifierRecursionModeling,
+                  "Known verifier limitation: subprogram call-graph handling rejects this recursion-shaped pattern. "
+                  "Diagnostic: error: 1: illegal recursion")
 // expected failure (VerifierRecursionModeling):
 //   reason: Known verifier limitation: subprogram call-graph handling rejects this recursion-shaped pattern.
 //   diagnostic: error: 18: illegal recursion
-TEST_SECTION_FAIL("cilium-ebpf", "loader_nobtf-el.elf", "xdp", verify_test::VerifyIssueKind::VerifierRecursionModeling, "Known verifier limitation: subprogram call-graph handling rejects this recursion-shaped pattern. Diagnostic: error: 18: illegal recursion")
+TEST_SECTION_FAIL("cilium-ebpf", "loader_nobtf-el.elf", "xdp", verify_test::VerifyIssueKind::VerifierRecursionModeling,
+                  "Known verifier limitation: subprogram call-graph handling rejects this recursion-shaped pattern. "
+                  "Diagnostic: error: 18: illegal recursion")
 
 // ===========================================================================
 // Failure Cause Group: ExternalSymbolResolution
@@ -229,59 +285,98 @@ TEST_SECTION_FAIL("cilium-ebpf", "loader_nobtf-el.elf", "xdp", verify_test::Veri
 // skipped (ExternalSymbolResolution):
 //   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
 //   diagnostic: Unresolved symbols found.
-TEST_SECTION_SKIP("cilium-ebpf", "kconfig-el.elf", "socket", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
+TEST_SECTION_SKIP("cilium-ebpf", "kconfig-el.elf", "socket", verify_test::VerifyIssueKind::ExternalSymbolResolution,
+                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
+                  "verification. Diagnostic: Unresolved symbols found.")
 // skipped (ExternalSymbolResolution):
 //   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
 //   diagnostic: Unresolved symbols found.
-TEST_PROGRAM_SKIP("cilium-ebpf", "kfunc-el.elf", "tp_btf/task_newtask", "call_weak_kfunc", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
+TEST_PROGRAM_SKIP("cilium-ebpf", "kfunc-el.elf", "tp_btf/task_newtask", "call_weak_kfunc",
+                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
+                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
+                  "verification. Diagnostic: Unresolved symbols found.")
 // skipped (ExternalSymbolResolution):
 //   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
 //   diagnostic: Unresolved symbols found.
-TEST_PROGRAM_SKIP("cilium-ebpf", "kfunc-el.elf", "tp_btf/task_newtask", "weak_kfunc_missing", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
+TEST_PROGRAM_SKIP("cilium-ebpf", "kfunc-el.elf", "tp_btf/task_newtask", "weak_kfunc_missing",
+                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
+                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
+                  "verification. Diagnostic: Unresolved symbols found.")
 // skipped (ExternalSymbolResolution):
 //   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
 //   diagnostic: Unresolved symbols found.
-TEST_PROGRAM_SKIP("cilium-ebpf", "ksym-el.elf", "socket", "ksym_missing_test", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
+TEST_PROGRAM_SKIP("cilium-ebpf", "ksym-el.elf", "socket", "ksym_missing_test",
+                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
+                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
+                  "verification. Diagnostic: Unresolved symbols found.")
 // skipped (ExternalSymbolResolution):
 //   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
 //   diagnostic: Unresolved symbols found.
-TEST_PROGRAM_SKIP("cilium-ebpf", "ksym-el.elf", "socket", "ksym_test", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
+TEST_PROGRAM_SKIP("cilium-ebpf", "ksym-el.elf", "socket", "ksym_test",
+                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
+                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
+                  "verification. Diagnostic: Unresolved symbols found.")
 // skipped (ExternalSymbolResolution):
 //   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
 //   diagnostic: Unresolved symbols found.
-TEST_SECTION_SKIP("cilium-ebpf", "loader-clang-14-el.elf", "socket/2", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
+TEST_SECTION_SKIP("cilium-ebpf", "loader-clang-14-el.elf", "socket/2",
+                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
+                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
+                  "verification. Diagnostic: Unresolved symbols found.")
 // skipped (ExternalSymbolResolution):
 //   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
 //   diagnostic: Unresolved symbols found.
-TEST_SECTION_SKIP("cilium-ebpf", "loader-clang-14-el.elf", "xdp", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
+TEST_SECTION_SKIP("cilium-ebpf", "loader-clang-14-el.elf", "xdp",
+                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
+                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
+                  "verification. Diagnostic: Unresolved symbols found.")
 // skipped (ExternalSymbolResolution):
 //   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
 //   diagnostic: Unresolved symbols found.
-TEST_SECTION_SKIP("cilium-ebpf", "loader-clang-17-el.elf", "socket/2", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
+TEST_SECTION_SKIP("cilium-ebpf", "loader-clang-17-el.elf", "socket/2",
+                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
+                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
+                  "verification. Diagnostic: Unresolved symbols found.")
 // skipped (ExternalSymbolResolution):
 //   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
 //   diagnostic: Unresolved symbols found.
-TEST_SECTION_SKIP("cilium-ebpf", "loader-clang-17-el.elf", "xdp", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
+TEST_SECTION_SKIP("cilium-ebpf", "loader-clang-17-el.elf", "xdp",
+                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
+                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
+                  "verification. Diagnostic: Unresolved symbols found.")
 // skipped (ExternalSymbolResolution):
 //   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
 //   diagnostic: Unresolved symbols found.
-TEST_SECTION_SKIP("cilium-ebpf", "loader-clang-20-el.elf", "socket/2", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
+TEST_SECTION_SKIP("cilium-ebpf", "loader-clang-20-el.elf", "socket/2",
+                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
+                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
+                  "verification. Diagnostic: Unresolved symbols found.")
 // skipped (ExternalSymbolResolution):
 //   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
 //   diagnostic: Unresolved symbols found.
-TEST_SECTION_SKIP("cilium-ebpf", "loader-clang-20-el.elf", "xdp", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
+TEST_SECTION_SKIP("cilium-ebpf", "loader-clang-20-el.elf", "xdp",
+                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
+                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
+                  "verification. Diagnostic: Unresolved symbols found.")
 // skipped (ExternalSymbolResolution):
 //   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
 //   diagnostic: Unresolved symbols found.
-TEST_SECTION_SKIP("cilium-ebpf", "loader-el.elf", "socket/2", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
+TEST_SECTION_SKIP("cilium-ebpf", "loader-el.elf", "socket/2", verify_test::VerifyIssueKind::ExternalSymbolResolution,
+                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
+                  "verification. Diagnostic: Unresolved symbols found.")
 // skipped (ExternalSymbolResolution):
 //   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
 //   diagnostic: Unresolved symbols found.
-TEST_SECTION_SKIP("cilium-ebpf", "loader-el.elf", "xdp", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
+TEST_SECTION_SKIP("cilium-ebpf", "loader-el.elf", "xdp", verify_test::VerifyIssueKind::ExternalSymbolResolution,
+                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
+                  "verification. Diagnostic: Unresolved symbols found.")
 // skipped (ExternalSymbolResolution):
 //   reason: Known architectural limitation: unresolved external symbols are not modeled in offline verification.
 //   diagnostic: Unresolved symbols found.
-TEST_SECTION_SKIP("cilium-ebpf", "loader_nobtf-el.elf", "socket/2", verify_test::VerifyIssueKind::ExternalSymbolResolution, "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.")
+TEST_SECTION_SKIP("cilium-ebpf", "loader_nobtf-el.elf", "socket/2",
+                  verify_test::VerifyIssueKind::ExternalSymbolResolution,
+                  "Known architectural limitation: unresolved external symbols are not modeled in offline "
+                  "verification. Diagnostic: Unresolved symbols found.")
 
 // ===========================================================================
 // Failure Cause Group: ElfLegacyMapLayout
@@ -299,49 +394,79 @@ TEST_SECTION_SKIP("cilium-ebpf", "loader_nobtf-el.elf", "socket/2", verify_test:
 //   reason: Known loader limitation: legacy map symbol layout is not fully supported.
 //   diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of
 //               section bounds
-TEST_PROGRAM_SKIP("cilium-ebpf", "linked-el.elf", ".text", "l1", verify_test::VerifyIssueKind::ElfLegacyMapLayout, "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds")
+TEST_PROGRAM_SKIP(
+    "cilium-ebpf", "linked-el.elf", ".text", "l1", verify_test::VerifyIssueKind::ElfLegacyMapLayout,
+    "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol "
+    "'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds")
 // skipped (ElfLegacyMapLayout):
 //   reason: Known loader limitation: legacy map symbol layout is not fully supported.
 //   diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of
 //               section bounds
-TEST_PROGRAM_SKIP("cilium-ebpf", "linked-el.elf", ".text", "l1_s", verify_test::VerifyIssueKind::ElfLegacyMapLayout, "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds")
+TEST_PROGRAM_SKIP(
+    "cilium-ebpf", "linked-el.elf", ".text", "l1_s", verify_test::VerifyIssueKind::ElfLegacyMapLayout,
+    "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol "
+    "'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds")
 // skipped (ElfLegacyMapLayout):
 //   reason: Known loader limitation: legacy map symbol layout is not fully supported.
 //   diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of
 //               section bounds
-TEST_PROGRAM_SKIP("cilium-ebpf", "linked-el.elf", ".text", "l1_w", verify_test::VerifyIssueKind::ElfLegacyMapLayout, "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds")
+TEST_PROGRAM_SKIP(
+    "cilium-ebpf", "linked-el.elf", ".text", "l1_w", verify_test::VerifyIssueKind::ElfLegacyMapLayout,
+    "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol "
+    "'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds")
 // skipped (ElfLegacyMapLayout):
 //   reason: Known loader limitation: legacy map symbol layout is not fully supported.
 //   diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of
 //               section bounds
-TEST_PROGRAM_SKIP("cilium-ebpf", "linked-el.elf", ".text", "l2", verify_test::VerifyIssueKind::ElfLegacyMapLayout, "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds")
+TEST_PROGRAM_SKIP(
+    "cilium-ebpf", "linked-el.elf", ".text", "l2", verify_test::VerifyIssueKind::ElfLegacyMapLayout,
+    "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol "
+    "'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds")
 // skipped (ElfLegacyMapLayout):
 //   reason: Known loader limitation: legacy map symbol layout is not fully supported.
 //   diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of
 //               section bounds
-TEST_PROGRAM_SKIP("cilium-ebpf", "linked-el.elf", ".text", "ww", verify_test::VerifyIssueKind::ElfLegacyMapLayout, "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds")
+TEST_PROGRAM_SKIP(
+    "cilium-ebpf", "linked-el.elf", ".text", "ww", verify_test::VerifyIssueKind::ElfLegacyMapLayout,
+    "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol "
+    "'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds")
 // skipped (ElfLegacyMapLayout):
 //   reason: Known loader limitation: legacy map symbol layout is not fully supported.
 //   diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of
 //               section bounds
-TEST_PROGRAM_SKIP("cilium-ebpf", "linked-el.elf", "socket", "entry_l1", verify_test::VerifyIssueKind::ElfLegacyMapLayout, "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds")
+TEST_PROGRAM_SKIP(
+    "cilium-ebpf", "linked-el.elf", "socket", "entry_l1", verify_test::VerifyIssueKind::ElfLegacyMapLayout,
+    "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol "
+    "'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds")
 // skipped (ElfLegacyMapLayout):
 //   reason: Known loader limitation: legacy map symbol layout is not fully supported.
 //   diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of
 //               section bounds
-TEST_PROGRAM_SKIP("cilium-ebpf", "linked-el.elf", "socket", "entry_l1_s", verify_test::VerifyIssueKind::ElfLegacyMapLayout, "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds")
+TEST_PROGRAM_SKIP(
+    "cilium-ebpf", "linked-el.elf", "socket", "entry_l1_s", verify_test::VerifyIssueKind::ElfLegacyMapLayout,
+    "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol "
+    "'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds")
 // skipped (ElfLegacyMapLayout):
 //   reason: Known loader limitation: legacy map symbol layout is not fully supported.
 //   diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of
 //               section bounds
-TEST_PROGRAM_SKIP("cilium-ebpf", "linked-el.elf", "socket", "entry_l1_w", verify_test::VerifyIssueKind::ElfLegacyMapLayout, "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds")
+TEST_PROGRAM_SKIP(
+    "cilium-ebpf", "linked-el.elf", "socket", "entry_l1_w", verify_test::VerifyIssueKind::ElfLegacyMapLayout,
+    "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol "
+    "'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds")
 // skipped (ElfLegacyMapLayout):
 //   reason: Known loader limitation: legacy map symbol layout is not fully supported.
 //   diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of
 //               section bounds
-TEST_PROGRAM_SKIP("cilium-ebpf", "linked-el.elf", "socket", "entry_l2", verify_test::VerifyIssueKind::ElfLegacyMapLayout, "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds")
+TEST_PROGRAM_SKIP(
+    "cilium-ebpf", "linked-el.elf", "socket", "entry_l2", verify_test::VerifyIssueKind::ElfLegacyMapLayout,
+    "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol "
+    "'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds")
 // skipped (ElfLegacyMapLayout):
 //   reason: Known loader limitation: legacy map symbol layout is not fully supported.
 //   diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of
 //               section bounds
-TEST_PROGRAM_SKIP("cilium-ebpf", "linked-el.elf", "socket", "entry_ww", verify_test::VerifyIssueKind::ElfLegacyMapLayout, "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds")
+TEST_PROGRAM_SKIP(
+    "cilium-ebpf", "linked-el.elf", "socket", "entry_ww", verify_test::VerifyIssueKind::ElfLegacyMapLayout,
+    "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol "
+    "'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds")
