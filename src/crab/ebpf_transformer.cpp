@@ -398,6 +398,9 @@ void EbpfTransformer::operator()(const Exit& a) {
     // Restore r10.
     constexpr Reg r10_reg{R10_STACK_POINTER};
     add(r10_reg, EBPF_SUBPROGRAM_STACK_SIZE, 64);
+
+    // Scratch r1-r5: the callee may have clobbered them (caller-saved per BPF ABI).
+    scratch_caller_saved_registers();
 }
 
 void EbpfTransformer::operator()(const Jmp&) const {
@@ -883,26 +886,43 @@ void EbpfTransformer::operator()(const Call& call) {
     constexpr Reg r0_reg{R0_RETURN_VALUE};
     const auto r0_pack = reg_pack(r0_reg);
     dom.state.values.havoc(r0_pack.stack_numeric_size);
-    if (call.is_map_lookup) {
-        // This is the only way to get a null pointer
-        if (maybe_fd_reg) {
-            if (const auto map_type = dom.get_map_type(*maybe_fd_reg)) {
-                if (thread_local_program_info->platform->get_map_type(*map_type).value_type == EbpfMapValueType::MAP) {
-                    if (const auto inner_map_fd = dom.get_map_inner_map_fd(*maybe_fd_reg)) {
-                        do_load_mapfd(r0_reg, to_signed(*inner_map_fd), true);
-                        goto out;
-                    }
-                } else {
-                    assign_valid_ptr(r0_reg, true);
-                    dom.state.values.assign(r0_pack.shared_offset, 0);
-                    dom.state.values.set(r0_pack.shared_region_size, dom.get_map_value_size(*maybe_fd_reg));
-                    dom.state.assign_type(r0_reg, T_SHARED);
-                }
-            }
-        }
+    // Set r0 as a nullable T_SHARED pointer at offset 0.
+    // If region_size is known, constrain it; otherwise havoc to prevent stale values.
+    auto assign_shared_map_value = [&](const std::optional<Interval>& region_size) {
         assign_valid_ptr(r0_reg, true);
         dom.state.values.assign(r0_pack.shared_offset, 0);
+        if (region_size) {
+            dom.state.values.set(r0_pack.shared_region_size, *region_size);
+        } else {
+            dom.state.values.havoc(r0_pack.shared_region_size);
+        }
         dom.state.assign_type(r0_reg, T_SHARED);
+    };
+    auto resolve_map_lookup = [&] {
+        // Map lookup is the only way to get a null pointer.
+        if (!maybe_fd_reg) {
+            assign_shared_map_value(std::nullopt);
+            return;
+        }
+        const auto map_type = dom.get_map_type(*maybe_fd_reg);
+        if (!map_type) {
+            assign_shared_map_value(std::nullopt);
+            return;
+        }
+        if (thread_local_program_info->platform->get_map_type(*map_type).value_type == EbpfMapValueType::MAP) {
+            // Map-of-maps: r0 is an inner map fd if known, otherwise an opaque shared pointer.
+            if (const auto inner_map_fd = dom.get_map_inner_map_fd(*maybe_fd_reg)) {
+                do_load_mapfd(r0_reg, to_signed(*inner_map_fd), true);
+            } else {
+                assign_shared_map_value(std::nullopt);
+            }
+            return;
+        }
+        // Regular map: r0 is a shared pointer with known value size.
+        assign_shared_map_value(dom.get_map_value_size(*maybe_fd_reg));
+    };
+    if (call.is_map_lookup) {
+        resolve_map_lookup();
     } else if (call.return_ptr_type.has_value()) {
         assign_valid_ptr(r0_reg, call.return_nullable);
         dom.state.assign_type(r0_reg, *call.return_ptr_type);
@@ -912,7 +932,6 @@ void EbpfTransformer::operator()(const Call& call) {
         dom.state.assign_type(r0_reg, T_NUM);
         // dom.state.values.add_constraint(r0_pack.value < 0); for INTEGER_OR_NO_RETURN_IF_SUCCEED.
     }
-out:
     scratch_caller_saved_registers();
     if (call.reallocate_packet) {
         forget_packet_pointers();
