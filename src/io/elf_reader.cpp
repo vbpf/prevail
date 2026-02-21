@@ -234,17 +234,18 @@ ELFIO::elfio load_elf(std::istream& input_stream, const std::string& path) {
 
     std::error_code ec;
     const std::uintmax_t file_size = std::filesystem::file_size(path, ec);
-    if (!ec) {
-        for (const auto& section : reader.sections) {
-            if (!section || section->get_type() == ELFIO::SHT_NOBITS) {
-                continue;
-            }
+    if (ec) {
+        throw MalformedElf("Cannot determine file size for " + path + ": " + ec.message());
+    }
+    for (const auto& section : reader.sections) {
+        if (!section || section->get_type() == ELFIO::SHT_NOBITS) {
+            continue;
+        }
 
-            const std::uintmax_t offset = section->get_offset();
-            const std::uintmax_t size = section->get_size();
-            if (offset > file_size || size > file_size - offset) {
-                throw MalformedElf("ELF section '" + section->get_name() + "' has out-of-bounds file range");
-            }
+        const std::uintmax_t offset = section->get_offset();
+        const std::uintmax_t size = section->get_size();
+        if (offset > file_size || size > file_size - offset) {
+            throw MalformedElf("ELF section '" + section->get_name() + "' has out-of-bounds file range");
         }
     }
 

@@ -20,7 +20,7 @@ namespace prevail {
 // CO-RE types visible to the header (bpf_core_relo is forward-declared there)
 // ---------------------------------------------------------------------------
 
-enum bpf_core_relo_kind {
+enum bpf_core_relo_kind : uint32_t {
     BPF_CORE_FIELD_BYTE_OFFSET = 0,
     BPF_CORE_FIELD_BYTE_SIZE = 1,
     BPF_CORE_FIELD_EXISTS = 2,
@@ -42,6 +42,7 @@ struct bpf_core_relo {
     uint32_t access_str_off;
     bpf_core_relo_kind kind;
 };
+static_assert(sizeof(bpf_core_relo) == 16);
 
 namespace {
 
