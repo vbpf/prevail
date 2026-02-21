@@ -49,6 +49,18 @@ uint32_t read_u32_le(const std::vector<uint8_t>& bytes, const size_t offset) {
                                  (static_cast<uint32_t>(bytes[offset + 3]) << 24U));
 }
 
+uint64_t read_u64_le(const std::vector<uint8_t>& bytes, const size_t offset) {
+    if (offset + sizeof(uint64_t) > bytes.size()) {
+        throw std::runtime_error("u64 read out of bounds");
+    }
+
+    uint64_t value = 0;
+    for (size_t i = 0; i < sizeof(uint64_t); ++i) {
+        value |= static_cast<uint64_t>(bytes[offset + i]) << (8U * i);
+    }
+    return value;
+}
+
 void write_u16_le(std::vector<uint8_t>& bytes, const size_t offset, const uint16_t value) {
     if (offset + sizeof(uint16_t) > bytes.size()) {
         throw std::runtime_error("u16 write out of bounds");
@@ -167,6 +179,40 @@ void patch_section_size(const std::filesystem::path& path, const std::string& se
     write_file_bytes(path, bytes);
 }
 
+struct RelocationSectionInfo {
+    unsigned char elf_class;
+    ELFIO::Elf_Word section_type;
+    size_t section_offset;
+    size_t section_size;
+    size_t entry_size;
+};
+
+RelocationSectionInfo get_relocation_section_info(const std::filesystem::path& path, const std::string& section_name) {
+    ELFIO::elfio reader;
+    if (!reader.load(path.string())) {
+        throw std::runtime_error("Failed to parse test ELF copy: " + path.string());
+    }
+
+    const auto* section = reader.sections[section_name];
+    if (!section) {
+        throw std::runtime_error("Relocation section not found in test ELF copy: " + section_name);
+    }
+    if (section->get_type() != ELFIO::SHT_REL && section->get_type() != ELFIO::SHT_RELA) {
+        throw std::runtime_error("Section is not a relocation section: " + section_name);
+    }
+    if (section->get_entry_size() == 0 || section->get_size() < section->get_entry_size()) {
+        throw std::runtime_error("Relocation section has no entries: " + section_name);
+    }
+
+    return {
+        .elf_class = reader.get_class(),
+        .section_type = section->get_type(),
+        .section_offset = static_cast<size_t>(section->get_offset()),
+        .section_size = static_cast<size_t>(section->get_size()),
+        .entry_size = static_cast<size_t>(section->get_entry_size()),
+    };
+}
+
 void patch_first_core_access_string_offset(const std::filesystem::path& path, const uint32_t new_offset) {
     ELFIO::elfio reader;
     if (!reader.load(path.string())) {
@@ -221,6 +267,58 @@ void patch_first_core_access_string_offset(const std::filesystem::path& path, co
 
     if (!patched) {
         throw std::runtime_error("No CO-RE relocation records found in test ELF copy");
+    }
+
+    write_file_bytes(path, bytes);
+}
+
+void patch_first_relocation_symbol_index(const std::filesystem::path& path, const std::string& section_name,
+                                         const uint32_t new_symbol_index) {
+    const auto info = get_relocation_section_info(path, section_name);
+    auto bytes = read_file_bytes(path);
+    const size_t entry_offset = info.section_offset;
+    if (entry_offset + info.entry_size > bytes.size()) {
+        throw std::runtime_error("Relocation entry out of bounds in test ELF copy");
+    }
+
+    if (info.elf_class == ELFIO::ELFCLASS64) {
+        constexpr size_t r_info_offset = 8;
+        const auto old_info = read_u64_le(bytes, entry_offset + r_info_offset);
+        const uint64_t new_info = (static_cast<uint64_t>(new_symbol_index) << 32U) | (old_info & 0xffffffffULL);
+        write_u64_le(bytes, entry_offset + r_info_offset, new_info);
+    } else if (info.elf_class == ELFIO::ELFCLASS32) {
+        constexpr size_t r_info_offset = 4;
+        const auto old_info = read_u32_le(bytes, entry_offset + r_info_offset);
+        const uint32_t new_info = (new_symbol_index << 8U) | (old_info & 0xffU);
+        write_u32_le(bytes, entry_offset + r_info_offset, new_info);
+    } else {
+        throw std::runtime_error("Unexpected ELF class");
+    }
+
+    write_file_bytes(path, bytes);
+}
+
+void patch_first_relocation_type(const std::filesystem::path& path, const std::string& section_name,
+                                 const uint32_t new_relocation_type) {
+    const auto info = get_relocation_section_info(path, section_name);
+    auto bytes = read_file_bytes(path);
+    const size_t entry_offset = info.section_offset;
+    if (entry_offset + info.entry_size > bytes.size()) {
+        throw std::runtime_error("Relocation entry out of bounds in test ELF copy");
+    }
+
+    if (info.elf_class == ELFIO::ELFCLASS64) {
+        constexpr size_t r_info_offset = 8;
+        const auto old_info = read_u64_le(bytes, entry_offset + r_info_offset);
+        const uint64_t new_info = (old_info & 0xffffffff00000000ULL) | static_cast<uint64_t>(new_relocation_type);
+        write_u64_le(bytes, entry_offset + r_info_offset, new_info);
+    } else if (info.elf_class == ELFIO::ELFCLASS32) {
+        constexpr size_t r_info_offset = 4;
+        const auto old_info = read_u32_le(bytes, entry_offset + r_info_offset);
+        const uint32_t new_info = (old_info & 0xffffff00U) | (new_relocation_type & 0xffU);
+        write_u32_le(bytes, entry_offset + r_info_offset, new_info);
+    } else {
+        throw std::runtime_error("Unexpected ELF class");
     }
 
     write_file_bytes(path, bytes);
@@ -333,4 +431,24 @@ TEST_CASE("CO-RE access string offset out-of-bounds fails cleanly", "[elf][core]
 
     REQUIRE_THROWS_WITH((ElfObject{elf.path().string(), {}, &g_ebpf_platform_linux}.get_programs("fentry/tcp_close")),
                         Catch::Matchers::ContainsSubstring("Unsupported or invalid CO-RE/BTF relocation data"));
+}
+
+TEST_CASE("ELF loader rejects relocation entries with invalid symbol index", "[elf][hardening]") {
+    thread_local_options = {};
+
+    TempElfFile elf{"ebpf-samples/build/twomaps.o", "bad-reloc-symbol-index"};
+    patch_first_relocation_symbol_index(elf.path(), ".rel.text", 0x00ffffffU);
+
+    REQUIRE_THROWS_WITH((ElfObject{elf.path().string(), {}, &g_ebpf_platform_linux}.get_programs(".text")),
+                        Catch::Matchers::ContainsSubstring("Invalid relocation symbol index"));
+}
+
+TEST_CASE("ELF loader rejects unsupported relocation types", "[elf][hardening]") {
+    thread_local_options = {};
+
+    TempElfFile elf{"ebpf-samples/build/twomaps.o", "bad-reloc-type"};
+    patch_first_relocation_type(elf.path(), ".rel.text", 0xffU);
+
+    REQUIRE_THROWS_WITH((ElfObject{elf.path().string(), {}, &g_ebpf_platform_linux}.get_programs(".text")),
+                        Catch::Matchers::ContainsSubstring("Unsupported relocation type"));
 }

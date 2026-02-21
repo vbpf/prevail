@@ -203,10 +203,20 @@ struct symbol_details_t {
     unsigned char other{};
 };
 
+constexpr unsigned R_BPF_NONE_TYPE = 0;
+constexpr unsigned R_BPF_64_64_TYPE = 1;
+constexpr unsigned R_BPF_64_32_TYPE = 10;
+
+bool is_supported_bpf_relocation_type(const unsigned type) {
+    return type == R_BPF_NONE_TYPE || type == R_BPF_64_64_TYPE || type == R_BPF_64_32_TYPE;
+}
+
 symbol_details_t get_symbol_details(const ELFIO::const_symbol_section_accessor& symbols, const ELFIO::Elf_Xword index) {
     symbol_details_t details;
-    symbols.get_symbol(index, details.name, details.value, details.size, details.bind, details.type,
-                       details.section_index, details.other);
+    if (!symbols.get_symbol(index, details.name, details.value, details.size, details.bind, details.type,
+                            details.section_index, details.other)) {
+        throw MalformedElf("Invalid symbol index in ELF symbol table: " + std::to_string(index));
+    }
     return details;
 }
 
@@ -436,12 +446,19 @@ ELFIO::const_symbol_section_accessor read_and_validate_symbol_section(const ELFI
                                                                       const std::string& path) {
     const ELFIO::section* symbol_section = reader.sections[".symtab"];
     if (!symbol_section) {
-        throw UnmarshalError("No symbol section found in ELF file " + path);
+        throw MalformedElf("No symbol section found in ELF file " + path);
     }
     const auto expected_entry_size =
         reader.get_class() == ELFIO::ELFCLASS32 ? sizeof(ELFIO::Elf32_Sym) : sizeof(ELFIO::Elf64_Sym);
-    if (symbol_section->get_entry_size() != expected_entry_size) {
-        throw UnmarshalError("Invalid symbol section in ELF file " + path);
+    if (symbol_section->get_entry_size() != expected_entry_size || symbol_section->get_entry_size() == 0 ||
+        symbol_section->get_data() == nullptr || symbol_section->get_size() % symbol_section->get_entry_size() != 0) {
+        throw MalformedElf("Invalid symbol section in ELF file " + path);
+    }
+
+    const auto linked_strtab_index = symbol_section->get_link();
+    if (linked_strtab_index >= reader.sections.size() || reader.sections[linked_strtab_index] == nullptr ||
+        reader.sections[linked_strtab_index]->get_data() == nullptr) {
+        throw MalformedElf("Invalid symbol string table link in ELF file " + path);
     }
     return ELFIO::const_symbol_section_accessor{reader, symbol_section};
 }
@@ -449,13 +466,13 @@ ELFIO::const_symbol_section_accessor read_and_validate_symbol_section(const ELFI
 ELFIO::elfio load_elf(std::istream& input_stream, const std::string& path) {
     ELFIO::elfio reader;
     if (!reader.load(input_stream)) {
-        throw UnmarshalError("Can't process ELF file " + path);
+        throw MalformedElf("Can't process ELF file " + path);
     }
 
     // Accept EM_NONE for compatibility with older toolchains that emit eBPF
     // objects without setting e_machine, but reject all non-BPF architectures.
     if (reader.get_machine() != ELFIO::EM_BPF && reader.get_machine() != ELFIO::EM_NONE) {
-        throw UnmarshalError("Unsupported ELF machine in file " + path + ": expected EM_BPF");
+        throw MalformedElf("Unsupported ELF machine in file " + path + ": expected EM_BPF");
     }
 
     std::error_code ec;
@@ -469,7 +486,7 @@ ELFIO::elfio load_elf(std::istream& input_stream, const std::string& path) {
             const std::uintmax_t offset = section->get_offset();
             const std::uintmax_t size = section->get_size();
             if (offset > file_size || size > file_size - offset) {
-                throw UnmarshalError("ELF section '" + section->get_name() + "' has out-of-bounds file range");
+                throw MalformedElf("ELF section '" + section->get_name() + "' has out-of-bounds file range");
             }
         }
     }
@@ -1644,28 +1661,42 @@ void ProgramReader::process_relocations(std::vector<EbpfInst>& instructions,
         ELFIO::Elf_Word idx{};
         unsigned type{};
         ELFIO::Elf_Sxword addend{};
-        if (reloc.get_entry(i, o, idx, type, addend)) {
-            if (o < program_offset || o >= program_offset + program_size) {
-                continue;
-            }
-            o -= program_offset;
+        if (!reloc.get_entry(i, o, idx, type, addend)) {
+            throw MalformedElf("Malformed relocation entry in section " + section_name + " at index " +
+                               std::to_string(i));
+        }
+        if (!is_supported_bpf_relocation_type(type)) {
+            throw MalformedElf("Unsupported relocation type " + std::to_string(type) + " in section " + section_name);
+        }
+        // Compatibility: some producer pipelines encode map relocations as
+        // R_BPF_NONE with a non-zero symbol index in executable sections.
+        // Keep STN_UNDEF (idx==0) as an explicit no-op relocation.
+        if (type == R_BPF_NONE_TYPE && idx == 0) {
+            continue;
+        }
+        if (idx >= symbols.get_symbols_num()) {
+            throw MalformedElf("Invalid relocation symbol index " + std::to_string(idx) + " in section " + section_name);
+        }
+        if (o < program_offset || o >= program_offset + program_size) {
+            continue;
+        }
+        o -= program_offset;
 
-            if (o % sizeof(EbpfInst) != 0) {
-                throw UnmarshalError("Unaligned relocation offset");
-            }
-            const auto loc = o / sizeof(EbpfInst);
-            if (loc >= instructions.size()) {
-                throw UnmarshalError("Invalid relocation");
-            }
-            auto sym = get_symbol_details(symbols, idx);
+        if (o % sizeof(EbpfInst) != 0) {
+            throw UnmarshalError("Unaligned relocation offset");
+        }
+        const auto loc = o / sizeof(EbpfInst);
+        if (loc >= instructions.size()) {
+            throw UnmarshalError("Invalid relocation");
+        }
+        auto sym = get_symbol_details(symbols, idx);
 
-            if (!try_reloc(sym.name, sym.section_index, sym.type, instructions, loc, idx, addend)) {
-                unresolved_symbol_errors.push_back(unresolved_symbol_error_t{
-                    .section = section_name,
-                    .message = "Unresolved external symbol " + sym.name + " in section " + section_name +
-                               " at location " + std::to_string(loc),
-                });
-            }
+        if (!try_reloc(sym.name, sym.section_index, sym.type, instructions, loc, idx, addend)) {
+            unresolved_symbol_errors.push_back(unresolved_symbol_error_t{
+                .section = section_name,
+                .message = "Unresolved external symbol " + (sym.name.empty() ? "<anonymous>" : sym.name) +
+                           " in section " + section_name + " at location " + std::to_string(loc),
+            });
         }
     }
 }

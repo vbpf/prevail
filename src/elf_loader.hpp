@@ -12,9 +12,14 @@
 #include "platform.hpp"
 namespace prevail {
 
-class UnmarshalError final : public std::runtime_error {
+class UnmarshalError : public std::runtime_error {
   public:
     explicit UnmarshalError(const std::string& what) : std::runtime_error(what) {}
+};
+
+class MalformedElf final : public UnmarshalError {
+  public:
+    explicit MalformedElf(const std::string& what) : UnmarshalError(what) {}
 };
 
 int create_map_crab(const EbpfMapType& map_type, uint32_t key_size, uint32_t value_size, uint32_t max_entries,
