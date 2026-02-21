@@ -153,7 +153,7 @@ void ElfObject::ElfObjectState::load_section(const std::string& section_name) {
         cache_entry.valid = true;
         cache_entry.error.clear();
         mark_section_validity(section_name, true, "");
-    } catch (const std::runtime_error& e) {
+    } catch (const std::exception& e) {
         cache_entry.valid = false;
         cache_entry.error = e.what();
         cache_entry.programs.clear();

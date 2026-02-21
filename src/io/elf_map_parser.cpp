@@ -241,10 +241,10 @@ ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO
         }
 
         const auto* section = reader.sections[sym_details.section_index];
-        const size_t record_size = record_size_it->second;
         if (!section) {
             continue;
         }
+        const size_t record_size = record_size_it->second;
 
         if (sym_details.value % record_size != 0 || sym_details.value >= section->get_size()) {
             throw UnmarshalError("Legacy map symbol '" + sym_details.name + "' has invalid offset: not aligned to " +
