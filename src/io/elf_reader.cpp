@@ -205,7 +205,7 @@ std::vector<ELFIO::section*> global_sections(const ELFIO::elfio& reader) {
         }
 
         const auto type = section->get_type();
-        if (type == ELFIO::SHT_NOBITS || (type == ELFIO::SHT_PROGBITS && section->get_size() != 0)) {
+        if ((type == ELFIO::SHT_NOBITS || type == ELFIO::SHT_PROGBITS) && section->get_size() != 0) {
             result.push_back(section.get());
         }
     }

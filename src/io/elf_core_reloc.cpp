@@ -267,6 +267,15 @@ void ProgramReader::apply_core_relocation(RawProgram& prog, const bpf_core_relo&
         throw UnmarshalError("CO-RE relocation offset out of bounds");
     }
     EbpfInst& inst = prog.prog[inst_idx];
+
+    // LDDW is a two-slot instruction: slot 0 (opcode 0x18) carries the lo32 immediate,
+    // slot 1 (opcode 0x00) carries the hi32 immediate.  A CO-RE relocation that targets
+    // the continuation slot would silently corrupt the hi32 bits instead of patching the
+    // intended instruction field.
+    if (inst.opcode == 0x00 && inst_idx > 0 && prog.prog[inst_idx - 1].opcode == INST_OP_LDDW_IMM) {
+        throw UnmarshalError("CO-RE relocation at offset " + std::to_string(relo.insn_off) +
+                             " targets LDDW continuation slot");
+    }
     std::optional<core_field_resolution_t> resolved_field;
     const auto get_field = [&]() -> const core_field_resolution_t& {
         if (!resolved_field) {
