@@ -14,7 +14,7 @@
 #include <elfio/elfio.hpp>
 
 #include "config.hpp"
-#include "elf_loader.hpp"
+#include "io/elf_loader.hpp"
 #include "platform.hpp"
 
 using namespace prevail;

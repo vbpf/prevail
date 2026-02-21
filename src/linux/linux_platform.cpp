@@ -93,7 +93,7 @@
 #define PTYPE(name, descr, native_type, prefixes) {name, descr, 0, prefixes}
 #define PTYPE_PRIVILEGED(name, descr, native_type, prefixes) {name, descr, 0, prefixes, true}
 #endif
-#include "elf_loader.hpp"
+#include "io/elf_loader.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
 #include "linux/kfunc.hpp"
 #include "linux/linux_platform.hpp"

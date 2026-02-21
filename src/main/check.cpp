@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "ebpf_verifier.hpp"
-#include "elf_loader.hpp"
+#include "io/elf_loader.hpp"
 #ifdef _WIN32
 #include "memsize_windows.hpp"
 #else

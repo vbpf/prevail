@@ -13,7 +13,7 @@
 #include <unordered_map>
 
 #include "ebpf_verifier.hpp"
-#include "elf_loader.hpp"
+#include "io/elf_loader.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
 
 namespace verify_test {
