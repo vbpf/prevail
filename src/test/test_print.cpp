@@ -12,7 +12,7 @@
 #define MAX_PATH (256)
 #endif
 
-#include "elf_loader.hpp"
+#include "io/elf_loader.hpp"
 #include "ir/unmarshal.hpp"
 
 #define TEST_OBJECT_FILE_DIRECTORY "ebpf-samples/build/"
@@ -32,8 +32,8 @@ static void trim_right(std::string& s) {
 
 void verify_printed_string(const std::string& file) {
     std::stringstream generated_output;
-    auto raw_progs =
-        read_elf(std::string(TEST_OBJECT_FILE_DIRECTORY) + file + ".o", "", "", {}, &g_ebpf_platform_linux);
+    ElfObject elf{std::string(TEST_OBJECT_FILE_DIRECTORY) + file + ".o", {}, &g_ebpf_platform_linux};
+    const auto& raw_progs = elf.get_programs();
     const RawProgram& raw_prog = raw_progs.back();
     std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, thread_local_options);
     auto program = std::get_if<InstructionSeq>(&prog_or_error);

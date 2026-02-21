@@ -2599,6 +2599,22 @@ static constexpr EbpfHelperPrototype prototypes[] = {
     FN(211, cgrp_storage_delete),
 };
 
+std::optional<int32_t> resolve_helper_id_linux(const std::string& name) {
+    std::string_view candidate{name};
+    if (candidate.starts_with("bpf_")) {
+        candidate.remove_prefix(4);
+    } else if (candidate.starts_with("ebpf_")) {
+        candidate.remove_prefix(5);
+    }
+
+    for (int32_t id = 0; id < static_cast<int32_t>(std::size(prototypes)); ++id) {
+        if (candidate == prototypes[id].name) {
+            return id;
+        }
+    }
+    return std::nullopt;
+}
+
 bool is_helper_usable_linux(const int32_t n) {
     if (n >= static_cast<int>(std::size(prototypes)) || n < 0) {
         return false;

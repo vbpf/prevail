@@ -93,7 +93,7 @@
 #define PTYPE(name, descr, native_type, prefixes) {name, descr, 0, prefixes}
 #define PTYPE_PRIVILEGED(name, descr, native_type, prefixes) {name, descr, 0, prefixes, true}
 #endif
-#include "elf_loader.hpp"
+#include "io/elf_loader.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
 #include "linux/kfunc.hpp"
 #include "linux/linux_platform.hpp"
@@ -355,6 +355,7 @@ constexpr int32_t LINUX_BUILTIN_CALL_MEMSET = -11;
 constexpr int32_t LINUX_BUILTIN_CALL_MEMCPY = -12;
 constexpr int32_t LINUX_BUILTIN_CALL_MEMMOVE = -13;
 constexpr int32_t LINUX_BUILTIN_CALL_MEMCMP = -14;
+constexpr int32_t LINUX_BUILTIN_CALL_EXTERN_UNSPEC = -100;
 } // namespace
 
 std::optional<int32_t> resolve_builtin_call_linux(const std::string& name) {
@@ -370,6 +371,15 @@ std::optional<int32_t> resolve_builtin_call_linux(const std::string& name) {
     if (name == "memcmp") {
         return LINUX_BUILTIN_CALL_MEMCMP;
     }
+
+    if (const auto helper_id = resolve_helper_id_linux(name)) {
+        return *helper_id;
+    }
+
+    if (!name.empty()) {
+        return LINUX_BUILTIN_CALL_EXTERN_UNSPEC;
+    }
+
     return std::nullopt;
 }
 
@@ -402,6 +412,17 @@ static std::optional<Call> get_builtin_call_linux(const int32_t id) {
             .name = "memcmp",
             .pairs = {{ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{1}, Reg{3}, false},
                       {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}},
+        };
+    case LINUX_BUILTIN_CALL_EXTERN_UNSPEC:
+        return Call{
+            .func = id,
+            .name = "extern_unspecified",
+            .reallocate_packet = true,
+            .singles = {{ArgSingle::Kind::ANYTHING, false, Reg{1}},
+                        {ArgSingle::Kind::ANYTHING, false, Reg{2}},
+                        {ArgSingle::Kind::ANYTHING, false, Reg{3}},
+                        {ArgSingle::Kind::ANYTHING, false, Reg{4}},
+                        {ArgSingle::Kind::ANYTHING, false, Reg{5}}},
         };
     default: return std::nullopt;
     }

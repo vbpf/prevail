@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "ebpf_verifier.hpp"
+#include "io/elf_loader.hpp"
 #ifdef _WIN32
 #include "memsize_windows.hpp"
 #else
@@ -184,30 +185,44 @@ int main(int argc, char** argv) {
         ebpf_verifier_options.mock_map_fds = false;
     }
 
-    // Read a set of raw program sections from an ELF file.
+    ElfObject elf{filename, ebpf_verifier_options, &platform};
     vector<RawProgram> raw_progs;
-    try {
-        raw_progs = read_elf(filename, desired_section, desired_program, ebpf_verifier_options, &platform);
-    } catch (std::runtime_error& e) {
-        std::cerr << "error: " << e.what() << std::endl;
-        return 1;
+    std::optional<std::string> load_error;
+    if (!list) {
+        try {
+            raw_progs = elf.get_programs(desired_section, desired_program);
+        } catch (const std::runtime_error& e) {
+            load_error = e.what();
+        }
     }
 
-    if (list || raw_progs.size() != 1) {
-        if (!list) {
+    if (list || load_error.has_value() || raw_progs.size() != 1) {
+        if (load_error.has_value()) {
+            std::cerr << "error: " << *load_error << std::endl;
+        }
+        if (!list && !load_error.has_value() && raw_progs.size() != 1) {
             std::cout << "please specify a program\n";
+        }
+        if (!list) {
             std::cout << "available programs:\n";
         }
-        if (!desired_section.empty() && raw_progs.empty()) {
-            // We could not find the desired program, so get the full list
-            // of possibilities.
-            raw_progs = read_elf(filename, string(), string(), ebpf_verifier_options, &platform);
-        }
-        for (const RawProgram& raw_prog : raw_progs) {
-            std::cout << "section=" << raw_prog.section_name << " function=" << raw_prog.function_name << std::endl;
+        try {
+            for (const ElfProgramInfo& prog : elf.list_programs()) {
+                std::cout << "section=" << prog.section_name << " function=" << prog.function_name;
+                if (prog.invalid) {
+                    std::cout << " [invalid: " << prog.invalid_reason << "]";
+                }
+                std::cout << std::endl;
+            }
+        } catch (const std::runtime_error& e) {
+            std::cerr << "error listing programs: " << e.what() << std::endl;
+            return 1;
         }
         std::cout << "\n";
-        return list ? 0 : 64;
+        if (list) {
+            return 0;
+        }
+        return load_error.has_value() ? 1 : 64;
     }
     const RawProgram& raw_prog = raw_progs.back();
 
