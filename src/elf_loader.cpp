@@ -2057,7 +2057,8 @@ const std::vector<RawProgram>& ElfObject::get_programs(const std::string& desire
                 throw UnmarshalError("Program not found in section '" + desired_section + "': " + desired_program);
             }
             if (selected.size() > 1) {
-                throw UnmarshalError("Program name is ambiguous in section '" + desired_section + "': " + desired_program);
+                throw UnmarshalError("Program name is ambiguous in section '" + desired_section +
+                                     "': " + desired_program);
             }
         }
         auto [it, _] = query_cache_.emplace(std::move(key), std::move(selected));
@@ -2082,7 +2083,8 @@ const std::vector<RawProgram>& ElfObject::get_programs(const std::string& desire
             throw UnmarshalError("Program not found: " + desired_program);
         }
         if (selected.size() > 1) {
-            throw UnmarshalError("Program name is ambiguous across sections: " + desired_program + "; please specify a section");
+            throw UnmarshalError("Program name is ambiguous across sections: " + desired_program +
+                                 "; please specify a section");
         }
     }
     auto [it, _] = query_cache_.emplace(std::move(key), std::move(selected));

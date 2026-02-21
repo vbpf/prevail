@@ -126,8 +126,8 @@ inline std::vector<prevail::RawProgram> read_elf_cached(const std::string& path,
                         if (!inst_seq) {                                                                             \
                             rejected = true;                                                                         \
                         } else {                                                                                     \
-                            const prevail::Program prog =                                                            \
-                                prevail::Program::from_sequence(*inst_seq, raw_prog.info, prevail::thread_local_options);\
+                            const prevail::Program prog = prevail::Program::from_sequence(                           \
+                                *inst_seq, raw_prog.info, prevail::thread_local_options);                            \
                             rejected = (prevail::verify(prog) == false);                                             \
                         }                                                                                            \
                     } catch (const std::runtime_error& ex) {                                                         \
@@ -211,13 +211,13 @@ inline std::vector<prevail::RawProgram> read_elf_cached(const std::string& path,
         SKIP(verify_test::format_issue(kind, reason));                                   \
     }
 
-#define TEST_SECTION_REJECT_LOAD(project, filename, section)                                                           \
-    TEST_CASE("expect load rejection " project "/" filename " " section, "[verify][samples][" project "]") {         \
-        REQUIRE_THROWS_AS(([&]() {                                                                                    \
-                              (void)verify_test::read_elf_cached("ebpf-samples/" project "/" filename, section, "",   \
-                                                                 {}, &prevail::g_ebpf_platform_linux);                \
-                          }()),                                                                                       \
-                          std::runtime_error);                                                                        \
+#define TEST_SECTION_REJECT_LOAD(project, filename, section)                                                        \
+    TEST_CASE("expect load rejection " project "/" filename " " section, "[verify][samples][" project "]") {        \
+        REQUIRE_THROWS_AS(([&]() {                                                                                  \
+                              (void)verify_test::read_elf_cached("ebpf-samples/" project "/" filename, section, "", \
+                                                                 {}, &prevail::g_ebpf_platform_linux);              \
+                          }()),                                                                                     \
+                          std::runtime_error);                                                                      \
     }
 
 #define TEST_SECTION_FAIL_SLOW(project, filename, section, kind, reason)                       \

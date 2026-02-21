@@ -62,28 +62,45 @@ TEST_SECTION_REJECT("build", "wronghelper.o", "xdp")
 // ===========================================================================
 // expected failure (VerifierTypeTracking):
 //   diagnostic: 4: Invalid type (r1.type in {number, ctx, stack, packet, shared})
-TEST_SECTION_FAIL("build", "badmapptr.o", "test", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 4: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
+TEST_SECTION_FAIL("build", "badmapptr.o", "test", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 4: Invalid type (r1.type in {number, ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
 //   diagnostic: 8: Invalid type (r2.type == func)
-TEST_SECTION_FAIL("build", "bpf_loop_helper.o", "xdp", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 8: Invalid type (r2.type == func)")
+TEST_SECTION_FAIL("build", "bpf_loop_helper.o", "xdp", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 8: Invalid type (r2.type == func)")
 // expected failure (VerifierTypeTracking):
 //   diagnostic: 16: Invalid type (r7.type in {ctx, stack, packet, shared})
-TEST_SECTION_FAIL("build", "correlated_branch.o", "xdp", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 16: Invalid type (r7.type in {ctx, stack, packet, shared})")
+TEST_SECTION_FAIL("build", "correlated_branch.o", "xdp", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 16: Invalid type (r7.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
 //   diagnostic: 1: Invalid type (r3.type in {number, ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("build", "global_func.o", ".text", "add_and_store", 2, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1: Invalid type (r3.type in {number, ctx, stack, packet, shared})")
+TEST_PROGRAM_FAIL("build", "global_func.o", ".text", "add_and_store", 2,
+                  verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 1: Invalid type (r3.type in {number, ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
 //   diagnostic: 13: Invalid type (r7.type in {ctx, stack, packet, shared})
-TEST_SECTION_FAIL("build", "packet_reallocate.o", "socket_filter", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 13: Invalid type (r7.type in {ctx, stack, packet, shared})")
+TEST_SECTION_FAIL("build", "packet_reallocate.o", "socket_filter", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 13: Invalid type (r7.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
 //   diagnostic: 30: Invalid type (r0.type == number)
-TEST_SECTION_FAIL("build", "queue_stack.o", ".text", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 30: Invalid type (r0.type == number)")
+TEST_SECTION_FAIL("build", "queue_stack.o", ".text", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 30: Invalid type (r0.type == number)")
 // expected failure (VerifierTypeTracking):
 //   diagnostic: 19: Invalid type (r1.type == map_fd)
-TEST_SECTION_FAIL("build", "ringbuf_in_map.o", ".text", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 19: Invalid type (r1.type == map_fd)")
+TEST_SECTION_FAIL("build", "ringbuf_in_map.o", ".text", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 19: Invalid type (r1.type == map_fd)")
 // expected failure (VerifierTypeTracking):
 //   diagnostic: 3: Invalid type (r2.type == map_fd_programs)
-TEST_SECTION_FAIL("build", "tail_call_bad.o", "xdp_prog", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 3: Invalid type (r2.type == map_fd_programs)")
+TEST_SECTION_FAIL("build", "tail_call_bad.o", "xdp_prog", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 3: Invalid type (r2.type == map_fd_programs)")
 
 // ===========================================================================
 // Failure Cause Group: VerifierBoundsTracking
@@ -100,22 +117,38 @@ TEST_SECTION_FAIL("build", "tail_call_bad.o", "xdp_prog", verify_test::VerifyIss
 // ===========================================================================
 // expected failure (VerifierBoundsTracking):
 //   diagnostic: 3: Upper bound must be at most EBPF_TOTAL_STACK_SIZE (valid_access(r1.offset, width=r2) for write)
-TEST_SECTION_FAIL("build", "badhelpercall.o", ".text", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 3: Upper bound must be at most EBPF_TOTAL_STACK_SIZE (valid_access(r1.offset, width=r2) for write)")
+TEST_SECTION_FAIL(
+    "build", "badhelpercall.o", ".text", verify_test::VerifyIssueKind::VerifierBoundsTracking,
+    "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: "
+    "3: Upper bound must be at most EBPF_TOTAL_STACK_SIZE (valid_access(r1.offset, width=r2) for write)")
 // expected failure (VerifierBoundsTracking):
 //   diagnostic: 10: Upper bound must be at most packet_size (valid_access(r1.offset, width=4) for read)
-TEST_SECTION_FAIL("build", "dependent_read.o", "xdp", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 10: Upper bound must be at most packet_size (valid_access(r1.offset, width=4) for read)")
+TEST_SECTION_FAIL("build", "dependent_read.o", "xdp", verify_test::VerifyIssueKind::VerifierBoundsTracking,
+                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
+                  "Diagnostic: 10: Upper bound must be at most packet_size (valid_access(r1.offset, width=4) for read)")
 // expected failure (VerifierBoundsTracking):
 //   diagnostic: 19: Upper bound must be at most r1.shared_region_size (valid_access(r1.offset, width=4) for write)
-TEST_SECTION_FAIL("build", "invalid_map_access.o", ".text", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 19: Upper bound must be at most r1.shared_region_size (valid_access(r1.offset, width=4) for write)")
+TEST_SECTION_FAIL(
+    "build", "invalid_map_access.o", ".text", verify_test::VerifyIssueKind::VerifierBoundsTracking,
+    "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: "
+    "19: Upper bound must be at most r1.shared_region_size (valid_access(r1.offset, width=4) for write)")
 // expected failure (VerifierBoundsTracking):
 //   diagnostic: 15: Upper bound must be at most EBPF_TOTAL_STACK_SIZE (valid_access(r5.offset, width=1) for write)
-TEST_SECTION_FAIL("build", "loop.o", "test_md", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 15: Upper bound must be at most EBPF_TOTAL_STACK_SIZE (valid_access(r5.offset, width=1) for write)")
+TEST_SECTION_FAIL(
+    "build", "loop.o", "test_md", verify_test::VerifyIssueKind::VerifierBoundsTracking,
+    "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: "
+    "15: Upper bound must be at most EBPF_TOTAL_STACK_SIZE (valid_access(r5.offset, width=1) for write)")
 // expected failure (VerifierBoundsTracking):
 //   diagnostic: 10: Upper bound must be at most r1.shared_region_size (valid_access(r1.offset, width=8) for read)
-TEST_SECTION_FAIL("build", "mapvalue-overrun.o", ".text", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 10: Upper bound must be at most r1.shared_region_size (valid_access(r1.offset, width=8) for read)")
+TEST_SECTION_FAIL(
+    "build", "mapvalue-overrun.o", ".text", verify_test::VerifyIssueKind::VerifierBoundsTracking,
+    "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: "
+    "10: Upper bound must be at most r1.shared_region_size (valid_access(r1.offset, width=8) for read)")
 // expected failure (VerifierBoundsTracking):
 //   diagnostic: 4: Upper bound must be at most packet_size (valid_access(r2.offset, width=4) for read)
-TEST_SECTION_FAIL("build", "packet_overflow.o", "xdp", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 4: Upper bound must be at most packet_size (valid_access(r2.offset, width=4) for read)")
+TEST_SECTION_FAIL("build", "packet_overflow.o", "xdp", verify_test::VerifyIssueKind::VerifierBoundsTracking,
+                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
+                  "Diagnostic: 4: Upper bound must be at most packet_size (valid_access(r2.offset, width=4) for read)")
 
 // ===========================================================================
 // Failure Cause Group: VerifierStackInitialization
@@ -132,13 +165,20 @@ TEST_SECTION_FAIL("build", "packet_overflow.o", "xdp", verify_test::VerifyIssueK
 // ===========================================================================
 // expected failure (VerifierStackInitialization):
 //   diagnostic: 52: Stack content is not numeric (valid_access(r3.offset, width=r4) for read)
-TEST_SECTION_FAIL("build", "correlated_branch2.o", "socket_filter", verify_test::VerifyIssueKind::VerifierStackInitialization, "Known verifier limitation: stack initialization tracking is too coarse for this access path. Diagnostic: 52: Stack content is not numeric (valid_access(r3.offset, width=r4) for read)")
+TEST_SECTION_FAIL("build", "correlated_branch2.o", "socket_filter",
+                  verify_test::VerifyIssueKind::VerifierStackInitialization,
+                  "Known verifier limitation: stack initialization tracking is too coarse for this access path. "
+                  "Diagnostic: 52: Stack content is not numeric (valid_access(r3.offset, width=r4) for read)")
 // expected failure (VerifierStackInitialization):
 //   diagnostic: 12: Stack content is not numeric (valid_access(r4.offset, width=r5) for read)
-TEST_SECTION_FAIL("build", "perf_event_array.o", "xdp", verify_test::VerifyIssueKind::VerifierStackInitialization, "Known verifier limitation: stack initialization tracking is too coarse for this access path. Diagnostic: 12: Stack content is not numeric (valid_access(r4.offset, width=r5) for read)")
+TEST_SECTION_FAIL("build", "perf_event_array.o", "xdp", verify_test::VerifyIssueKind::VerifierStackInitialization,
+                  "Known verifier limitation: stack initialization tracking is too coarse for this access path. "
+                  "Diagnostic: 12: Stack content is not numeric (valid_access(r4.offset, width=r5) for read)")
 // expected failure (VerifierStackInitialization):
 //   diagnostic: 6: Stack content is not numeric (valid_access(r2.offset, width=r3) for read)
-TEST_SECTION_FAIL("build", "ringbuf_uninit.o", ".text", verify_test::VerifyIssueKind::VerifierStackInitialization, "Known verifier limitation: stack initialization tracking is too coarse for this access path. Diagnostic: 6: Stack content is not numeric (valid_access(r2.offset, width=r3) for read)")
+TEST_SECTION_FAIL("build", "ringbuf_uninit.o", ".text", verify_test::VerifyIssueKind::VerifierStackInitialization,
+                  "Known verifier limitation: stack initialization tracking is too coarse for this access path. "
+                  "Diagnostic: 6: Stack content is not numeric (valid_access(r2.offset, width=r3) for read)")
 
 // ===========================================================================
 // Failure Cause Group: VerifierPointerArithmetic
@@ -156,7 +196,10 @@ TEST_SECTION_FAIL("build", "ringbuf_uninit.o", ".text", verify_test::VerifyIssue
 // expected failure (VerifierPointerArithmetic):
 //   diagnostic: 2: Only numbers can be added to pointers (r2.type in {ctx, stack, packet, shared} -> r1.type ==
 //               number)
-TEST_SECTION_FAIL("build", "ptr_arith.o", "xdp", verify_test::VerifyIssueKind::VerifierPointerArithmetic, "Known verifier limitation: pointer-arithmetic typing is too restrictive in this pattern. Diagnostic: 2: Only numbers can be added to pointers (r2.type in {ctx, stack, packet, shared} -> r1.type == number)")
+TEST_SECTION_FAIL(
+    "build", "ptr_arith.o", "xdp", verify_test::VerifyIssueKind::VerifierPointerArithmetic,
+    "Known verifier limitation: pointer-arithmetic typing is too restrictive in this pattern. Diagnostic: 2: Only "
+    "numbers can be added to pointers (r2.type in {ctx, stack, packet, shared} -> r1.type == number)")
 
 // ===========================================================================
 // Failure Cause Group: VerifierMapTyping
@@ -172,16 +215,26 @@ TEST_SECTION_FAIL("build", "ptr_arith.o", "xdp", verify_test::VerifyIssueKind::V
 // ===========================================================================
 // expected failure (VerifierMapTyping):
 //   diagnostic: 6: Illegal map update with a non-numerical value [4092-4096) (within(r2:key_size(r1)))
-TEST_SECTION_FAIL("build", "bpf_loop_helper.o", ".text", verify_test::VerifyIssueKind::VerifierMapTyping, "Known verifier limitation: map value/key typing and scalarization are too conservative here. Diagnostic: 6: Illegal map update with a non-numerical value [4092-4096) (within(r2:key_size(r1)))")
+TEST_SECTION_FAIL("build", "bpf_loop_helper.o", ".text", verify_test::VerifyIssueKind::VerifierMapTyping,
+                  "Known verifier limitation: map value/key typing and scalarization are too conservative here. "
+                  "Diagnostic: 6: Illegal map update with a non-numerical value [4092-4096) (within(r2:key_size(r1)))")
 // expected failure (VerifierMapTyping):
 //   diagnostic: 10: Illegal map update with a non-numerical value [4088-4096) (within(r3:value_size(r1)))
-TEST_SECTION_FAIL("build", "exposeptr.o", ".text", verify_test::VerifyIssueKind::VerifierMapTyping, "Known verifier limitation: map value/key typing and scalarization are too conservative here. Diagnostic: 10: Illegal map update with a non-numerical value [4088-4096) (within(r3:value_size(r1)))")
+TEST_SECTION_FAIL(
+    "build", "exposeptr.o", ".text", verify_test::VerifyIssueKind::VerifierMapTyping,
+    "Known verifier limitation: map value/key typing and scalarization are too conservative here. Diagnostic: 10: "
+    "Illegal map update with a non-numerical value [4088-4096) (within(r3:value_size(r1)))")
 // expected failure (VerifierMapTyping):
 //   diagnostic: 10: Illegal map update with a non-numerical value [4088-4096) (within(r2:key_size(r1)))
-TEST_SECTION_FAIL("build", "exposeptr2.o", ".text", verify_test::VerifyIssueKind::VerifierMapTyping, "Known verifier limitation: map value/key typing and scalarization are too conservative here. Diagnostic: 10: Illegal map update with a non-numerical value [4088-4096) (within(r2:key_size(r1)))")
+TEST_SECTION_FAIL("build", "exposeptr2.o", ".text", verify_test::VerifyIssueKind::VerifierMapTyping,
+                  "Known verifier limitation: map value/key typing and scalarization are too conservative here. "
+                  "Diagnostic: 10: Illegal map update with a non-numerical value [4088-4096) (within(r2:key_size(r1)))")
 // expected failure (VerifierMapTyping):
 //   diagnostic: 5: Illegal map update with a non-numerical value [4092-4096) (within(r2:key_size(r1)))
-TEST_PROGRAM_FAIL("build", "global_func.o", ".text", "process_entry", 2, verify_test::VerifyIssueKind::VerifierMapTyping, "Known verifier limitation: map value/key typing and scalarization are too conservative here. Diagnostic: 5: Illegal map update with a non-numerical value [4092-4096) (within(r2:key_size(r1)))")
+TEST_PROGRAM_FAIL("build", "global_func.o", ".text", "process_entry", 2,
+                  verify_test::VerifyIssueKind::VerifierMapTyping,
+                  "Known verifier limitation: map value/key typing and scalarization are too conservative here. "
+                  "Diagnostic: 5: Illegal map update with a non-numerical value [4092-4096) (within(r2:key_size(r1)))")
 
 // ===========================================================================
 // Failure Cause Group: VerifierNullability
@@ -197,7 +250,9 @@ TEST_PROGRAM_FAIL("build", "global_func.o", ".text", "process_entry", 2, verify_
 // ===========================================================================
 // expected failure (VerifierNullability):
 //   diagnostic: 7: Possible null access (valid_access(r0.offset, width=4) for write)
-TEST_SECTION_FAIL("build", "nullmapref.o", "test", verify_test::VerifyIssueKind::VerifierNullability, "Known verifier limitation: nullability tracking is too conservative on this path. Diagnostic: 7: Possible null access (valid_access(r0.offset, width=4) for write)")
+TEST_SECTION_FAIL("build", "nullmapref.o", "test", verify_test::VerifyIssueKind::VerifierNullability,
+                  "Known verifier limitation: nullability tracking is too conservative on this path. Diagnostic: 7: "
+                  "Possible null access (valid_access(r0.offset, width=4) for write)")
 
 // ===========================================================================
 // Failure Cause Group: VerifierContextModeling
@@ -212,4 +267,6 @@ TEST_SECTION_FAIL("build", "nullmapref.o", "test", verify_test::VerifyIssueKind:
 // ===========================================================================
 // expected failure (VerifierContextModeling):
 //   diagnostic: 8: Nonzero context offset (r1.ctx_offset == 0)
-TEST_SECTION_FAIL("build", "ctxoffset.o", "sockops", verify_test::VerifyIssueKind::VerifierContextModeling, "Known verifier limitation: context-offset modeling is too restrictive for this access pattern. Diagnostic: 8: Nonzero context offset (r1.ctx_offset == 0)")
+TEST_SECTION_FAIL("build", "ctxoffset.o", "sockops", verify_test::VerifyIssueKind::VerifierContextModeling,
+                  "Known verifier limitation: context-offset modeling is too restrictive for this access pattern. "
+                  "Diagnostic: 8: Nonzero context offset (r1.ctx_offset == 0)")

@@ -344,12 +344,12 @@ void patch_first_relocation_type(const std::filesystem::path& path, const std::s
 #define FAIL_LOAD_ELF_SECTION(dirname, filename, sectionname) \
     FAIL_LOAD_ELF_BASE("Try loading bad section: " dirname "/" filename " " sectionname, dirname, filename, sectionname)
 
-#define LOAD_ELF_SECTION(dirname, filename, sectionname)                                                      \
-    TEST_CASE("Try loading section: " dirname "/" filename " " sectionname, "[elf]") {                       \
-        thread_local_options = {};                                                                            \
-        const auto progs =                                                                                   \
+#define LOAD_ELF_SECTION(dirname, filename, sectionname)                                                           \
+    TEST_CASE("Try loading section: " dirname "/" filename " " sectionname, "[elf]") {                             \
+        thread_local_options = {};                                                                                 \
+        const auto progs =                                                                                         \
             ElfObject{"ebpf-samples/" dirname "/" filename, {}, &g_ebpf_platform_linux}.get_programs(sectionname); \
-        REQUIRE_FALSE(progs.empty());                                                                         \
+        REQUIRE_FALSE(progs.empty());                                                                              \
     }
 
 // Intentional loader failures.

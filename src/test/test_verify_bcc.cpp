@@ -26,22 +26,35 @@ TEST_SECTION("bcc", "tcpconnect.bpf.o", "kprobe/tcp_v6_connect")
 // ===========================================================================
 // expected failure (VerifierTypeTracking):
 //   diagnostic: 2: Invalid type (valid_access(r7.offset) for comparison/subtraction)
-TEST_SECTION_FAIL("bcc", "bashreadline.bpf.o", "uretprobe/readline", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (valid_access(r7.offset) for comparison/subtraction)")
+TEST_SECTION_FAIL("bcc", "bashreadline.bpf.o", "uretprobe/readline", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 2: Invalid type (valid_access(r7.offset) for comparison/subtraction)")
 // expected failure (VerifierTypeTracking):
 //   diagnostic: 17: Invalid type (r6.type in {number, ctx, stack, packet, shared})
-TEST_SECTION_FAIL("bcc", "filelife.bpf.o", "kprobe/security_inode_create", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 17: Invalid type (r6.type in {number, ctx, stack, packet, shared})")
+TEST_SECTION_FAIL("bcc", "filelife.bpf.o", "kprobe/security_inode_create",
+                  verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 17: Invalid type (r6.type in {number, ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
 //   diagnostic: 34: Invalid type (r6.type in {number, ctx, stack, packet, shared})
-TEST_SECTION_FAIL("bcc", "filelife.bpf.o", "kprobe/vfs_create", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 34: Invalid type (r6.type in {number, ctx, stack, packet, shared})")
+TEST_SECTION_FAIL("bcc", "filelife.bpf.o", "kprobe/vfs_create", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 34: Invalid type (r6.type in {number, ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
 //   diagnostic: 35: Invalid type (r6.type in {number, ctx, stack, packet, shared})
-TEST_SECTION_FAIL("bcc", "filelife.bpf.o", "kprobe/vfs_open", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 35: Invalid type (r6.type in {number, ctx, stack, packet, shared})")
+TEST_SECTION_FAIL("bcc", "filelife.bpf.o", "kprobe/vfs_open", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 35: Invalid type (r6.type in {number, ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
 //   diagnostic: 38: Invalid type (r7.type in {ctx, stack, packet, shared})
-TEST_SECTION_FAIL("bcc", "filelife.bpf.o", "kretprobe/vfs_unlink", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 38: Invalid type (r7.type in {ctx, stack, packet, shared})")
+TEST_SECTION_FAIL("bcc", "filelife.bpf.o", "kretprobe/vfs_unlink", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 38: Invalid type (r7.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
 //   diagnostic: 21: Invalid type (r7.type in {ctx, stack, packet, shared})
-TEST_SECTION_FAIL("bcc", "oomkill.bpf.o", "kprobe/oom_kill_process", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 21: Invalid type (r7.type in {ctx, stack, packet, shared})")
+TEST_SECTION_FAIL("bcc", "oomkill.bpf.o", "kprobe/oom_kill_process", verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 21: Invalid type (r7.type in {ctx, stack, packet, shared})")
 
 // ===========================================================================
 // Failure Cause Group: VerifierBoundsTracking
@@ -58,7 +71,13 @@ TEST_SECTION_FAIL("bcc", "oomkill.bpf.o", "kprobe/oom_kill_process", verify_test
 // ===========================================================================
 // expected failure (VerifierBoundsTracking):
 //   diagnostic: 57: Upper bound must be at most r1.shared_region_size (valid_access(r1.offset, width=4) for read)
-TEST_SECTION_FAIL("bcc", "tcpconnect.bpf.o", "kretprobe/tcp_v4_connect", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 57: Upper bound must be at most r1.shared_region_size (valid_access(r1.offset, width=4) for read)")
+TEST_SECTION_FAIL(
+    "bcc", "tcpconnect.bpf.o", "kretprobe/tcp_v4_connect", verify_test::VerifyIssueKind::VerifierBoundsTracking,
+    "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: "
+    "57: Upper bound must be at most r1.shared_region_size (valid_access(r1.offset, width=4) for read)")
 // expected failure (VerifierBoundsTracking):
 //   diagnostic: 57: Upper bound must be at most r1.shared_region_size (valid_access(r1.offset, width=4) for read)
-TEST_SECTION_FAIL("bcc", "tcpconnect.bpf.o", "kretprobe/tcp_v6_connect", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 57: Upper bound must be at most r1.shared_region_size (valid_access(r1.offset, width=4) for read)")
+TEST_SECTION_FAIL(
+    "bcc", "tcpconnect.bpf.o", "kretprobe/tcp_v6_connect", verify_test::VerifyIssueKind::VerifierBoundsTracking,
+    "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: "
+    "57: Upper bound must be at most r1.shared_region_size (valid_access(r1.offset, width=4) for read)")
