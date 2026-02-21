@@ -640,9 +640,7 @@
           "test_overrides": {
             "sections": {
               ".text": {
-                "kind": "ElfSubprogramResolution",
-                "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: ebpf_map_update_elem",
-                "status": "skip"
+                "status": "reject"
               }
             }
           }
@@ -926,15 +924,6 @@
                 "invalid_reason": "Subprogram not found: bpf_map_lookup_elem"
               }
             ]
-          },
-          "test_overrides": {
-            "sections": {
-              ".text": {
-                "kind": "ElfSubprogramResolution",
-                "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: bpf_map_lookup_elem",
-                "status": "skip"
-              }
-            }
           }
         },
         "global_func.o": {
@@ -1633,9 +1622,7 @@
           "test_overrides": {
             "sections": {
               "xdp": {
-                "kind": "PlatformHelperAvailability",
-                "reason": "Known platform-model limitation: helper availability differs from the sample expectation. Diagnostic: error: rejected: helper function is unavailable on this platform (at 7)",
-                "status": "skip"
+                "status": "reject"
               }
             }
           }
@@ -3606,20 +3593,11 @@
           "test_overrides": {
             "programs": {
               "socket": {
-                "poisoned_double": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: invalid_kfunc",
-                  "status": "skip"
-                },
                 "poisoned_kfunc": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: invalid_kfunc",
-                  "status": "skip"
+                  "status": "reject"
                 },
                 "poisoned_single": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: invalid_kfunc",
-                  "status": "skip"
+                  "status": "reject"
                 }
               }
             }
@@ -3694,9 +3672,7 @@
           "test_overrides": {
             "sections": {
               "socket": {
-                "kind": "ElfSubprogramResolution",
-                "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: fwd",
-                "status": "skip"
+                "status": "reject"
               }
             }
           }
@@ -3718,9 +3694,7 @@
           "test_overrides": {
             "sections": {
               "tc": {
-                "kind": "ElfSubprogramResolution",
-                "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: bpf_kfunc_call_test_mem_len_pass1",
-                "status": "skip"
+                "status": "reject"
               }
             }
           }
@@ -3829,30 +3803,12 @@
             ]
           },
           "test_overrides": {
-            "programs": {
-              "tp_btf/task_newtask": {
-                "call_weak_kfunc": {
-                  "kind": "ExternalSymbolResolution",
-                  "reason": "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.",
-                  "status": "skip"
-                },
-                "weak_kfunc_missing": {
-                  "kind": "ExternalSymbolResolution",
-                  "reason": "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.",
-                  "status": "skip"
-                }
-              }
-            },
             "sections": {
               "fentry/bpf_fentry_test2": {
-                "kind": "ElfSubprogramResolution",
-                "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: bpf_fentry_test1",
-                "status": "skip"
+                "status": "reject"
               },
               "tc": {
-                "kind": "ElfSubprogramResolution",
-                "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: bpf_skb_ct_lookup",
-                "status": "skip"
+                "status": "reject"
               }
             }
           }
@@ -3874,9 +3830,7 @@
           "test_overrides": {
             "sections": {
               "tc": {
-                "kind": "ElfSubprogramResolution",
-                "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: bpf_testmod_test_mod_kfunc",
-                "status": "skip"
+                "status": "reject"
               }
             }
           }
@@ -3903,22 +3857,6 @@
                 "invalid_reason": "Unresolved symbols found."
               }
             ]
-          },
-          "test_overrides": {
-            "programs": {
-              "socket": {
-                "ksym_missing_test": {
-                  "kind": "ExternalSymbolResolution",
-                  "reason": "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.",
-                  "status": "skip"
-                },
-                "ksym_test": {
-                  "kind": "ExternalSymbolResolution",
-                  "reason": "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.",
-                  "status": "skip"
-                }
-              }
-            }
           }
         },
         "linked-el.elf": {
@@ -3981,64 +3919,6 @@
                 "invalid_reason": "Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds"
               }
             ]
-          },
-          "test_overrides": {
-            "programs": {
-              ".text": {
-                "l1": {
-                  "kind": "ElfLegacyMapLayout",
-                  "reason": "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds",
-                  "status": "skip"
-                },
-                "l1_s": {
-                  "kind": "ElfLegacyMapLayout",
-                  "reason": "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds",
-                  "status": "skip"
-                },
-                "l1_w": {
-                  "kind": "ElfLegacyMapLayout",
-                  "reason": "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds",
-                  "status": "skip"
-                },
-                "l2": {
-                  "kind": "ElfLegacyMapLayout",
-                  "reason": "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds",
-                  "status": "skip"
-                },
-                "ww": {
-                  "kind": "ElfLegacyMapLayout",
-                  "reason": "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds",
-                  "status": "skip"
-                }
-              },
-              "socket": {
-                "entry_l1": {
-                  "kind": "ElfLegacyMapLayout",
-                  "reason": "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds",
-                  "status": "skip"
-                },
-                "entry_l1_s": {
-                  "kind": "ElfLegacyMapLayout",
-                  "reason": "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds",
-                  "status": "skip"
-                },
-                "entry_l1_w": {
-                  "kind": "ElfLegacyMapLayout",
-                  "reason": "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds",
-                  "status": "skip"
-                },
-                "entry_l2": {
-                  "kind": "ElfLegacyMapLayout",
-                  "reason": "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds",
-                  "status": "skip"
-                },
-                "entry_ww": {
-                  "kind": "ElfLegacyMapLayout",
-                  "reason": "Known loader limitation: legacy map symbol layout is not fully supported. Diagnostic: Legacy map symbol 'map_legacy_l2_s' has invalid offset: not aligned to 40-byte boundary or out of section bounds",
-                  "status": "skip"
-                }
-              }
-            }
           }
         },
         "linked1-el.elf": {
@@ -4091,25 +3971,8 @@
           "test_overrides": {
             "programs": {
               "socket": {
-                "entry_l1_s": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: l2",
-                  "status": "skip"
-                },
-                "entry_l1_w": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: l2",
-                  "status": "skip"
-                },
                 "entry_l2": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: l2",
-                  "status": "skip"
-                },
-                "entry_ww": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: l2",
-                  "status": "skip"
+                  "status": "reject"
                 }
               }
             }
@@ -4166,24 +4029,7 @@
             "programs": {
               "socket": {
                 "entry_l1": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: l1",
-                  "status": "skip"
-                },
-                "entry_l1_s": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: l1",
-                  "status": "skip"
-                },
-                "entry_l1_w": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: l1",
-                  "status": "skip"
-                },
-                "entry_ww": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: l1",
-                  "status": "skip"
+                  "status": "reject"
                 }
               }
             }
@@ -4276,20 +4122,10 @@
                 "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
                 "status": "expected_failure"
               },
-              "socket/2": {
-                "kind": "ExternalSymbolResolution",
-                "reason": "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.",
-                "status": "skip"
-              },
               "static": {
                 "kind": "VerifierTypeTracking",
                 "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
                 "status": "expected_failure"
-              },
-              "xdp": {
-                "kind": "ExternalSymbolResolution",
-                "reason": "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.",
-                "status": "skip"
               }
             }
           }
@@ -4381,20 +4217,10 @@
                 "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
                 "status": "expected_failure"
               },
-              "socket/2": {
-                "kind": "ExternalSymbolResolution",
-                "reason": "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.",
-                "status": "skip"
-              },
               "static": {
                 "kind": "VerifierTypeTracking",
                 "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
                 "status": "expected_failure"
-              },
-              "xdp": {
-                "kind": "ExternalSymbolResolution",
-                "reason": "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.",
-                "status": "skip"
               }
             }
           }
@@ -4486,20 +4312,10 @@
                 "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
                 "status": "expected_failure"
               },
-              "socket/2": {
-                "kind": "ExternalSymbolResolution",
-                "reason": "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.",
-                "status": "skip"
-              },
               "static": {
                 "kind": "VerifierTypeTracking",
                 "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
                 "status": "expected_failure"
-              },
-              "xdp": {
-                "kind": "ExternalSymbolResolution",
-                "reason": "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.",
-                "status": "skip"
               }
             }
           }
@@ -4591,20 +4407,10 @@
                 "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
                 "status": "expected_failure"
               },
-              "socket/2": {
-                "kind": "ExternalSymbolResolution",
-                "reason": "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.",
-                "status": "skip"
-              },
               "static": {
                 "kind": "VerifierTypeTracking",
                 "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
                 "status": "expected_failure"
-              },
-              "xdp": {
-                "kind": "ExternalSymbolResolution",
-                "reason": "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.",
-                "status": "skip"
               }
             }
           }
@@ -4691,11 +4497,6 @@
                 "kind": "VerifierTypeTracking",
                 "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
                 "status": "expected_failure"
-              },
-              "socket/2": {
-                "kind": "ExternalSymbolResolution",
-                "reason": "Known architectural limitation: unresolved external symbols are not modeled in offline verification. Diagnostic: Unresolved symbols found.",
-                "status": "skip"
               },
               "static": {
                 "kind": "VerifierTypeTracking",
@@ -5968,24 +5769,16 @@
           "test_overrides": {
             "sections": {
               "cgroup/connect4": {
-                "kind": "ElfCoreRelocation",
-                "reason": "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
-                "status": "skip"
+                "status": "reject_load"
               },
               "cgroup/connect6": {
-                "kind": "ElfCoreRelocation",
-                "reason": "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
-                "status": "skip"
+                "status": "reject_load"
               },
               "cgroup/recv_accept4": {
-                "kind": "ElfCoreRelocation",
-                "reason": "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
-                "status": "skip"
+                "status": "reject_load"
               },
               "cgroup/recv_accept6": {
-                "kind": "ElfCoreRelocation",
-                "reason": "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
-                "status": "skip"
+                "status": "reject_load"
               }
             }
           }
@@ -6061,24 +5854,16 @@
           "test_overrides": {
             "sections": {
               "cgroup/connect4": {
-                "kind": "ElfCoreRelocation",
-                "reason": "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
-                "status": "skip"
+                "status": "reject_load"
               },
               "cgroup/connect6": {
-                "kind": "ElfCoreRelocation",
-                "reason": "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
-                "status": "skip"
+                "status": "reject_load"
               },
               "cgroup/recv_accept4": {
-                "kind": "ElfCoreRelocation",
-                "reason": "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
-                "status": "skip"
+                "status": "reject_load"
               },
               "cgroup/recv_accept6": {
-                "kind": "ElfCoreRelocation",
-                "reason": "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. Diagnostic: Unsupported or invalid CO-RE/BTF relocation data: Invalid .BTF section - invalid BTF_KIND - 0",
-                "status": "skip"
+                "status": "reject_load"
               }
             }
           }
@@ -6183,9 +5968,7 @@
           "test_overrides": {
             "sections": {
               ".text": {
-                "kind": "UnmarshalControlFlow",
-                "reason": "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. Diagnostic: unmarshaling error at 1: incomplete lddw",
-                "status": "expected_failure"
+                "status": "reject"
               }
             }
           }
@@ -8316,39 +8099,25 @@
             "programs": {
               "struct_ops": {
                 "bpf_cubic_acked": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_slow_start",
-                  "status": "skip"
+                  "status": "reject"
                 },
                 "bpf_cubic_cong_avoid": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_slow_start",
-                  "status": "skip"
+                  "status": "reject"
                 },
                 "bpf_cubic_cwnd_event": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_slow_start",
-                  "status": "skip"
+                  "status": "reject"
                 },
                 "bpf_cubic_init": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_slow_start",
-                  "status": "skip"
+                  "status": "reject"
                 },
                 "bpf_cubic_recalc_ssthresh": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_slow_start",
-                  "status": "skip"
+                  "status": "reject"
                 },
                 "bpf_cubic_state": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_slow_start",
-                  "status": "skip"
+                  "status": "reject"
                 },
                 "bpf_cubic_undo_cwnd": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_slow_start",
-                  "status": "skip"
+                  "status": "reject"
                 }
               }
             }
@@ -8402,39 +8171,25 @@
             "programs": {
               "struct_ops": {
                 "bpf_dctcp_cong_avoid": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid",
-                  "status": "skip"
+                  "status": "reject"
                 },
                 "bpf_dctcp_cwnd_event": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid",
-                  "status": "skip"
+                  "status": "reject"
                 },
                 "bpf_dctcp_cwnd_undo": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid",
-                  "status": "skip"
+                  "status": "reject"
                 },
                 "bpf_dctcp_init": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid",
-                  "status": "skip"
+                  "status": "reject"
                 },
                 "bpf_dctcp_ssthresh": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid",
-                  "status": "skip"
+                  "status": "reject"
                 },
                 "bpf_dctcp_state": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid",
-                  "status": "skip"
+                  "status": "reject"
                 },
                 "bpf_dctcp_update_alpha": {
-                  "kind": "ElfSubprogramResolution",
-                  "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: tcp_reno_cong_avoid",
-                  "status": "skip"
+                  "status": "reject"
                 }
               }
             }
@@ -8815,9 +8570,7 @@
             },
             "sections": {
               "cgroup_skb/egress": {
-                "kind": "ElfSubprogramResolution",
-                "reason": "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. Diagnostic: Subprogram not found: bpf_map_sum_elem_count",
-                "status": "skip"
+                "status": "reject"
               }
             }
           }

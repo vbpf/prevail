@@ -200,8 +200,10 @@ int main(int argc, char** argv) {
         if (load_error.has_value()) {
             std::cerr << "error: " << *load_error << std::endl;
         }
-        if (!list) {
+        if (!list && !load_error.has_value() && raw_progs.size() != 1) {
             std::cout << "please specify a program\n";
+        }
+        if (!list) {
             std::cout << "available programs:\n";
         }
         try {

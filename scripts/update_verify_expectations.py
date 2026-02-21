@@ -13,7 +13,6 @@ from pathlib import Path
 
 TELEMETRY_LINE = re.compile(r"^[01],\d+(?:\.\d+)?,\d+$")
 MANUAL_BCC_REASON_PREFIX = "Known verifier mismatch on BCC "
-FIXABLE_KINDS = {"ElfSubprogramResolution"}
 
 
 def explain(kind: str, diagnostic: str) -> str:
@@ -57,36 +56,6 @@ def explain(kind: str, diagnostic: str) -> str:
             "Known verifier limitation: subprogram call-graph handling rejects this recursion-shaped pattern. "
             f"Diagnostic: {diagnostic}"
         )
-    if kind == "UnmarshalControlFlow":
-        return (
-            "Known loader limitation: instruction unmarshaling cannot reconstruct this control-flow shape. "
-            f"Diagnostic: {diagnostic}"
-        )
-    if kind == "ExternalSymbolResolution":
-        return (
-            "Known architectural limitation: unresolved external symbols are not modeled in offline verification. "
-            f"Diagnostic: {diagnostic}"
-        )
-    if kind == "PlatformHelperAvailability":
-        return (
-            "Known platform-model limitation: helper availability differs from the sample expectation. "
-            f"Diagnostic: {diagnostic}"
-        )
-    if kind == "ElfCoreRelocation":
-        return (
-            "Known loader limitation: CO-RE/BTF relocation payload is unsupported or malformed for this object. "
-            f"Diagnostic: {diagnostic}"
-        )
-    if kind == "ElfSubprogramResolution":
-        return (
-            "Known loader limitation: subprogram resolution/disambiguation is incomplete for this object. "
-            f"Diagnostic: {diagnostic}"
-        )
-    if kind == "ElfLegacyMapLayout":
-        return (
-            "Known loader limitation: legacy map symbol layout is not fully supported. "
-            f"Diagnostic: {diagnostic}"
-        )
     if kind == "VerificationTimeout":
         return (
             "Known algorithmic limitation: verification did not converge within the configured timeout. "
@@ -98,24 +67,6 @@ def explain(kind: str, diagnostic: str) -> str:
 
 
 def classify_diagnostic(diagnostic: str) -> tuple[str, str, str] | None:
-    if "helper function is unavailable on this platform" in diagnostic:
-        kind = "PlatformHelperAvailability"
-        return "skip", kind, explain(kind, diagnostic)
-    if diagnostic.startswith("Unsupported or invalid CO-RE/BTF relocation data:"):
-        kind = "ElfCoreRelocation"
-        return "skip", kind, explain(kind, diagnostic)
-    if diagnostic.startswith("Subprogram not found:") or diagnostic == "please specify a program":
-        kind = "ElfSubprogramResolution"
-        return "skip", kind, explain(kind, diagnostic)
-    if diagnostic.startswith("Legacy map symbol "):
-        kind = "ElfLegacyMapLayout"
-        return "skip", kind, explain(kind, diagnostic)
-    if "Unresolved symbols found." in diagnostic or diagnostic.startswith("Unresolved external symbol"):
-        kind = "ExternalSymbolResolution"
-        return "skip", kind, explain(kind, diagnostic)
-    if diagnostic.startswith("unmarshaling error at "):
-        kind = "UnmarshalControlFlow"
-        return "expected_failure", kind, explain(kind, diagnostic)
     if "illegal recursion" in diagnostic:
         kind = "VerifierRecursionModeling"
         return "expected_failure", kind, explain(kind, diagnostic)
@@ -176,19 +127,13 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Fail if check reports diagnostics that are not mapped to a known limitation kind.",
     )
-    parser.add_argument(
-        "--allow-fixable-overrides",
-        action="store_true",
-        help="Keep overrides for diagnostics classified as fixable; default drops them so they fail as pass tests.",
-    )
     return parser.parse_args()
 
 
-def classify_invalid_program_from_inventory(program: dict) -> tuple[str, str, str] | None:
+def classify_invalid_program_from_inventory(program: dict) -> tuple[str, str | None, str] | None:
     if not program.get("invalid", False):
         return None
-    diagnostic = program.get("invalid_reason") or "invalid section in ELF metadata"
-    return classify_diagnostic(diagnostic)
+    return "reject_load", None, ""
 
 
 def run_check(
@@ -213,47 +158,74 @@ def run_check(
 
     stdout_lines = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
     stderr_lines = [line.strip() for line in completed.stderr.splitlines() if line.strip()]
-    diagnostics = [line for line in stdout_lines + stderr_lines if not TELEMETRY_LINE.fullmatch(line)]
-    if diagnostics:
-        return "fail", diagnostics[0]
+
+    def normalize(line: str) -> str | None:
+        if TELEMETRY_LINE.fullmatch(line):
+            return None
+        if line == "please specify a program" or line == "available programs:" or line.startswith("section="):
+            return None
+        if line.startswith("error: "):
+            return line[len("error: ") :]
+        return line
+
+    for line in stderr_lines + stdout_lines:
+        diagnostic = normalize(line)
+        if diagnostic:
+            return "fail", diagnostic
     return "fail", "verification failed"
 
 
 def refresh_expectations(
-    inventory: dict, samples_root: Path, check_bin: Path, jobs: int, timeout_seconds: int, allow_fixable_overrides: bool
-) -> tuple[list[tuple[str, str, str, str, str]], list[tuple[str, str, str, str, str, str]]]:
-    tasks: list[tuple[str, str, str, str, int, bool]] = []
+    inventory: dict, samples_root: Path, check_bin: Path, jobs: int, timeout_seconds: int
+) -> list[tuple[str, str, str, str, str]]:
+    tasks: list[tuple[str, str, str, str | None, int, bool]] = []
     for project, pdata in inventory["projects"].items():
         for object_name, odata in pdata["objects"].items():
             for section, programs in odata["sections"].items():
                 if len(programs) == 1:
-                    tasks.append((project, object_name, section, programs[0]["function"], 1, True))
+                    tasks.append((project, object_name, section, None, 1, True))
                 else:
                     for program in programs:
                         tasks.append((project, object_name, section, program["function"], len(programs), False))
 
     def classify(
-        task: tuple[str, str, str, str, int, bool]
+        task: tuple[str, str, str, str | None, int, bool]
     ) -> tuple[str, str, str, str, int, bool, str, str | None, str]:
         project, object_name, section, function_name, section_program_count, section_scoped = task
         odata = inventory["projects"][project]["objects"][object_name]
         object_path = samples_root / project / object_name
-        program = next(p for p in odata["sections"][section] if p["function"] == function_name)
+        if section_scoped:
+            program = odata["sections"][section][0]
+        else:
+            program = next(p for p in odata["sections"][section] if p["function"] == function_name)
+        reported_function = function_name or program["function"]
         inventory_classification = classify_invalid_program_from_inventory(program)
         if inventory_classification is not None:
             status, kind, reason = inventory_classification
-            return project, object_name, section, function_name, section_program_count, section_scoped, status, kind, reason
+            return (
+                project,
+                object_name,
+                section,
+                reported_function,
+                section_program_count,
+                section_scoped,
+                status,
+                kind,
+                reason,
+            )
 
-        result_kind, diagnostic = run_check(check_bin, object_path, section, timeout_seconds, function_name)
+        result_kind, diagnostic = run_check(
+            check_bin, object_path, section, timeout_seconds, None if section_scoped else function_name
+        )
         if result_kind == "pass":
-            return project, object_name, section, function_name, section_program_count, section_scoped, "pass", None, ""
+            return project, object_name, section, reported_function, section_program_count, section_scoped, "pass", None, ""
         if result_kind == "timeout":
             kind = "VerificationTimeout"
             return (
                 project,
                 object_name,
                 section,
-                function_name,
+                reported_function,
                 section_program_count,
                 section_scoped,
                 "skip",
@@ -266,7 +238,7 @@ def refresh_expectations(
                 project,
                 object_name,
                 section,
-                function_name,
+                reported_function,
                 section_program_count,
                 section_scoped,
                 "pass",
@@ -274,10 +246,9 @@ def refresh_expectations(
                 diagnostic,
             )
         status, kind, reason = classified
-        return project, object_name, section, function_name, section_program_count, section_scoped, status, kind, reason
+        return project, object_name, section, reported_function, section_program_count, section_scoped, status, kind, reason
 
     unknown_diagnostics: list[tuple[str, str, str, str, str]] = []
-    dropped_fixable: list[tuple[str, str, str, str, str, str]] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
         for (
             project,
@@ -294,17 +265,6 @@ def refresh_expectations(
             test_overrides = odata.setdefault("test_overrides", {})
             section_overrides = test_overrides.setdefault("sections", {})
             program_overrides = test_overrides.setdefault("programs", {})
-            if (
-                not allow_fixable_overrides
-                and status in ("expected_failure", "skip")
-                and kind in FIXABLE_KINDS
-                and reason
-            ):
-                dropped_fixable.append((project, object_name, section, function_name, kind, reason))
-                status = "pass"
-                kind = None
-                reason = ""
-
             if status == "pass" and reason and reason not in ("", "verification failed"):
                 unknown_diagnostics.append((project, object_name, section, function_name, reason))
 
@@ -313,6 +273,8 @@ def refresh_expectations(
                 program_overrides.pop(section, None)
                 if status == "pass":
                     section_overrides.pop(section, None)
+                elif status == "reject_load":
+                    section_overrides[section] = {"status": "reject_load"}
                 else:
                     current_reason = current.get("reason") if current else None
                     current_kind = current.get("kind") if current else None
@@ -324,6 +286,17 @@ def refresh_expectations(
                         reason_to_store = reason
                     section_overrides[section] = {"status": status, "kind": kind, "reason": reason_to_store}
             else:
+                if status == "reject_load":
+                    section_overrides[section] = {"status": "reject_load"}
+                    program_overrides.pop(section, None)
+                    if not section_overrides:
+                        test_overrides.pop("sections", None)
+                    if not program_overrides:
+                        test_overrides.pop("programs", None)
+                    if not test_overrides:
+                        odata.pop("test_overrides", None)
+                    continue
+
                 section_overrides.pop(section, None)
                 section_program_overrides = program_overrides.setdefault(section, {})
                 current = section_program_overrides.get(function_name)
@@ -349,7 +322,7 @@ def refresh_expectations(
             if not test_overrides:
                 odata.pop("test_overrides", None)
 
-    return unknown_diagnostics, dropped_fixable
+    return unknown_diagnostics
 
 
 def main() -> int:
@@ -375,22 +348,9 @@ def main() -> int:
         return 2
 
     inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
-    unknown_diagnostics, dropped_fixable = refresh_expectations(
-        inventory, samples_root, check_bin, args.jobs, args.timeout_seconds, args.allow_fixable_overrides
-    )
+    unknown_diagnostics = refresh_expectations(inventory, samples_root, check_bin, args.jobs, args.timeout_seconds)
     inventory_path.write_text(json.dumps(inventory, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"Wrote {inventory_path}", file=sys.stderr)
-    if dropped_fixable:
-        print(
-            f"info: dropped {len(dropped_fixable)} fixable overrides ({', '.join(sorted(FIXABLE_KINDS))}); "
-            "these tests are now expected to pass.",
-            file=sys.stderr,
-        )
-        for project, object_name, section, function_name, kind, reason in dropped_fixable[:20]:
-            print(
-                f"  fixable: {project}/{object_name} {section}::{function_name} [{kind}] -> {reason}",
-                file=sys.stderr,
-            )
     if unknown_diagnostics:
         print(
             f"warning: {len(unknown_diagnostics)} diagnostics are not mapped to a known limitation kind; "

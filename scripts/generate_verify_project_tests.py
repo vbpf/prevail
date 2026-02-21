@@ -19,12 +19,6 @@ VALID_KINDS = {
     "VerifierNullability",
     "VerifierContextModeling",
     "VerifierRecursionModeling",
-    "UnmarshalControlFlow",
-    "ExternalSymbolResolution",
-    "PlatformHelperAvailability",
-    "ElfCoreRelocation",
-    "ElfSubprogramResolution",
-    "ElfLegacyMapLayout",
     "VerificationTimeout",
     "LegacyBccBehavior",
 }
@@ -38,12 +32,6 @@ KIND_ORDER = [
     "VerifierNullability",
     "VerifierContextModeling",
     "VerifierRecursionModeling",
-    "UnmarshalControlFlow",
-    "ExternalSymbolResolution",
-    "PlatformHelperAvailability",
-    "ElfCoreRelocation",
-    "ElfSubprogramResolution",
-    "ElfLegacyMapLayout",
     "VerificationTimeout",
     "LegacyBccBehavior",
 ]
@@ -124,56 +112,6 @@ KIND_GUIDANCE = {
             "illegal recursion."
         ),
     },
-    "UnmarshalControlFlow": {
-        "root": (
-            "Instruction unmarshaling has a loader bug: it cannot reconstruct a valid CFG for this extracted "
-            "bytecode slice."
-        ),
-        "fix": (
-            "Stabilize extraction and jump target mapping so every emitted instruction stream has valid in-range "
-            "branch and call targets."
-        ),
-    },
-    "ExternalSymbolResolution": {
-        "root": (
-            "Program references external symbols with no offline resolver or model, so linking cannot complete."
-        ),
-        "fix": (
-            "Add explicit platform-level symbol resolution and modeling for required externs, or provide conservative "
-            "stubs with sound semantics."
-        ),
-    },
-    "PlatformHelperAvailability": {
-        "root": "Sample expects helper availability that differs from the modeled target platform.",
-        "fix": (
-            "Update platform helper matrix or test platform assumptions; keep behavior explicit per target profile."
-        ),
-    },
-    "ElfCoreRelocation": {
-        "root": (
-            "CO-RE or BTF relocation handling has a loader bug for this input variant: relocation or BTF payload is "
-            "rejected by current parser expectations."
-        ),
-        "fix": (
-            "Harden BTF or CO-RE parser compatibility and validation, or gate unsupported variants with explicit "
-            "diagnostics."
-        ),
-    },
-    "ElfSubprogramResolution": {
-        "root": "Call target symbol cannot be resolved by loader or platform symbol resolution pipeline.",
-        "fix": (
-            "Wire missing symbol resolution path (ELF local or platform external) and ensure resolved target gets "
-            "sound semantics."
-        ),
-    },
-    "ElfLegacyMapLayout": {
-        "root": (
-            "Legacy map symbol layout does not match loader assumptions (record alignment or offset expectations)."
-        ),
-        "fix": (
-            "Support legacy map layout variant or normalize symbol offsets before map descriptor resolution."
-        ),
-    },
     "VerificationTimeout": {
         "root": "Analysis does not converge in configured time on this workload.",
         "fix": (
@@ -201,6 +139,13 @@ def cpp_kind(kind: str | None) -> str:
     return f"verify_test::VerifyIssueKind::{kind}"
 
 
+def require_nonpass_kind(status: str, kind: str | None, target: str) -> None:
+    if kind is None:
+        raise ValueError(f"Missing failure kind for {target}")
+    if kind not in VALID_KINDS:
+        raise ValueError(f"Unsupported kind '{kind}' for {target}")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate src/test/test_verify_<project>.cpp from test-data/elf_inventory.json."
@@ -219,15 +164,6 @@ def section_override(obj: dict, section: str) -> dict | None:
 
 def program_override(obj: dict, section: str, function_name: str) -> dict | None:
     return obj.get("test_overrides", {}).get("programs", {}).get(section, {}).get(function_name)
-
-
-def is_load_failure_reason(reason: str | None) -> bool:
-    if reason is None:
-        return False
-    return (
-        "Unsupported or invalid CO-RE/BTF relocation data:" in reason
-        or "Subprogram not found:" in reason
-    )
 
 
 def wrap_comment(
@@ -290,11 +226,10 @@ def classify_section(obj: dict, section: str, programs: list[dict]) -> tuple[str
         status = override.get("status")
         kind = override.get("kind")
         reason = override.get("reason")
-        if status not in ("pass", "expected_failure", "skip"):
+        if status not in ("pass", "reject", "reject_load", "expected_failure", "skip"):
             raise ValueError(f"Unsupported status '{status}' for section '{section}'")
         if status in ("expected_failure", "skip"):
-            if not kind:
-                raise ValueError(f"Missing kind for section '{section}' with status '{status}'")
+            require_nonpass_kind(status, kind, f"section '{section}'")
             if not reason:
                 raise ValueError(f"Missing reason for section '{section}' with status '{status}'")
         return status, kind, reason
@@ -315,22 +250,16 @@ def render_test(
 
     if status == "pass":
         return [f'TEST_SECTION("{p}", "{o}", "{s}")']
+    if status == "reject":
+        return [f'TEST_SECTION_REJECT("{p}", "{o}", "{s}")']
+    if status == "reject_load":
+        return [f'TEST_SECTION_REJECT_LOAD("{p}", "{o}", "{s}")']
     if status == "expected_failure":
-        if is_load_failure_reason(reason):
-            return [
-                *render_reason_comment("expected load failure", kind, reason),
-                f'TEST_SECTION_LOAD_FAIL("{p}", "{o}", "{s}", {cpp_kind(kind)}, "{reason_text}")',
-            ]
         return [
             *render_reason_comment("expected failure", kind, reason),
             f'TEST_SECTION_FAIL("{p}", "{o}", "{s}", {cpp_kind(kind)}, "{reason_text}")',
         ]
     if status == "skip":
-        if is_load_failure_reason(reason):
-            return [
-                *render_reason_comment("expected load failure", kind, reason),
-                f'TEST_SECTION_LOAD_FAIL("{p}", "{o}", "{s}", {cpp_kind(kind)}, "{reason_text}")',
-            ]
         return [
             *render_reason_comment("skipped", kind, reason),
             f'TEST_SECTION_SKIP("{p}", "{o}", "{s}", {cpp_kind(kind)}, "{reason_text}")',
@@ -356,6 +285,12 @@ def render_program_test(
 
     if status == "pass":
         return [f'TEST_PROGRAM("{p}", "{o}", "{s}", "{f}", {section_program_count})']
+    if status == "reject":
+        return [f'TEST_PROGRAM_REJECT("{p}", "{o}", "{s}", "{f}", {section_program_count})']
+    if status == "reject_load":
+        raise ValueError(
+            f"Program-level reject_load is not supported for {project}/{object_name} {section_name}::{function_name}"
+        )
     if status == "expected_failure":
         return [
             *render_reason_comment("expected failure", kind, reason),
@@ -394,11 +329,10 @@ def generate(inventory: dict, project: str) -> str:
         section_name: str,
         function_name: str | None = None,
     ) -> None:
-        if status == "pass":
+        if status in ("pass", "reject", "reject_load"):
             pass_lines.extend(body_lines)
             return
-        if kind is None:
-            raise ValueError(f"Missing failure kind for non-pass entry {project}/{object_name} {section_name}")
+        require_nonpass_kind(status, kind, f"{project}/{object_name} {section_name}")
         grouped_nonpass[kind].append(
             {
                 "status": status,
@@ -434,15 +368,14 @@ def generate(inventory: dict, project: str) -> str:
                     status = override.get("status")
                     kind = override.get("kind")
                     reason = override.get("reason")
-                    if status not in ("pass", "expected_failure", "skip"):
+                    if status not in ("pass", "reject", "reject_load", "expected_failure", "skip"):
                         raise ValueError(
                             f"Unsupported status '{status}' for program '{function_name}' in section '{section_name}'"
                         )
                     if status in ("expected_failure", "skip"):
-                        if not kind:
-                            raise ValueError(
-                                f"Missing kind for program '{function_name}' in section '{section_name}' with status '{status}'"
-                            )
+                        require_nonpass_kind(
+                            status, kind, f"program '{function_name}' in section '{section_name}'"
+                        )
                         if not reason:
                             raise ValueError(
                                 f"Missing reason for program '{function_name}' in section '{section_name}' with status '{status}'"

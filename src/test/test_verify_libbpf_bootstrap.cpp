@@ -33,27 +33,16 @@ TEST_PROGRAM("libbpf-bootstrap", "usdt.bpf.o", ".text", "bpf_usdt_cookie", 3)
 // ===========================================================================
 // expected failure (VerifierTypeTracking):
 //   diagnostic: 70: Invalid type (r3.type == number)
-TEST_SECTION_FAIL("libbpf-bootstrap", "bootstrap_legacy.bpf.o", "tp/sched/sched_process_exec",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 70: Invalid type (r3.type == number)")
+TEST_SECTION_FAIL("libbpf-bootstrap", "bootstrap_legacy.bpf.o", "tp/sched/sched_process_exec", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 70: Invalid type (r3.type == number)")
 // expected failure (VerifierTypeTracking):
 //   diagnostic: 4: Invalid type (r6.type in {ctx, stack, packet, shared})
-TEST_PROGRAM_FAIL("libbpf-bootstrap", "usdt.bpf.o", ".text", "bpf_usdt_arg", 3,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 4: Invalid type (r6.type in {ctx, stack, packet, shared})")
+TEST_PROGRAM_FAIL("libbpf-bootstrap", "usdt.bpf.o", ".text", "bpf_usdt_arg", 3, verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 4: Invalid type (r6.type in {ctx, stack, packet, shared})")
 // expected failure (VerifierTypeTracking):
 //   diagnostic: 10/83: Invalid type (r3.type == number)
-TEST_SECTION_FAIL("libbpf-bootstrap", "usdt.bpf.o", "usdt", verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 10/83: Invalid type (r3.type == number)")
+TEST_SECTION_FAIL("libbpf-bootstrap", "usdt.bpf.o", "usdt", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 10/83: Invalid type (r3.type == number)")
 // expected failure (VerifierTypeTracking):
 //   diagnostic: 10/90: Invalid type (r3.type == number)
-TEST_SECTION_FAIL("libbpf-bootstrap", "usdt.bpf.o", "usdt/libc.so.6:libc:setjmp",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 10/90: Invalid type (r3.type == number)")
+TEST_SECTION_FAIL("libbpf-bootstrap", "usdt.bpf.o", "usdt/libc.so.6:libc:setjmp", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 10/90: Invalid type (r3.type == number)")
 
 // ===========================================================================
 // Failure Cause Group: VerifierBoundsTracking
@@ -70,51 +59,28 @@ TEST_SECTION_FAIL("libbpf-bootstrap", "usdt.bpf.o", "usdt/libc.so.6:libc:setjmp"
 // ===========================================================================
 // expected failure (VerifierBoundsTracking):
 //   diagnostic: 24: Lower bound must be at least 0 (valid_access(r7.offset) for comparison/subtraction)
-TEST_SECTION_FAIL("libbpf-bootstrap", "bootstrap.bpf.o", "tp/sched/sched_process_exec",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 24: Lower bound must be at least 0 (valid_access(r7.offset) for comparison/subtraction)")
+TEST_SECTION_FAIL("libbpf-bootstrap", "bootstrap.bpf.o", "tp/sched/sched_process_exec", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 24: Lower bound must be at least 0 (valid_access(r7.offset) for comparison/subtraction)")
 // expected failure (VerifierBoundsTracking):
 //   diagnostic: 39: Lower bound must be at least 0 (valid_access(r6.offset) for comparison/subtraction)
-TEST_SECTION_FAIL("libbpf-bootstrap", "bootstrap.bpf.o", "tp/sched/sched_process_exit",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 39: Lower bound must be at least 0 (valid_access(r6.offset) for comparison/subtraction)")
+TEST_SECTION_FAIL("libbpf-bootstrap", "bootstrap.bpf.o", "tp/sched/sched_process_exit", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 39: Lower bound must be at least 0 (valid_access(r6.offset) for comparison/subtraction)")
 // expected failure (VerifierBoundsTracking):
 //   diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+8, width=8) for read)
-TEST_SECTION_FAIL("libbpf-bootstrap", "fentry.bpf.o", "fentry/do_unlinkat",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+8, width=8) for read)")
+TEST_SECTION_FAIL("libbpf-bootstrap", "fentry.bpf.o", "fentry/do_unlinkat", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+8, width=8) for read)")
 // expected failure (VerifierBoundsTracking):
 //   diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+16, width=8) for read)
-TEST_SECTION_FAIL("libbpf-bootstrap", "fentry.bpf.o", "fexit/do_unlinkat",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+16, width=8) for read)")
+TEST_SECTION_FAIL("libbpf-bootstrap", "fentry.bpf.o", "fexit/do_unlinkat", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+16, width=8) for read)")
 // expected failure (VerifierBoundsTracking):
 //   diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+24, width=8) for read)
-TEST_SECTION_FAIL("libbpf-bootstrap", "lsm.bpf.o", "lsm/bpf", verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+24, width=8) for read)")
+TEST_SECTION_FAIL("libbpf-bootstrap", "lsm.bpf.o", "lsm/bpf", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+24, width=8) for read)")
 // expected failure (VerifierBoundsTracking):
 //   diagnostic: 12: Lower bound must be at least 0 (valid_access(r7.offset) for comparison/subtraction)
-TEST_SECTION_FAIL("libbpf-bootstrap", "profile.bpf.o", "perf_event",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 12: Lower bound must be at least 0 (valid_access(r7.offset) for comparison/subtraction)")
+TEST_SECTION_FAIL("libbpf-bootstrap", "profile.bpf.o", "perf_event", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 12: Lower bound must be at least 0 (valid_access(r7.offset) for comparison/subtraction)")
 // expected failure (VerifierBoundsTracking):
 //   diagnostic: 27: Lower bound must be at least 0 (valid_access(r7.offset) for comparison/subtraction)
-TEST_SECTION_FAIL("libbpf-bootstrap", "sockfilter.bpf.o", "socket",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 27: Lower bound must be at least 0 (valid_access(r7.offset) for comparison/subtraction)")
+TEST_SECTION_FAIL("libbpf-bootstrap", "sockfilter.bpf.o", "socket", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 27: Lower bound must be at least 0 (valid_access(r7.offset) for comparison/subtraction)")
 // expected failure (VerifierBoundsTracking):
 //   diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)
-TEST_SECTION_FAIL("libbpf-bootstrap", "task_iter.bpf.o", "iter/task",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)")
+TEST_SECTION_FAIL("libbpf-bootstrap", "task_iter.bpf.o", "iter/task", verify_test::VerifyIssueKind::VerifierBoundsTracking, "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)")
 
 // ===========================================================================
 // Failure Cause Group: VerifierStackInitialization
@@ -133,16 +99,8 @@ TEST_SECTION_FAIL("libbpf-bootstrap", "task_iter.bpf.o", "iter/task",
 // expected failure (VerifierStackInitialization):
 //   diagnostic: 54: Stack content is not numeric ((r3.type == number and r3.value == 0) or valid_access(r3.offset,
 //               width=r4) for read)
-TEST_SECTION_FAIL("libbpf-bootstrap", "ksyscall.bpf.o", "ksyscall/kill",
-                  verify_test::VerifyIssueKind::VerifierStackInitialization,
-                  "Known verifier limitation: stack initialization tracking is too coarse for this access path. "
-                  "Diagnostic: 54: Stack content is not numeric ((r3.type == number and r3.value == 0) or "
-                  "valid_access(r3.offset, width=r4) for read)")
+TEST_SECTION_FAIL("libbpf-bootstrap", "ksyscall.bpf.o", "ksyscall/kill", verify_test::VerifyIssueKind::VerifierStackInitialization, "Known verifier limitation: stack initialization tracking is too coarse for this access path. Diagnostic: 54: Stack content is not numeric ((r3.type == number and r3.value == 0) or valid_access(r3.offset, width=r4) for read)")
 // expected failure (VerifierStackInitialization):
 //   diagnostic: 81: Stack content is not numeric ((r3.type == number and r3.value == 0) or valid_access(r3.offset,
 //               width=r4) for read)
-TEST_SECTION_FAIL("libbpf-bootstrap", "ksyscall.bpf.o", "ksyscall/tgkill",
-                  verify_test::VerifyIssueKind::VerifierStackInitialization,
-                  "Known verifier limitation: stack initialization tracking is too coarse for this access path. "
-                  "Diagnostic: 81: Stack content is not numeric ((r3.type == number and r3.value == 0) or "
-                  "valid_access(r3.offset, width=r4) for read)")
+TEST_SECTION_FAIL("libbpf-bootstrap", "ksyscall.bpf.o", "ksyscall/tgkill", verify_test::VerifyIssueKind::VerifierStackInitialization, "Known verifier limitation: stack initialization tracking is too coarse for this access path. Diagnostic: 81: Stack content is not numeric ((r3.type == number and r3.value == 0) or valid_access(r3.offset, width=r4) for read)")

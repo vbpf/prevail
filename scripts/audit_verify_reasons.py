@@ -7,7 +7,7 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-FIXABLE_KINDS = {"ElfSubprogramResolution"}
+FIXABLE_KINDS = set()
 
 
 def parse_args() -> argparse.Namespace:

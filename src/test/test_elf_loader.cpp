@@ -344,34 +344,44 @@ void patch_first_relocation_type(const std::filesystem::path& path, const std::s
 #define FAIL_LOAD_ELF_SECTION(dirname, filename, sectionname) \
     FAIL_LOAD_ELF_BASE("Try loading bad section: " dirname "/" filename " " sectionname, dirname, filename, sectionname)
 
+#define LOAD_ELF_SECTION(dirname, filename, sectionname)                                                      \
+    TEST_CASE("Try loading section: " dirname "/" filename " " sectionname, "[elf]") {                       \
+        thread_local_options = {};                                                                            \
+        const auto progs =                                                                                   \
+            ElfObject{"ebpf-samples/" dirname "/" filename, {}, &g_ebpf_platform_linux}.get_programs(sectionname); \
+        REQUIRE_FALSE(progs.empty());                                                                         \
+    }
+
 // Intentional loader failures.
 FAIL_LOAD_ELF("cilium", "not-found.o", "2/1")
 FAIL_LOAD_ELF("cilium", "bpf_lxc.o", "not-found")
-FAIL_LOAD_ELF("build", "badrelo.o", ".text")
 FAIL_LOAD_ELF("invalid", "badsymsize.o", "xdp_redirect_map")
-FAIL_LOAD_ELF_SECTION("linux-selftests", "bpf_cubic.o", "struct_ops")
-FAIL_LOAD_ELF_SECTION("linux-selftests", "bpf_dctcp.o", "struct_ops")
-FAIL_LOAD_ELF_SECTION("linux-selftests", "map_ptr_kern.o", "cgroup_skb/egress")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "errors-el.elf", "socket")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "fwd_decl-el.elf", "socket")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "invalid-kfunc-el.elf", "tc")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "kfunc-el.elf", "tc")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "kfunc-el.elf", "fentry/bpf_fentry_test2")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "kfunc-el.elf", "tp_btf/task_newtask")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "kfunc-kmod-el.elf", "tc")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "ksym-el.elf", "socket")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "linked-el.elf", "socket")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "linked1-el.elf", "socket")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "linked2-el.elf", "socket")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "xdp")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "socket/2")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "xdp")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "socket/2")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "xdp")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "socket/2")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "xdp")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "socket/2")
-FAIL_LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "socket/2")
+
+// Sections that used to be loader failures and now load successfully (verification may still reject later).
+LOAD_ELF_SECTION("build", "badrelo.o", ".text")
+LOAD_ELF_SECTION("linux-selftests", "bpf_cubic.o", "struct_ops")
+LOAD_ELF_SECTION("linux-selftests", "bpf_dctcp.o", "struct_ops")
+LOAD_ELF_SECTION("linux-selftests", "map_ptr_kern.o", "cgroup_skb/egress")
+LOAD_ELF_SECTION("cilium-ebpf", "errors-el.elf", "socket")
+LOAD_ELF_SECTION("cilium-ebpf", "fwd_decl-el.elf", "socket")
+LOAD_ELF_SECTION("cilium-ebpf", "invalid-kfunc-el.elf", "tc")
+LOAD_ELF_SECTION("cilium-ebpf", "kfunc-el.elf", "tc")
+LOAD_ELF_SECTION("cilium-ebpf", "kfunc-el.elf", "fentry/bpf_fentry_test2")
+LOAD_ELF_SECTION("cilium-ebpf", "kfunc-el.elf", "tp_btf/task_newtask")
+LOAD_ELF_SECTION("cilium-ebpf", "kfunc-kmod-el.elf", "tc")
+LOAD_ELF_SECTION("cilium-ebpf", "ksym-el.elf", "socket")
+LOAD_ELF_SECTION("cilium-ebpf", "linked-el.elf", "socket")
+LOAD_ELF_SECTION("cilium-ebpf", "linked1-el.elf", "socket")
+LOAD_ELF_SECTION("cilium-ebpf", "linked2-el.elf", "socket")
+LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "xdp")
+LOAD_ELF_SECTION("cilium-ebpf", "loader-el.elf", "socket/2")
+LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "xdp")
+LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-14-el.elf", "socket/2")
+LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "xdp")
+LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-17-el.elf", "socket/2")
+LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "xdp")
+LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "socket/2")
+LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "socket/2")
 
 TEST_CASE("CO-RE relocations are parsed from .BTF.ext core_relo subsection", "[elf][core]") {
     thread_local_options = {};

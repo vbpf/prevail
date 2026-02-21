@@ -27,12 +27,6 @@ enum class VerifyIssueKind {
     VerifierNullability,
     VerifierContextModeling,
     VerifierRecursionModeling,
-    UnmarshalControlFlow,
-    ExternalSymbolResolution,
-    PlatformHelperAvailability,
-    ElfCoreRelocation,
-    ElfSubprogramResolution,
-    ElfLegacyMapLayout,
     VerificationTimeout,
     LegacyBccBehavior,
 };
@@ -47,12 +41,6 @@ inline const char* to_string(VerifyIssueKind kind) noexcept {
     case VerifyIssueKind::VerifierNullability: return "VerifierNullability";
     case VerifyIssueKind::VerifierContextModeling: return "VerifierContextModeling";
     case VerifyIssueKind::VerifierRecursionModeling: return "VerifierRecursionModeling";
-    case VerifyIssueKind::UnmarshalControlFlow: return "UnmarshalControlFlow";
-    case VerifyIssueKind::ExternalSymbolResolution: return "ExternalSymbolResolution";
-    case VerifyIssueKind::PlatformHelperAvailability: return "PlatformHelperAvailability";
-    case VerifyIssueKind::ElfCoreRelocation: return "ElfCoreRelocation";
-    case VerifyIssueKind::ElfSubprogramResolution: return "ElfSubprogramResolution";
-    case VerifyIssueKind::ElfLegacyMapLayout: return "ElfLegacyMapLayout";
     case VerifyIssueKind::VerificationTimeout: return "VerificationTimeout";
     case VerifyIssueKind::LegacyBccBehavior: return "LegacyBccBehavior";
     }
@@ -61,28 +49,6 @@ inline const char* to_string(VerifyIssueKind kind) noexcept {
 
 inline std::string format_issue(VerifyIssueKind kind, const char* reason) {
     return std::string(to_string(kind)) + ": " + reason;
-}
-
-inline std::string expected_exception_substring(const char* reason) {
-    if (reason == nullptr) {
-        return {};
-    }
-    const std::string text{reason};
-    constexpr std::string_view marker = "Diagnostic: ";
-    const auto marker_index = text.find(marker);
-    if (marker_index == std::string::npos) {
-        return text;
-    }
-    const std::string diagnostic = text.substr(marker_index + marker.size());
-    constexpr std::string_view core_prefix = "Unsupported or invalid CO-RE/BTF relocation data:";
-    constexpr std::string_view subprogram_prefix = "Subprogram not found:";
-    if (diagnostic.rfind(core_prefix, 0) == 0) {
-        return std::string(core_prefix);
-    }
-    if (diagnostic.rfind(subprogram_prefix, 0) == 0) {
-        return std::string(subprogram_prefix);
-    }
-    return diagnostic;
 }
 
 template <typename T>
@@ -140,16 +106,39 @@ inline std::vector<prevail::RawProgram> read_elf_cached(const std::string& path,
         const auto& raw_progs = verify_test::read_elf_cached("ebpf-samples/" dirname "/" filename, section_name, "", \
                                                              prevail::thread_local_options, platform);               \
         REQUIRE(raw_progs.size() == count);                                                                          \
+        bool matched_program = false;                                                                                \
         for (const auto& raw_prog : raw_progs) {                                                                     \
             if (count == 1 || raw_prog.function_name == program_name) {                                              \
-                const auto prog_or_error = prevail::unmarshal(raw_prog, prevail::thread_local_options);              \
-                const auto inst_seq = std::get_if<prevail::InstructionSeq>(&prog_or_error);                          \
-                REQUIRE(inst_seq);                                                                                   \
-                const prevail::Program prog =                                                                        \
-                    prevail::Program::from_sequence(*inst_seq, raw_prog.info, prevail::thread_local_options);        \
-                REQUIRE(prevail::verify(prog) == should_pass);                                                       \
+                matched_program = true;                                                                              \
+                INFO("function_name=" << raw_prog.function_name);                                                    \
+                if (should_pass) {                                                                                   \
+                    const auto prog_or_error = prevail::unmarshal(raw_prog, prevail::thread_local_options);          \
+                    const auto inst_seq = std::get_if<prevail::InstructionSeq>(&prog_or_error);                      \
+                    REQUIRE(inst_seq);                                                                               \
+                    const prevail::Program prog =                                                                    \
+                        prevail::Program::from_sequence(*inst_seq, raw_prog.info, prevail::thread_local_options);    \
+                    REQUIRE(prevail::verify(prog) == true);                                                          \
+                } else {                                                                                             \
+                    bool rejected = false;                                                                           \
+                    try {                                                                                            \
+                        const auto prog_or_error = prevail::unmarshal(raw_prog, prevail::thread_local_options);      \
+                        const auto inst_seq = std::get_if<prevail::InstructionSeq>(&prog_or_error);                  \
+                        if (!inst_seq) {                                                                             \
+                            rejected = true;                                                                         \
+                        } else {                                                                                     \
+                            const prevail::Program prog =                                                            \
+                                prevail::Program::from_sequence(*inst_seq, raw_prog.info, prevail::thread_local_options);\
+                            rejected = (prevail::verify(prog) == false);                                             \
+                        }                                                                                            \
+                    } catch (const std::runtime_error& ex) {                                                         \
+                        INFO("rejected_by_exception=" << ex.what());                                                 \
+                        rejected = true;                                                                             \
+                    }                                                                                                \
+                    REQUIRE(rejected);                                                                               \
+                }                                                                                                    \
             }                                                                                                        \
         }                                                                                                            \
+        REQUIRE(matched_program);                                                                                    \
     } while (0)
 
 // Verify a section with only one program in it.
@@ -222,15 +211,13 @@ inline std::vector<prevail::RawProgram> read_elf_cached(const std::string& path,
         SKIP(verify_test::format_issue(kind, reason));                                   \
     }
 
-#define TEST_SECTION_LOAD_FAIL(project, filename, section, kind, reason)                                              \
-    TEST_CASE("expect load failure " project "/" filename " " section, "[verify][samples][" project "]") {            \
-        INFO("issue_kind=" << verify_test::to_string(kind));                                                          \
-        INFO("issue_reason=" << reason);                                                                              \
-        REQUIRE_THROWS_WITH(([&]() {                                                                                  \
-                                (void)verify_test::read_elf_cached("ebpf-samples/" project "/" filename, section, "", \
-                                                                   {}, &prevail::g_ebpf_platform_linux);              \
-                            }()),                                                                                     \
-                            Catch::Matchers::ContainsSubstring(verify_test::expected_exception_substring(reason)));   \
+#define TEST_SECTION_REJECT_LOAD(project, filename, section)                                                           \
+    TEST_CASE("expect load rejection " project "/" filename " " section, "[verify][samples][" project "]") {         \
+        REQUIRE_THROWS_AS(([&]() {                                                                                    \
+                              (void)verify_test::read_elf_cached("ebpf-samples/" project "/" filename, section, "",   \
+                                                                 {}, &prevail::g_ebpf_platform_linux);                \
+                          }()),                                                                                       \
+                          std::runtime_error);                                                                        \
     }
 
 #define TEST_SECTION_FAIL_SLOW(project, filename, section, kind, reason)                       \

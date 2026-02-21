@@ -10,6 +10,7 @@
 #include <iostream>
 #include <limits>
 #include <map>
+#include <numeric>
 #include <optional>
 #include <set>
 #include <sstream>
@@ -162,6 +163,20 @@ bool rewrite_extern_constant_load(std::vector<EbpfInst>& instructions, const siz
 
     lo_inst.get() = make_mov_reg_nop(lo_inst.get().dst);
     hi_inst.get() = make_mov_reg_nop(hi_inst.get().dst);
+    return true;
+}
+
+bool rewrite_extern_address_load_to_zero(std::vector<EbpfInst>& instructions, const size_t location) {
+    if (location + 1 >= instructions.size()) {
+        return false;
+    }
+    if (instructions[location].opcode != INST_OP_LDDW_IMM) {
+        return false;
+    }
+
+    auto [lo_inst, hi_inst] = validate_and_get_lddw_pair(instructions, location, "external symbol");
+    lo_inst.get().imm = 0;
+    hi_inst.get().imm = 0;
     return true;
 }
 
@@ -684,27 +699,37 @@ ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO
             continue;
         }
 
-        // Count map symbols in this section
-        int map_count = 0;
+        std::vector<symbol_details_t> map_symbols;
         for (ELFIO::Elf_Xword index = 0; index < symbols.get_symbols_num(); ++index) {
             const auto symbol_details = get_symbol_details(symbols, index);
             if (symbol_details.section_index == i && !symbol_details.name.empty()) {
-                map_count++;
+                map_symbols.push_back(symbol_details);
             }
         }
 
         // Track this as a map section even if empty
         global.map_section_indices.insert(s->get_index());
 
-        if (map_count <= 0) {
+        if (map_symbols.empty()) {
             continue;
         }
 
         const size_t base_index = global.map_descriptors.size();
-        if (s->get_data() == nullptr || s->get_size() % gsl::narrow<size_t>(map_count) != 0) {
+        if (s->get_data() == nullptr) {
             throw UnmarshalError("Malformed legacy maps section: " + s->get_name());
         }
-        const size_t map_record_size = s->get_size() / gsl::narrow<size_t>(map_count);
+
+        size_t map_record_size = 0;
+        for (const auto& symbol : map_symbols) {
+            if (symbol.size == 0) {
+                continue;
+            }
+            const auto symbol_size = gsl::narrow<size_t>(symbol.size);
+            map_record_size = map_record_size == 0 ? symbol_size : std::min(map_record_size, symbol_size);
+        }
+        if (map_record_size == 0) {
+            map_record_size = parse_params.platform->map_record_size;
+        }
 
         // Validate section structure
         // Legacy map records must contain at least the required base fields
@@ -712,13 +737,36 @@ ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO
         if (map_record_size < 4 * sizeof(uint32_t) || map_record_size % sizeof(uint32_t) != 0) {
             throw UnmarshalError("Malformed legacy maps section: " + s->get_name());
         }
+        if (s->get_size() < map_record_size) {
+            throw UnmarshalError("Malformed legacy maps section: " + s->get_name());
+        }
+
+        size_t map_count = s->get_size() / map_record_size;
+        if (map_count == 0) {
+            throw UnmarshalError("Malformed legacy maps section: " + s->get_name());
+        }
+        if (s->get_size() % map_record_size != 0) {
+            size_t max_record_end = 0;
+            for (const auto& symbol : map_symbols) {
+                const size_t symbol_offset = gsl::narrow<size_t>(symbol.value);
+                if (symbol_offset >= s->get_size()) {
+                    throw UnmarshalError("Malformed legacy maps section: " + s->get_name());
+                }
+                max_record_end = std::max(max_record_end, symbol_offset + map_record_size);
+            }
+            if (max_record_end > s->get_size()) {
+                throw UnmarshalError("Malformed legacy maps section: " + s->get_name());
+            }
+            map_count = (max_record_end + map_record_size - 1) / map_record_size;
+        }
 
         section_record_sizes[i] = map_record_size;
         section_base_index[i] = base_index;
 
         // Platform-specific parsing of map definitions
-        parse_params.platform->parse_maps_section(global.map_descriptors, s->get_data(), map_record_size, map_count,
-                                                  parse_params.platform, parse_params.options);
+        parse_params.platform->parse_maps_section(global.map_descriptors, s->get_data(), map_record_size,
+                                                  gsl::narrow<int>(map_count), parse_params.platform,
+                                                  parse_params.options);
     }
 
     // Resolve inner map references (platform-specific logic)
@@ -786,11 +834,12 @@ ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO
 /// @brief Extract maps and global variable metadata from an ELF file.
 ///
 /// This function determines the appropriate parsing strategy based on the file's format:
-/// 1. **Legacy maps** (priority): If a "maps" section exists, use struct bpf_elf_map parsing
-///    - The .BTF section (if present) contains only type information, not map definitions
-/// 2. **BTF-only**: If no legacy maps but .BTF exists, parse map definitions from BTF
+/// 1. **BTF maps** (priority): If both .BTF and .maps are present, parse map definitions from BTF
+///    - Modern format where map metadata is anchored in BTF DATASEC records
+/// 2. **Legacy maps**: If any "maps" section exists, use struct bpf_elf_map parsing
+/// 3. **BTF-only**: If no legacy maps but .BTF exists, parse map definitions from BTF
 ///    - Modern format where maps are defined as BTF VAR types in a DATASEC
-/// 3. **No maps**: If neither exists, create implicit maps for global variable sections only
+/// 4. **No maps**: If neither exists, create implicit maps for global variable sections only
 ///
 /// @param params Parsing parameters including path, options, and platform
 /// @param reader The loaded ELF file reader
@@ -798,10 +847,13 @@ ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO
 /// @return Global data structure containing all extracted metadata
 ElfGlobalData extract_global_data(const parse_params_t& params, const ELFIO::elfio& reader,
                                   const ELFIO::const_symbol_section_accessor& symbols) {
+    const bool has_btf_maps = reader.sections[".BTF"] != nullptr && reader.sections[".maps"] != nullptr;
+    if (has_btf_maps) {
+        return parse_btf_section(params, reader);
+    }
+
     const bool has_legacy_maps =
         std::ranges::any_of(reader.sections, [](const auto& s) { return is_map_section(s->get_name()); });
-    // If we have legacy maps section, always use legacy parser regardless of BTF.
-    // The BTF in these files is just for type info, not map definitions
     if (has_legacy_maps) {
         return parse_map_sections(params, reader, symbols);
     }
@@ -1556,6 +1608,9 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
                 return true;
             }
         }
+        if (rewrite_extern_address_load_to_zero(instructions, location)) {
+            return true;
+        }
     }
 
     // Handle local function calls - queue for post-processing.
@@ -1566,9 +1621,14 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
             if (const auto builtin_id = parse_params.platform->resolve_builtin_call(symbol_name)) {
                 instruction_to_relocate.src = INST_CALL_STATIC_HELPER;
                 instruction_to_relocate.imm = *builtin_id;
-                builtin_offsets_for_current_program.insert(location);
+                if (*builtin_id < 0) {
+                    builtin_offsets_for_current_program.insert(location);
+                }
                 return true;
             }
+        }
+        if (symbol_section_index == ELFIO::SHN_UNDEF) {
+            return false;
         }
 
         std::string target_function_name = symbol_name;
@@ -1675,7 +1735,8 @@ void ProgramReader::process_relocations(std::vector<EbpfInst>& instructions,
             continue;
         }
         if (idx >= symbols.get_symbols_num()) {
-            throw MalformedElf("Invalid relocation symbol index " + std::to_string(idx) + " in section " + section_name);
+            throw MalformedElf("Invalid relocation symbol index " + std::to_string(idx) + " in section " +
+                               section_name);
         }
         if (o < program_offset || o >= program_offset + program_size) {
             continue;
@@ -1964,12 +2025,13 @@ std::vector<RawProgram> ElfObject::filter_section_programs(const std::vector<Raw
         return programs;
     }
 
+    std::vector<RawProgram> selected;
     for (const RawProgram& program : programs) {
         if (program.function_name == desired_program) {
-            return {program};
+            selected.push_back(program);
         }
     }
-    return programs;
+    return selected;
 }
 
 const std::vector<RawProgram>& ElfObject::get_programs(const std::string& desired_section,
@@ -1989,8 +2051,16 @@ const std::vector<RawProgram>& ElfObject::get_programs(const std::string& desire
         if (!section_it->second.valid) {
             throw UnmarshalError(section_it->second.error);
         }
-        auto [it, _] =
-            query_cache_.emplace(std::move(key), filter_section_programs(section_it->second.programs, desired_program));
+        auto selected = filter_section_programs(section_it->second.programs, desired_program);
+        if (!desired_program.empty()) {
+            if (selected.empty()) {
+                throw UnmarshalError("Program not found in section '" + desired_section + "': " + desired_program);
+            }
+            if (selected.size() > 1) {
+                throw UnmarshalError("Program name is ambiguous in section '" + desired_section + "': " + desired_program);
+            }
+        }
+        auto [it, _] = query_cache_.emplace(std::move(key), std::move(selected));
         return it->second;
     }
 
@@ -2006,7 +2076,16 @@ const std::vector<RawProgram>& ElfObject::get_programs(const std::string& desire
         throw UnmarshalError("No executable sections");
     }
 
-    auto [it, _] = query_cache_.emplace(std::move(key), filter_section_programs(all_programs, desired_program));
+    auto selected = filter_section_programs(all_programs, desired_program);
+    if (!desired_program.empty()) {
+        if (selected.empty()) {
+            throw UnmarshalError("Program not found: " + desired_program);
+        }
+        if (selected.size() > 1) {
+            throw UnmarshalError("Program name is ambiguous across sections: " + desired_program + "; please specify a section");
+        }
+    }
+    auto [it, _] = query_cache_.emplace(std::move(key), std::move(selected));
     return it->second;
 }
 
