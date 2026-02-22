@@ -174,7 +174,7 @@ Separating assertions from semantics enables:
 **File**: `src/main.cpp`
 
 ```bash
-./prevail <elf-file> <section>/<function> [options]
+./bin/prevail <elf-file> <section>/<function> [options]
 ```
 
 Options:

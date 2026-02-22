@@ -249,7 +249,6 @@ install(TARGETS prevail libbtf GSL
 install(DIRECTORY "${prevail_source_dir}/src/"
   DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/prevail"
   FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h"
-  PATTERN "main.cpp" EXCLUDE
   PATTERN "test/*" EXCLUDE
 )
 
