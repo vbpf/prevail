@@ -92,11 +92,9 @@ TEST_SECTION_FAIL("libbpf-bootstrap", "fentry.bpf.o", "fexit/do_unlinkat",
                   verify_test::VerifyIssueKind::VerifierBoundsTracking,
                   "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
                   "Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+16, width=8) for read)")
-// expected failure (VerifierBoundsTracking):
-//   diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+24, width=8) for read)
-TEST_SECTION_FAIL("libbpf-bootstrap", "lsm.bpf.o", "lsm/bpf", verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+24, width=8) for read)")
+// Previously failed because LSM used g_unspec_descr (size=0), rejecting all context accesses.
+// Now passes with g_tracing_descr (size=96).
+TEST_SECTION("libbpf-bootstrap", "lsm.bpf.o", "lsm/bpf")
 // expected failure (VerifierBoundsTracking):
 //   diagnostic: 12: Lower bound must be at least 0 (valid_access(r7.offset) for comparison/subtraction)
 TEST_SECTION_FAIL("libbpf-bootstrap", "profile.bpf.o", "perf_event",

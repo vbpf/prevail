@@ -26,11 +26,25 @@ constexpr int sk_lookup_regions = 72;
 constexpr int sk_reuseport_regions = 56;
 constexpr int flow_dissector_regions = 56;
 constexpr int cgroup_sysctl_regions = 8;
+// Tracing/LSM/struct_ops programs receive function arguments as context:
+// an array of u64 values. The kernel allows up to 12 args
+// (MAX_BPF_FUNC_ARGS), but typical functions have at most 5.
+constexpr int tracing_regions = 12 * 8;
+// LIRC_MODE2: context is a single u32 (pulse/space sample).
+constexpr int lirc_mode2_regions = 4;
+// Netfilter: context is struct bpf_nf_ctx { nf_hook_state*, sk_buff* }.
+constexpr int netfilter_regions = 2 * 8;
+// Syscall: context is user-supplied buffer, kernel allows up to U16_MAX.
+constexpr int syscall_regions = 65535;
 
 constexpr ebpf_context_descriptor_t sk_buff = {sk_skb_regions, 19 * 4, 20 * 4, 35 * 4};
 constexpr ebpf_context_descriptor_t xdp_md = {xdp_regions, 0, 1 * 4, 2 * 4};
 constexpr ebpf_context_descriptor_t sk_msg_md = {17 * 4, 0, 1 * 8, -1}; // TODO: verify
 constexpr ebpf_context_descriptor_t unspec_descr = {0, -1, -1, -1};
+constexpr ebpf_context_descriptor_t tracing_descr = {tracing_regions, -1, -1, -1};
+constexpr ebpf_context_descriptor_t lirc_mode2_descr = {lirc_mode2_regions, -1, -1, -1};
+constexpr ebpf_context_descriptor_t netfilter_descr = {netfilter_regions, -1, -1, -1};
+constexpr ebpf_context_descriptor_t syscall_descr = {syscall_regions, -1, -1, -1};
 constexpr ebpf_context_descriptor_t cgroup_dev_descr = {cgroup_dev_regions, -1, -1, -1};
 constexpr ebpf_context_descriptor_t kprobe_descr = {kprobe_regions, -1, -1, -1};
 constexpr ebpf_context_descriptor_t tracepoint_descr = {tracepoint_regions, -1, -1, -1};
@@ -48,6 +62,10 @@ extern const ebpf_context_descriptor_t g_sk_buff;
 extern const ebpf_context_descriptor_t g_xdp_md;
 extern const ebpf_context_descriptor_t g_sk_msg_md;
 extern const ebpf_context_descriptor_t g_unspec_descr;
+extern const ebpf_context_descriptor_t g_tracing_descr;
+extern const ebpf_context_descriptor_t g_lirc_mode2_descr;
+extern const ebpf_context_descriptor_t g_netfilter_descr;
+extern const ebpf_context_descriptor_t g_syscall_descr;
 extern const ebpf_context_descriptor_t g_cgroup_dev_descr;
 extern const ebpf_context_descriptor_t g_kprobe_descr;
 extern const ebpf_context_descriptor_t g_tracepoint_descr;
