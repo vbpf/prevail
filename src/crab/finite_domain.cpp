@@ -78,11 +78,11 @@ std::vector<LinearConstraint> FiniteDomain::assume_signed_32bit_eq(const Variabl
 
             // Use the high 32-bits from the left lower bound and the low 32-bits from the right singleton.
             // The result might be lower than the lower bound.
-            const int64_t lb_match = (lb & 0xFFFFFFFF00000000) | (rn->cast_to<int64_t>() & 0xFFFFFFFF);
+            int64_t lb_match = (lb & 0xFFFFFFFF00000000) | (rn->cast_to<int64_t>() & 0xFFFFFFFF);
             if (lb_match < lb) {
                 // The result is lower than the left interval, so try the next higher matching 64-bit value.
                 // It's ok if this goes higher than the left upper bound.
-                lb += 0x100000000;
+                lb_match += 0x100000000;
             }
 
             // Find the highest 64-bit svalue whose low 32 bits match the singleton.
@@ -92,11 +92,11 @@ std::vector<LinearConstraint> FiniteDomain::assume_signed_32bit_eq(const Variabl
 
             // Use the high 32-bits from the left upper bound and the low 32-bits from the right singleton.
             // The result might be higher than the upper bound.
-            const int64_t ub_match = (ub & 0xFFFFFFFF00000000) | (rn->cast_to<int64_t>() & 0xFFFFFFFF);
+            int64_t ub_match = (ub & 0xFFFFFFFF00000000) | (rn->cast_to<int64_t>() & 0xFFFFFFFF);
             if (ub_match > ub) {
                 // The result is higher than the left interval, so try the next lower matching 64-bit value.
                 // It's ok if this goes lower than the left lower bound.
-                lb -= 0x100000000;
+                ub_match -= 0x100000000;
             }
 
             if (to_unsigned(lb_match) <= to_unsigned(ub_match)) {
@@ -137,21 +137,22 @@ void FiniteDomain::get_signed_intervals(bool is64, const Variable left_svalue, c
         }
     }
 
+    const int width = is64 ? 64 : 32;
     if (!left_interval.is_top()) {
-        left_interval_positive = left_interval & Interval::nonnegative(64);
-        left_interval_negative = left_interval & Interval::negative(64);
+        left_interval_positive = left_interval & Interval::nonnegative(width);
+        left_interval_negative = left_interval & Interval::negative(width);
     } else {
         left_interval = eval_interval(left_uvalue);
         if (!left_interval.is_top()) {
             // The interval is TOP as a signed interval but is represented precisely as an unsigned interval,
             // so split into two signed intervals that can be treated separately.
-            left_interval_positive = left_interval & Interval::nonnegative(64);
+            left_interval_positive = left_interval & Interval::nonnegative(width);
             const Number lih_ub =
                 left_interval.ub().number() ? left_interval.ub().number()->truncate_to<int64_t>() : -1;
             left_interval_negative = Interval{std::numeric_limits<int64_t>::min(), lih_ub};
         } else {
-            left_interval_positive = Interval::nonnegative(64);
-            left_interval_negative = Interval::negative(64);
+            left_interval_positive = Interval::nonnegative(width);
+            left_interval_negative = Interval::negative(width);
         }
     }
 
@@ -183,9 +184,10 @@ void FiniteDomain::get_unsigned_intervals(bool is64, const Variable left_svalue,
         }
     }
 
+    const int width = is64 ? 64 : 32;
     if (!left_interval.is_top()) {
-        left_interval_low = left_interval & Interval::nonnegative(64);
-        left_interval_high = left_interval & Interval::unsigned_high(64);
+        left_interval_low = left_interval & Interval::nonnegative(width);
+        left_interval_high = left_interval & Interval::unsigned_high(width);
     } else {
         left_interval = eval_interval(left_svalue);
         if (!left_interval.is_top()) {
@@ -194,8 +196,8 @@ void FiniteDomain::get_unsigned_intervals(bool is64, const Variable left_svalue,
             left_interval_low = Interval(0, left_interval.ub()).truncate_to<uint64_t>();
             left_interval_high = Interval(left_interval.lb(), -1).truncate_to<uint64_t>();
         } else {
-            left_interval_low = Interval::nonnegative(64);
-            left_interval_high = Interval::unsigned_high(64);
+            left_interval_low = Interval::nonnegative(width);
+            left_interval_high = Interval::unsigned_high(width);
         }
     }
 
