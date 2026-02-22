@@ -926,7 +926,14 @@ void EbpfTransformer::operator()(const Call& call) {
     } else if (call.return_ptr_type.has_value()) {
         assign_valid_ptr(r0_reg, call.return_nullable);
         dom.state.assign_type(r0_reg, *call.return_ptr_type);
-        dom.state.havoc_offsets(r0_reg);
+        if (*call.return_ptr_type == T_ALLOC_MEM && call.alloc_size_reg.has_value()) {
+            // Propagate allocation bounds: offset starts at 0, size is the allocation size argument.
+            dom.state.values.assign(r0_pack.alloc_mem_offset, 0);
+            const auto size_value = dom.state.values.eval_interval(reg_pack(*call.alloc_size_reg).uvalue);
+            dom.state.values.set(r0_pack.alloc_mem_size, size_value);
+        } else {
+            dom.state.havoc_offsets(r0_reg);
+        }
     } else {
         dom.state.havoc_register_except_type(r0_reg);
         dom.state.assign_type(r0_reg, T_NUM);

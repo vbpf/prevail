@@ -22,7 +22,7 @@ struct KfuncPrototypeEntry {
     bool requires_privileged;
 };
 
-constexpr std::array<KfuncPrototypeEntry, 9> kfunc_prototypes{{
+constexpr std::array<KfuncPrototypeEntry, 10> kfunc_prototypes{{
     {
         12,
         EbpfHelperPrototype{
@@ -158,6 +158,21 @@ constexpr std::array<KfuncPrototypeEntry, 9> kfunc_prototypes{{
         "",
         false,
     },
+    {
+        1008,
+        EbpfHelperPrototype{
+            .name = "kfunc_test_release_flag",
+            .return_type = EBPF_RETURN_TYPE_INTEGER,
+            .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
+                              EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
+            .reallocate_packet = false,
+            .context_descriptor = nullptr,
+            .unsupported = false,
+        },
+        KfuncFlags::release,
+        "",
+        false,
+    },
 }};
 
 constexpr bool kfunc_prototypes_are_sorted_by_btf_id() {
@@ -231,8 +246,18 @@ std::optional<Call> make_kfunc_call(const int32_t btf_id, const ProgramInfo* inf
     res.reallocate_packet = proto.reallocate_packet;
     res.is_map_lookup = proto.return_type == EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL;
 
-    if (entry->flags != KfuncFlags::none) {
-        set_unsupported(why_not, std::string("kfunc flags are unsupported on this platform: ") + proto.name);
+    // Per-flag handling: accept flags whose safety properties are covered by existing type checking,
+    // reject flags that require unimplemented reference lifecycle tracking.
+    constexpr auto accepted_flags =
+        KfuncFlags::acquire | KfuncFlags::destructive | KfuncFlags::trusted_args | KfuncFlags::sleepable;
+    // KF_ACQUIRE: type propagation works; release obligation not enforced (same gap as ringbuf).
+    // KF_DESTRUCTIVE: privilege-level gate; no verification machinery needed.
+    // KF_TRUSTED_ARGS: arguments already type-checked via the normal assertion path.
+    // KF_SLEEPABLE: context constraint; not a memory-safety property.
+    // KF_RELEASE: rejected — requires acquire/release state machine (see docs/parity/lifetime.md).
+    if ((entry->flags & ~accepted_flags) != KfuncFlags::none) {
+        set_unsupported(why_not, std::string("kfunc has unsupported flags (release requires lifecycle tracking): ") +
+                                     proto.name);
         return std::nullopt;
     }
     if (info && !entry->required_program_type.empty() && info->type.name != entry->required_program_type) {
@@ -329,6 +354,7 @@ std::optional<Call> make_kfunc_call(const int32_t btf_id, const ProgramInfo* inf
             break;
         case EBPF_ARGUMENT_TYPE_CONST_ALLOC_SIZE_OR_ZERO:
             res.singles.push_back({ArgSingle::Kind::CONST_SIZE_OR_ZERO, false, Reg{gsl::narrow<uint8_t>(i)}});
+            res.alloc_size_reg = Reg{gsl::narrow<uint8_t>(i)};
             break;
         case EBPF_ARGUMENT_TYPE_PTR_TO_LONG:
             res.singles.push_back({ArgSingle::Kind::PTR_TO_WRITABLE_LONG, false, Reg{gsl::narrow<uint8_t>(i)}});

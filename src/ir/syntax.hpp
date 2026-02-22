@@ -207,6 +207,7 @@ struct Call {
     bool reallocate_packet{};
     std::optional<TypeEncoding> return_ptr_type{}; ///< Non-integer return pointer type, if any.
     bool return_nullable{};                        ///< Whether the return pointer may be null.
+    std::optional<Reg> alloc_size_reg{};           ///< Register holding allocation size (for T_ALLOC_MEM returns).
     std::vector<ArgSingle> singles;
     std::vector<ArgPair> pairs;
     std::string stack_frame_prefix; ///< Variable prefix at point of call.

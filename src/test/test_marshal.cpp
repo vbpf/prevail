@@ -1015,15 +1015,25 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         REQUIRE(verify(prog));
     }
 
-    SECTION("kfunc with unsupported flags is rejected") {
+    SECTION("kfunc with acquire flag is accepted") {
         RawProgram raw_prog{
             "", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1002}, exit}, info};
         auto prog_or_error = unmarshal(raw_prog, {});
         REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        REQUIRE_THROWS_WITH(
-            Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
-            Catch::Matchers::ContainsSubstring("not implemented: kfunc flags are unsupported on this platform") &&
-                Catch::Matchers::ContainsSubstring("(at 0)"));
+        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
+        const auto* call = std::get_if<Call>(&prog.instruction_at(Label{0}));
+        REQUIRE(call != nullptr);
+        REQUIRE(call->name == "kfunc_test_acquire_flag");
+    }
+
+    SECTION("kfunc with release flag is rejected") {
+        RawProgram raw_prog{
+            "", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1008}, exit}, info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
+                            Catch::Matchers::ContainsSubstring("not implemented: kfunc has unsupported flags") &&
+                                Catch::Matchers::ContainsSubstring("(at 0)"));
     }
 
     SECTION("kfunc program type gating is enforced") {

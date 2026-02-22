@@ -551,6 +551,7 @@ struct Unmarshaller {
                 break;
             case EBPF_ARGUMENT_TYPE_CONST_ALLOC_SIZE_OR_ZERO:
                 res.singles.push_back({ArgSingle::Kind::CONST_SIZE_OR_ZERO, false, Reg{gsl::narrow<uint8_t>(i)}});
+                res.alloc_size_reg = Reg{gsl::narrow<uint8_t>(i)};
                 break;
             case EBPF_ARGUMENT_TYPE_PTR_TO_LONG:
                 res.singles.push_back({ArgSingle::Kind::PTR_TO_WRITABLE_LONG, false, Reg{gsl::narrow<uint8_t>(i)}});
