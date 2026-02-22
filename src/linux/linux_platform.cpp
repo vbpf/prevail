@@ -154,18 +154,19 @@ const std::vector<EbpfProgramType> linux_program_types = {
           {"cgroup/bind" COMMA "cgroup/post_bind" COMMA "cgroup/connect" COMMA "cgroup/sendmsg" COMMA
            "cgroup/recvmsg" COMMA "cgroup/getpeername" COMMA "cgroup/getsockname"}),
     PTYPE("lwt_seg6local", &g_lwt_xmit_descr, BPF_PROG_TYPE_LWT_SEG6LOCAL, {"lwt_seg6local"}),
-    PTYPE("lirc_mode2", &g_unspec_descr, BPF_PROG_TYPE_LIRC_MODE2, {"lirc_mode2"}),
+    PTYPE("lirc_mode2", &g_lirc_mode2_descr, BPF_PROG_TYPE_LIRC_MODE2, {"lirc_mode2"}),
     PTYPE("sk_reuseport", &g_sk_reuseport_descr, BPF_PROG_TYPE_SK_REUSEPORT, {"sk_reuseport/"}),
     PTYPE("flow_dissector", &g_flow_dissector_descr, BPF_PROG_TYPE_FLOW_DISSECTOR, {"flow_dissector"}),
     PTYPE("cgroup_sysctl", &g_cgroup_sysctl_descr, BPF_PROG_TYPE_CGROUP_SYSCTL, {"cgroup/sysctl"}),
     PTYPE("ext", &g_unspec_descr, BPF_PROG_TYPE_EXT, {"freplace/"}),
-    PTYPE("tracing", &g_unspec_descr, BPF_PROG_TYPE_TRACING,
-          {"fentry/" COMMA "fexit/" COMMA "fmod_ret/" COMMA "iter/" COMMA "lsm.s/" COMMA "tp_btf/"}),
-    PTYPE("struct_ops", &g_unspec_descr, BPF_PROG_TYPE_STRUCT_OPS, {"struct_ops/"}),
-    PTYPE("lsm", &g_unspec_descr, BPF_PROG_TYPE_LSM, {"lsm/"}),
+    PTYPE("tracing", &g_tracing_descr, BPF_PROG_TYPE_TRACING,
+          {"fentry/" COMMA "fexit/" COMMA "fmod_ret/" COMMA "iter/" COMMA "tp_btf/"}),
+    // struct_ops callbacks receive function arguments as u64 array, same as fentry/fexit.
+    PTYPE("struct_ops", &g_tracing_descr, BPF_PROG_TYPE_STRUCT_OPS, {"struct_ops/"}),
+    PTYPE("lsm", &g_tracing_descr, BPF_PROG_TYPE_LSM, {"lsm/" COMMA "lsm.s/"}),
     PTYPE("sk_lookup", &g_sk_lookup_descr, BPF_PROG_TYPE_SK_LOOKUP, {"sk_lookup/"}),
-    PTYPE("syscall", &g_unspec_descr, BPF_PROG_TYPE_SYSCALL, {"syscall/"}),
-    PTYPE("netfilter", &g_unspec_descr, BPF_PROG_TYPE_NETFILTER, {"netfilter/"}),
+    PTYPE("syscall", &g_syscall_descr, BPF_PROG_TYPE_SYSCALL, {"syscall/"}),
+    PTYPE("netfilter", &g_netfilter_descr, BPF_PROG_TYPE_NETFILTER, {"netfilter/"}),
 };
 
 static EbpfProgramType get_program_type_linux(const std::string& section, const std::string& path) {

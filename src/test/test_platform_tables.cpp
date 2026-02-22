@@ -329,9 +329,9 @@ TEST_CASE("new Linux context descriptors keep expected layout constants", "[plat
     REQUIRE(g_sk_reuseport_descr.end == 8);
     REQUIRE(g_sk_reuseport_descr.meta == -1);
 
-    REQUIRE(g_flow_dissector_descr.size == 56);
-    REQUIRE(g_flow_dissector_descr.data == -1);
-    REQUIRE(g_flow_dissector_descr.end == -1);
+    REQUIRE(g_flow_dissector_descr.size == 192);
+    REQUIRE(g_flow_dissector_descr.data == 76);
+    REQUIRE(g_flow_dissector_descr.end == 80);
     REQUIRE(g_flow_dissector_descr.meta == -1);
 
     REQUIRE(g_cgroup_sysctl_descr.size == 8);

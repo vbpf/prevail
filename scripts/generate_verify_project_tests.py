@@ -6,7 +6,6 @@ import argparse
 import json
 import re
 import sys
-import textwrap
 from collections import defaultdict
 from pathlib import Path
 
@@ -35,96 +34,6 @@ KIND_ORDER = [
     "VerificationTimeout",
     "LegacyBccBehavior",
 ]
-
-KIND_GUIDANCE = {
-    "VerifierTypeTracking": {
-        "root": (
-            "State refinement loses precise register type information across specific control-flow merges, "
-            "so a pointer or scalar register is later treated as an incompatible type."
-        ),
-        "fix": (
-            "Improve type-domain join or widen logic for pointer classes and preserve key path constraints "
-            "through merges. Start from the first failing instruction and inspect predecessor states."
-        ),
-    },
-    "VerifierBoundsTracking": {
-        "root": (
-            "Numeric range reasoning is too coarse for dependent bounds, so safe accesses fail range checks "
-            "(packet size, stack window, map value window)."
-        ),
-        "fix": (
-            "Strengthen interval propagation for correlated predicates and arithmetic-derived offsets, and keep "
-            "relation information across branches where possible."
-        ),
-    },
-    "VerifierStackInitialization": {
-        "root": (
-            "Stack byte initialization tracking misses writes or invalidates facts too aggressively, so reads are "
-            "reported as non-numeric or uninitialized."
-        ),
-        "fix": (
-            "Tighten per-byte initialization transfer functions and join behavior for stack slots touched through "
-            "aliases and conditional writes."
-        ),
-    },
-    "VerifierPointerArithmetic": {
-        "root": (
-            "Pointer arithmetic rules are stricter than required for this pattern, rejecting arithmetic that should "
-            "remain safely typed."
-        ),
-        "fix": (
-            "Refine pointer-plus-scalar typing rules and preserve provenance when arithmetic stays within verified "
-            "bounds."
-        ),
-    },
-    "VerifierMapTyping": {
-        "root": (
-            "Map key or value region typing cannot prove scalar compatibility for helper arguments in these flows."
-        ),
-        "fix": (
-            "Improve map region typing and value or key scalarization so helper argument checks can recover precise "
-            "numeric facts."
-        ),
-    },
-    "VerifierNullability": {
-        "root": (
-            "Null-state tracking is conservative across paths, so values proven non-null on one path are reintroduced "
-            "as maybe-null later."
-        ),
-        "fix": (
-            "Refine nullability join rules and path-sensitive implication handling for pointer checks before access."
-        ),
-    },
-    "VerifierContextModeling": {
-        "root": (
-            "Platform context model does not expose offset semantics expected by the program, so accesses are "
-            "rejected."
-        ),
-        "fix": "Extend context layout and offset modeling for the relevant program type.",
-    },
-    "VerifierRecursionModeling": {
-        "root": (
-            "Call-graph handling flags recursion in patterns that should be accepted after proper subprogram "
-            "modeling."
-        ),
-        "fix": (
-            "Adjust call-graph expansion and recursion detection to distinguish legal call structure from true "
-            "illegal recursion."
-        ),
-    },
-    "VerificationTimeout": {
-        "root": "Analysis does not converge in configured time on this workload.",
-        "fix": (
-            "Profile hot control-flow regions and tighten widening or narrowing strategy while preserving soundness."
-        ),
-    },
-    "LegacyBccBehavior": {
-        "root": "Known historical mismatch in specific BCC sample behavior relative to current verifier model.",
-        "fix": (
-            "Re-validate against intended kernel semantics and update either model assumptions or sample expectation."
-        ),
-    },
-}
 
 
 def cpp_string(value: str) -> str:
@@ -166,60 +75,6 @@ def program_override(obj: dict, section: str, function_name: str) -> dict | None
     return obj.get("test_overrides", {}).get("programs", {}).get(section, {}).get(function_name)
 
 
-def wrap_comment(
-    text: str, prefix: str = "// ", width: int = 118, continuation_prefix: str | None = None
-) -> list[str]:
-    continuation = continuation_prefix or prefix
-    if not text:
-        return [prefix.rstrip()]
-
-    lines: list[str] = []
-    first_line = True
-    for paragraph in text.splitlines():
-        if not paragraph:
-            lines.append((prefix if first_line else continuation).rstrip())
-            first_line = False
-            continue
-
-        paragraph_prefix = prefix if first_line else continuation
-        wrapped = textwrap.wrap(
-            paragraph,
-            width=width - len(paragraph_prefix),
-            break_long_words=False,
-            break_on_hyphens=False,
-        )
-        for wrapped_line in wrapped:
-            lines.append((prefix if first_line else continuation) + wrapped_line)
-            first_line = False
-
-    return lines if lines else [prefix.rstrip()]
-
-
-def wrap_labeled_comment(label: str, text: str, prefix: str = "//   ", width: int = 118) -> list[str]:
-    first_prefix = f"{prefix}{label}: "
-    continuation_prefix = f"{prefix}{' ' * (len(label) + 2)}"
-    return wrap_comment(text, prefix=first_prefix, continuation_prefix=continuation_prefix, width=width)
-
-
-def split_reason(reason: str | None) -> tuple[str, str]:
-    if not reason:
-        return "No reason provided.", "n/a"
-    marker = "Diagnostic:"
-    index = reason.find(marker)
-    if index == -1:
-        return reason.strip(), "n/a"
-    details = reason[:index].strip()
-    diagnostic = reason[index + len(marker) :].strip()
-    return details or "No reason provided.", diagnostic or "n/a"
-
-
-def render_reason_comment(label: str, kind: str | None, reason: str | None) -> list[str]:
-    reason_text, diagnostic = split_reason(reason)
-    if diagnostic != "n/a":
-        return [f"// {label} ({kind}):", *wrap_labeled_comment("diagnostic", diagnostic)]
-    return [f"// {label} ({kind}):", *wrap_labeled_comment("note", reason_text)]
-
-
 def classify_section(obj: dict, section: str, programs: list[dict]) -> tuple[str, str | None, str | None]:
     override = section_override(obj, section)
     if override is not None:
@@ -240,29 +95,51 @@ def classify_section(obj: dict, section: str, programs: list[dict]) -> tuple[str
     return "pass", None, None
 
 
+MAX_LINE = 120
+
+
+def render_reason_comment(reason: str | None) -> list[str]:
+    """Emit a short one-line comment with the reason, if present."""
+    if not reason:
+        return []
+    return [f"// {reason}"]
+
+
+def wrap_macro(macro: str, args: list[str]) -> str:
+    """Format a macro call, wrapping to multiple lines if it exceeds MAX_LINE."""
+    one_line = f'{macro}({", ".join(args)})'
+    if len(one_line) <= MAX_LINE:
+        return one_line
+    indent = " " * (len(macro) + 1)
+    lines = [f"{macro}({args[0]},"]
+    for i, arg in enumerate(args[1:], 1):
+        suffix = ")" if i == len(args) - 1 else ","
+        lines.append(f"{indent}{arg}{suffix}")
+    return "\n".join(lines)
+
+
 def render_test(
     project: str, object_name: str, section_name: str, status: str, kind: str | None, reason: str | None
 ) -> list[str]:
     p = cpp_string(project)
     o = cpp_string(object_name)
     s = cpp_string(section_name)
-    reason_text = cpp_string(reason or "")
 
     if status == "pass":
-        return [f'TEST_SECTION("{p}", "{o}", "{s}")']
+        return [wrap_macro("TEST_SECTION", [f'"{p}"', f'"{o}"', f'"{s}"'])]
     if status == "reject":
-        return [f'TEST_SECTION_REJECT("{p}", "{o}", "{s}")']
+        return [wrap_macro("TEST_SECTION_REJECT", [f'"{p}"', f'"{o}"', f'"{s}"'])]
     if status == "reject_load":
-        return [f'TEST_SECTION_REJECT_LOAD("{p}", "{o}", "{s}")']
+        return [wrap_macro("TEST_SECTION_REJECT_LOAD", [f'"{p}"', f'"{o}"', f'"{s}"'])]
     if status == "expected_failure":
         return [
-            *render_reason_comment("expected failure", kind, reason),
-            f'TEST_SECTION_FAIL("{p}", "{o}", "{s}", {cpp_kind(kind)}, "{reason_text}")',
+            *render_reason_comment(reason),
+            wrap_macro("TEST_SECTION_FAIL", [f'"{p}"', f'"{o}"', f'"{s}"', cpp_kind(kind)]),
         ]
     if status == "skip":
         return [
-            *render_reason_comment("skipped", kind, reason),
-            f'TEST_SECTION_SKIP("{p}", "{o}", "{s}", {cpp_kind(kind)}, "{reason_text}")',
+            *render_reason_comment(reason),
+            wrap_macro("TEST_SECTION_SKIP", [f'"{p}"', f'"{o}"', f'"{s}"', cpp_kind(kind)]),
         ]
     raise ValueError(f"Unsupported status '{status}'")
 
@@ -281,25 +158,25 @@ def render_program_test(
     o = cpp_string(object_name)
     s = cpp_string(section_name)
     f = cpp_string(function_name)
-    reason_text = cpp_string(reason or "")
 
+    args_base = [f'"{p}"', f'"{o}"', f'"{s}"', f'"{f}"']
     if status == "pass":
-        return [f'TEST_PROGRAM("{p}", "{o}", "{s}", "{f}", {section_program_count})']
+        return [wrap_macro("TEST_PROGRAM", [*args_base, str(section_program_count)])]
     if status == "reject":
-        return [f'TEST_PROGRAM_REJECT("{p}", "{o}", "{s}", "{f}", {section_program_count})']
+        return [wrap_macro("TEST_PROGRAM_REJECT", [*args_base, str(section_program_count)])]
     if status == "reject_load":
         raise ValueError(
             f"Program-level reject_load is not supported for {project}/{object_name} {section_name}::{function_name}"
         )
     if status == "expected_failure":
         return [
-            *render_reason_comment("expected failure", kind, reason),
-            f'TEST_PROGRAM_FAIL("{p}", "{o}", "{s}", "{f}", {section_program_count}, {cpp_kind(kind)}, "{reason_text}")',
+            *render_reason_comment(reason),
+            wrap_macro("TEST_PROGRAM_FAIL", [*args_base, str(section_program_count), cpp_kind(kind)]),
         ]
     if status == "skip":
         return [
-            *render_reason_comment("skipped", kind, reason),
-            f'TEST_PROGRAM_SKIP("{p}", "{o}", "{s}", "{f}", {cpp_kind(kind)}, "{reason_text}")',
+            *render_reason_comment(reason),
+            wrap_macro("TEST_PROGRAM_SKIP", [*args_base, cpp_kind(kind)]),
         ]
     raise ValueError(f"Unsupported status '{status}'")
 
@@ -337,7 +214,6 @@ def generate(inventory: dict, project: str) -> str:
             {
                 "status": status,
                 "reason": reason or "",
-                "diagnostic": split_reason(reason)[1],
                 "object_name": object_name,
                 "section_name": section_name,
                 "function_name": function_name,
@@ -402,29 +278,8 @@ def generate(inventory: dict, project: str) -> str:
     sorted_kinds = sorted(grouped_nonpass, key=lambda name: (kind_order_index.get(name, len(KIND_ORDER)), name))
     for kind in sorted_kinds:
         entries = grouped_nonpass[kind]
-        guidance = KIND_GUIDANCE.get(kind, {"root": "Root cause is not yet documented.", "fix": "Fix direction pending."})
-        expected_failure_count = sum(1 for entry in entries if entry["status"] == "expected_failure")
-        skip_count = sum(1 for entry in entries if entry["status"] == "skip")
-        example = entries[0]
-        function_suffix = f"::{example['function_name']}" if example["function_name"] else ""
-        example_target = f"{project}/{example['object_name']} {example['section_name']}{function_suffix}"
-
-        lines.extend(
-            [
-                "",
-                "// ===========================================================================",
-                f"// Failure Cause Group: {kind}",
-                f"// Group size: {len(entries)} tests ({expected_failure_count} expected_failure, {skip_count} skip).",
-                "// Root cause:",
-                *wrap_comment(guidance["root"], prefix="//   "),
-                "// Representative example:",
-                *wrap_labeled_comment("test", example_target),
-                *wrap_labeled_comment("diagnostic", example["diagnostic"]),
-                "// Addressing direction:",
-                *wrap_comment(guidance["fix"], prefix="//   "),
-                "// ===========================================================================",
-            ]
-        )
+        lines.append("")
+        lines.append(f"// {kind}:")
         for entry in entries:
             lines.extend(entry["lines"])
 

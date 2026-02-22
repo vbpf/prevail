@@ -17,6 +17,10 @@ const ebpf_context_descriptor_t g_sk_buff = sk_buff;
 const ebpf_context_descriptor_t g_xdp_md = xdp_md;
 const ebpf_context_descriptor_t g_sk_msg_md = sk_msg_md;
 const ebpf_context_descriptor_t g_unspec_descr = unspec_descr;
+const ebpf_context_descriptor_t g_tracing_descr = tracing_descr;
+const ebpf_context_descriptor_t g_lirc_mode2_descr = lirc_mode2_descr;
+const ebpf_context_descriptor_t g_netfilter_descr = netfilter_descr;
+const ebpf_context_descriptor_t g_syscall_descr = syscall_descr;
 const ebpf_context_descriptor_t g_cgroup_dev_descr = cgroup_dev_descr;
 const ebpf_context_descriptor_t g_kprobe_descr = kprobe_descr;
 const ebpf_context_descriptor_t g_tracepoint_descr = tracepoint_descr;
@@ -27,8 +31,8 @@ const ebpf_context_descriptor_t g_sock_addr_descr = sock_addr_descr;
 const ebpf_context_descriptor_t g_sockopt_descr = sockopt_descr;
 const ebpf_context_descriptor_t g_sk_lookup_descr = sk_lookup_descr;
 const ebpf_context_descriptor_t g_sk_reuseport_descr = sk_reuseport_descr;
-const ebpf_context_descriptor_t g_flow_dissector_descr = flow_dissector_descr;
 const ebpf_context_descriptor_t g_cgroup_sysctl_descr = cgroup_sysctl_descr;
+const ebpf_context_descriptor_t g_flow_dissector_descr = flow_dissector_descr;
 
 // eBPF helpers are documented at the following links:
 // https://github.com/iovisor/bpf-docs/blob/master/bpf_helpers.rst

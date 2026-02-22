@@ -127,19 +127,7 @@ TEST_SECTION("linux", "xdp_sample_pkts_kern.o", "xdp_sample")
 TEST_SECTION("linux", "xdp_tx_iptunnel_kern.o", "xdp_tx_iptunnel")
 TEST_SECTION("linux", "xdpsock_kern.o", "xdp_sock")
 
-// ===========================================================================
-// Failure Cause Group: VerifierTypeTracking
-// Group size: 1 tests (1 expected_failure, 0 skip).
-// Root cause:
-//   State refinement loses precise register type information across specific control-flow merges, so a pointer or
-//   scalar register is later treated as an incompatible type.
-// Representative example:
-//   test: linux/test_map_in_map_kern.o kprobe/sys_connect
-//   diagnostic: 80: Invalid type (r1.type == map_fd)
-// Addressing direction:
-//   Improve type-domain join or widen logic for pointer classes and preserve key path constraints through merges.
-//   Start from the first failing instruction and inspect predecessor states.
-// ===========================================================================
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 80: Invalid type (r1.type == map_fd)
-TEST_SECTION_FAIL("linux", "test_map_in_map_kern.o", "kprobe/sys_connect", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 80: Invalid type (r1.type == map_fd)")
+// VerifierTypeTracking:
+// register type refinement is too imprecise in this control-flow pattern
+TEST_SECTION_FAIL("linux", "test_map_in_map_kern.o", "kprobe/sys_connect",
+                  verify_test::VerifyIssueKind::VerifierTypeTracking)

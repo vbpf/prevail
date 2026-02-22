@@ -20,7 +20,7 @@
             "sections": {
               "uretprobe/readline": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (valid_access(r7.offset) for comparison/subtraction)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -101,22 +101,22 @@
             "sections": {
               "kprobe/security_inode_create": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 17: Invalid type (r6.type in {number, ctx, stack, packet, shared})",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               },
               "kprobe/vfs_create": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 34: Invalid type (r6.type in {number, ctx, stack, packet, shared})",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               },
               "kprobe/vfs_open": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 35: Invalid type (r6.type in {number, ctx, stack, packet, shared})",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               },
               "kretprobe/vfs_unlink": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 38: Invalid type (r7.type in {ctx, stack, packet, shared})",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -139,7 +139,7 @@
             "sections": {
               "kprobe/oom_kill_process": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 21: Invalid type (r7.type in {ctx, stack, packet, shared})",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -180,12 +180,12 @@
             "sections": {
               "kretprobe/tcp_v4_connect": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 57: Upper bound must be at most r1.shared_region_size (valid_access(r1.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "kretprobe/tcp_v6_connect": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 57: Upper bound must be at most r1.shared_region_size (valid_access(r1.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               }
             }
@@ -594,7 +594,7 @@
             "sections": {
               ".text": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 3: Upper bound must be at most EBPF_TOTAL_STACK_SIZE (valid_access(r1.offset, width=r2) for write)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               }
             }
@@ -617,7 +617,7 @@
             "sections": {
               "test": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 4: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -706,12 +706,12 @@
             "sections": {
               ".text": {
                 "kind": "VerifierMapTyping",
-                "reason": "Known verifier limitation: map value/key typing and scalarization are too conservative here. Diagnostic: 6: Illegal map update with a non-numerical value [4092-4096) (within(r2:key_size(r1)))",
+                "reason": "map value/key typing and scalarization are too conservative here",
                 "status": "expected_failure"
               },
               "xdp": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 8: Invalid type (r2.type == func)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -748,7 +748,7 @@
             "sections": {
               "xdp": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 16: Invalid type (r7.type in {ctx, stack, packet, shared})",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -771,7 +771,7 @@
             "sections": {
               "socket_filter": {
                 "kind": "VerifierStackInitialization",
-                "reason": "Known verifier limitation: stack initialization tracking is too coarse for this access path. Diagnostic: 52: Stack content is not numeric (valid_access(r3.offset, width=r4) for read)",
+                "reason": "stack initialization tracking is too coarse for this access path",
                 "status": "expected_failure"
               }
             }
@@ -808,7 +808,7 @@
             "sections": {
               "sockops": {
                 "kind": "VerifierContextModeling",
-                "reason": "Known verifier limitation: context-offset modeling is too restrictive for this access pattern. Diagnostic: 8: Nonzero context offset (r1.ctx_offset == 0)",
+                "reason": "context-offset modeling is too restrictive for this access pattern",
                 "status": "expected_failure"
               }
             }
@@ -831,7 +831,7 @@
             "sections": {
               "xdp": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 10: Upper bound must be at most packet_size (valid_access(r1.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               }
             }
@@ -882,7 +882,7 @@
             "sections": {
               ".text": {
                 "kind": "VerifierMapTyping",
-                "reason": "Known verifier limitation: map value/key typing and scalarization are too conservative here. Diagnostic: 10: Illegal map update with a non-numerical value [4088-4096) (within(r3:value_size(r1)))",
+                "reason": "map value/key typing and scalarization are too conservative here",
                 "status": "expected_failure"
               }
             }
@@ -905,7 +905,7 @@
             "sections": {
               ".text": {
                 "kind": "VerifierMapTyping",
-                "reason": "Known verifier limitation: map value/key typing and scalarization are too conservative here. Diagnostic: 10: Illegal map update with a non-numerical value [4088-4096) (within(r2:key_size(r1)))",
+                "reason": "map value/key typing and scalarization are too conservative here",
                 "status": "expected_failure"
               }
             }
@@ -954,12 +954,12 @@
               ".text": {
                 "add_and_store": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1: Invalid type (r3.type in {number, ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "process_entry": {
                   "kind": "VerifierMapTyping",
-                  "reason": "Known verifier limitation: map value/key typing and scalarization are too conservative here. Diagnostic: 5: Illegal map update with a non-numerical value [4092-4096) (within(r2:key_size(r1)))",
+                  "reason": "map value/key typing and scalarization are too conservative here",
                   "status": "expected_failure"
                 }
               }
@@ -1039,7 +1039,7 @@
             "sections": {
               ".text": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 19: Upper bound must be at most r1.shared_region_size (valid_access(r1.offset, width=4) for write)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               }
             }
@@ -1062,7 +1062,7 @@
             "sections": {
               "test_md": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 15: Upper bound must be at most EBPF_TOTAL_STACK_SIZE (valid_access(r5.offset, width=1) for write)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               }
             }
@@ -1183,7 +1183,7 @@
             "sections": {
               ".text": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 10: Upper bound must be at most r1.shared_region_size (valid_access(r1.offset, width=8) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               }
             }
@@ -1206,7 +1206,7 @@
             "sections": {
               "test": {
                 "kind": "VerifierNullability",
-                "reason": "Known verifier limitation: nullability tracking is too conservative on this path. Diagnostic: 7: Possible null access (valid_access(r0.offset, width=4) for write)",
+                "reason": "nullability tracking is too conservative on this path",
                 "status": "expected_failure"
               }
             }
@@ -1243,7 +1243,7 @@
             "sections": {
               "xdp": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 4: Upper bound must be at most packet_size (valid_access(r2.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               }
             }
@@ -1266,7 +1266,7 @@
             "sections": {
               "socket_filter": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 13: Invalid type (r7.type in {ctx, stack, packet, shared})",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -1331,7 +1331,7 @@
             "sections": {
               "xdp": {
                 "kind": "VerifierStackInitialization",
-                "reason": "Known verifier limitation: stack initialization tracking is too coarse for this access path. Diagnostic: 12: Stack content is not numeric (valid_access(r4.offset, width=r5) for read)",
+                "reason": "stack initialization tracking is too coarse for this access path",
                 "status": "expected_failure"
               }
             }
@@ -1384,7 +1384,7 @@
             "sections": {
               "xdp": {
                 "kind": "VerifierPointerArithmetic",
-                "reason": "Known verifier limitation: pointer-arithmetic typing is too restrictive in this pattern. Diagnostic: 2: Only numbers can be added to pointers (r2.type in {ctx, stack, packet, shared} -> r1.type == number)",
+                "reason": "pointer-arithmetic typing is too restrictive in this pattern",
                 "status": "expected_failure"
               }
             }
@@ -1407,7 +1407,7 @@
             "sections": {
               ".text": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 30: Invalid type (r0.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -1430,7 +1430,7 @@
             "sections": {
               ".text": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 19: Invalid type (r1.type == map_fd)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -1453,7 +1453,7 @@
             "sections": {
               ".text": {
                 "kind": "VerifierStackInitialization",
-                "reason": "Known verifier limitation: stack initialization tracking is too coarse for this access path. Diagnostic: 6: Stack content is not numeric (valid_access(r2.offset, width=r3) for read)",
+                "reason": "stack initialization tracking is too coarse for this access path",
                 "status": "expected_failure"
               }
             }
@@ -1544,7 +1544,7 @@
             "sections": {
               "xdp_prog": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 3: Invalid type (r2.type == map_fd_programs)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -1923,52 +1923,52 @@
             "sections": {
               "2/10": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 168: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/15": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 64: Upper bound must be at most packet_size (valid_access(r5.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/16": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 169: Invalid type (r3.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               },
               "2/17": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 63: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/18": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 202: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/19": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 39: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/20": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 230: Upper bound must be at most packet_size (valid_access(r3.offset+32, width=8) for write)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/21": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 344: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for write)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/24": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 191: Invalid type (r5.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               },
               "2/7": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 126: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               }
             }
@@ -2057,52 +2057,52 @@
             "sections": {
               "2/10": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 168: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/15": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 64: Upper bound must be at most packet_size (valid_access(r5.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/16": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 169: Invalid type (r3.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               },
               "2/17": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 63: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/18": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 202: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/19": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 39: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/20": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 230: Upper bound must be at most packet_size (valid_access(r3.offset+32, width=8) for write)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/21": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 344: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for write)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/24": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 191: Invalid type (r5.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               },
               "2/7": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 126: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               }
             }
@@ -2191,52 +2191,52 @@
             "sections": {
               "2/10": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 173: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/15": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 68: Upper bound must be at most packet_size (valid_access(r3.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/16": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 176: Invalid type (r4.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               },
               "2/17": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 67: Upper bound must be at most packet_size (valid_access(r3.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/18": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 184: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/19": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 43: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/20": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 256: Upper bound must be at most packet_size (valid_access(r3.offset+32, width=8) for write)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/21": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 375: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for write)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/24": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 198: Invalid type (r5.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               },
               "2/7": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 133: Upper bound must be at most packet_size (valid_access(r3.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               }
             }
@@ -2313,42 +2313,42 @@
             "sections": {
               "2/10": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 170: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/15": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 64: Upper bound must be at most packet_size (valid_access(r5.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/16": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 169: Invalid type (r3.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               },
               "2/17": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 63: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/18": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 202: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/19": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 39: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/24": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 191: Invalid type (r5.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               },
               "2/7": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 143: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               }
             }
@@ -2425,42 +2425,42 @@
             "sections": {
               "2/10": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 170: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/15": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 64: Upper bound must be at most packet_size (valid_access(r5.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/16": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 169: Invalid type (r3.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               },
               "2/17": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 63: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/18": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 202: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/19": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 39: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "2/24": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 191: Invalid type (r5.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               },
               "2/7": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 143: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               }
             }
@@ -2647,111 +2647,111 @@
               ".text": {
                 "__check_device_mtu": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 3: Invalid type (r0.type == number)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "__check_eth_header_length": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 3: Invalid type (r0.type == number)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 }
               },
               "tc/entry": {
                 "cil_from_host": {
                   "kind": "VerifierBoundsTracking",
-                  "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 27: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)",
+                  "reason": "interval/bounds refinement loses precision for this memory-access proof",
                   "status": "expected_failure"
                 },
                 "cil_from_netdev": {
                   "kind": "VerifierBoundsTracking",
-                  "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 27: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)",
+                  "reason": "interval/bounds refinement loses precision for this memory-access proof",
                   "status": "expected_failure"
                 },
                 "cil_host_policy": {
                   "kind": "VerifierBoundsTracking",
-                  "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 18: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)",
+                  "reason": "interval/bounds refinement loses precision for this memory-access proof",
                   "status": "expected_failure"
                 },
                 "cil_to_host": {
                   "kind": "VerifierBoundsTracking",
-                  "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 21: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)",
+                  "reason": "interval/bounds refinement loses precision for this memory-access proof",
                   "status": "expected_failure"
                 },
                 "cil_to_netdev": {
                   "kind": "VerifierBoundsTracking",
-                  "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 29: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)",
+                  "reason": "interval/bounds refinement loses precision for this memory-access proof",
                   "status": "expected_failure"
                 }
               },
               "tc/tail": {
                 "tail_handle_ipv4_cont_from_host": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 328: Invalid type (r4.type in {ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_handle_ipv4_cont_from_netdev": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 299: Invalid type (r3.type in {ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_handle_ipv6_cont_from_host": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 203: Invalid type (r3.type in {ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_handle_ipv6_cont_from_netdev": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 134: Invalid type (r7.type == number)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_handle_ipv6_from_host": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 46: Invalid type (r2.type == number)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_handle_ipv6_from_netdev": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 42: Invalid type (r2.type == number)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_handle_snat_fwd_ipv4": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 669: Invalid type (r2.type in {ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_handle_snat_fwd_ipv6": {
                   "kind": "VerifierNullability",
-                  "reason": "Known verifier limitation: nullability tracking is too conservative on this path. Diagnostic: 927: Non-null number ((r2.type == number and r2.value == 0) or valid_access(r2.offset, width=r3) for read)",
+                  "reason": "nullability tracking is too conservative on this path",
                   "status": "expected_failure"
                 },
                 "tail_ipv4_host_policy_ingress": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 840: Invalid type (r3.type in {ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_ipv6_host_policy_ingress": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 296: Invalid type (r9.type in {ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_nodeport_nat_egress_ipv4": {
                   "kind": "VerifierStackInitialization",
-                  "reason": "Known verifier limitation: stack initialization tracking is too coarse for this access path. Diagnostic: 1026: Stack content is not numeric (valid_access(r2.offset+32, width=4) for read)",
+                  "reason": "stack initialization tracking is too coarse for this access path",
                   "status": "expected_failure"
                 },
                 "tail_nodeport_nat_ingress_ipv4": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 689: Invalid type (r3.type in {ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_nodeport_nat_ingress_ipv6": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1239: Invalid type (r8.type in {ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_srv6_encap": {
                   "kind": "VerifierBoundsTracking",
-                  "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 70: Upper bound must be at most packet_size (valid_access(r1.offset+12, width=1) for read)",
+                  "reason": "interval/bounds refinement loses precision for this memory-access proof",
                   "status": "expected_failure"
                 }
               }
@@ -2916,52 +2916,52 @@
               "tc/tail": {
                 "tail_handle_ipv4_cont": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 495: Invalid type (r3.type in {ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_handle_ipv6": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 29: Invalid type (r2.type == number)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_handle_ipv6_cont": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 444: Invalid type (valid_access(r3.offset) for comparison/subtraction)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_ipv4_policy": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 464: Invalid type (r3.type in {ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_ipv4_to_endpoint": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 521: Invalid type (r1.type in {ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_ipv6_policy": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 51: Invalid type (r2.type == number)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_ipv6_to_endpoint": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 625: Invalid type (r3.type in {ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_nodeport_nat_egress_ipv4": {
                   "kind": "VerifierStackInitialization",
-                  "reason": "Known verifier limitation: stack initialization tracking is too coarse for this access path. Diagnostic: 1011: Stack content is not numeric (valid_access(r2.offset+32, width=4) for read)",
+                  "reason": "stack initialization tracking is too coarse for this access path",
                   "status": "expected_failure"
                 },
                 "tail_nodeport_nat_ingress_ipv4": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 670: Invalid type (r4.type in {ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_nodeport_nat_ingress_ipv6": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1175: Invalid type (r7.type in {ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 }
               }
@@ -2969,7 +2969,7 @@
             "sections": {
               ".text": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 3: Invalid type (r0.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -3105,61 +3105,49 @@
               ".text": {
                 "__check_device_mtu": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 3: Invalid type (r0.type == number)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "__mcast_ep_delivery": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 9: Invalid type (valid_access(r3.offset) for comparison/subtraction)",
-                  "status": "expected_failure"
-                }
-              },
-              "tc/entry": {
-                "cil_to_overlay": {
-                  "kind": "VerifierBoundsTracking",
-                  "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 228: Upper bound must be at most 144 (valid_access(r4.offset+160, width=4) for read)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 }
               },
               "tc/tail": {
-                "tail_handle_ipv4": {
-                  "kind": "VerifierBoundsTracking",
-                  "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 2122: Upper bound must be at most 144 (valid_access(r6.offset+160, width=4) for read)",
-                  "status": "expected_failure"
-                },
                 "tail_handle_ipv6": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 32: Invalid type (r4.type == number)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_handle_snat_fwd_ipv4": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1618: Invalid type (r0.type in {ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_handle_snat_fwd_ipv6": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2349: Invalid type (r5.type in {ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_mcast_ep_delivery": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 40: Invalid type (r2.type == func)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_nodeport_nat_egress_ipv4": {
                   "kind": "VerifierStackInitialization",
-                  "reason": "Known verifier limitation: stack initialization tracking is too coarse for this access path. Diagnostic: 1010: Stack content is not numeric (valid_access(r2.offset+32, width=4) for read)",
+                  "reason": "stack initialization tracking is too coarse for this access path",
                   "status": "expected_failure"
                 },
                 "tail_nodeport_nat_ingress_ipv4": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 668: Invalid type (r4.type in {ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_nodeport_nat_ingress_ipv6": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1172: Invalid type (r7.type in {ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 }
               }
@@ -3231,12 +3219,7 @@
             "sections": {
               "cgroup/recvmsg6": {
                 "kind": "VerifierMapTyping",
-                "reason": "Known verifier limitation: map value/key typing and scalarization are too conservative here. Diagnostic: 303: Illegal map update with a non-numerical value [4048-4072) (within(r2:key_size(r1)))",
-                "status": "expected_failure"
-              },
-              "cgroup/sock_release": {
-                "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 8: Upper bound must be at most 48 (valid_access(r6.offset+52, width=4) for read)",
+                "reason": "map value/key typing and scalarization are too conservative here",
                 "status": "expected_failure"
               }
             }
@@ -3338,29 +3321,24 @@
           "test_overrides": {
             "programs": {
               "tc/tail": {
-                "tail_handle_ipv4": {
-                  "kind": "VerifierBoundsTracking",
-                  "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 2096: Upper bound must be at most 144 (valid_access(r6.offset+160, width=4) for read)",
-                  "status": "expected_failure"
-                },
                 "tail_handle_ipv6": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 32: Invalid type (r5.type == number)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_nodeport_nat_egress_ipv4": {
                   "kind": "VerifierStackInitialization",
-                  "reason": "Known verifier limitation: stack initialization tracking is too coarse for this access path. Diagnostic: 1009: Stack content is not numeric (valid_access(r2.offset+32, width=4) for read)",
+                  "reason": "stack initialization tracking is too coarse for this access path",
                   "status": "expected_failure"
                 },
                 "tail_nodeport_nat_ingress_ipv4": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 668: Invalid type (r9.type in {ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_nodeport_nat_ingress_ipv6": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1143: Invalid type (r9.type in {ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 }
               }
@@ -3368,7 +3346,7 @@
             "sections": {
               ".text": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 3: Invalid type (r0.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -3448,57 +3426,57 @@
               "xdp/tail": {
                 "tail_lb_ipv4": {
                   "kind": "VerifierBoundsTracking",
-                  "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 170: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)",
+                  "reason": "interval/bounds refinement loses precision for this memory-access proof",
                   "status": "expected_failure"
                 },
                 "tail_lb_ipv6": {
                   "kind": "VerifierBoundsTracking",
-                  "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 66: Upper bound must be at most packet_size (valid_access(r3.offset, width=2) for read)",
+                  "reason": "interval/bounds refinement loses precision for this memory-access proof",
                   "status": "expected_failure"
                 },
                 "tail_nodeport_ipv4_dsr": {
                   "kind": "VerifierBoundsTracking",
-                  "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 283: Upper bound must be at most packet_size (valid_access(r0.offset, width=2) for read)",
+                  "reason": "interval/bounds refinement loses precision for this memory-access proof",
                   "status": "expected_failure"
                 },
                 "tail_nodeport_ipv6_dsr": {
                   "kind": "VerifierBoundsTracking",
-                  "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 76: Upper bound must be at most packet_size (valid_access(r3.offset, width=2) for read)",
+                  "reason": "interval/bounds refinement loses precision for this memory-access proof",
                   "status": "expected_failure"
                 },
                 "tail_nodeport_nat_egress_ipv4": {
                   "kind": "VerifierBoundsTracking",
-                  "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 97: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)",
+                  "reason": "interval/bounds refinement loses precision for this memory-access proof",
                   "status": "expected_failure"
                 },
                 "tail_nodeport_nat_egress_ipv6": {
                   "kind": "VerifierBoundsTracking",
-                  "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 74: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)",
+                  "reason": "interval/bounds refinement loses precision for this memory-access proof",
                   "status": "expected_failure"
                 },
                 "tail_nodeport_nat_ingress_ipv4": {
                   "kind": "VerifierBoundsTracking",
-                  "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 82: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)",
+                  "reason": "interval/bounds refinement loses precision for this memory-access proof",
                   "status": "expected_failure"
                 },
                 "tail_nodeport_nat_ingress_ipv6": {
                   "kind": "VerifierBoundsTracking",
-                  "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 47: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)",
+                  "reason": "interval/bounds refinement loses precision for this memory-access proof",
                   "status": "expected_failure"
                 },
                 "tail_nodeport_rev_dnat_egress_ipv6": {
                   "kind": "VerifierBoundsTracking",
-                  "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 60: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)",
+                  "reason": "interval/bounds refinement loses precision for this memory-access proof",
                   "status": "expected_failure"
                 },
                 "tail_nodeport_rev_dnat_ingress_ipv6": {
                   "kind": "VerifierBoundsTracking",
-                  "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 60: Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)",
+                  "reason": "interval/bounds refinement loses precision for this memory-access proof",
                   "status": "expected_failure"
                 },
                 "tail_nodeport_rev_dnat_ipv4": {
                   "kind": "VerifierBoundsTracking",
-                  "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 139: Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)",
+                  "reason": "interval/bounds refinement loses precision for this memory-access proof",
                   "status": "expected_failure"
                 }
               }
@@ -3506,12 +3484,12 @@
             "sections": {
               ".text": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 3: Invalid type (r0.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               },
               "xdp/entry": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 51: Upper bound must be at most packet_size (valid_access(r5.offset, width=1) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               }
             }
@@ -3736,7 +3714,7 @@
             "sections": {
               "xdp": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 6: Invalid type (r1.type == map_fd)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -4106,12 +4084,12 @@
               ".text": {
                 "global_fn": {
                   "kind": "VerifierPointerArithmetic",
-                  "reason": "Known verifier limitation: pointer-arithmetic typing is too restrictive in this pattern. Diagnostic: 6: Only numbers can be added to pointers (r7.type in {ctx, stack, packet, shared} -> r8.type == number)",
+                  "reason": "pointer-arithmetic typing is too restrictive in this pattern",
                   "status": "expected_failure"
                 },
                 "global_fn2": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 }
               }
@@ -4119,12 +4097,12 @@
             "sections": {
               "other": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               },
               "static": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -4201,12 +4179,12 @@
               ".text": {
                 "global_fn": {
                   "kind": "VerifierPointerArithmetic",
-                  "reason": "Known verifier limitation: pointer-arithmetic typing is too restrictive in this pattern. Diagnostic: 6: Only numbers can be added to pointers (r7.type in {ctx, stack, packet, shared} -> r8.type == number)",
+                  "reason": "pointer-arithmetic typing is too restrictive in this pattern",
                   "status": "expected_failure"
                 },
                 "global_fn2": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 }
               }
@@ -4214,12 +4192,12 @@
             "sections": {
               "other": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               },
               "static": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -4296,12 +4274,12 @@
               ".text": {
                 "global_fn": {
                   "kind": "VerifierPointerArithmetic",
-                  "reason": "Known verifier limitation: pointer-arithmetic typing is too restrictive in this pattern. Diagnostic: 6: Only numbers can be added to pointers (r7.type in {ctx, stack, packet, shared} -> r8.type == number)",
+                  "reason": "pointer-arithmetic typing is too restrictive in this pattern",
                   "status": "expected_failure"
                 },
                 "global_fn2": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 }
               }
@@ -4309,12 +4287,12 @@
             "sections": {
               "other": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               },
               "static": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -4391,12 +4369,12 @@
               ".text": {
                 "global_fn": {
                   "kind": "VerifierPointerArithmetic",
-                  "reason": "Known verifier limitation: pointer-arithmetic typing is too restrictive in this pattern. Diagnostic: 6: Only numbers can be added to pointers (r7.type in {ctx, stack, packet, shared} -> r8.type == number)",
+                  "reason": "pointer-arithmetic typing is too restrictive in this pattern",
                   "status": "expected_failure"
                 },
                 "global_fn2": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 }
               }
@@ -4404,12 +4382,12 @@
             "sections": {
               "other": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               },
               "static": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -4482,12 +4460,12 @@
               ".text": {
                 "global_fn": {
                   "kind": "VerifierPointerArithmetic",
-                  "reason": "Known verifier limitation: pointer-arithmetic typing is too restrictive in this pattern. Diagnostic: 6: Only numbers can be added to pointers (r7.type in {ctx, stack, packet, shared} -> r8.type == number)",
+                  "reason": "pointer-arithmetic typing is too restrictive in this pattern",
                   "status": "expected_failure"
                 },
                 "global_fn2": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 }
               }
@@ -4495,12 +4473,12 @@
             "sections": {
               "other": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               },
               "static": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 2: Invalid type (r0.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -4769,7 +4747,7 @@
             "sections": {
               "xdp": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 19: Invalid type (r2.type == func)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -4853,7 +4831,7 @@
             "sections": {
               "fentry/tcp_connect": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               }
             }
@@ -4918,7 +4896,7 @@
             "sections": {
               "kprobe/sys_execve": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 9: Invalid type (r0.type in {ctx, stack, packet, shared})",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -4941,7 +4919,7 @@
             "sections": {
               "fentry/tcp_close": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               }
             }
@@ -4964,7 +4942,7 @@
             "sections": {
               "sockops": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 61: Lower bound must be at least 0 (valid_access(r0.offset) for comparison/subtraction)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               }
             }
@@ -5019,7 +4997,7 @@
             "sections": {
               "uretprobe/bash_readline": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r3.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -5625,102 +5603,102 @@
             "sections": {
               "raw_tracepoint/filler/sys_accept_x": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 675: Invalid size (r2.value >= 0)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "raw_tracepoint/filler/sys_connect_x": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 507: Invalid size (r2.value >= 0)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "raw_tracepoint/filler/sys_getsockopt_x": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 1825: Lower bound must be at least 0 (valid_access(r0.offset, width=4) for write)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "raw_tracepoint/filler/sys_nanosleep_e": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 260: Lower bound must be at least 0 (valid_access(r1.offset, width=8) for write)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "raw_tracepoint/filler/sys_poll_e": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 311: Lower bound must be at least 0 (valid_access(r3.offset+10, width=2) for write)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "raw_tracepoint/filler/sys_poll_x": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 457: Lower bound must be at least 0 (valid_access(r3.offset+10, width=2) for write)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "raw_tracepoint/filler/sys_ppoll_e": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 302: Lower bound must be at least 0 (valid_access(r3.offset+10, width=2) for write)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "raw_tracepoint/filler/sys_read_x": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 1094: Invalid size (r2.value >= 0)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "raw_tracepoint/filler/sys_readv_preadv_x": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 2093: Invalid size (r2.value >= 0)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "raw_tracepoint/filler/sys_recv_x": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 908: Invalid size (r2.value >= 0)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "raw_tracepoint/filler/sys_recvfrom_x": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 937: Invalid size (r2.value >= 0)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "raw_tracepoint/filler/sys_recvmsg_x": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 2187: Invalid size (r2.value >= 0)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "raw_tracepoint/filler/sys_recvmsg_x_2": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 228: Invalid size (r2.value >= 0)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "raw_tracepoint/filler/sys_send_x": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 908: Invalid size (r2.value >= 0)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "raw_tracepoint/filler/sys_sendmsg_e": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 563: Invalid size (r2.value >= 0)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "raw_tracepoint/filler/sys_sendmsg_x": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 2049: Invalid size (r2.value >= 0)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "raw_tracepoint/filler/sys_sendto_e": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 849: Invalid size (r2.value >= 0)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "raw_tracepoint/filler/sys_socket_bind_x": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 480: Invalid size (r2.value >= 0)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "raw_tracepoint/filler/sys_write_x": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 1105: Invalid size (r2.value >= 0)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "raw_tracepoint/filler/sys_writev_pwritev_x": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 2260: Invalid size (r2.value >= 0)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               }
             }
@@ -5799,9 +5777,7 @@
           "test_overrides": {
             "sections": {
               "xdp": {
-                "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 12: Upper bound must be at most 20 (valid_access(r6.offset+24, width=4) for read)",
-                "status": "expected_failure"
+                "status": "reject"
               }
             }
           }
@@ -5884,9 +5860,9 @@
           "test_overrides": {
             "sections": {
               "xdp_prog": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 13: Invalid type (r1.type == map_fd)",
-                "status": "expected_failure"
+                "status": "expected_failure",
+                "kind": "VerifierMapTyping",
+                "reason": "Map-in-map lookup chains not supported"
               }
             }
           }
@@ -5931,9 +5907,7 @@
           "test_overrides": {
             "sections": {
               "bind": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 60: Invalid type (r2.type in {ctx, stack, packet, shared})",
-                "status": "expected_failure"
+                "status": "reject"
               }
             }
           }
@@ -6199,184 +6173,112 @@
           "test_overrides": {
             "sections": {
               "bind": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 20: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/0": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/1": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/10": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/11": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/12": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/13": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/14": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/15": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/16": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/17": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/18": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/19": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/2": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/20": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/21": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/22": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/23": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/24": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/25": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/26": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/27": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/28": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/29": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/3": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/30": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/31": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/32": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/33": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/34": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 20: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/4": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/5": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/6": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/7": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/8": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               },
               "bind/9": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 48: Invalid type (r1.type == ctx)",
-                "status": "expected_failure"
+                "status": "reject"
               }
             }
           }
@@ -6428,12 +6330,12 @@
             "sections": {
               "tp/sched/sched_process_exec": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 24: Lower bound must be at least 0 (valid_access(r7.offset) for comparison/subtraction)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "tp/sched/sched_process_exit": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 39: Lower bound must be at least 0 (valid_access(r6.offset) for comparison/subtraction)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               }
             }
@@ -6462,7 +6364,7 @@
             "sections": {
               "tp/sched/sched_process_exec": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 70: Invalid type (r3.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -6491,12 +6393,12 @@
             "sections": {
               "fentry/do_unlinkat": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+8, width=8) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "fexit/do_unlinkat": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+16, width=8) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               }
             }
@@ -6545,12 +6447,12 @@
             "sections": {
               "ksyscall/kill": {
                 "kind": "VerifierStackInitialization",
-                "reason": "Known verifier limitation: stack initialization tracking is too coarse for this access path. Diagnostic: 54: Stack content is not numeric ((r3.type == number and r3.value == 0) or valid_access(r3.offset, width=r4) for read)",
+                "reason": "stack initialization tracking is too coarse for this access path",
                 "status": "expected_failure"
               },
               "ksyscall/tgkill": {
                 "kind": "VerifierStackInitialization",
-                "reason": "Known verifier limitation: stack initialization tracking is too coarse for this access path. Diagnostic: 81: Stack content is not numeric ((r3.type == number and r3.value == 0) or valid_access(r3.offset, width=r4) for read)",
+                "reason": "stack initialization tracking is too coarse for this access path",
                 "status": "expected_failure"
               }
             }
@@ -6568,15 +6470,6 @@
                 "invalid": false
               }
             ]
-          },
-          "test_overrides": {
-            "sections": {
-              "lsm/bpf": {
-                "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+24, width=8) for read)",
-                "status": "expected_failure"
-              }
-            }
           }
         },
         "minimal.bpf.o": {
@@ -6638,7 +6531,7 @@
             "sections": {
               "perf_event": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 12: Lower bound must be at least 0 (valid_access(r7.offset) for comparison/subtraction)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               }
             }
@@ -6661,7 +6554,7 @@
             "sections": {
               "socket": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 27: Lower bound must be at least 0 (valid_access(r7.offset) for comparison/subtraction)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               }
             }
@@ -6684,7 +6577,7 @@
             "sections": {
               "iter/task": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               }
             }
@@ -6774,7 +6667,7 @@
               ".text": {
                 "bpf_usdt_arg": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 4: Invalid type (r6.type in {ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 }
               }
@@ -6782,12 +6675,12 @@
             "sections": {
               "usdt": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 10/83: Invalid type (r3.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               },
               "usdt/libc.so.6:libc:setjmp": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 10/90: Invalid type (r3.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -7391,7 +7284,7 @@
             "sections": {
               "kprobe/sys_connect": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 80: Invalid type (r1.type == map_fd)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -8032,12 +7925,12 @@
               "fentry/__x64_sys_getpgid": {
                 "check_bloom": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 10: Invalid type (r2.type == func)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "inner_map": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 22: Invalid type (r2.type == func)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 }
               }
@@ -8045,7 +7938,7 @@
             "sections": {
               ".text": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1: Invalid type (r4.type in {ctx, stack, packet, shared})",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -8232,7 +8125,7 @@
             "sections": {
               "freplace/get_constant": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1: Invalid type (r1.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }
@@ -8281,17 +8174,17 @@
             "sections": {
               "fentry/eth_type_trans": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "fexit/eth_type_trans": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "tp_btf/kfree_skb": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset, width=8) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               }
             }
@@ -8342,7 +8235,7 @@
             "sections": {
               "raw_tracepoint/consume_skb": {
                 "kind": "VerificationTimeout",
-                "reason": "Known algorithmic limitation: verification did not converge within the configured timeout. Diagnostic: verification timed out after 20s",
+                "reason": "Known algorithmic limitation: verification did not converge within the configured timeout",
                 "status": "skip"
               }
             }
@@ -8473,97 +8366,97 @@
               ".text": {
                 "check": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 5: Invalid type (r2.type in {ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "check_array_of_maps": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 9: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "check_cgroup_storage": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "check_cpumap": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "check_default_noinline": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 9/16: Invalid type (r2.type in {ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "check_devmap": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "check_devmap_hash": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "check_hash_of_maps": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 9: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "check_lpm_trie": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "check_lru_percpu_hash": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "check_percpu_cgroup_storage": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "check_queue": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "check_reuseport_sockarray": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "check_ringbuf": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "check_sk_storage": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "check_sockhash": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "check_sockmap": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "check_stack": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "check_xskmap": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 7: Invalid type (r1.type in {number, ctx, stack, packet, shared})",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 }
               }
@@ -8604,18 +8497,18 @@
             "sections": {
               "cgroup/connect6": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 10: Invalid type (r2.type == socket)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               },
               "fexit/inet_stream_connect": {
                 "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+8, width=8) for read)",
+                "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
               "sockops": {
-                "kind": "VerifierBoundsTracking",
-                "reason": "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. Diagnostic: 1: Upper bound must be at most 184 (valid_access(r6.offset+184, width=8) for read)",
-                "status": "expected_failure"
+                "status": "expected_failure",
+                "kind": "VerifierTypeTracking",
+                "reason": "Socket type not tracked through sockops context access"
               }
             }
           }
@@ -8762,12 +8655,12 @@
               ".text": {
                 "f2": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1: Invalid type (r1.type == number)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "f3": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 0: Invalid type (r3.type == number)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 }
               }
@@ -8806,12 +8699,12 @@
               ".text": {
                 "bar": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 0: Invalid type (valid_access(r2.offset) for comparison/subtraction)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "foo": {
                   "kind": "VerifierTypeTracking",
-                  "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 0: Invalid type (valid_access(r2.offset) for comparison/subtraction)",
+                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 }
               }
@@ -8863,7 +8756,7 @@
             "sections": {
               "cgroup_skb/ingress": {
                 "kind": "VerifierNullability",
-                "reason": "Known verifier limitation: nullability tracking is too conservative on this path. Diagnostic: 89: Possible null access (valid_access(r7.offset+4, width=4) for read)",
+                "reason": "nullability tracking is too conservative on this path",
                 "status": "expected_failure"
               }
             }
@@ -9311,12 +9204,12 @@
             "sections": {
               ".text": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1: Invalid type (r2.type == number)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               },
               "xdp_prog": {
                 "kind": "VerifierTypeTracking",
-                "reason": "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 112: Invalid type (r1.type == map_fd)",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
               }
             }

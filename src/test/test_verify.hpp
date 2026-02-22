@@ -18,16 +18,36 @@
 
 namespace verify_test {
 
+// Why the verifier rejects a program that the kernel verifier would accept.
+// Each value represents a category of imprecision in our abstract domain or modeling.
 enum class VerifyIssueKind {
+    // State refinement loses precise register type information across control-flow merges,
+    // so a pointer or scalar register is later treated as an incompatible type.
     VerifierTypeTracking,
+    // Numeric range reasoning is too coarse for dependent bounds, so safe accesses
+    // fail range checks (packet size, stack window, map value window, context size).
     VerifierBoundsTracking,
+    // Stack byte initialization tracking misses writes or invalidates facts too
+    // aggressively, so reads are reported as non-numeric or uninitialized.
     VerifierStackInitialization,
+    // Pointer arithmetic constraints are lost or over-approximated, causing safe
+    // offset computations to be rejected.
     VerifierPointerArithmetic,
+    // Map type or inner-map resolution is incomplete, so valid map operations
+    // (e.g. map-in-map lookups) are rejected.
     VerifierMapTyping,
+    // Nullability tracking is too conservative: a pointer that is guaranteed non-null
+    // by program logic is still treated as potentially null.
     VerifierNullability,
+    // Context struct modeling is incomplete or incorrect, causing valid context
+    // field accesses to be rejected.
     VerifierContextModeling,
+    // Recursive or re-entrant call patterns are not modeled, so the verifier
+    // rejects programs that call themselves or cycle through tail calls.
     VerifierRecursionModeling,
+    // Verification exceeds the iteration or time budget before reaching a fixed point.
     VerificationTimeout,
+    // Legacy BCC-generated code uses patterns that our verifier does not recognize.
     LegacyBccBehavior,
 };
 
@@ -45,10 +65,6 @@ inline const char* to_string(VerifyIssueKind kind) noexcept {
     case VerifyIssueKind::LegacyBccBehavior: return "LegacyBccBehavior";
     }
     return "Unknown";
-}
-
-inline std::string format_issue(VerifyIssueKind kind, const char* reason) {
-    return std::string(to_string(kind)) + ": " + reason;
 }
 
 template <typename T>
@@ -161,10 +177,9 @@ inline std::vector<prevail::RawProgram> read_elf_cached(const std::string& path,
                        count);                                                                                   \
     }
 
-#define TEST_PROGRAM_FAIL(project, filename, section_name, program_name, count, kind, reason)                    \
+#define TEST_PROGRAM_FAIL(project, filename, section_name, program_name, count, kind)                            \
     TEST_CASE(project "/" filename " " program_name, "[!shouldfail][verify][samples][" project "]") {            \
         INFO("issue_kind=" << verify_test::to_string(kind));                                                     \
-        INFO("issue_reason=" << reason);                                                                         \
         VERIFY_PROGRAM(project, filename, section_name, program_name, {}, &prevail::g_ebpf_platform_linux, true, \
                        count);                                                                                   \
     }
@@ -194,21 +209,20 @@ inline std::vector<prevail::RawProgram> read_elf_cached(const std::string& path,
         VERIFY_SECTION(project, filename, section, options, &prevail::g_ebpf_platform_linux, false); \
     }
 
-#define TEST_SECTION_FAIL(project, filename, section, kind, reason)                                                \
+#define TEST_SECTION_FAIL(project, filename, section, kind)                                                        \
     TEST_CASE("expect failure " project "/" filename " " section, "[!shouldfail][verify][samples][" project "]") { \
         INFO("issue_kind=" << verify_test::to_string(kind));                                                       \
-        INFO("issue_reason=" << reason);                                                                           \
         VERIFY_SECTION(project, filename, section, {}, &prevail::g_ebpf_platform_linux, true);                     \
     }
 
-#define TEST_SECTION_SKIP(project, filename, section, kind, reason)                 \
+#define TEST_SECTION_SKIP(project, filename, section, kind)                         \
     TEST_CASE(project "/" filename " " section, "[verify][samples][" project "]") { \
-        SKIP(verify_test::format_issue(kind, reason));                              \
+        SKIP(verify_test::to_string(kind));                                         \
     }
 
-#define TEST_PROGRAM_SKIP(project, filename, section_name, program_name, kind, reason)   \
+#define TEST_PROGRAM_SKIP(project, filename, section_name, program_name, kind)           \
     TEST_CASE(project "/" filename " " program_name, "[verify][samples][" project "]") { \
-        SKIP(verify_test::format_issue(kind, reason));                                   \
+        SKIP(verify_test::to_string(kind));                                              \
     }
 
 #define TEST_SECTION_REJECT_LOAD(project, filename, section)                                                        \
@@ -220,11 +234,10 @@ inline std::vector<prevail::RawProgram> read_elf_cached(const std::string& path,
                           std::runtime_error);                                                                      \
     }
 
-#define TEST_SECTION_FAIL_SLOW(project, filename, section, kind, reason)                       \
+#define TEST_SECTION_FAIL_SLOW(project, filename, section, kind)                               \
     TEST_CASE("expect failure " project "/" filename " " section,                              \
               "[!shouldfail][verify][samples][slow][" project "]") {                           \
         INFO("issue_kind=" << verify_test::to_string(kind));                                   \
-        INFO("issue_reason=" << reason);                                                       \
         VERIFY_SECTION(project, filename, section, {}, &prevail::g_ebpf_platform_linux, true); \
     }
 
@@ -235,5 +248,5 @@ inline std::vector<prevail::RawProgram> read_elf_cached(const std::string& path,
 
 #define TEST_SECTION_LEGACY(dirname, filename, sectionname) TEST_SECTION(dirname, filename, sectionname)
 #define TEST_SECTION_LEGACY_SLOW(dirname, filename, sectionname) TEST_SECTION_SLOW(dirname, filename, sectionname)
-#define TEST_SECTION_LEGACY_FAIL(dirname, filename, sectionname, kind, reason) \
-    TEST_SECTION_FAIL(dirname, filename, sectionname, kind, reason)
+#define TEST_SECTION_LEGACY_FAIL(dirname, filename, sectionname, kind) \
+    TEST_SECTION_FAIL(dirname, filename, sectionname, kind)
