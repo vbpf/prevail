@@ -230,25 +230,34 @@ void EbpfTransformer::operator()(const Assume& s) {
     if (const auto psrc_reg = std::get_if<Reg>(&cond.right)) {
         const auto src_reg = *psrc_reg;
         const auto src = reg_pack(src_reg);
-        // This should have been checked by EbpfChecker
-        assert(dom.state.same_type(cond.left, std::get<Reg>(cond.right)));
-        dom.state = dom.state.join_over_types(cond.left, [&](TypeToNumDomain& state, const TypeEncoding type) {
-            if (type == T_NUM) {
-                for (const LinearConstraint& cst :
-                     state.values->assume_cst_reg(cond.op, cond.is64, dst.svalue, dst.uvalue, src.svalue, src.uvalue)) {
-                    state.values.add_constraint(cst);
-                }
-            } else {
-                // Either pointers to a singleton region,
-                // or an equality comparison on map descriptors/pointers to non-singleton locations
-                if (const auto dst_offset = get_type_offset_variable(cond.left, type)) {
-                    if (const auto src_offset = get_type_offset_variable(src_reg, type)) {
-                        state.values.add_constraint(
-                            assume_cst_offsets_reg(cond.op, dst_offset.value(), src_offset.value()));
+        if (dom.state.same_type(cond.left, src_reg)) {
+            dom.state = dom.state.join_over_types(cond.left, [&](TypeToNumDomain& state, const TypeEncoding type) {
+                if (type == T_NUM) {
+                    for (const LinearConstraint& cst : state.values->assume_cst_reg(
+                             cond.op, cond.is64, dst.svalue, dst.uvalue, src.svalue, src.uvalue)) {
+                        state.values.add_constraint(cst);
+                    }
+                } else {
+                    // Either pointers to a singleton region,
+                    // or an equality comparison on map descriptors/pointers to non-singleton locations
+                    if (const auto dst_offset = get_type_offset_variable(cond.left, type)) {
+                        if (const auto src_offset = get_type_offset_variable(src_reg, type)) {
+                            state.values.add_constraint(
+                                assume_cst_offsets_reg(cond.op, dst_offset.value(), src_offset.value()));
+                        }
                     }
                 }
+            });
+        } else if (dom.state.entail_type(reg_type(src_reg), T_NUM)) {
+            // Different types but r2 is a number — apply only numeric constraints.
+            for (const LinearConstraint& cst :
+                 dom.state.values->assume_cst_reg(cond.op, cond.is64, dst.svalue, dst.uvalue, src.svalue, src.uvalue)) {
+                dom.state.values.add_constraint(cst);
             }
-        });
+        } else {
+            // Different types and r2 is not a number — should have been caught by checker.
+            dom.state.set_to_bottom();
+        }
     } else {
         const int64_t imm = gsl::narrow_cast<int64_t>(std::get<Imm>(cond.right).v);
         for (const LinearConstraint& cst :
