@@ -32,3 +32,4 @@ They should be unconditionally available.
 - [ ] **Map-in-map identity propagation** — after `map_lookup_elem` on an outer map, the inner map descriptor (type, key/value size) should be available for subsequent helper calls. Currently, inner map identity is lost across control flow.
 - [ ] **External map FD reasoning** — when map metadata is unavailable (externally provided FDs), the verifier cannot reason about map properties. Needs a model for unknown-but-constrained map descriptors.
 - [x] **Tail-call map constraints in subprograms** — tail calls in subprograms are accepted; `map_fd_programs` argument typing remains enforced for `bpf_tail_call`.
+- [ ] **Arena map semantics** — `BPF_MAP_TYPE_ARENA` is in the map-type table, but arena-specific verification (user-mappable memory, `addr_space_cast` instruction) is not implemented.

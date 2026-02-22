@@ -2,9 +2,9 @@
 
 ## Callback verification
 
-- [x] **`PTR_TO_FUNC` argument type** — helper signatures now carry `PTR_TO_FUNC`, and verifier checks enforce `func`-typed callback registers.
-- [x] **Callback target validity** — helper calls with `PTR_TO_FUNC` now require singleton code-address targets that resolve to valid top-level instruction labels.
-- [ ] **Callback body analysis** — verify the callback subprogram body against the callback contract (expected argument types, return type, side-effect constraints). Basic shape validation is present: callback targets must have a reachable exit.
+- [x] **`PTR_TO_FUNC` argument type** — helper signatures carry `PTR_TO_FUNC`; verifier enforces `T_FUNC` type on the register.
+- [x] **Callback target validity** — helper calls with `PTR_TO_FUNC` require a singleton code-address register that resolves to a valid top-level instruction label (not a jump target, not Entry/Exit) with a reachable exit.
+- [ ] **Callback body analysis** — the callback subprogram body is not verified. Only structural checks are performed (valid label, reachable exit). No checking of callback argument types, return type, or side-effect constraints. The callback's code is present in the CFG but not analyzed under a callback-specific contract.
 - [ ] **Callback frame semantics** — model the callback's stack frame and register state as a nested verification context.
 
 ## Tail calls

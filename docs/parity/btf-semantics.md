@@ -10,7 +10,21 @@ BTF section parsing and CO-RE relocations are implemented. What is missing is
 - [x] **kfunc argument type checking** — verify arguments against resolved kfunc prototypes (table-driven subset).
 - [x] **kfunc availability gating** — apply prototype-level availability checks (program type and privileged-only constraints) before analysis.
 - [ ] **kfunc return type propagation** — propagate BTF-typed return values into the register state. Current subset supports integer and map-value-or-null style return contracts only.
-- [ ] **kfunc flags** — handle kfunc behavioral flags (e.g., `KF_ACQUIRE`, `KF_RELEASE`, `KF_TRUSTED_ARGS`, `KF_SLEEPABLE`, `KF_DESTRUCTIVE`). Flagged entries are conservatively rejected today.
+- [ ] **kfunc flags** — per-flag handling for kfunc behavioral flags. Flags accepted today (type-level safety covered by existing checks):
+  - `KF_ACQUIRE` — type propagation works; release obligation not enforced (same gap as ringbuf, tracked in [lifetime.md](lifetime.md))
+  - `KF_DESTRUCTIVE` — privilege-level gate only
+  - `KF_TRUSTED_ARGS` — arguments type-checked via normal assertion path
+  - `KF_SLEEPABLE` — context constraint, not a memory-safety property
+
+  Flags rejected (require unimplemented infrastructure):
+  - `KF_RELEASE` — requires acquire/release state machine (see [lifetime.md](lifetime.md))
+
+  Flags not yet in the `KfuncFlags` enum (Linux defines but Prevail does not):
+  - `KF_RET_NULL` — forces null check on return value (safety-critical)
+  - `KF_RCU` / `KF_RCU_PROTECTED` — RCU pointer trust and critical-section enforcement (safety-critical)
+  - `KF_ITER_NEW` / `KF_ITER_NEXT` / `KF_ITER_DESTROY` — iterator lifecycle tracking (safety-critical)
+  - `KF_DEPRECATED` — load-time warning (informational)
+  - `KF_IMPLICIT_ARGS` — hidden argument injection (ABI)
 
 ## BTF-ID pointer typing
 

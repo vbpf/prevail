@@ -48,9 +48,11 @@ Out of scope:
 
 Many gaps are coupled. The most important dependency chains:
 
-1. **Pointer type classes** → helper families, lifetime tracking, kfuncs
-2. **BTF semantic integration** → kfuncs, BTF-ID pointer typing, object-type reasoning
-3. **Lifetime tracking** → socket helpers, ringbuf reserve/submit, kptr exchange
-4. **Callback verification** → `bpf_loop`, `for_each_map_elem`, timer callbacks
-5. **Program-type/context fidelity** → correct helper availability per attach point
-6. **Map identity propagation** → map-in-map chains, inner map descriptor reasoning
+1. **Lifetime tracking** → socket helpers, ringbuf ownership, kptr exchange, dynptr lifecycle, kfunc acquire/release
+2. **Pointer type classes** → helper families, lifetime tracking, kfuncs
+3. **BTF semantic integration** → kfuncs, BTF-ID pointer typing, map-value field validation
+4. **Callback body analysis** → `bpf_loop`, `for_each_map_elem`, timer callbacks, user ringbuf
+5. **Dynptr type representation** → dynptr helpers, dynptr ringbuf, user ringbuf
+6. **Program-type/context fidelity** → correct helper availability per attach point
+7. **Map identity propagation** → map-in-map chains, inner map descriptor reasoning
+8. **ISA extensions** → `may_goto` (open-coded iterators), `addr_space_cast` (arena)
