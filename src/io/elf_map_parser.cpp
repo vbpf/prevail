@@ -282,8 +282,7 @@ ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO
 
 ElfGlobalData extract_global_data(const parse_params_t& params, const ELFIO::elfio& reader,
                                   const ELFIO::const_symbol_section_accessor& symbols) {
-    const bool has_btf_maps = reader.sections[".BTF"] != nullptr && reader.sections[".maps"] != nullptr;
-    if (has_btf_maps) {
+    if (reader.sections[".BTF"] && reader.sections[".maps"]) {
         try {
             return parse_btf_section(params, reader);
         } catch (const UnmarshalError& e) {

@@ -9,7 +9,6 @@
 
 #include <elfio/elfio.hpp>
 #include <libbtf/btf_c_type.h>
-#include <libbtf/btf_parse.h>
 
 #include "crab_utils/num_safety.hpp"
 #include "io/elf_reader.hpp"
@@ -76,7 +75,7 @@ struct core_field_resolution_t {
 
 template <typename T>
     requires std::is_trivially_copyable_v<T>
-T read_struct_at(const char* data, size_t data_size, size_t offset, const std::string& context) {
+T read_struct_at(const char* data, const size_t data_size, const size_t offset, const std::string& context) {
     if (offset > data_size || data_size - offset < sizeof(T)) {
         throw UnmarshalError(context + " out of bounds");
     }
@@ -85,7 +84,7 @@ T read_struct_at(const char* data, size_t data_size, size_t offset, const std::s
     return value;
 }
 
-size_t checked_add(size_t start, size_t length, size_t limit, const std::string& context) {
+size_t checked_add(const size_t start, const size_t length, const size_t limit, const std::string& context) {
     if (start > limit || length > limit - start) {
         throw UnmarshalError(context + " out of bounds");
     }
@@ -111,7 +110,7 @@ btf_string_table_view_t parse_btf_string_table(const ELFIO::section& btf_section
     return {btf_data + str_start, str_end - str_start};
 }
 
-std::string_view btf_string_at(const btf_string_table_view_t& strings, uint32_t string_offset,
+std::string_view btf_string_at(const btf_string_table_view_t& strings, const uint32_t string_offset,
                                const std::string& name) {
     if (string_offset >= strings.size) {
         throw UnmarshalError("Invalid BTF string offset for " + name);
@@ -165,8 +164,8 @@ std::vector<uint32_t> parse_core_access_string(const std::string_view s) {
     return indices;
 }
 
-core_field_resolution_t resolve_core_field(const libbtf::btf_type_data& btf_data, uint32_t type_id,
-                                           std::string_view access_string) {
+core_field_resolution_t resolve_core_field(const libbtf::btf_type_data& btf_data, const uint32_t type_id,
+                                           const std::string_view access_string) {
     auto indices = parse_core_access_string(access_string);
     // Clang/libbpf encode root type with a leading "0" accessor.
     if (!indices.empty() && indices.front() == 0) {
@@ -253,8 +252,8 @@ bool core_field_offset_uses_offset_field(const EbpfInst& inst) {
 // ProgramReader CO-RE methods
 // ---------------------------------------------------------------------------
 
-void ProgramReader::apply_core_relocation(RawProgram& prog, const bpf_core_relo& relo, std::string_view access_string,
-                                          const libbtf::btf_type_data& btf_data) {
+void ProgramReader::apply_core_relocation(RawProgram& prog, const bpf_core_relo& relo,
+                                          const std::string_view access_string, const libbtf::btf_type_data& btf_data) {
     if (relo.insn_off < prog.insn_off) {
         throw UnmarshalError("CO-RE relocation offset before program start");
     }
@@ -434,7 +433,7 @@ void ProgramReader::process_core_relocations(const libbtf::btf_type_data& btf_da
         programs_by_section[prog.section_name].push_back(&prog);
     }
 
-    for (; offset < core_relo_end;) {
+    while (offset < core_relo_end) {
         const auto section =
             read_struct_at<btf_ext_info_sec_t>(btf_ext_data, btf_ext_size, offset, "CO-RE section info");
         offset += sizeof(btf_ext_info_sec_t);

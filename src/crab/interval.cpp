@@ -39,7 +39,7 @@ Interval Interval::operator/(const Interval& x) const {
         // Divisor is a singleton:
         //   the linear interval solver can perform many divisions where
         //   the divisor is a singleton interval. We optimize for this case.
-        Number c = *n;
+        const Number c = *n;
         if (c == 1) {
             return *this;
         } else if (c > 0) {
@@ -53,17 +53,17 @@ Interval Interval::operator/(const Interval& x) const {
     }
     if (x.contains(0)) {
         // The divisor contains 0.
-        Interval l{x._lb, -1};
-        Interval u{1, x._ub};
+        const Interval l{x._lb, -1};
+        const Interval u{1, x._ub};
         return operator/(l) | operator/(u) | Interval{0};
     } else if (contains(0)) {
         // The dividend contains 0.
-        Interval l{_lb, -1};
-        Interval u{1, _ub};
+        const Interval l{_lb, -1};
+        const Interval u{1, _ub};
         return (l / x) | (u / x) | Interval{0};
     } else {
         // Neither the dividend nor the divisor contains 0
-        Interval a = make_dividend_when_both_nonzero(*this, x);
+        const Interval a = make_dividend_when_both_nonzero(*this, x);
         const auto [clb, cub] = std::minmax({
             a._lb / x._lb,
             a._lb / x._ub,
@@ -84,7 +84,7 @@ Interval Interval::sdiv(const Interval& x) const {
             // Divisor is a singleton:
             //   the linear interval solver can perform many divisions where
             //   the divisor is a singleton interval. We optimize for this case.
-            Number c{n->cast_to<int64_t>()};
+            const Number c{n->cast_to<int64_t>()};
             if (c == 1) {
                 return *this;
             } else if (c != 0) {
@@ -97,17 +97,17 @@ Interval Interval::sdiv(const Interval& x) const {
     }
     if (x.contains(0)) {
         // The divisor contains 0.
-        Interval l{x._lb, -1};
-        Interval u{1, x._ub};
+        const Interval l{x._lb, -1};
+        const Interval u{1, x._ub};
         return sdiv(l) | sdiv(u) | Interval{0};
     } else if (contains(0)) {
         // The dividend contains 0.
-        Interval l{_lb, -1};
-        Interval u{1, _ub};
+        const Interval l{_lb, -1};
+        const Interval u{1, _ub};
         return l.sdiv(x) | u.sdiv(x) | Interval{0};
     } else {
         // Neither the dividend nor the divisor contains 0
-        Interval a = make_dividend_when_both_nonzero(*this, x);
+        const Interval a = make_dividend_when_both_nonzero(*this, x);
         const auto [clb, cub] = std::minmax({
             a._lb / x._lb,
             a._lb / x._ub,
@@ -128,7 +128,7 @@ Interval Interval::udiv(const Interval& x) const {
             // Divisor is a singleton:
             //   the linear interval solver can perform many divisions where
             //   the divisor is a singleton interval. We optimize for this case.
-            Number c{n->cast_to<uint64_t>()};
+            const Number c{n->cast_to<uint64_t>()};
             if (c == 1) {
                 return *this;
             } else if (c > 0) {
@@ -141,18 +141,18 @@ Interval Interval::udiv(const Interval& x) const {
     }
     if (x.contains(0)) {
         // The divisor contains 0.
-        Interval l{x._lb, -1};
-        Interval u{1, x._ub};
+        const Interval l{x._lb, -1};
+        const Interval u{1, x._ub};
         return udiv(l) | udiv(u) | Interval{0};
     }
     if (contains(0)) {
         // The dividend contains 0.
-        Interval l{_lb, -1};
-        Interval u{1, _ub};
+        const Interval l{_lb, -1};
+        const Interval u{1, _ub};
         return l.udiv(x) | u.udiv(x) | Interval{0};
     }
     // Neither the dividend nor the divisor contains 0
-    Interval a = make_dividend_when_both_nonzero(*this, x);
+    const Interval a = make_dividend_when_both_nonzero(*this, x);
     const auto [clb, cub] = std::minmax({
         a._lb.udiv(x._lb),
         a._lb.udiv(x._ub),
@@ -179,8 +179,8 @@ Interval Interval::srem(const Interval& x) const {
     }
     if (x.contains(0)) {
         // The divisor contains 0.
-        Interval l{x._lb, -1};
-        Interval u{1, x._ub};
+        const Interval l{x._lb, -1};
+        const Interval u{1, x._ub};
         return srem(l) | srem(u) | *this;
     }
     if (x.ub().is_finite() && x.lb().is_finite()) {
@@ -225,13 +225,13 @@ Interval Interval::urem(const Interval& x) const {
     }
     if (x.contains(0)) {
         // The divisor contains 0.
-        Interval l{x._lb, -1};
-        Interval u{1, x._ub};
+        const Interval l{x._lb, -1};
+        const Interval u{1, x._ub};
         return urem(l) | urem(u) | *this;
     } else if (contains(0)) {
         // The dividend contains 0.
-        Interval l{_lb, -1};
-        Interval u{1, _ub};
+        const Interval l{_lb, -1};
+        const Interval u{1, _ub};
         return l.urem(x) | u.urem(x) | *this;
     } else {
         // Neither the dividend nor the divisor contains 0
@@ -244,7 +244,7 @@ Interval Interval::urem(const Interval& x) const {
             // Dividend lower than divisor, so the dividend is the remainder.
             return *this;
         } else {
-            Number max_divisor{x._ub.number()->cast_to<uint64_t>()};
+            const Number max_divisor{x._ub.number()->cast_to<uint64_t>()};
             return Interval{0, max_divisor - 1};
         }
     }

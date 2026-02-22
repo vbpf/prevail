@@ -10,7 +10,6 @@
 #include "crab/interval.hpp"
 #include "crab/zone_domain.hpp"
 #include "ir/syntax.hpp"
-#include "string_constraints.hpp"
 
 namespace prevail {
 
@@ -70,11 +69,11 @@ std::vector<LinearConstraint> FiniteDomain::assume_signed_32bit_eq(const Variabl
 
     if (const auto rn = right_interval.singleton()) {
         const auto left_svalue_interval = eval_interval(left_svalue);
-        if (auto size = left_svalue_interval.finite_size()) {
+        if (left_svalue_interval.finite_size()) {
             // Find the lowest 64-bit svalue whose low 32 bits match the singleton.
 
             // Get lower bound as a 64-bit value.
-            int64_t lb = left_svalue_interval.lb().number()->cast_to<int64_t>();
+            const int64_t lb = left_svalue_interval.lb().number()->cast_to<int64_t>();
 
             // Use the high 32-bits from the left lower bound and the low 32-bits from the right singleton.
             // The result might be lower than the lower bound.

@@ -139,7 +139,7 @@ class offset_map_t final {
 
 void offset_map_t::remove_cell(const Cell& c) {
     const offset_t key = c.offset;
-    if (auto it = _map.find(key); it != _map.end()) {
+    if (const auto it = _map.find(key); it != _map.end()) {
         it->second.erase(c);
         if (it->second.empty()) {
             _map.erase(it);
@@ -526,9 +526,9 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, const
 }
 
 std::optional<LinearExpression> ArrayDomain::load_type(const Interval& i, int width) const {
-    if (std::optional<Number> n = i.singleton()) {
+    if (const std::optional<Number> n = i.singleton()) {
         offset_map_t& offset_map = lookup_array_map(DataKind::types);
-        int64_t k = n->narrow<int64_t>();
+        const int64_t k = n->narrow<int64_t>();
         auto [only_num, only_non_num] = num_bytes.uniformity(k, width);
         if (only_num) {
             return T_NUM;
@@ -536,14 +536,14 @@ std::optional<LinearExpression> ArrayDomain::load_type(const Interval& i, int wi
         if (!only_non_num || width != 8) {
             return {};
         }
-        offset_t o(k);
-        unsigned size = to_unsigned(width);
-        if (auto cell = lookup_array_map(DataKind::types).get_cell(o, size)) {
+        const offset_t o(k);
+        const unsigned size = to_unsigned(width);
+        if (const auto cell = lookup_array_map(DataKind::types).get_cell(o, size)) {
             return cell_var(DataKind::types, *cell);
         }
-        std::vector<Cell> cells = offset_map.get_overlap_cells(o, size);
+        const std::vector<Cell> cells = offset_map.get_overlap_cells(o, size);
         if (cells.empty()) {
-            Cell c = offset_map.mk_cell(o, size);
+            const Cell c = offset_map.mk_cell(o, size);
             // Here it's ok to do assignment (instead of expand) because c is not a summarized variable.
             // Otherwise, it would be unsound.
             return cell_var(DataKind::types, c);
@@ -557,10 +557,10 @@ std::optional<LinearExpression> ArrayDomain::load_type(const Interval& i, int wi
         */
     } else {
         // Check whether the kind is uniform across the entire interval.
-        auto lb = i.lb().number();
-        auto ub = i.ub().number();
+        const auto lb = i.lb().number();
+        const auto ub = i.ub().number();
         if (lb.has_value() && ub.has_value()) {
-            Number fullwidth = ub.value() - lb.value() + width;
+            const Number fullwidth = ub.value() - lb.value() + width;
             if (lb->fits<uint32_t>() && fullwidth.fits<uint32_t>()) {
                 auto [only_num, only_non_num] =
                     num_bytes.uniformity(lb->narrow<uint32_t>(), fullwidth.narrow<uint32_t>());

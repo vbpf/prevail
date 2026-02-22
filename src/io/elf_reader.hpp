@@ -76,7 +76,7 @@ constexpr unsigned R_BPF_64_32_TYPE = 10;
 
 template <typename T>
     requires std::is_trivially_copyable_v<T>
-std::vector<T> vector_of(const char* data, ELFIO::Elf_Xword size) {
+std::vector<T> vector_of(const char* data, const ELFIO::Elf_Xword size) {
     if (!data || size % sizeof(T) != 0 || size > std::numeric_limits<uint32_t>::max()) {
         throw UnmarshalError("Invalid argument to vector_of");
     }

@@ -64,8 +64,6 @@ struct ElfObject::ElfObjectState {
     void discover_programs();
     void load_section(const std::string& section_name);
     void mark_section_validity(const std::string& section_name, bool valid, const std::string& reason);
-    std::vector<RawProgram> filter_section_programs(const std::vector<RawProgram>& programs,
-                                                    const std::string& desired_program) const;
 };
 
 // ---------------------------------------------------------------------------
@@ -131,7 +129,7 @@ void ElfObject::ElfObjectState::mark_section_validity(const std::string& section
 
 void ElfObject::ElfObjectState::load_section(const std::string& section_name) {
     discover_programs();
-    auto section_it = section_cache.find(section_name);
+    const auto section_it = section_cache.find(section_name);
     if (section_it == section_cache.end()) {
         throw UnmarshalError("Section not found");
     }
@@ -145,8 +143,8 @@ void ElfObject::ElfObjectState::load_section(const std::string& section_name) {
     try {
         // Use the cached reader/symbols to construct ProgramReader directly,
         // avoiding re-opening and re-parsing the ELF file.
-        parse_params_t params{path, options, platform, section_name};
-        auto global = extract_global_data(params, *reader, *symbols);
+        const parse_params_t params{path, options, platform, section_name};
+        const auto global = extract_global_data(params, *reader, *symbols);
         ProgramReader program_reader{params, *reader, *symbols, global};
         program_reader.read_programs();
         cache_entry.programs = std::move(program_reader.raw_programs);
@@ -160,15 +158,14 @@ void ElfObject::ElfObjectState::load_section(const std::string& section_name) {
         mark_section_validity(section_name, false, cache_entry.error);
     }
 }
-
-std::vector<RawProgram> ElfObject::ElfObjectState::filter_section_programs(const std::vector<RawProgram>& programs_vec,
-                                                                           const std::string& desired_program) const {
+std::vector<RawProgram> filter_section_programs(const std::vector<RawProgram>& programs,
+                                                const std::string& desired_program) {
     if (desired_program.empty()) {
-        return programs_vec;
+        return programs;
     }
 
     std::vector<RawProgram> selected;
-    for (const RawProgram& program : programs_vec) {
+    for (const RawProgram& program : programs) {
         if (program.function_name == desired_program) {
             selected.push_back(program);
         }
@@ -214,7 +211,7 @@ const std::vector<RawProgram>& ElfObject::get_programs(const std::string& desire
         if (!section_it->second.valid) {
             throw UnmarshalError(section_it->second.error);
         }
-        auto selected = state_->filter_section_programs(section_it->second.programs, desired_program);
+        auto selected = filter_section_programs(section_it->second.programs, desired_program);
         if (!desired_program.empty()) {
             if (selected.empty()) {
                 throw UnmarshalError("Program not found in section '" + desired_section + "': " + desired_program);
@@ -240,7 +237,7 @@ const std::vector<RawProgram>& ElfObject::get_programs(const std::string& desire
         throw UnmarshalError("No executable sections");
     }
 
-    auto selected = state_->filter_section_programs(all_programs, desired_program);
+    auto selected = filter_section_programs(all_programs, desired_program);
     if (!desired_program.empty()) {
         if (selected.empty()) {
             throw UnmarshalError("Program not found: " + desired_program);

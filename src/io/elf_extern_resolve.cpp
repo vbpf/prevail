@@ -1,6 +1,5 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
-#include <cstdint>
 #include <optional>
 #include <string_view>
 #include <vector>

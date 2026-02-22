@@ -579,12 +579,12 @@ void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
         case T_NUM: return;
         case T_FUNC: return;
         case T_CTX: {
-            LinearExpression addr = mem_reg.ctx_offset + offset;
+            const LinearExpression addr = mem_reg.ctx_offset + offset;
             do_load_ctx(state, target_reg, addr, width);
             break;
         }
         case T_STACK: {
-            LinearExpression addr = mem_reg.stack_offset + offset;
+            const LinearExpression addr = mem_reg.stack_offset + offset;
             do_load_stack(state, stack, target_reg, addr, width, b.access.basereg);
             break;
         }

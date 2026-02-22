@@ -10,7 +10,6 @@
 #include <functional>
 #include <iostream>
 #include <map>
-#include <numeric>
 #include <optional>
 #include <set>
 #include <string>
@@ -30,7 +29,7 @@ namespace prevail {
 // ---------------------------------------------------------------------------
 
 std::pair<std::reference_wrapper<EbpfInst>, std::reference_wrapper<EbpfInst>>
-validate_and_get_lddw_pair(std::vector<EbpfInst>& instructions, size_t location, const std::string& context) {
+validate_and_get_lddw_pair(std::vector<EbpfInst>& instructions, const size_t location, const std::string& context) {
     constexpr uint8_t BPF_LDDW = 0x18;
     constexpr uint8_t BPF_LDDW_HI = 0x00;
 
