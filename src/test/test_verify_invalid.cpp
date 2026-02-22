@@ -8,42 +8,15 @@ TEST_SECTION_REJECT_LOAD("invalid", "58087ea4ff41695f3186d628a3250b26dc8d237a", 
 TEST_SECTION_REJECT_LOAD("invalid", "58087ea4ff41695f3186d628a3250b26dc8d237a", "cgroup/connect6")
 TEST_SECTION_REJECT_LOAD("invalid", "58087ea4ff41695f3186d628a3250b26dc8d237a", "cgroup/recv_accept4")
 TEST_SECTION_REJECT_LOAD("invalid", "58087ea4ff41695f3186d628a3250b26dc8d237a", "cgroup/recv_accept6")
+TEST_SECTION_REJECT("invalid", "662b334a22904023c13f11008e072076a4f4d215", "xdp")
 TEST_SECTION_REJECT_LOAD("invalid", "ab3408afd06d68dd7e73bf21bde38350d9751a78", "cgroup/connect4")
 TEST_SECTION_REJECT_LOAD("invalid", "ab3408afd06d68dd7e73bf21bde38350d9751a78", "cgroup/connect6")
 TEST_SECTION_REJECT_LOAD("invalid", "ab3408afd06d68dd7e73bf21bde38350d9751a78", "cgroup/recv_accept4")
 TEST_SECTION_REJECT_LOAD("invalid", "ab3408afd06d68dd7e73bf21bde38350d9751a78", "cgroup/recv_accept6")
 TEST_SECTION("invalid", "c049438cf649269921736e7306231385350dea58", ".text")
+TEST_SECTION_REJECT("invalid", "dac31099c3bb5b6395908c82cc8540e77a6a1849", "bind")
 TEST_SECTION("invalid", "ef2e42c0bfcf4dab6b9c3926759365b6dfa73634", ".text")
 TEST_SECTION_REJECT("invalid", "invalid-lddw.o", ".text")
-
-// ===========================================================================
-// Correct rejection: map-in-map not supported
-// The program uses a map_lookup_elem result (shared pointer) as the first
-// argument to another map_lookup_elem, which requires a map_fd. This is
-// valid map-in-map usage that the kernel verifier would accept, but our
-// verifier does not track inner map types.
-// ===========================================================================
-TEST_SECTION_FAIL("invalid", "af99e766f6ba44fd7f2135c3e325c817224b99a3", "xdp_prog",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: map-in-map lookup chains are not supported. "
-                  "Diagnostic: 13: Invalid type (r1.type == map_fd)")
-
-// ===========================================================================
-// Correct rejection: dereferences non-pointer context field
-// The program reads user_family (u32 at bpf_sock_addr offset 0) as a u64
-// then tries to dereference it as a pointer. The context value is a scalar
-// number, not a pointer — the access is genuinely invalid.
-// ===========================================================================
-TEST_SECTION_REJECT("invalid", "dac31099c3bb5b6395908c82cc8540e77a6a1849", "bind")
-
-// ===========================================================================
-// Correct rejection: stack pointer passed as ctx
-// All 36 sections in this binary pass a stack pointer (r10 + offset) as the
-// ctx argument to helpers like bpf_tail_call and bpf_clone_redirect, which
-// require the program's context pointer. This is genuinely invalid: the
-// stack frame is destroyed by tail_call, and clone_redirect needs the
-// actual skb/context.
-// ===========================================================================
 TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind")
 TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/0")
 TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/1")
@@ -81,9 +54,7 @@ TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37
 TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/8")
 TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/9")
 
-// ===========================================================================
-// Correct rejection: OOB context access
-// The program reads *(u32*)(ctx + 24) on xdp_md which is 24 bytes
-// (offsets 0-23). Byte offset 24 + width 4 = 28 > 24, genuinely OOB.
-// ===========================================================================
-TEST_SECTION_REJECT("invalid", "662b334a22904023c13f11008e072076a4f4d215", "xdp")
+// VerifierMapTyping:
+// Map-in-map lookup chains not supported
+TEST_SECTION_FAIL("invalid", "af99e766f6ba44fd7f2135c3e325c817224b99a3", "xdp_prog",
+                  verify_test::VerifyIssueKind::VerifierMapTyping)
