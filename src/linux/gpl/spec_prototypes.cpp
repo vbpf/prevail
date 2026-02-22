@@ -311,6 +311,7 @@ static constexpr EbpfHelperPrototype bpf_skb_store_bytes_proto = {
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    .reallocate_packet = true,
     .context_descriptor = &g_sk_buff,
 };
 
@@ -349,6 +350,7 @@ static constexpr EbpfHelperPrototype bpf_skb_pull_data_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    .reallocate_packet = true,
     .context_descriptor = &g_sk_buff,
 };
 
@@ -572,6 +574,7 @@ static constexpr EbpfHelperPrototype bpf_skb_vlan_push_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    .reallocate_packet = true,
     .context_descriptor = &g_sk_buff,
 };
 
@@ -582,6 +585,7 @@ static constexpr EbpfHelperPrototype bpf_skb_vlan_pop_proto = {
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
         },
+    .reallocate_packet = true,
     .context_descriptor = &g_sk_buff,
 };
 
@@ -594,6 +598,7 @@ static constexpr EbpfHelperPrototype bpf_skb_change_proto_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    .reallocate_packet = true,
     .context_descriptor = &g_sk_buff,
 };
 
@@ -631,6 +636,7 @@ static constexpr EbpfHelperPrototype bpf_skb_change_tail_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    .reallocate_packet = true,
     .context_descriptor = &g_sk_buff,
 };
 
@@ -1040,6 +1046,7 @@ static constexpr EbpfHelperPrototype bpf_msg_push_data_proto = {
         EBPF_ARGUMENT_TYPE_ANYTHING,
         EBPF_ARGUMENT_TYPE_ANYTHING,
     },
+    .reallocate_packet = true,
     .context_descriptor = &g_sk_msg_md,
 };
 
@@ -1052,6 +1059,7 @@ static constexpr EbpfHelperPrototype bpf_msg_pop_data_proto = {
         EBPF_ARGUMENT_TYPE_ANYTHING,
         EBPF_ARGUMENT_TYPE_ANYTHING,
     },
+    .reallocate_packet = true,
     .context_descriptor = &g_sk_msg_md,
 };
 
