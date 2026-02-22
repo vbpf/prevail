@@ -17,263 +17,73 @@ TEST_SECTION("invalid", "ef2e42c0bfcf4dab6b9c3926759365b6dfa73634", ".text")
 TEST_SECTION_REJECT("invalid", "invalid-lddw.o", ".text")
 
 // ===========================================================================
-// Failure Cause Group: VerifierTypeTracking
-// Group size: 38 tests (38 expected_failure, 0 skip).
-// Root cause:
-//   State refinement loses precise register type information across specific control-flow merges, so a pointer or
-//   scalar register is later treated as an incompatible type.
-// Representative example:
-//   test: invalid/af99e766f6ba44fd7f2135c3e325c817224b99a3 xdp_prog
-//   diagnostic: 13: Invalid type (r1.type == map_fd)
-// Addressing direction:
-//   Improve type-domain join or widen logic for pointer classes and preserve key path constraints through merges.
-//   Start from the first failing instruction and inspect predecessor states.
+// Correct rejection: map-in-map not supported
+// The program uses a map_lookup_elem result (shared pointer) as the first
+// argument to another map_lookup_elem, which requires a map_fd. This is
+// valid map-in-map usage that the kernel verifier would accept, but our
+// verifier does not track inner map types.
 // ===========================================================================
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 13: Invalid type (r1.type == map_fd)
 TEST_SECTION_FAIL("invalid", "af99e766f6ba44fd7f2135c3e325c817224b99a3", "xdp_prog",
                   verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Known verifier limitation: map-in-map lookup chains are not supported. "
                   "Diagnostic: 13: Invalid type (r1.type == map_fd)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 60: Invalid type (r2.type in {ctx, stack, packet, shared})
-TEST_SECTION_FAIL("invalid", "dac31099c3bb5b6395908c82cc8540e77a6a1849", "bind",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 60: Invalid type (r2.type in {ctx, stack, packet, shared})")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 20: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 20: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/0",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/1",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/10",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/11",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/12",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/13",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/14",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/15",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/16",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/17",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/18",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/19",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/2",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/20",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/21",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/22",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/23",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/24",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/25",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/26",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/27",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/28",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/29",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/3",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/30",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/31",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/32",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/33",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 20: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/34",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 20: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/4",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/5",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/6",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/7",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/8",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
-// expected failure (VerifierTypeTracking):
-//   diagnostic: 48: Invalid type (r1.type == ctx)
-TEST_SECTION_FAIL("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/9",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking,
-                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
-                  "Diagnostic: 48: Invalid type (r1.type == ctx)")
 
 // ===========================================================================
-// Failure Cause Group: VerifierBoundsTracking
-// Group size: 1 tests (1 expected_failure, 0 skip).
-// Root cause:
-//   Numeric range reasoning is too coarse for dependent bounds, so safe accesses fail range checks (packet size,
-//   stack window, map value window).
-// Representative example:
-//   test: invalid/662b334a22904023c13f11008e072076a4f4d215 xdp
-//   diagnostic: 12: Upper bound must be at most 20 (valid_access(r6.offset+24, width=4) for read)
-// Addressing direction:
-//   Strengthen interval propagation for correlated predicates and arithmetic-derived offsets, and keep relation
-//   information across branches where possible.
+// Correct rejection: dereferences non-pointer context field
+// The program reads user_family (u32 at bpf_sock_addr offset 0) as a u64
+// then tries to dereference it as a pointer. The context value is a scalar
+// number, not a pointer — the access is genuinely invalid.
 // ===========================================================================
-// expected failure (VerifierBoundsTracking):
-//   diagnostic: 12: Upper bound must be at most 20 (valid_access(r6.offset+24, width=4) for read)
-TEST_SECTION_FAIL("invalid", "662b334a22904023c13f11008e072076a4f4d215", "xdp",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking,
-                  "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
-                  "Diagnostic: 12: Upper bound must be at most 20 (valid_access(r6.offset+24, width=4) for read)")
+TEST_SECTION_REJECT("invalid", "dac31099c3bb5b6395908c82cc8540e77a6a1849", "bind")
+
+// ===========================================================================
+// Correct rejection: stack pointer passed as ctx
+// All 36 sections in this binary pass a stack pointer (r10 + offset) as the
+// ctx argument to helpers like bpf_tail_call and bpf_clone_redirect, which
+// require the program's context pointer. This is genuinely invalid: the
+// stack frame is destroyed by tail_call, and clone_redirect needs the
+// actual skb/context.
+// ===========================================================================
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/0")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/1")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/10")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/11")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/12")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/13")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/14")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/15")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/16")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/17")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/18")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/19")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/2")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/20")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/21")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/22")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/23")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/24")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/25")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/26")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/27")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/28")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/29")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/3")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/30")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/31")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/32")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/33")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/34")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/4")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/5")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/6")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/7")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/8")
+TEST_SECTION_REJECT("invalid", "timeout-29db93548c671165313b314d4f83a3eefa24df37", "bind/9")
+
+// ===========================================================================
+// Correct rejection: OOB context access
+// The program reads *(u32*)(ctx + 24) on xdp_md which is 24 bytes
+// (offsets 0-23). Byte offset 24 + width 4 = 28 > 24, genuinely OOB.
+// ===========================================================================
+TEST_SECTION_REJECT("invalid", "662b334a22904023c13f11008e072076a4f4d215", "xdp")

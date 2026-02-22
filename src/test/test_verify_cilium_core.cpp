@@ -83,7 +83,6 @@ TEST_PROGRAM("cilium-core", "bpf_xdp.o", "xdp/tail", "tail_drop_notify", 12)
 
 // ===========================================================================
 // Failure Cause Group: VerifierTypeTracking
-// Group size: 36 tests (36 expected_failure, 0 skip).
 // Root cause:
 //   State refinement loses precise register type information across specific control-flow merges, so a pointer or
 //   scalar register is later treated as an incompatible type.
@@ -310,7 +309,6 @@ TEST_SECTION_FAIL("cilium-core", "bpf_xdp.o", ".text", verify_test::VerifyIssueK
 
 // ===========================================================================
 // Failure Cause Group: VerifierBoundsTracking
-// Group size: 22 tests (18 expected_failure, 0 skip).
 // Root cause:
 //   Numeric range reasoning is too coarse for dependent bounds, so safe accesses fail range checks (packet size,
 //   stack window, map value window).
@@ -443,7 +441,6 @@ TEST_PROGRAM_FAIL(
 
 // ===========================================================================
 // Failure Cause Group: VerifierStackInitialization
-// Group size: 4 tests (4 expected_failure, 0 skip).
 // Root cause:
 //   Stack byte initialization tracking misses writes or invalidates facts too aggressively, so reads are reported as
 //   non-numeric or uninitialized.
@@ -481,7 +478,6 @@ TEST_PROGRAM_FAIL("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_nodeport_na
 
 // ===========================================================================
 // Failure Cause Group: VerifierMapTyping
-// Group size: 1 tests (1 expected_failure, 0 skip).
 // Root cause:
 //   Map key or value region typing cannot prove scalar compatibility for helper arguments in these flows.
 // Representative example:
@@ -500,7 +496,6 @@ TEST_SECTION_FAIL(
 
 // ===========================================================================
 // Failure Cause Group: VerifierNullability
-// Group size: 1 tests (1 expected_failure, 0 skip).
 // Root cause:
 //   Null-state tracking is conservative across paths, so values proven non-null on one path are reintroduced as
 //   maybe-null later.

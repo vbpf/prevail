@@ -61,7 +61,6 @@ TEST_PROGRAM("linux-selftests", "test_spin_lock.o", "tc", "lock_static_subprog_u
 
 // ===========================================================================
 // Failure Cause Group: VerifierTypeTracking
-// Group size: 28 tests (28 expected_failure, 0 skip).
 // Root cause:
 //   State refinement loses precise register type information across specific control-flow merges, so a pointer or
 //   scalar register is later treated as an incompatible type.
@@ -242,7 +241,6 @@ TEST_PROGRAM_FAIL("linux-selftests", "test_global_func_args.o", ".text", "foo", 
 
 // ===========================================================================
 // Failure Cause Group: VerifierBoundsTracking
-// Group size: 5 tests (5 expected_failure, 0 skip).
 // Root cause:
 //   Numeric range reasoning is too coarse for dependent bounds, so safe accesses fail range checks (packet size,
 //   stack window, map value window).
@@ -288,7 +286,6 @@ TEST_SECTION_FAIL("linux-selftests", "socket_cookie_prog.o", "sockops",
 
 // ===========================================================================
 // Failure Cause Group: VerifierNullability
-// Group size: 1 tests (1 expected_failure, 0 skip).
 // Root cause:
 //   Null-state tracking is conservative across paths, so values proven non-null on one path are reintroduced as
 //   maybe-null later.
@@ -307,7 +304,6 @@ TEST_SECTION_FAIL("linux-selftests", "test_spin_lock.o", "cgroup_skb/ingress",
 
 // ===========================================================================
 // Failure Cause Group: VerificationTimeout
-// Group size: 1 tests (0 expected_failure, 1 skip).
 // Root cause:
 //   Analysis does not converge in configured time on this workload.
 // Representative example:

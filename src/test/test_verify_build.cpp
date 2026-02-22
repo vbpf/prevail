@@ -49,7 +49,6 @@ TEST_SECTION_REJECT("build", "wronghelper.o", "xdp")
 
 // ===========================================================================
 // Failure Cause Group: VerifierTypeTracking
-// Group size: 8 tests (8 expected_failure, 0 skip).
 // Root cause:
 //   State refinement loses precise register type information across specific control-flow merges, so a pointer or
 //   scalar register is later treated as an incompatible type.
@@ -104,7 +103,6 @@ TEST_SECTION_FAIL("build", "tail_call_bad.o", "xdp_prog", verify_test::VerifyIss
 
 // ===========================================================================
 // Failure Cause Group: VerifierBoundsTracking
-// Group size: 6 tests (6 expected_failure, 0 skip).
 // Root cause:
 //   Numeric range reasoning is too coarse for dependent bounds, so safe accesses fail range checks (packet size,
 //   stack window, map value window).
@@ -152,7 +150,6 @@ TEST_SECTION_FAIL("build", "packet_overflow.o", "xdp", verify_test::VerifyIssueK
 
 // ===========================================================================
 // Failure Cause Group: VerifierStackInitialization
-// Group size: 3 tests (3 expected_failure, 0 skip).
 // Root cause:
 //   Stack byte initialization tracking misses writes or invalidates facts too aggressively, so reads are reported as
 //   non-numeric or uninitialized.
@@ -182,7 +179,6 @@ TEST_SECTION_FAIL("build", "ringbuf_uninit.o", ".text", verify_test::VerifyIssue
 
 // ===========================================================================
 // Failure Cause Group: VerifierPointerArithmetic
-// Group size: 1 tests (1 expected_failure, 0 skip).
 // Root cause:
 //   Pointer arithmetic rules are stricter than required for this pattern, rejecting arithmetic that should remain
 //   safely typed.
@@ -203,7 +199,6 @@ TEST_SECTION_FAIL(
 
 // ===========================================================================
 // Failure Cause Group: VerifierMapTyping
-// Group size: 4 tests (4 expected_failure, 0 skip).
 // Root cause:
 //   Map key or value region typing cannot prove scalar compatibility for helper arguments in these flows.
 // Representative example:
@@ -238,7 +233,6 @@ TEST_PROGRAM_FAIL("build", "global_func.o", ".text", "process_entry", 2,
 
 // ===========================================================================
 // Failure Cause Group: VerifierNullability
-// Group size: 1 tests (1 expected_failure, 0 skip).
 // Root cause:
 //   Null-state tracking is conservative across paths, so values proven non-null on one path are reintroduced as
 //   maybe-null later.
@@ -256,7 +250,6 @@ TEST_SECTION_FAIL("build", "nullmapref.o", "test", verify_test::VerifyIssueKind:
 
 // ===========================================================================
 // Failure Cause Group: VerifierContextModeling
-// Group size: 1 tests (1 expected_failure, 0 skip).
 // Root cause:
 //   Platform context model does not expose offset semantics expected by the program, so accesses are rejected.
 // Representative example:

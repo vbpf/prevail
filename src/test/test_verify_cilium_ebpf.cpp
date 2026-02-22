@@ -122,7 +122,6 @@ TEST_PROGRAM("cilium-ebpf", "variables-el.elf", "socket", "set_vars", 8)
 
 // ===========================================================================
 // Failure Cause Group: VerifierTypeTracking
-// Group size: 17 tests (17 expected_failure, 0 skip).
 // Root cause:
 //   State refinement loses precise register type information across specific control-flow merges, so a pointer or
 //   scalar register is later treated as an incompatible type.
@@ -226,7 +225,6 @@ TEST_SECTION_FAIL("cilium-ebpf", "subprog_reloc-el.elf", "xdp", verify_test::Ver
 
 // ===========================================================================
 // Failure Cause Group: VerifierPointerArithmetic
-// Group size: 5 tests (5 expected_failure, 0 skip).
 // Root cause:
 //   Pointer arithmetic rules are stricter than required for this pattern, rejecting arithmetic that should remain
 //   safely typed.

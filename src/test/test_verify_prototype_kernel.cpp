@@ -39,7 +39,6 @@ TEST_SECTION("prototype-kernel", "xdp_vlan01_kern.o", "xdp_vlan_remove_outer2")
 
 // ===========================================================================
 // Failure Cause Group: VerifierTypeTracking
-// Group size: 2 tests (2 expected_failure, 0 skip).
 // Root cause:
 //   State refinement loses precise register type information across specific control-flow merges, so a pointer or
 //   scalar register is later treated as an incompatible type.
@@ -52,7 +51,13 @@ TEST_SECTION("prototype-kernel", "xdp_vlan01_kern.o", "xdp_vlan_remove_outer2")
 // ===========================================================================
 // expected failure (VerifierTypeTracking):
 //   diagnostic: 1: Invalid type (r2.type == number)
-TEST_SECTION_FAIL("prototype-kernel", "xdp_ddos01_blacklist_kern.o", ".text", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 1: Invalid type (r2.type == number)")
+TEST_SECTION_FAIL("prototype-kernel", "xdp_ddos01_blacklist_kern.o", ".text",
+                  verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 1: Invalid type (r2.type == number)")
 // expected failure (VerifierTypeTracking):
 //   diagnostic: 112: Invalid type (r1.type == map_fd)
-TEST_SECTION_FAIL("prototype-kernel", "xdp_ddos01_blacklist_kern.o", "xdp_prog", verify_test::VerifyIssueKind::VerifierTypeTracking, "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. Diagnostic: 112: Invalid type (r1.type == map_fd)")
+TEST_SECTION_FAIL("prototype-kernel", "xdp_ddos01_blacklist_kern.o", "xdp_prog",
+                  verify_test::VerifyIssueKind::VerifierTypeTracking,
+                  "Known verifier limitation: register type refinement is too imprecise in this control-flow pattern. "
+                  "Diagnostic: 112: Invalid type (r1.type == map_fd)")

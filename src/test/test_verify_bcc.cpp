@@ -13,7 +13,6 @@ TEST_SECTION("bcc", "tcpconnect.bpf.o", "kprobe/tcp_v6_connect")
 
 // ===========================================================================
 // Failure Cause Group: VerifierTypeTracking
-// Group size: 6 tests (6 expected_failure, 0 skip).
 // Root cause:
 //   State refinement loses precise register type information across specific control-flow merges, so a pointer or
 //   scalar register is later treated as an incompatible type.
@@ -58,7 +57,6 @@ TEST_SECTION_FAIL("bcc", "oomkill.bpf.o", "kprobe/oom_kill_process", verify_test
 
 // ===========================================================================
 // Failure Cause Group: VerifierBoundsTracking
-// Group size: 2 tests (2 expected_failure, 0 skip).
 // Root cause:
 //   Numeric range reasoning is too coarse for dependent bounds, so safe accesses fail range checks (packet size,
 //   stack window, map value window).

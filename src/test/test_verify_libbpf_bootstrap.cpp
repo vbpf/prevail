@@ -20,7 +20,6 @@ TEST_PROGRAM("libbpf-bootstrap", "usdt.bpf.o", ".text", "bpf_usdt_cookie", 3)
 
 // ===========================================================================
 // Failure Cause Group: VerifierTypeTracking
-// Group size: 4 tests (4 expected_failure, 0 skip).
 // Root cause:
 //   State refinement loses precise register type information across specific control-flow merges, so a pointer or
 //   scalar register is later treated as an incompatible type.
@@ -57,7 +56,6 @@ TEST_SECTION_FAIL("libbpf-bootstrap", "usdt.bpf.o", "usdt/libc.so.6:libc:setjmp"
 
 // ===========================================================================
 // Failure Cause Group: VerifierBoundsTracking
-// Group size: 8 tests (8 expected_failure, 0 skip).
 // Root cause:
 //   Numeric range reasoning is too coarse for dependent bounds, so safe accesses fail range checks (packet size,
 //   stack window, map value window).
@@ -116,7 +114,6 @@ TEST_SECTION_FAIL("libbpf-bootstrap", "task_iter.bpf.o", "iter/task",
 
 // ===========================================================================
 // Failure Cause Group: VerifierStackInitialization
-// Group size: 2 tests (2 expected_failure, 0 skip).
 // Root cause:
 //   Stack byte initialization tracking misses writes or invalidates facts too aggressively, so reads are reported as
 //   non-numeric or uninitialized.
