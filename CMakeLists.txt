@@ -178,19 +178,27 @@ set_target_properties(prevail PROPERTIES
 
 set(prevail_binary_dir "${prevail_source_dir}/bin" CACHE INTERNAL "")
 
-# Main executables
-add_executable(check "${prevail_source_dir}/src/main/check.cpp" "${prevail_source_dir}/src/main/linux_verifier.cpp")
-target_link_libraries(check PRIVATE prevail ${CMAKE_DL_LIBS})
+# Main executable: bin/prevail (with bin/check alias for backwards compatibility)
+add_executable(prevail-cli "${prevail_source_dir}/src/main/check.cpp" "${prevail_source_dir}/src/main/linux_verifier.cpp")
+set_target_properties(prevail-cli PROPERTIES OUTPUT_NAME "prevail")
+target_link_libraries(prevail-cli PRIVATE prevail ${CMAKE_DL_LIBS})
 if (CMAKE_CONFIGURATION_TYPES)
-  set_target_properties(check PROPERTIES
+  set_target_properties(prevail-cli PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY_DEBUG "${prevail_binary_dir}"
     RUNTIME_OUTPUT_DIRECTORY_RELEASE "${prevail_binary_dir}"
     RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${prevail_binary_dir}"
   )
 else ()
-  set_target_properties(check PROPERTIES
+  set_target_properties(prevail-cli PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${prevail_binary_dir}")
 endif ()
+# Transitional alias: bin/check -> bin/prevail
+set(_prevail_exe "$<TARGET_FILE_DIR:prevail-cli>/$<TARGET_FILE_NAME:prevail-cli>")
+set(_check_ext "$<TARGET_FILE_SUFFIX:prevail-cli>")
+add_custom_command(TARGET prevail-cli POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_prevail_exe}" "$<TARGET_FILE_DIR:prevail-cli>/check${_check_ext}"
+  COMMENT "Creating backwards-compatible bin/check alias"
+)
 
 # Tests
 if (prevail_ENABLE_TESTS)

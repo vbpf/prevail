@@ -12,4 +12,4 @@ WORKDIR /prevail/build
 RUN cmake .. -DCMAKE_BUILD_TYPE=Release
 RUN make -j $(nproc)
 WORKDIR /prevail
-ENTRYPOINT ["bin/check"]
+ENTRYPOINT ["bin/prevail"]

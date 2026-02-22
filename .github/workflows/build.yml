@@ -55,7 +55,7 @@ jobs:
         run: >
           valgrind --leak-check=full --errors-for-leak-kinds=all
           --show-leak-kinds=all --error-exitcode=1
-          bin/check ebpf-samples/cilium/bpf_xdp_snat_linux_v1.o 2/1
+          bin/prevail ebpf-samples/cilium/bpf_xdp_snat_linux_v1.o 2/1
 
   build_windows:
     strategy:

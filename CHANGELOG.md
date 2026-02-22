@@ -50,6 +50,8 @@ Major expansion of type system, platform modeling, and safety guarantees.
 - Simplify test framework: drop per-test diagnostic strings, reclassify
   genuinely-unsafe programs as rejections, document VerifyIssueKind enum
   centrally.
+- Rename main executable from `bin/check` to `bin/prevail`; `bin/check` is
+  kept as a backwards-compatible copy during the transition.
 - Bump external/libbtf, external/bpf_conformance, actions/checkout.
 
 ## v0.1.3

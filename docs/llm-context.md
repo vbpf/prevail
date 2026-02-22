@@ -31,7 +31,7 @@ Prevail logs show the abstract state at each program point. Here's how to interp
 
 ### 2.1 Log Structure
 
-When running `./bin/check <file> <section> -v`, the verbose output shows:
+When running `./bin/prevail <file> <section> -v`, the verbose output shows:
 
 ```text
 Pre-invariant : [
@@ -503,7 +503,7 @@ Run with `-v` flag for verbose output showing invariants at each step:
 Request the full disassembly to see surrounding instructions:
 
 ```bash
-./bin/check <elf-file> <section> --asm <disasm-file>
+./bin/prevail <elf-file> <section> --asm <disasm-file>
 ```
 
 ### Specific Invariant

@@ -21,7 +21,8 @@ Interval FiniteDomain::eval_interval(const Variable v, const int finite_width) c
 }
 
 static std::vector<LinearConstraint> assume_bit_cst_interval(const Condition::Op op, const bool is64,
-                                                             Interval dst_interval, Interval src_interval) {
+                                                             const Interval& dst_interval,
+                                                             const Interval& src_interval) {
     using namespace dsl_syntax;
     using Op = Condition::Op;
 

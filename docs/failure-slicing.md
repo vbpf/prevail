@@ -15,7 +15,7 @@ instructions.
 ## Quick Start
 
 ```bash
-./bin/check program.o section --failure-slice
+./bin/prevail program.o section --failure-slice
 ```
 
 Output includes:
@@ -78,16 +78,16 @@ This information is computed once during verification and reused for slicing.
 
 ```bash
 # Basic usage — shows first failure with filtered output
-./bin/check program.o section --failure-slice
+./bin/prevail program.o section --failure-slice
 
 # Control backward traversal depth (default: 200 worklist steps)
-./bin/check program.o section --failure-slice --failure-slice-depth 500
+./bin/prevail program.o section --failure-slice --failure-slice-depth 500
 
 # With simplified basic blocks (collapses sequential instructions)
-./bin/check program.o section --failure-slice --simplify
+./bin/prevail program.o section --failure-slice --simplify
 
 # Combined with other options
-./bin/check program.o section --failure-slice --line-info
+./bin/prevail program.o section --failure-slice --line-info
 ```
 
 **Default behavior:**
@@ -371,7 +371,7 @@ os << invariant_filter(nullptr) << domain;
 ### Simple Case: Null Pointer After Map Lookup
 
 ```bash
-./bin/check ebpf-samples/build/nullmapref.o test --failure-slice
+./bin/prevail ebpf-samples/build/nullmapref.o test --failure-slice
 ```
 
 ```text
@@ -392,7 +392,7 @@ possible.
 ### Complex Case: Lost Correlations
 
 ```bash
-./bin/check ebpf-samples/cilium/bpf_xdp_dsr_linux.o 2/20 --failure-slice
+./bin/prevail ebpf-samples/cilium/bpf_xdp_dsr_linux.o 2/20 --failure-slice
 ```
 
 ```text

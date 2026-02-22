@@ -132,7 +132,7 @@ def parse_args() -> argparse.Namespace:
         description="Generate a complete project/object/section/program inventory from ebpf-samples."
     )
     parser.add_argument("--samples-root", default="ebpf-samples", help="Root directory to scan for ELF files.")
-    parser.add_argument("--check-bin", default="bin/check", help="Path to prevail check executable.")
+    parser.add_argument("--check-bin", default="bin/prevail", help="Path to prevail executable.")
     parser.add_argument("--output", default="-", help="Output JSON path, or '-' for stdout.")
     parser.add_argument(
         "--jobs",

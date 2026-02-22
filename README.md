@@ -98,7 +98,7 @@ docker run --privileged -it prevail ebpf-samples/linux/cpustat_kern.o --domain=l
 ### Example:
 
 ```
-$ bin/check ebpf-samples/cilium/bpf_lxc.o 2/1
+$ bin/prevail ebpf-samples/cilium/bpf_lxc.o 2/1
 1,0.014153,6080
 ```
 
@@ -114,7 +114,7 @@ The output is three comma-separated values:
 PREVAIL is a new eBPF verifier based on abstract interpretation.
 
 
-bin/check [OPTIONS] path [section] [function]
+bin/prevail [OPTIONS] path [section] [function]
 
 
 POSITIONALS:
@@ -164,7 +164,7 @@ The cfg can be viewed using `dot` and the standard PDF viewer:
 
 ```
 sudo apt install graphviz
-bin/check ebpf-samples/cilium/bpf_lxc.o 2/1 --dot cfg.dot --domain=stats
+bin/prevail ebpf-samples/cilium/bpf_lxc.o 2/1 --dot cfg.dot --domain=stats
 dot -Tpdf cfg.dot > cfg.pdf
 ```
 
@@ -175,5 +175,5 @@ dot -Tpdf cfg.dot > cfg.pdf
 To run the Linux verifier, you must use `sudo`:
 
 ```
-sudo bin/check ebpf-samples/linux/cpustat_kern.o tracepoint/power/cpu_idle --domain=linux
+sudo bin/prevail ebpf-samples/linux/cpustat_kern.o tracepoint/power/cpu_idle --domain=linux
 ```

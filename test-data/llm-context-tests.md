@@ -18,7 +18,7 @@ Other samples are pre-built in `ebpf-samples/cilium/`, `ebpf-samples/prototype-k
 In a GitHub Copilot CLI session:
 
 ```text
-Using docs/llm-context.md, run ./bin/check <sample> <section> -v and diagnose the failure.
+Using docs/llm-context.md, run ./bin/prevail <sample> <section> -v and diagnose the failure.
 ```
 
 The LLM should:
@@ -56,7 +56,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 1: Null Pointer After Map Lookup
 
 ```bash
-./bin/check ebpf-samples/build/nullmapref.o test -v
+./bin/prevail ebpf-samples/build/nullmapref.o test -v
 ```
 
 **Expected error**: `Possible null access (valid_access(r0.offset, width=4) for write)`
@@ -69,7 +69,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 2: Unbounded Packet Access
 
 ```bash
-./bin/check ebpf-samples/build/packet_overflow.o xdp -v
+./bin/prevail ebpf-samples/build/packet_overflow.o xdp -v
 ```
 
 **Expected error**: `Upper bound must be at most packet_size (valid_access(r2.offset, width=4) for read)`
@@ -82,7 +82,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 3: Uninitialized Stack Memory
 
 ```bash
-./bin/check ebpf-samples/build/ringbuf_uninit.o .text -v
+./bin/prevail ebpf-samples/build/ringbuf_uninit.o .text -v
 ```
 
 **Expected error**: `Stack content is not numeric (valid_access(r2.offset, width=r3) for read)`
@@ -95,7 +95,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 4: Pointer Exposure to Map
 
 ```bash
-./bin/check ebpf-samples/build/exposeptr.o .text -v
+./bin/prevail ebpf-samples/build/exposeptr.o .text -v
 ```
 
 **Expected error**: `Illegal map update with a non-numerical value [4088-4096) (within(r3:value_size(r1)))`
@@ -108,7 +108,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 5: Nonzero Context Offset
 
 ```bash
-./bin/check ebpf-samples/build/ctxoffset.o sockops -v
+./bin/prevail ebpf-samples/build/ctxoffset.o sockops -v
 ```
 
 **Expected error**: `Nonzero context offset (r1.ctx_offset == 0)`
@@ -121,7 +121,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 6: Map Value Overrun
 
 ```bash
-./bin/check ebpf-samples/build/mapvalue-overrun.o .text -v
+./bin/prevail ebpf-samples/build/mapvalue-overrun.o .text -v
 ```
 
 **Expected error**: `Upper bound must be at most r1.shared_region_size (valid_access(r1.offset, width=8) for read)`
@@ -134,7 +134,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 7: Pointer Arithmetic with Non-Number
 
 ```bash
-./bin/check ebpf-samples/build/ptr_arith.o xdp -v
+./bin/prevail ebpf-samples/build/ptr_arith.o xdp -v
 ```
 
 **Expected error**: `Invalid type (r<N>.type == number)`
@@ -147,7 +147,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 8: Division by Zero
 
 ```bash
-./bin/check ebpf-samples/build/divzero.o test -v --no-division-by-zero
+./bin/prevail ebpf-samples/build/divzero.o test -v --no-division-by-zero
 ```
 
 **Expected error**: `Possible division by zero`
@@ -161,7 +161,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 9: Infinite Loop (Unbounded)
 
 ```bash
-./bin/check ebpf-samples/build/infinite_loop.o test -v --termination
+./bin/prevail ebpf-samples/build/infinite_loop.o test -v --termination
 ```
 
 **Expected error**: `Could not prove termination` or loop counter shows `[1, +oo]`
@@ -175,7 +175,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 10: Bounded Loop (Compiler Transformation)
 
 ```bash
-./bin/check ebpf-samples/build/bounded_loop.o test -v --termination
+./bin/prevail ebpf-samples/build/bounded_loop.o test -v --termination
 ```
 
 **Expected error**: `Could not prove termination`
@@ -189,7 +189,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 11: Lost Correlations in Computed Branches
 
 ```bash
-./bin/check ebpf-samples/cilium/bpf_xdp_dsr_linux.o 2/20 -v
+./bin/prevail ebpf-samples/cilium/bpf_xdp_dsr_linux.o 2/20 -v
 ```
 
 **Expected error**: `Upper bound must be at most packet_size`
@@ -202,7 +202,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 12: Bad Map Pointer Type
 
 ```bash
-./bin/check ebpf-samples/build/badmapptr.o test -v
+./bin/prevail ebpf-samples/build/badmapptr.o test -v
 ```
 
 **Expected error**: `Invalid type (r1.type in {number, ctx, stack, packet, shared})`
@@ -215,7 +215,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 13: Bad Helper Call (Stack Overflow)
 
 ```bash
-./bin/check ebpf-samples/build/badhelpercall.o .text -v
+./bin/prevail ebpf-samples/build/badhelpercall.o .text -v
 ```
 
 **Expected error**: `Upper bound must be at most EBPF_TOTAL_STACK_SIZE (valid_access(r1.offset, width=r2) for write)`
@@ -228,7 +228,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 14: Dependent Packet Read (Lost Correlation)
 
 ```bash
-./bin/check ebpf-samples/build/dependent_read.o xdp -v
+./bin/prevail ebpf-samples/build/dependent_read.o xdp -v
 ```
 
 **Expected error**: `Upper bound must be at most packet_size (valid_access(r1.offset, width=4) for read)`
@@ -241,7 +241,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 15: Pointer Exposure to Map (Key Variant)
 
 ```bash
-./bin/check ebpf-samples/build/exposeptr2.o .text -v
+./bin/prevail ebpf-samples/build/exposeptr2.o .text -v
 ```
 
 **Expected error**: `Illegal map update with a non-numerical value [4088-4096) (within(r2:key_size(r1)))`
@@ -254,7 +254,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 16: Stale Packet Pointer After Reallocation
 
 ```bash
-./bin/check ebpf-samples/build/packet_reallocate.o socket_filter -v
+./bin/prevail ebpf-samples/build/packet_reallocate.o socket_filter -v
 ```
 
 **Expected error**: `Invalid type (r7.type in {ctx, stack, packet, shared})`
@@ -267,7 +267,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 17: Wrong Map Type for Tail Call
 
 ```bash
-./bin/check ebpf-samples/build/tail_call_bad.o xdp_prog -v
+./bin/prevail ebpf-samples/build/tail_call_bad.o xdp_prog -v
 ```
 
 **Expected error**: `Invalid type (r2.type == map_fd_programs)`
@@ -282,7 +282,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 18: Map Lookup After Conditional (xdp_ddos, xdp_prog)
 
 ```bash
-./bin/check ebpf-samples/prototype-kernel/xdp_ddos01_blacklist_kern.o xdp_prog -v
+./bin/prevail ebpf-samples/prototype-kernel/xdp_ddos01_blacklist_kern.o xdp_prog -v
 ```
 
 **Expected error**: `Invalid type (r1.type == map_fd)`
@@ -295,7 +295,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 19: Pointer Arithmetic Type Error (xdp_ddos, .text)
 
 ```bash
-./bin/check ebpf-samples/prototype-kernel/xdp_ddos01_blacklist_kern.o .text -v
+./bin/prevail ebpf-samples/prototype-kernel/xdp_ddos01_blacklist_kern.o .text -v
 ```
 
 **Expected error**: `Invalid type (r2.type == number)`
@@ -308,7 +308,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 20: Map-in-Map Lookup Type
 
 ```bash
-./bin/check ebpf-samples/linux/test_map_in_map_kern.o "kprobe/sys_connect" -v
+./bin/prevail ebpf-samples/linux/test_map_in_map_kern.o "kprobe/sys_connect" -v
 ```
 
 **Expected error**: `Invalid type (r1.type == map_fd)`
@@ -321,7 +321,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 21: Non-Numerical Map Key (bpf_sock)
 
 ```bash
-./bin/check ebpf-samples/cilium-core/bpf_sock.o "cgroup/recvmsg6" -v
+./bin/prevail ebpf-samples/cilium-core/bpf_sock.o "cgroup/recvmsg6" -v
 ```
 
 **Expected error**: `Illegal map update with a non-numerical value [4048-4072) (within(r2:key_size(r1)))`
@@ -334,7 +334,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 22: Unbounded Packet Access (bpf_xdp core)
 
 ```bash
-./bin/check ebpf-samples/cilium-core/bpf_xdp.o "xdp/entry" -v
+./bin/prevail ebpf-samples/cilium-core/bpf_xdp.o "xdp/entry" -v
 ```
 
 **Expected error**: `Upper bound must be at most packet_size (valid_access(r5.offset, width=1) for read)`
@@ -347,7 +347,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 23: Cilium DSR — Packet Write (2/7)
 
 ```bash
-./bin/check ebpf-samples/cilium/bpf_xdp_dsr_linux.o 2/7 -v
+./bin/prevail ebpf-samples/cilium/bpf_xdp_dsr_linux.o 2/7 -v
 ```
 
 **Expected error**: `Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)`
@@ -360,7 +360,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 24: Cilium DSR — Packet Write (2/10)
 
 ```bash
-./bin/check ebpf-samples/cilium/bpf_xdp_dsr_linux.o 2/10 -v
+./bin/prevail ebpf-samples/cilium/bpf_xdp_dsr_linux.o 2/10 -v
 ```
 
 **Expected error**: `Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)`
@@ -373,7 +373,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 25: Cilium DSR — Packet Write (2/17)
 
 ```bash
-./bin/check ebpf-samples/cilium/bpf_xdp_dsr_linux.o 2/17 -v
+./bin/prevail ebpf-samples/cilium/bpf_xdp_dsr_linux.o 2/17 -v
 ```
 
 **Expected error**: `Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)`
@@ -386,7 +386,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 26: Cilium DSR — Packet Read (2/18)
 
 ```bash
-./bin/check ebpf-samples/cilium/bpf_xdp_dsr_linux.o 2/18 -v
+./bin/prevail ebpf-samples/cilium/bpf_xdp_dsr_linux.o 2/18 -v
 ```
 
 **Expected error**: `Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)`
@@ -399,7 +399,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 27: Cilium DSR — Packet Write (2/21)
 
 ```bash
-./bin/check ebpf-samples/cilium/bpf_xdp_dsr_linux.o 2/21 -v
+./bin/prevail ebpf-samples/cilium/bpf_xdp_dsr_linux.o 2/21 -v
 ```
 
 **Expected error**: `Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for write)`
@@ -412,7 +412,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 28: Cilium SNAT — Packet Read (2/7)
 
 ```bash
-./bin/check ebpf-samples/cilium/bpf_xdp_snat_linux.o 2/7 -v
+./bin/prevail ebpf-samples/cilium/bpf_xdp_snat_linux.o 2/7 -v
 ```
 
 **Expected error**: `Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)`
@@ -425,7 +425,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 29: Cilium SNAT — Packet Read (2/10)
 
 ```bash
-./bin/check ebpf-samples/cilium/bpf_xdp_snat_linux.o 2/10 -v
+./bin/prevail ebpf-samples/cilium/bpf_xdp_snat_linux.o 2/10 -v
 ```
 
 **Expected error**: `Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)`
@@ -438,7 +438,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 30: Cilium SNAT — Packet Read (2/17)
 
 ```bash
-./bin/check ebpf-samples/cilium/bpf_xdp_snat_linux.o 2/17 -v
+./bin/prevail ebpf-samples/cilium/bpf_xdp_snat_linux.o 2/17 -v
 ```
 
 **Expected error**: `Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)`
@@ -451,7 +451,7 @@ Skip any test marked as SLOW unless specifically requested.
 ### Test 31: Cilium SNAT — Packet Read (2/18)
 
 ```bash
-./bin/check ebpf-samples/cilium/bpf_xdp_snat_linux.o 2/18 -v
+./bin/prevail ebpf-samples/cilium/bpf_xdp_snat_linux.o 2/18 -v
 ```
 
 **Expected error**: `Upper bound must be at most packet_size (valid_access(r4.offset, width=2) for read)`
@@ -468,7 +468,7 @@ These tests take significantly longer to run. Skip unless specifically requested
 ### Test 32: Cilium DSR — Packet Access (2/15) (SLOW)
 
 ```bash
-./bin/check ebpf-samples/cilium/bpf_xdp_dsr_linux.o 2/15 -v
+./bin/prevail ebpf-samples/cilium/bpf_xdp_dsr_linux.o 2/15 -v
 ```
 
 **Expected error**: `Upper bound must be at most packet_size (valid_access(r5.offset, width=4) for read)`
@@ -481,7 +481,7 @@ These tests take significantly longer to run. Skip unless specifically requested
 ### Test 33: Cilium DSR — Type Error (2/16) (SLOW)
 
 ```bash
-./bin/check ebpf-samples/cilium/bpf_xdp_dsr_linux.o 2/16 -v
+./bin/prevail ebpf-samples/cilium/bpf_xdp_dsr_linux.o 2/16 -v
 ```
 
 **Expected error**: `Upper bound must be at most packet_size (valid_access(r3.offset, width=2) for read)`
@@ -494,7 +494,7 @@ These tests take significantly longer to run. Skip unless specifically requested
 ### Test 34: Cilium DSR — Packet Access (2/19) (SLOW)
 
 ```bash
-./bin/check ebpf-samples/cilium/bpf_xdp_dsr_linux.o 2/19 -v
+./bin/prevail ebpf-samples/cilium/bpf_xdp_dsr_linux.o 2/19 -v
 ```
 
 **Expected error**: `Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)`
@@ -507,7 +507,7 @@ These tests take significantly longer to run. Skip unless specifically requested
 ### Test 35: Cilium DSR — Type Error (2/24) (SLOW)
 
 ```bash
-./bin/check ebpf-samples/cilium/bpf_xdp_dsr_linux.o 2/24 -v
+./bin/prevail ebpf-samples/cilium/bpf_xdp_dsr_linux.o 2/24 -v
 ```
 
 **Expected error**: `Upper bound must be at most packet_size (valid_access(r5.offset, width=2) for read)`
@@ -520,7 +520,7 @@ These tests take significantly longer to run. Skip unless specifically requested
 ### Test 36: Cilium SNAT — Packet Access (2/15) (SLOW)
 
 ```bash
-./bin/check ebpf-samples/cilium/bpf_xdp_snat_linux.o 2/15 -v
+./bin/prevail ebpf-samples/cilium/bpf_xdp_snat_linux.o 2/15 -v
 ```
 
 **Expected error**: `Upper bound must be at most packet_size (valid_access(r5.offset, width=4) for read)`
@@ -533,7 +533,7 @@ These tests take significantly longer to run. Skip unless specifically requested
 ### Test 37: Cilium SNAT — Type Error (2/16) (SLOW)
 
 ```bash
-./bin/check ebpf-samples/cilium/bpf_xdp_snat_linux.o 2/16 -v
+./bin/prevail ebpf-samples/cilium/bpf_xdp_snat_linux.o 2/16 -v
 ```
 
 **Expected error**: `Upper bound must be at most packet_size (valid_access(r3.offset, width=2) for read)`
@@ -546,7 +546,7 @@ These tests take significantly longer to run. Skip unless specifically requested
 ### Test 38: Cilium SNAT — Packet Access (2/19) (SLOW)
 
 ```bash
-./bin/check ebpf-samples/cilium/bpf_xdp_snat_linux.o 2/19 -v
+./bin/prevail ebpf-samples/cilium/bpf_xdp_snat_linux.o 2/19 -v
 ```
 
 **Expected error**: `Upper bound must be at most packet_size (valid_access(r4.offset, width=4) for read)`
@@ -559,7 +559,7 @@ These tests take significantly longer to run. Skip unless specifically requested
 ### Test 39: Cilium SNAT — Type Error (2/24) (SLOW)
 
 ```bash
-./bin/check ebpf-samples/cilium/bpf_xdp_snat_linux.o 2/24 -v
+./bin/prevail ebpf-samples/cilium/bpf_xdp_snat_linux.o 2/24 -v
 ```
 
 **Expected error**: `Upper bound must be at most packet_size (valid_access(r5.offset, width=2) for read)`

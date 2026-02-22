@@ -60,6 +60,7 @@ src/crab_utils/heap.hpp
 \.gitattributes
 \.github/workflows/build.yml
 \.github/workflows/codeql-analysis.yml
+\.github/workflows/release.yaml
 \.gitignore
 \.gitmodules
 Dockerfile

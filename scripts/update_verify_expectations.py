@@ -110,11 +110,11 @@ def preserve_reason(current_reason: str | None) -> bool:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Refresh section-level verify expectations in test-data/elf_inventory.json using bin/check."
+        description="Refresh section-level verify expectations in test-data/elf_inventory.json using bin/prevail."
     )
     parser.add_argument("--inventory", default="test-data/elf_inventory.json", help="Inventory JSON path.")
     parser.add_argument("--samples-root", default="ebpf-samples", help="Path to samples root.")
-    parser.add_argument("--check-bin", default="bin/check", help="Path to check executable.")
+    parser.add_argument("--check-bin", default="bin/prevail", help="Path to prevail executable.")
     parser.add_argument(
         "--jobs",
         type=int,

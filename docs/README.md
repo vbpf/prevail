@@ -114,7 +114,7 @@ src/
 ## Getting Started
 
 1. **Build the verifier**: See [Building](building.md)
-2. **Run on an ELF file**: `./bin/check path/to/program.o section/function`
+2. **Run on an ELF file**: `./bin/prevail path/to/program.o section/function`
 3. **Understand the output**: The verifier prints invariants and any errors found
 
 ## Further Reading
@@ -130,11 +130,11 @@ When verification fails, you can use an LLM to help diagnose the issue.
 **Quick start** (with GitHub Copilot CLI):
 
 ```text
-Using docs/llm-context.md, run ./bin/check <your-program.o> <section> -v and diagnose the failure.
+Using docs/llm-context.md, run ./bin/prevail <your-program.o> <section> -v and diagnose the failure.
 ```
 
 **Manual approach** (with any LLM):
-1. Run the verifier with verbose output: `./bin/check program.o section -v`
+1. Run the verifier with verbose output: `./bin/prevail program.o section -v`
 2. Copy the contents of `docs/llm-context.md` into your LLM conversation
 3. Paste the verification error and ask for diagnosis
 
@@ -144,7 +144,7 @@ See [llm-context.md](llm-context.md) for the context document and [test-data/llm
 
 When you discover a verification failure that isn't covered by the existing patterns in Section 4 of `llm-context.md`, please contribute it:
 
-1. **Identify the pattern**: Run `./bin/check <sample> <section> -v` and capture the error message and pre-invariant
+1. **Identify the pattern**: Run `./bin/prevail <sample> <section> -v` and capture the error message and pre-invariant
 2. **Add to Section 4**: Create a new subsection (e.g., `### 4.12 <Pattern Name>`) following the existing format:
    - **Symptom**: The error message text
    - **Red Flags**: Key invariant properties that indicate this failure

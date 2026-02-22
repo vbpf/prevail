@@ -66,7 +66,7 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
 
 # Binaries are in bin/
-./bin/check --help
+./bin/prevail --help
 ```
 
 ### Windows (Command Line)

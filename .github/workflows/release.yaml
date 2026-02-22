@@ -64,14 +64,14 @@ jobs:
       - name: Package (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
-          cp bin/check prevail
+          cp bin/prevail prevail
           tar -czvf prevail-${{ runner.os }}-${{ runner.arch }}.tar.gz prevail README.md LICENSE.txt LICENSE-Apache-2.0.txt
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Copy-Item bin\check.exe prevail.exe
+          Copy-Item bin\prevail.exe prevail.exe
           Compress-Archive -Path prevail.exe, README.md, LICENSE.txt, LICENSE-Apache-2.0.txt -DestinationPath prevail-${{ runner.os }}-${{ runner.arch }}.zip
 
       # 5. Upload to GitHub Release
