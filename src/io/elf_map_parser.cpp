@@ -286,8 +286,9 @@ ElfGlobalData extract_global_data(const parse_params_t& params, const ELFIO::elf
     if (has_btf_maps) {
         try {
             return parse_btf_section(params, reader);
-        } catch (const UnmarshalError&) {
-            // If BTF-defined maps can't be decoded, fall back to section-based map descriptors.
+        } catch (const UnmarshalError& e) {
+            // BTF-defined maps can't be decoded; fall back to section-based map descriptors.
+            std::cerr << "BTF map parsing failed, falling back to section-based maps: " << e.what() << std::endl;
         }
         return parse_map_sections(params, reader, symbols);
     }
