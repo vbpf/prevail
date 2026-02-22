@@ -249,13 +249,19 @@ void EbpfTransformer::operator()(const Assume& s) {
                 }
             });
         } else if (dom.state.entail_type(reg_type(src_reg), T_NUM)) {
-            // Different types but r2 is a number — apply only numeric constraints.
+            // Different types but src is a number — apply only numeric constraints.
+            // This does not split dst by concrete type via join_over_types: the numeric
+            // constraints are applied to the global state across all type possibilities.
+            // This is sound (pointer registers carry meaningful svalue/uvalue bounds)
+            // but less precise than a type-split approach for non-numeric type paths.
             for (const LinearConstraint& cst :
                  dom.state.values->assume_cst_reg(cond.op, cond.is64, dst.svalue, dst.uvalue, src.svalue, src.uvalue)) {
                 dom.state.values.add_constraint(cst);
             }
         } else {
-            // Different types and r2 is not a number — should have been caught by checker.
+            // Different types and src is not a number.
+            // The checker may not have seen this Assume (e.g., implicit Assume or CFG-split edge),
+            // so go to bottom conservatively.
             dom.state.set_to_bottom();
         }
     } else {
