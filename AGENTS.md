@@ -10,7 +10,7 @@
 ## Quick project facts
 - **Language & standards:** Core verifier is implemented in modern C++20 (see `CMakeLists.txt`).
 - **Primary deliverables:**
-  - `check`: command-line verifier for eBPF object files.
+  - `prevail`: command-line verifier for eBPF object files.
   - `tests`: Catch2-based regression suite.
   - `run_yaml`: YAML test case runner.
 - **Third-party code:** resides under `external/` and is treated as vendored dependencies. Do not edit these unless explicitly asked.
@@ -39,7 +39,7 @@
    ```
 4. **Spot-check the verifier** against bundled samples:
    ```bash
-   ./prevail ebpf-samples/cilium/bpf_lxc.o 2/1
+   ./bin/prevail ebpf-samples/cilium/bpf_lxc.o 2/1
    ```
 5. **Capture reasoning.** When a change introduces or relies on a new invariant, add a targeted regression test and document the invariant in code comments or `docs/` notes so future auditors can reconstruct the argument.
 

@@ -169,16 +169,19 @@ Separating assertions from semantics enables:
 
 ## Entry Points
 
-### CLI Tool: `check`
+### CLI Tool
 
-**File**: `src/main/check.cpp`
+**File**: `src/main.cpp`
 
 ```bash
 ./prevail <elf-file> <section>/<function> [options]
 ```
 
 Options:
-- `--domain`: Choose abstract domain (e.g., `zoneCrab`)
+- `-q`/`--quiet`: No stdout output, exit code only
+- `--cfg`: Print control-flow graph and exit
+- `--failure-slice`: Print causal trace for failures
+- `-v`: Print invariants and first failure
 - `--no-simplify`: Don't merge basic blocks
 - `--strict`: Require explicit map bounds
 

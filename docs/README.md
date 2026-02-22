@@ -93,7 +93,7 @@ Prevail verifies that eBPF programs:
 
 ```text
 src/
-├── main/           # Entry points (check.cpp - CLI verifier)
+├── main.cpp        # CLI entry point
 ├── ir/             # Intermediate representation
 │   ├── syntax.hpp  # Instruction definitions
 │   └── cfg_builder.cpp

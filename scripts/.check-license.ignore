@@ -47,8 +47,6 @@ external/catch.hpp
 # Files using BSD-3-Clause
 external/CLI11/CLI11.hpp
 
-# Files using CC-BY-SA-2.5 license
-src/main/memsize_linux.hpp
 
 # Files with custom licenses embedded
 src/crab_utils/heap.hpp

@@ -88,9 +88,6 @@ cmake --build build
 ```bash
 docker build -t prevail .
 docker run -it prevail ebpf-samples/cilium/bpf_lxc.o 2/1
-1,0.009812,4132
-# To run the Linux verifier you'll need a privileged container:
-docker run --privileged -it prevail ebpf-samples/linux/cpustat_kern.o --domain=linux
 ```
 
 </details>
@@ -99,18 +96,12 @@ docker run --privileged -it prevail ebpf-samples/linux/cpustat_kern.o --domain=l
 
 ```
 $ bin/prevail ebpf-samples/cilium/bpf_lxc.o 2/1
-1,0.014153,6080
+PASS: 2/1
 ```
-
-The output is three comma-separated values:
-
-* 1 or 0, for "pass" and "fail" respectively
-* The runtime of the fixpoint algorithm (in seconds)
-* The peak memory consumption, in kb, as reflected by the resident-set size (rss)
 
 <details><summary>Usage</summary>
 
-```
+```text
 PREVAIL is a new eBPF verifier based on abstract interpretation.
 
 
@@ -127,8 +118,8 @@ OPTIONS:
           --section SECTION   Section to analyze
           --function FUNCTION Function to analyze
   -l                          List programs
-          --domain DOMAIN:{stats,linux,zoneCrab,cfg} [zoneCrab]
-                              Abstract domain
+  -q,     --quiet             No stdout output, exit code only
+          --cfg               Print control-flow graph and exit
 
 Features:
           --termination, --no-verify-termination{false}
@@ -144,14 +135,16 @@ Features:
 Verbosity:
           --simplify, --no-simplify{false}
                               Simplify the display of the CFG by merging chains of instructions
-                              into a single basic block. Default: enabled
+                              into a single basic block. Default: enabled (disabled with
+                              --failure-slice)
           --line-info         Print line information
           --print-btf-types   Print BTF types
-          --failure-slice     Print minimal failure diagnostic (causal trace)
-          --failure-slice-depth N
-                              Maximum backward traversal steps (default: 200)
   -v                          Print invariants and first failure
   -f                          Print first failure
+          --failure-slice     Print minimal failure slices showing only instructions that
+                              contributed to errors
+          --failure-slice-depth UINT
+                              Maximum backward steps for failure slicing (default: 200)
 
 CFG output:
           --asm FILE          Print disassembly to FILE
@@ -164,16 +157,8 @@ The cfg can be viewed using `dot` and the standard PDF viewer:
 
 ```
 sudo apt install graphviz
-bin/prevail ebpf-samples/cilium/bpf_lxc.o 2/1 --dot cfg.dot --domain=stats
+bin/prevail ebpf-samples/cilium/bpf_lxc.o 2/1 --dot cfg.dot
 dot -Tpdf cfg.dot > cfg.pdf
 ```
 
 </details>
-
-## Testing the Linux verifier
-
-To run the Linux verifier, you must use `sudo`:
-
-```
-sudo bin/prevail ebpf-samples/linux/cpustat_kern.o tracepoint/power/cpu_idle --domain=linux
-```

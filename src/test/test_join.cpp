@@ -215,9 +215,6 @@ TEST_CASE("join of type ranges with value ranges", "[join][lattice]") {
 
 TEST_CASE("join regression from 74+103 to 104", "[join][lattice]") {
     using namespace dsl_syntax;
-    // distillation of running:
-    // ./check --no-simplify ebpf-samples/linux/test_map_in_map_kern.o kprobe/sys_connect - v
-
     require_join(
         {{r0_type, TypeSet{T_MAP}}, {r6_type, TypeSet{T_MAP}}, {r7_type, TypeSet{T_NUM}}, {r10_type, TypeSet{T_STACK}}},
         {

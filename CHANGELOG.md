@@ -3,7 +3,7 @@
 ## v0.2.0 (2026-02-22)
 
 Major expansion of type system, platform modeling, and safety guarantees.
-27 commits since v0.1.3.
+34 commits since v0.1.3.
 
 ### Type system
 
@@ -36,22 +36,32 @@ Major expansion of type system, platform modeling, and safety guarantees.
   domain (#960).
 - Propagate alloc_mem_size through helpers and decompose kfunc flags.
 
+### Performance
+
+- >4× faster verification on large programs through splitdbm graph
+  internals modernization and zone domain optimizations (#1017).
+
 ### Diagnostics
 
 - Add failure slicing: `--failure-slice` prints a minimal causal trace
   from the first verification error back to its root cause.
+- Human-friendly CLI output: `PASS: section/function` / `FAIL: section/function`
+  with first error and hint line, replacing the old CSV format.
+- Add `-q`/`--quiet` flag (exit code only, no stdout).
 
 ### Infrastructure
 
 - Overhaul ELF loader and bump ebpf-samples (#1026).
 - Handle invalid BTF map metadata gracefully (#1034).
-- Modernize splitdbm graph internals (#1017).
 - Add MSVC debug assert handler (#1018).
 - Simplify test framework: drop per-test diagnostic strings, reclassify
   genuinely-unsafe programs as rejections, document VerifyIssueKind enum
   centrally.
-- Rename main executable from `bin/check` to `bin/prevail`; `bin/check` is
-  kept as a backwards-compatible copy during the transition.
+- Rename main executable from `bin/check` to `bin/prevail`.
+- Remove dead code: `--domain` option (`linux`, `stats` paths),
+  `linux_verifier`, `memsize` helpers, `collect_stats`, stale benchmark
+  scripts.
+- Move CLI entry point from `src/main/check.cpp` to `src/main.cpp`.
 - Bump external/libbtf, external/bpf_conformance, actions/checkout.
 
 ## v0.1.3

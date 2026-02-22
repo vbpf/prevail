@@ -6,12 +6,6 @@
 
 #include "ebpf_verifier.hpp"
 #include "io/elf_loader.hpp"
-#ifdef _WIN32
-#include "memsize_windows.hpp"
-#else
-#include "memsize_linux.hpp"
-#endif
-#include "linux_verifier.hpp"
 
 // Avoid affecting other headers by macros.
 #include <CLI11/CLI11.hpp>
@@ -20,22 +14,6 @@ using std::string;
 using std::vector;
 
 using namespace prevail;
-
-// FNV-1a 64-bit over arbitrary bytes
-static uint64_t fnv1a64(const std::string_view bytes) {
-    uint64_t h = 1469598103934665603ull; // offset basis
-    for (const unsigned char c : bytes) {
-        h ^= c;
-        h *= 1099511628211ull; // FNV prime
-    }
-    return h;
-}
-
-static uint64_t hash(const RawProgram& raw_prog) {
-    const auto start = reinterpret_cast<const char*>(raw_prog.prog.data());
-    const size_t len = raw_prog.prog.size() * sizeof(EbpfInst);
-    return fnv1a64(std::string_view{start, len});
-}
 
 static const std::map<std::string, bpf_conformance_groups_t> conformance_groups = {
     {"atomic32", bpf_conformance_groups_t::atomic32}, {"atomic64", bpf_conformance_groups_t::atomic64},
@@ -56,6 +34,14 @@ static std::set<std::string> get_conformance_group_names() {
         result.insert(name);
     }
     return result;
+}
+
+/// Format the program label as "section/function" or just "section" if they match.
+static std::string program_label(const RawProgram& raw_prog) {
+    if (raw_prog.function_name.empty() || raw_prog.function_name == raw_prog.section_name) {
+        return raw_prog.section_name;
+    }
+    return raw_prog.section_name + "/" + raw_prog.function_name;
 }
 
 int main(int argc, char** argv) {
@@ -83,11 +69,11 @@ int main(int argc, char** argv) {
     bool list = false;
     app.add_flag("-l", list, "List programs");
 
-    std::string domain = "zoneCrab";
-    app.add_option("--domain", domain, "Abstract domain")
-        ->type_name("DOMAIN")
-        ->capture_default_str()
-        ->check(CLI::IsMember({"stats", "linux", "zoneCrab", "cfg"}));
+    bool quiet = false;
+    app.add_flag("-q,--quiet", quiet, "No stdout output, exit code only");
+
+    bool print_cfg = false;
+    app.add_flag("--cfg", print_cfg, "Print control-flow graph and exit");
 
     app.add_flag("--termination,!--no-verify-termination", ebpf_verifier_options.cfg_opts.check_for_termination,
                  "Verify termination. Default: ignore")
@@ -158,33 +144,6 @@ int main(int argc, char** argv) {
 
     // Main program
 
-    if (filename == "@headers") {
-        if (domain == "stats") {
-            std::cout << "hash";
-            std::cout << ",instructions";
-            for (const string& h : stats_headers()) {
-                std::cout << "," << h;
-            }
-        } else {
-            std::cout << domain << "?,";
-            std::cout << domain << "_sec,";
-            std::cout << domain << "_kb";
-        }
-        std::cout << "\n";
-        return 0;
-    }
-
-#if !__linux__
-    if (domain == "linux") {
-        std::cerr << "error: linux domain is unsupported on this machine\n";
-        return 64;
-    }
-#endif
-
-    if (domain == "linux") {
-        ebpf_verifier_options.mock_map_fds = false;
-    }
-
     ElfObject elf{filename, ebpf_verifier_options, &platform};
     vector<RawProgram> raw_progs;
     std::optional<std::string> load_error;
@@ -240,28 +199,31 @@ int main(int argc, char** argv) {
         print_map_descriptors(thread_local_program_info->map_descriptors, out);
     }
 
-    if (domain == "zoneCrab" || domain == "cfg") {
-        // Convert the instruction sequence to a control-flow graph.
-        try {
-            // Enable dependency collection if failure slice is requested.
-            // Also disable simplification by default so each instruction is shown individually,
-            // unless the user explicitly specified --simplify.
-            if (failure_slice) {
-                ebpf_verifier_options.verbosity_opts.collect_instruction_deps = true;
-                if (simplify_opt->count() == 0) {
-                    ebpf_verifier_options.verbosity_opts.simplify = false;
-                }
+    // Convert the instruction sequence to a control-flow graph.
+    try {
+        // Enable dependency collection if failure slice is requested.
+        // Also disable simplification by default so each instruction is shown individually,
+        // unless the user explicitly specified --simplify.
+        if (failure_slice) {
+            ebpf_verifier_options.verbosity_opts.collect_instruction_deps = true;
+            if (simplify_opt->count() == 0) {
+                ebpf_verifier_options.verbosity_opts.simplify = false;
             }
-            const auto verbosity = ebpf_verifier_options.verbosity_opts;
-            const Program prog = Program::from_sequence(inst_seq, raw_prog.info, ebpf_verifier_options);
-            if (domain == "cfg") {
-                print_program(prog, std::cout, verbosity.simplify);
-                return 0;
-            }
-            const auto begin = std::chrono::steady_clock::now();
-            auto result = analyze(prog);
-            const auto end = std::chrono::steady_clock::now();
-            const auto seconds = std::chrono::duration<double>(end - begin).count();
+        }
+        const auto verbosity = ebpf_verifier_options.verbosity_opts;
+        const Program prog = Program::from_sequence(inst_seq, raw_prog.info, ebpf_verifier_options);
+
+        if (!dotfile.empty()) {
+            print_dot(prog, dotfile);
+        }
+
+        if (print_cfg) {
+            print_program(prog, std::cout, verbosity.simplify);
+            return 0;
+        }
+
+        auto result = analyze(prog);
+        if (!quiet) {
             if (verbosity.print_invariants) {
                 print_invariants(std::cout, prog, verbosity.simplify, result);
             }
@@ -280,43 +242,35 @@ int main(int argc, char** argv) {
             } else if (failure_slice && !result.failed) {
                 std::cout << "Program passed verification; no failure slices to display.\n";
             }
+        }
 
-            const bool pass = !result.failed;
-            if (pass && ebpf_verifier_options.cfg_opts.check_for_termination &&
-                (verbosity.print_failures || verbosity.print_invariants)) {
-                std::cout << "Program terminates within " << result.max_loop_count << " loop iterations\n";
+        const bool pass = !result.failed;
+        const auto label = program_label(raw_prog);
+
+        if (!quiet) {
+            if (pass) {
+                std::cout << "PASS: " << label;
+                if (ebpf_verifier_options.cfg_opts.check_for_termination) {
+                    std::cout << " (terminates within " << result.max_loop_count << " loop iterations)";
+                }
+                std::cout << "\n";
+            } else {
+                std::cout << "FAIL: " << label << "\n";
+                // Print the first error if not already printed by -v or -f.
+                if (!verbosity.print_invariants && !verbosity.print_failures && !failure_slice) {
+                    if (auto verification_error = result.find_first_error()) {
+                        print_error(std::cout, *verification_error);
+                    }
+                    std::cout << "Hint: run with --failure-slice for a causal trace, or -v for full invariants.\n";
+                }
             }
-            std::cout << pass << "," << seconds << "," << resident_set_size_kb() << "\n";
-            return pass ? 0 : 1;
-        } catch (UnmarshalError& e) {
-            std::cerr << "error: " << e.what() << std::endl;
-            return 1;
-        } catch (const std::exception& e) {
-            std::cerr << "error: " << e.what() << std::endl;
-            return 1;
         }
-    } else if (domain == "linux") {
-        // Pass the instruction sequence to the Linux kernel verifier.
-        const auto [res, seconds] = bpf_verify_program(raw_prog.info.type, raw_prog.prog, &ebpf_verifier_options);
-        std::cout << res << "," << seconds << "," << resident_set_size_kb() << "\n";
-        return !res;
-    } else if (domain == "stats") {
-        // Convert the instruction sequence to a control-flow graph.
-        const Program prog = Program::from_sequence(inst_seq, raw_prog.info, ebpf_verifier_options);
-
-        // Just print eBPF program stats.
-        auto stats = collect_stats(prog);
-        if (!dotfile.empty()) {
-            print_dot(prog, dotfile);
-        }
-        std::cout << std::hex << hash(raw_prog) << std::dec << "," << inst_seq.size();
-        for (const string& h : stats_headers()) {
-            std::cout << "," << stats.at(h);
-        }
-        std::cout << "\n";
-    } else {
-        assert(false);
+        return pass ? 0 : 1;
+    } catch (const UnmarshalError& e) {
+        std::cerr << "error: " << e.what() << std::endl;
+        return 1;
+    } catch (const std::exception& e) {
+        std::cerr << "error: " << e.what() << std::endl;
+        return 1;
     }
-
-    return 0;
 }

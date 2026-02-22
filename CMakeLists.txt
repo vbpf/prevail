@@ -99,7 +99,7 @@ include(cmake/SetupBoostHeaders.cmake)
 string(REGEX REPLACE "([][+.*()^$?|\\\\])" "\\\\\\1" prevail_source_dir_escaped "${prevail_source_dir}")
 
 file(GLOB_RECURSE prevail_LIB_SRC CONFIGURE_DEPENDS "${prevail_source_dir}/src/*.cpp")
-list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${prevail_source_dir_escaped}/src/main/.*")
+list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${prevail_source_dir_escaped}/src/main\\.cpp$")
 list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${prevail_source_dir_escaped}/src/test/.*")
 
 add_library(prevail ${prevail_LIB_SRC})
@@ -178,8 +178,8 @@ set_target_properties(prevail PROPERTIES
 
 set(prevail_binary_dir "${prevail_source_dir}/bin" CACHE INTERNAL "")
 
-# Main executable: bin/prevail (with bin/check alias for backwards compatibility)
-add_executable(prevail-cli "${prevail_source_dir}/src/main/check.cpp" "${prevail_source_dir}/src/main/linux_verifier.cpp")
+# Main executable: bin/prevail
+add_executable(prevail-cli "${prevail_source_dir}/src/main.cpp")
 set_target_properties(prevail-cli PROPERTIES OUTPUT_NAME "prevail")
 target_link_libraries(prevail-cli PRIVATE prevail ${CMAKE_DL_LIBS})
 if (CMAKE_CONFIGURATION_TYPES)
@@ -192,13 +192,6 @@ else ()
   set_target_properties(prevail-cli PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${prevail_binary_dir}")
 endif ()
-# Transitional alias: bin/check -> bin/prevail
-add_custom_command(TARGET prevail-cli POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "$<TARGET_FILE:prevail-cli>"
-    "$<TARGET_FILE_DIR:prevail-cli>/check$<TARGET_FILE_SUFFIX:prevail-cli>"
-  COMMENT "Creating backwards-compatible bin/check alias"
-)
 
 # Tests
 if (prevail_ENABLE_TESTS)
@@ -256,7 +249,7 @@ install(TARGETS prevail libbtf GSL
 install(DIRECTORY "${prevail_source_dir}/src/"
   DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/prevail"
   FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h"
-  PATTERN "main/*" EXCLUDE
+  PATTERN "main.cpp" EXCLUDE
   PATTERN "test/*" EXCLUDE
 )
 

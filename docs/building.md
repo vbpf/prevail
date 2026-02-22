@@ -119,7 +119,6 @@ After building, you'll find these executables in `bin/`:
 | Executable | Description |
 |------------|-------------|
 | `prevail` | Main verifier CLI tool |
-| `check` | Backwards-compatible alias for `prevail` |
 | `tests` | Catch2 test runner |
 | `run_yaml` | YAML test case runner |
 

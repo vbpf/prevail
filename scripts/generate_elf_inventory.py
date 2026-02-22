@@ -144,7 +144,7 @@ def parse_args() -> argparse.Namespace:
         "--timeout-seconds",
         type=int,
         default=60,
-        help="Timeout for each `check -l` invocation.",
+        help="Timeout for each `prevail -l` invocation.",
     )
     return parser.parse_args()
 

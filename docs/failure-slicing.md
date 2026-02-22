@@ -472,4 +472,4 @@ verification failures. When using failure slices with an LLM:
 | `src/fwd_analyzer.cpp` | Hooks to populate deps during forward analysis |
 | `src/ir/parse.cpp` | Invariant filter integration in `operator<<(StringInvariant)` |
 | `src/config.hpp` | `collect_instruction_deps` flag |
-| `src/main/check.cpp` | `--failure-slice` and `--failure-slice-depth` CLI flags |
+| `src/main.cpp` | `--failure-slice` and `--failure-slice-depth` CLI flags |
