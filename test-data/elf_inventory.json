@@ -8234,9 +8234,9 @@
           "test_overrides": {
             "sections": {
               "raw_tracepoint/consume_skb": {
-                "kind": "VerificationTimeout",
-                "reason": "Known algorithmic limitation: verification did not converge within the configured timeout",
-                "status": "skip"
+                "kind": "VerifierTypeTracking",
+                "reason": "Type precision lost through loop join: r3 loaded from stack loses type after widening",
+                "status": "expected_failure"
               }
             }
           }
