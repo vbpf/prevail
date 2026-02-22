@@ -11,7 +11,7 @@ files = [f for f in glob.iglob(samples_dir + '/**/*.o', recursive=True)
 		 if os.path.isfile(f)]
 
 def cmd_of(*args, **kwargs):
-	return ('./check',) + args + tuple('--'+k+'='+v for k, v in kwargs.items())
+	return ('./prevail',) + args + tuple('--'+k+'='+v for k, v in kwargs.items())
 
 def output_of(*args, **kwargs):
 	try:

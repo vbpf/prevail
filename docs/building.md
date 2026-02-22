@@ -79,7 +79,7 @@ cmake -S . -B build
 cmake --build build --config Release
 
 # Binaries are in bin/
-.\bin\check.exe --help
+.\bin\prevail.exe --help
 ```
 
 ### Windows (Visual Studio)
@@ -118,7 +118,8 @@ After building, you'll find these executables in `bin/`:
 
 | Executable | Description |
 |------------|-------------|
-| `check` | Main verifier CLI tool |
+| `prevail` | Main verifier CLI tool |
+| `check` | Backwards-compatible alias for `prevail` |
 | `tests` | Catch2 test runner |
 | `run_yaml` | YAML test case runner |
 
@@ -159,13 +160,13 @@ For a reproducible build environment:
 docker build -t prevail .
 
 # Run the verifier
-docker run --rm prevail ./check --help
+docker run --rm prevail ./prevail --help
 
 # Run tests
 docker run --rm prevail ./tests
 
 # Verify a program (mount your files)
-docker run --rm -v $(pwd)/samples:/samples prevail ./check /samples/prog.o 2/1
+docker run --rm -v $(pwd)/samples:/samples prevail ./prevail /samples/prog.o 2/1
 ```
 
 ## Development Build

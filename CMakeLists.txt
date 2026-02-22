@@ -193,10 +193,10 @@ else ()
     RUNTIME_OUTPUT_DIRECTORY "${prevail_binary_dir}")
 endif ()
 # Transitional alias: bin/check -> bin/prevail
-set(_prevail_exe "$<TARGET_FILE_DIR:prevail-cli>/$<TARGET_FILE_NAME:prevail-cli>")
-set(_check_ext "$<TARGET_FILE_SUFFIX:prevail-cli>")
 add_custom_command(TARGET prevail-cli POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_prevail_exe}" "$<TARGET_FILE_DIR:prevail-cli>/check${_check_ext}"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "$<TARGET_FILE:prevail-cli>"
+    "$<TARGET_FILE_DIR:prevail-cli>/check$<TARGET_FILE_SUFFIX:prevail-cli>"
   COMMENT "Creating backwards-compatible bin/check alias"
 )
 

@@ -39,7 +39,7 @@
    ```
 4. **Spot-check the verifier** against bundled samples:
    ```bash
-   ./check ebpf-samples/cilium/bpf_lxc.o 2/1
+   ./prevail ebpf-samples/cilium/bpf_lxc.o 2/1
    ```
 5. **Capture reasoning.** When a change introduces or relies on a new invariant, add a targeted regression test and document the invariant in code comments or `docs/` notes so future auditors can reconstruct the argument.
 
