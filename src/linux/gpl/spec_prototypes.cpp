@@ -31,8 +31,8 @@ const ebpf_context_descriptor_t g_sock_addr_descr = sock_addr_descr;
 const ebpf_context_descriptor_t g_sockopt_descr = sockopt_descr;
 const ebpf_context_descriptor_t g_sk_lookup_descr = sk_lookup_descr;
 const ebpf_context_descriptor_t g_sk_reuseport_descr = sk_reuseport_descr;
-const ebpf_context_descriptor_t g_flow_dissector_descr = flow_dissector_descr;
 const ebpf_context_descriptor_t g_cgroup_sysctl_descr = cgroup_sysctl_descr;
+const ebpf_context_descriptor_t g_flow_dissector_descr = flow_dissector_descr;
 
 // eBPF helpers are documented at the following links:
 // https://github.com/iovisor/bpf-docs/blob/master/bpf_helpers.rst

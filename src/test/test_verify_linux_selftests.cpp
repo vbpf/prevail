@@ -279,6 +279,8 @@ TEST_SECTION_FAIL("linux-selftests", "socket_cookie_prog.o", "fexit/inet_stream_
                   "Diagnostic: 0: Upper bound must be at most 0 (valid_access(r1.offset+8, width=8) for read)")
 // expected failure (VerifierBoundsTracking):
 //   diagnostic: 1: Upper bound must be at most 184 (valid_access(r6.offset+184, width=8) for read)
+//   Note: the old bounds error was fixed by correcting sock_ops_regions (184→224),
+//   but verification still fails for a different reason in this program.
 TEST_SECTION_FAIL("linux-selftests", "socket_cookie_prog.o", "sockops",
                   verify_test::VerifyIssueKind::VerifierBoundsTracking,
                   "Known verifier limitation: interval/bounds refinement loses precision for this memory-access proof. "
