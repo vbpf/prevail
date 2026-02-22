@@ -37,8 +37,8 @@ brew install cmake boost yaml-cpp
 ## Getting the Source
 
 ```bash
-git clone --recurse-submodules https://github.com/vbpf/ebpf-verifier.git
-cd ebpf-verifier
+git clone --recurse-submodules https://github.com/vbpf/prevail.git
+cd prevail
 ```
 
 If you already cloned without submodules:
@@ -89,7 +89,7 @@ cmake --build build --config Release
 cmake -S . -B build -G "Visual Studio 17 2022"
 
 # Open in Visual Studio
-start build\ebpf-verifier.sln
+start build\prevail.sln
 
 # Or build from command line
 cmake --build build --config Release
