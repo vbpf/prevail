@@ -1,6 +1,7 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
 #include <algorithm>
+#include <cassert>
 #include <iostream>
 #include <map>
 #include <ranges>
@@ -155,7 +156,8 @@ ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO
 
     for (ELFIO::Elf_Half i = 0; i < reader.sections.size(); ++i) {
         const auto s = reader.sections[i];
-        if (!s || !is_map_section(s->get_name())) {
+        assert(s);
+        if (!is_map_section(s->get_name())) {
             continue;
         }
 
@@ -241,9 +243,7 @@ ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO
         }
 
         const auto* section = reader.sections[sym_details.section_index];
-        if (!section) {
-            continue;
-        }
+        assert(section);
         const size_t record_size = record_size_it->second;
 
         if (sym_details.value % record_size != 0 || sym_details.value >= section->get_size()) {
@@ -284,7 +284,12 @@ ElfGlobalData extract_global_data(const parse_params_t& params, const ELFIO::elf
                                   const ELFIO::const_symbol_section_accessor& symbols) {
     const bool has_btf_maps = reader.sections[".BTF"] != nullptr && reader.sections[".maps"] != nullptr;
     if (has_btf_maps) {
-        return parse_btf_section(params, reader);
+        try {
+            return parse_btf_section(params, reader);
+        } catch (const UnmarshalError&) {
+            // If BTF-defined maps can't be decoded, fall back to section-based map descriptors.
+        }
+        return parse_map_sections(params, reader, symbols);
     }
 
     const bool has_legacy_maps =

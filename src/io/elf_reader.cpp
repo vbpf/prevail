@@ -55,7 +55,11 @@ validate_and_get_lddw_pair(std::vector<EbpfInst>& instructions, size_t location,
 
 bool is_map_section(const std::string& name) {
     const std::string maps_prefix = "maps/";
-    return name == "maps" || (name.length() > 5 && name.compare(0, maps_prefix.length(), maps_prefix) == 0);
+    const std::string dot_maps_prefix = ".maps/";
+    return name == "maps" || name == ".maps" ||
+           (name.length() > maps_prefix.length() && name.compare(0, maps_prefix.length(), maps_prefix) == 0) ||
+           (name.length() > dot_maps_prefix.length() &&
+            name.compare(0, dot_maps_prefix.length(), dot_maps_prefix) == 0);
 }
 
 bool is_global_section(const std::string& name) {
