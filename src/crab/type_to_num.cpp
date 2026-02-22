@@ -261,15 +261,9 @@ void TypeToNumDomain::havoc_register(const Reg& reg) {
 }
 
 TypeToNumDomain TypeToNumDomain::widen(const TypeToNumDomain& other) const {
-    auto extra_invariants = collect_type_dependent_constraints(other);
-
-    TypeToNumDomain res{types.widen(other.types), values.widen(other.values)};
-
-    // Now add in the extra invariants saved above.
-    for (const auto& [variable, interval] : extra_invariants) {
-        res.values.set(variable, interval);
-    }
-    return res;
+    // Unlike join, widen must NOT re-add type-dependent constraints:
+    // narrowing the widened result can defeat termination (see #960).
+    return TypeToNumDomain{types.widen(other.types), values.widen(other.values)};
 }
 
 TypeToNumDomain TypeToNumDomain::narrow(const TypeToNumDomain& other) const {
