@@ -82,6 +82,9 @@ std::vector<LinearConstraint> FiniteDomain::assume_signed_32bit_eq(const Variabl
             if (lb_match < lb) {
                 // The result is lower than the left interval, so try the next higher matching 64-bit value.
                 // It's ok if this goes higher than the left upper bound.
+                if (lb_match > std::numeric_limits<int64_t>::max() - 0x100000000) {
+                    return {}; // No valid matching 64-bit value exists.
+                }
                 lb_match += 0x100000000;
             }
 
@@ -96,6 +99,9 @@ std::vector<LinearConstraint> FiniteDomain::assume_signed_32bit_eq(const Variabl
             if (ub_match > ub) {
                 // The result is higher than the left interval, so try the next lower matching 64-bit value.
                 // It's ok if this goes lower than the left lower bound.
+                if (ub_match < std::numeric_limits<int64_t>::min() + 0x100000000) {
+                    return {}; // No valid matching 64-bit value exists.
+                }
                 ub_match -= 0x100000000;
             }
 
