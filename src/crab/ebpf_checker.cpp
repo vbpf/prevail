@@ -356,6 +356,15 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             if (!is_comparison_check) {
                 if (s.or_null) {
                     require_value(dom.state, reg.svalue == 0, "Non-null number");
+                    // A null pointer access is only valid with zero width.
+                    if (std::holds_alternative<Imm>(s.width)) {
+                        if (std::get<Imm>(s.width).v != 0) {
+                            throw_fail("Non-zero access size with null pointer");
+                        }
+                    } else {
+                        const auto width_svalue = reg_pack(std::get<Reg>(s.width)).svalue;
+                        require_value(dom.state, width_svalue == 0, "Non-zero access size with null pointer");
+                    }
                 } else {
                     throw_fail("Only pointers can be dereferenced");
                 }
