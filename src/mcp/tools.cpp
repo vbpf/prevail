@@ -457,8 +457,8 @@ static json handle_check_constraint(const json& args, AnalysisEngine& engine) {
     // Single: { "pc": N, "constraints": [...] }
     // Batch:  { "checks": [{ "pc": N, "constraints": [...], "mode": "...", "point": "..." }, ...] }
     struct CheckQuery {
-        int pc;
-        prevail::InvariantPoint pt;
+        int pc{};
+        prevail::InvariantPoint pt{prevail::InvariantPoint::pre};
         std::string md;
         std::vector<std::string> constraints;
     };

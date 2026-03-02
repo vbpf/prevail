@@ -11,7 +11,15 @@
 #include <cstdio>
 #include <functional>
 #include <iostream>
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 26495) // Uninitialized member variable (nlohmann::basic_json::m_data).
+#pragma warning(disable : 26819) // Unannotated fallthrough (nlohmann serializer).
+#endif
 #include <nlohmann/json.hpp>
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 #include <string>
 
 namespace prevail_mcp {
