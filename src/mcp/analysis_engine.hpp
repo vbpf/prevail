@@ -108,7 +108,7 @@ class AnalysisEngine {
                                                      const std::string& mode_str);
 
     /// Get the invariant at a label from the live session (calls to_set() on demand).
-    /// @returns empty StringInvariant if no session or label not found.
+    /// @returns StringInvariant::bottom() if no session, label not found, or state is bottom.
     prevail::StringInvariant get_live_invariant(const prevail::Label& label, prevail::InvariantPoint point) const;
 
     /// Compute failure slices from the live session (re-analyzes if needed).

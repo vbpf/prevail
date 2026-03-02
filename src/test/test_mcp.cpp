@@ -297,6 +297,38 @@ TEST_CASE("verify_assembly: observe at exit label", "[mcp][assembly]") {
     REQUIRE(result["observations"][0]["ok"] == true);
 }
 
+TEST_CASE("verify_assembly: lddw wide instruction", "[mcp][assembly]") {
+    McpTestHarness h;
+    // lddw occupies 2 bytecode slots but is one instruction in the parsed sequence.
+    auto result = h.call_tool("verify_assembly", {
+        {"code", "r0 = 42 ll\nexit"},
+        {"observe", json::array({
+            {{"pc", 0}, {"constraints", json::array({"r0.type=number"})}},
+        })},
+    });
+
+    REQUIRE(result["passed"] == true);
+    REQUIRE(result["instruction_count"].get<int>() == 2);
+    REQUIRE(result["observations"].is_array());
+    REQUIRE(result["observations"][0]["ok"] == true);
+}
+
+TEST_CASE("verify_assembly: observe with unknown mode", "[mcp][assembly]") {
+    McpTestHarness h;
+    auto result = h.call_tool("verify_assembly", {
+        {"code", "r0 = 0\nexit"},
+        {"observe", json::array({
+            {{"pc", 0}, {"mode", "invalid_mode"}, {"constraints", json::array({"r0.type=number"})}},
+        })},
+    });
+
+    // Unknown mode should produce an error observation, not crash.
+    REQUIRE(result["observations"].is_array());
+    REQUIRE(result["observations"].size() == 1);
+    REQUIRE(result["observations"][0]["ok"] == false);
+    REQUIRE(result["observations"][0]["message"].get<std::string>().find("Unknown mode") != std::string::npos);
+}
+
 TEST_CASE("verify_assembly: program_type parameter", "[mcp][assembly]") {
     McpTestHarness h;
     for (const auto& type : {"xdp", "sk_skb", "socket_filter"}) {
@@ -362,6 +394,22 @@ TEST_CASE("verify_assembly: verification options forwarding", "[mcp][assembly]")
         });
         REQUIRE(result["passed"] == false);
     }
+}
+
+TEST_CASE("verify_assembly: observe with unsupported label", "[mcp][assembly]") {
+    McpTestHarness h;
+    auto result = h.call_tool("verify_assembly", {
+        {"code", "r0 = 0\nexit"},
+        {"observe", json::array({
+            {{"label", "bogus"}, {"constraints", json::array({"r0.type=number"})}},
+        })},
+    });
+
+    // An unsupported label name falls through to Label::entry.
+    // The observation still executes — it doesn't crash or throw.
+    REQUIRE(result["observations"].is_array());
+    REQUIRE(result["observations"].size() == 1);
+    REQUIRE(result["observations"][0].contains("ok"));
 }
 
 // ─── list_programs ──────────────────────────────────────────────────────────────

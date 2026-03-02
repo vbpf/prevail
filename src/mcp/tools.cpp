@@ -899,8 +899,17 @@ static json handle_verify_assembly(const json& args, AnalysisEngine& engine) {
 
             try {
                 auto point = (point_str == "post") ? prevail::InvariantPoint::post : prevail::InvariantPoint::pre;
-                auto mode = (mode_str == "entailed") ? prevail::ObservationCheckMode::entailed
-                                                     : prevail::ObservationCheckMode::consistent;
+                prevail::ObservationCheckMode mode;
+                if (mode_str == "entailed") {
+                    mode = prevail::ObservationCheckMode::entailed;
+                } else if (mode_str == "consistent") {
+                    mode = prevail::ObservationCheckMode::consistent;
+                } else {
+                    obs_entry["ok"] = false;
+                    obs_entry["message"] = "Unknown mode: " + mode_str;
+                    obs_results.push_back(obs_entry);
+                    continue;
+                }
                 std::set<std::string> constraint_set(constraints_vec.begin(), constraints_vec.end());
                 prevail::StringInvariant observation{std::move(constraint_set)};
 

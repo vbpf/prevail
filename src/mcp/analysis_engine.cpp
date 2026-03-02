@@ -216,8 +216,14 @@ AnalysisEngine::check_constraint(const std::string& elf_path, const std::string&
                            "The verifier's state includes possibilities outside the observation."};
     }
 
-    auto mode =
-        (mode_str == "entailed") ? prevail::ObservationCheckMode::entailed : prevail::ObservationCheckMode::consistent;
+    prevail::ObservationCheckMode mode;
+    if (mode_str == "entailed") {
+        mode = prevail::ObservationCheckMode::entailed;
+    } else if (mode_str == "consistent") {
+        mode = prevail::ObservationCheckMode::consistent;
+    } else {
+        return {.ok = false, .message = "Unknown mode: " + mode_str};
+    }
     return session_->live_result->check_observation_at_label(label, point, observation, mode);
 }
 
