@@ -230,10 +230,20 @@ ELFIO::elfio load_elf(std::istream& input_stream, const std::string& path) {
         throw MalformedElf("Unsupported ELF machine in file " + path + ": expected EM_BPF");
     }
 
-    std::error_code ec;
-    const std::uintmax_t file_size = std::filesystem::file_size(path, ec);
-    if (ec) {
-        throw MalformedElf("Cannot determine file size for " + path + ": " + ec.message());
+    std::uintmax_t data_size;
+    {
+        std::error_code ec;
+        data_size = std::filesystem::file_size(path, ec);
+        if (ec) {
+            // Fallback: compute size from the input stream (handles in-memory ELF data
+            // where path is not a real filesystem path, e.g. path="memory").
+            input_stream.seekg(0, std::ios::end);
+            const auto end_pos = input_stream.tellg();
+            if (end_pos < 0) {
+                throw MalformedElf("Cannot determine data size for " + path);
+            }
+            data_size = static_cast<std::uintmax_t>(end_pos);
+        }
     }
     for (const auto& section : reader.sections) {
         if (!section || section->get_type() == ELFIO::SHT_NOBITS) {
@@ -242,7 +252,7 @@ ELFIO::elfio load_elf(std::istream& input_stream, const std::string& path) {
 
         const std::uintmax_t offset = section->get_offset();
         const std::uintmax_t size = section->get_size();
-        if (offset > file_size || size > file_size - offset) {
+        if (offset > data_size || size > data_size - offset) {
             throw MalformedElf("ELF section '" + section->get_name() + "' has out-of-bounds file range");
         }
     }

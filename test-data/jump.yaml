@@ -1121,3 +1121,47 @@ post: []
 
 messages:
   - "0: Invalid type (r1.type == number)"
+---
+# Regression tests for aa31b0ed: Assume with operands of different inferred types.
+# Before the fix, the verifier hit assert(same_type(left, right)) which on Windows
+# opened a WER dialog (blocking the process), causing fuzzer timeouts.
+test-case: assume reg-vs-reg with different types (ctx == number)
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "r2.type=number", "r2.svalue=0", "r2.uvalue=0"]
+
+code:
+  <start>: |
+    assume r1 == r2
+
+post:
+  - r1.type=ctx
+  - r1.ctx_offset=0
+  - r1.svalue=0
+  - r1.uvalue=0
+  - r2.type=number
+  - r2.svalue=r1.svalue
+  - r2.uvalue=r1.uvalue
+---
+test-case: assume reg-vs-reg with different types (packet != number)
+
+pre: ["r1.type=packet", "r1.packet_offset=0", "r2.type=number", "r2.svalue=5", "r2.uvalue=5"]
+
+code:
+  <start>: |
+    assume r1 != r2
+
+post: []
+messages:
+  - "0: Lower bound must be at least meta_offset (valid_access(r1.offset) for comparison/subtraction)"
+---
+test-case: assume reg-vs-reg with different types (stack < number)
+
+pre: ["r1.type=stack", "r1.stack_offset=0", "r2.type=number", "r2.svalue=10", "r2.uvalue=10"]
+
+code:
+  <start>: |
+    assume r1 < r2
+
+post: []
+messages:
+  - "0: Lower bound must be at least r10.stack_offset - EBPF_SUBPROGRAM_STACK_SIZE (valid_access(r1.offset) for comparison/subtraction)"
