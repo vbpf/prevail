@@ -220,6 +220,23 @@ RawProgram* find_subprogram(std::vector<RawProgram>& programs, const ELFIO::sect
     return nullptr;
 }
 
+static std::uintmax_t get_data_size(std::istream& input_stream, const std::string& path) {
+    std::error_code ec;
+    const auto size = std::filesystem::file_size(path, ec);
+    if (!ec) {
+        return size;
+    }
+    // Fallback: compute size from the input stream (handles in-memory ELF data
+    // where path is not a real filesystem path, e.g. path="memory").
+    input_stream.seekg(0, std::ios::end);
+    const auto end_pos = input_stream.tellg();
+    if (end_pos < 0) {
+        throw MalformedElf("Cannot determine data size for " + path);
+    }
+    input_stream.seekg(0);
+    return end_pos;
+}
+
 ELFIO::elfio load_elf(std::istream& input_stream, const std::string& path) {
     ELFIO::elfio reader;
     if (!reader.load(input_stream)) {
@@ -230,11 +247,7 @@ ELFIO::elfio load_elf(std::istream& input_stream, const std::string& path) {
         throw MalformedElf("Unsupported ELF machine in file " + path + ": expected EM_BPF");
     }
 
-    std::error_code ec;
-    const std::uintmax_t file_size = std::filesystem::file_size(path, ec);
-    if (ec) {
-        throw MalformedElf("Cannot determine file size for " + path + ": " + ec.message());
-    }
+    const std::uintmax_t data_size = get_data_size(input_stream, path);
     for (const auto& section : reader.sections) {
         if (!section || section->get_type() == ELFIO::SHT_NOBITS) {
             continue;
@@ -242,7 +255,7 @@ ELFIO::elfio load_elf(std::istream& input_stream, const std::string& path) {
 
         const std::uintmax_t offset = section->get_offset();
         const std::uintmax_t size = section->get_size();
-        if (offset > file_size || size > file_size - offset) {
+        if (offset > data_size || size > data_size - offset) {
             throw MalformedElf("ELF section '" + section->get_name() + "' has out-of-bounds file range");
         }
     }

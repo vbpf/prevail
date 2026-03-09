@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iterator>
 #include <random>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -16,6 +17,7 @@
 
 #include "config.hpp"
 #include "io/elf_loader.hpp"
+#include "io/elf_reader.hpp"
 #include "platform.hpp"
 
 using namespace prevail;
@@ -506,4 +508,21 @@ TEST_CASE("ELF loader ignores non-function .ksyms entries", "[elf]") {
     ElfObject elf{"ebpf-samples/cilium-ebpf/ksym-el.elf", {}, &platform};
     const auto& progs = elf.get_programs("socket", "ksym_test");
     REQUIRE(progs.size() == 1);
+}
+
+// Regression test: read_elf(istream, path) must work when path is not a real file.
+// The load_elf function uses file_size(path) for section-bounds validation, which
+// fails for non-file paths like "memory". The fix falls back to stream size.
+TEST_CASE("read_elf succeeds with istream and non-file path", "[elf]") {
+    thread_local_options = {};
+
+    // Read a valid ELF file into memory.
+    const auto bytes = read_file_bytes("ebpf-samples/build/twomaps.o");
+    std::string data(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+    std::istringstream stream(data);
+
+    // Use a non-file path — this is how ebpf-for-windows loads ELF from memory.
+    ebpf_verifier_options_t options{};
+    auto programs = read_elf(stream, "memory", ".text", "", options, &g_ebpf_platform_linux);
+    REQUIRE(!programs.empty());
 }
