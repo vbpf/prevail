@@ -491,9 +491,10 @@ struct Unmarshaller {
     [[nodiscard]]
     auto makeCall(const int32_t imm) const -> Call {
         const EbpfHelperPrototype proto = info.platform->get_helper_prototype(imm);
+        auto helper_prototype_name = proto.name ? proto.name : std::to_string(imm);
         Call res;
         res.func = imm;
-        res.name = proto.name;
+        res.name = helper_prototype_name;
         auto mark_unsupported = [&](const std::string& why) -> Call {
             res.is_supported = false;
             res.unsupported_reason = why;
@@ -501,7 +502,7 @@ struct Unmarshaller {
         };
         const auto return_info = classify_call_return_type(proto.return_type);
         if (!return_info.has_value()) {
-            return mark_unsupported(std::string("helper prototype is unavailable on this platform: ") + proto.name);
+            return mark_unsupported(std::string("helper prototype is unavailable on this platform: ") + helper_prototype_name);
         }
         res.return_ptr_type = return_info->pointer_type;
         res.return_nullable = return_info->pointer_nullable;
@@ -514,7 +515,7 @@ struct Unmarshaller {
             switch (args[i]) {
             case EBPF_ARGUMENT_TYPE_UNSUPPORTED:
                 return mark_unsupported(std::string("helper argument type is unavailable on this platform: ") +
-                                        proto.name);
+                                        helper_prototype_name);
             case EBPF_ARGUMENT_TYPE_DONTCARE: return res;
             case EBPF_ARGUMENT_TYPE_ANYTHING:
             case EBPF_ARGUMENT_TYPE_PTR_TO_MAP:
@@ -561,18 +562,18 @@ struct Unmarshaller {
                 break;
             case EBPF_ARGUMENT_TYPE_PTR_TO_CONST_STR:
                 return mark_unsupported(std::string("helper argument type is unavailable on this platform: ") +
-                                        proto.name);
+                                        helper_prototype_name);
             case EBPF_ARGUMENT_TYPE_CONST_SIZE: {
                 // Sanity check: This argument should never be seen in isolation.
                 return mark_unsupported(
                     std::string("mismatched EBPF_ARGUMENT_TYPE_PTR_TO* and EBPF_ARGUMENT_TYPE_CONST_SIZE: ") +
-                    proto.name);
+                    helper_prototype_name);
             }
             case EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO: {
                 // Sanity check: This argument should never be seen in isolation.
                 return mark_unsupported(
                     std::string("mismatched EBPF_ARGUMENT_TYPE_PTR_TO* and EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO: ") +
-                    proto.name);
+                    helper_prototype_name);
             }
             case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL:
             case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM:
@@ -586,14 +587,14 @@ struct Unmarshaller {
                     return mark_unsupported(
                         std::string(
                             "missing EBPF_ARGUMENT_TYPE_CONST_SIZE or EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO: ") +
-                        proto.name);
+                        helper_prototype_name);
                 }
                 if (args[i + 1] != EBPF_ARGUMENT_TYPE_CONST_SIZE &&
                     args[i + 1] != EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO) {
                     return mark_unsupported(
                         std::string("Pointer argument not followed by EBPF_ARGUMENT_TYPE_CONST_SIZE or "
                                     "EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO: ") +
-                        proto.name);
+                        helper_prototype_name);
                 }
                 const bool can_be_zero = (args[i + 1] == EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO);
                 const bool or_null = args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL ||
@@ -700,18 +701,19 @@ struct Unmarshaller {
                             .is_supported = false,
                             .unsupported_reason = "helper function is unavailable on this platform"};
             }
-            if (!info.platform->is_helper_usable(inst.imm)) {
-                std::string name = std::to_string(inst.imm);
-                try {
-                    name = info.platform->get_helper_prototype(inst.imm).name;
-                } catch (const std::exception&) {
+            if (info.platform->is_helper_usable(inst.imm)) {
+                return makeCall(inst.imm);
+            } else {
+                std::string function_name = std::to_string(inst.imm);
+                auto function_name_from_helper_prototype = info.platform->get_helper_prototype(inst.imm).name;
+                if (function_name_from_helper_prototype) {
+                    function_name = function_name_from_helper_prototype;
                 }
                 return Call{.func = inst.imm,
-                            .name = std::move(name),
+                            .name = std::move(function_name),
                             .is_supported = false,
                             .unsupported_reason = "helper function is unavailable on this platform"};
             }
-            return makeCall(inst.imm);
         case INST_EXIT:
             if ((inst.opcode & INST_CLS_MASK) != INST_CLS_JMP || (inst.opcode & INST_SRC_REG)) {
                 throw InvalidInstruction(pc, inst.opcode);
