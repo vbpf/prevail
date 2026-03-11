@@ -215,11 +215,19 @@ ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO
             if (max_record_end > s->get_size()) {
                 throw UnmarshalError("Malformed legacy maps section: " + s->get_name());
             }
-            map_count = (max_record_end + map_record_size - 1) / map_record_size;
+            // Use floor division to ensure map_count * map_record_size <= section size.
+            // Ceiling division can produce a count whose last record extends past the buffer,
+            // causing a heap-buffer-overflow in the platform's parse_maps_section callback.
+            map_count = max_record_end / map_record_size;
         }
 
         section_record_sizes[i] = map_record_size;
         section_base_index[i] = base_index;
+
+        // Safety invariant: all records must fit within the section data.
+        if (map_count * map_record_size > s->get_size()) {
+            throw UnmarshalError("Malformed legacy maps section: " + s->get_name());
+        }
 
         parse_params.platform->parse_maps_section(global.map_descriptors, s->get_data(), map_record_size,
                                                   gsl::narrow<int>(map_count), parse_params.platform,
