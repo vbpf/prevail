@@ -99,6 +99,12 @@ $ bin/prevail ebpf-samples/cilium/bpf_lxc.o 2/1
 PASS: 2/1
 ```
 
+### MCP Server
+
+An MCP server (`prevail_mcp`) exposes the verifier's analysis as structured JSON
+tools for LLM agents. Build with `cmake --build build --target prevail_mcp`.
+See [src/mcp/README.md](src/mcp/README.md) for details.
+
 <details><summary>Usage</summary>
 
 ```text

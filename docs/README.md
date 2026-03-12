@@ -14,6 +14,7 @@ This documentation provides a comprehensive guide to understanding the Prevail e
 | [Memory Model](memory-model.md) | Stack, packet, context, and shared memory handling |
 | [Type System](type-system.md) | Type domains and type-guided verification |
 | [Failure Slicing](failure-slicing.md) | Minimal diagnostic slices for verification failures |
+| [MCP Server](../src/mcp/README.md) | Structured verification queries for LLM agents |
 | [Building](building.md) | Build instructions for all platforms |
 | [Testing](testing.md) | Test infrastructure and conformance testing |
 | [Glossary](glossary.md) | Terminology and definitions |
@@ -94,6 +95,8 @@ Prevail verifies that eBPF programs:
 ```text
 src/
 ├── main.cpp        # CLI entry point
+├── mcp/            # MCP server (structured verification queries for LLM agents)
+├── prevail_mcp.cpp # MCP server entry point
 ├── ir/             # Intermediate representation
 │   ├── syntax.hpp  # Instruction definitions
 │   └── cfg_builder.cpp
@@ -127,7 +130,18 @@ src/
 
 When verification fails, you can use an LLM to help diagnose the issue.
 
-**Quick start** (with GitHub Copilot CLI):
+**Using the MCP server** (recommended — structured data, no text parsing):
+
+Build and start `prevail_mcp` (see [MCP Server](../src/mcp/README.md)):
+
+```bash
+cmake --build build --target prevail_mcp
+# Add to your MCP client (Copilot CLI: /mcp add, VS Code: .vscode/mcp.json)
+```
+
+Then ask your LLM: *"Use get_slice to diagnose the verification failure in program.o"*
+
+**Using prevail with verbose output** (text-based):
 
 ```text
 Using docs/llm-context.md, run ./bin/prevail <your-program.o> <section> -v and diagnose the failure.
@@ -138,7 +152,15 @@ Using docs/llm-context.md, run ./bin/prevail <your-program.o> <section> -v and d
 2. Copy the contents of `docs/llm-context.md` into your LLM conversation
 3. Paste the verification error and ask for diagnosis
 
-See [llm-context.md](llm-context.md) for the context document and [test-data/llm-context-tests.md](../test-data/llm-context-tests.md) for validated test cases.
+**Using prevail with failure slicing** (most concise text output):
+
+```bash
+./bin/prevail program.o section --failure-slice
+```
+
+See [llm-context.md](llm-context.md) for the diagnostic reference,
+[test-data/llm-context-tests.md](../test-data/llm-context-tests.md) for validated test cases,
+and [MCP Server](../src/mcp/README.md) for the structured query tools.
 
 ### Contributing New Failure Patterns
 
