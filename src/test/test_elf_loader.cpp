@@ -538,8 +538,9 @@ TEST_CASE("rewrite_extern_constant_load bails out on values exceeding int32 rang
     auto check_bailout_preserves_program = [&](const uint64_t value) {
         const auto original = make_instructions();
         auto insts = original;
-        CHECK_NOTHROW(rewrite_extern_constant_load(insts, 0, value));
-        CHECK_FALSE(rewrite_extern_constant_load(insts, 0, value));
+        bool result = true;
+        CHECK_NOTHROW(result = rewrite_extern_constant_load(insts, 0, value));
+        CHECK_FALSE(result);
         CHECK(insts == original);
     };
 
@@ -551,6 +552,11 @@ TEST_CASE("rewrite_extern_constant_load bails out on values exceeding int32 rang
     SECTION("INT32_MAX fits — rewrite succeeds") {
         auto insts = make_instructions();
         REQUIRE(rewrite_extern_constant_load(insts, 0, 0x7FFFFFFF));
+    }
+
+    SECTION("-1 (0xFFFFFFFFFFFFFFFF) fits via sign-extension — rewrite succeeds") {
+        auto insts = make_instructions();
+        REQUIRE(rewrite_extern_constant_load(insts, 0, 0xFFFFFFFFFFFFFFFFULL));
     }
 
     SECTION("0x80000000 exceeds int32 — bails out without mutation") {
