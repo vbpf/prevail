@@ -510,6 +510,70 @@ TEST_CASE("ELF loader ignores non-function .ksyms entries", "[elf]") {
     REQUIRE(progs.size() == 1);
 }
 
+// Regression test: rewrite_extern_constant_load must not crash when the resolved value
+// exceeds INT32_MAX and the load instruction is 8-byte width (LDX DW).
+// BPF MOV imm only has a 32-bit immediate; values that don't fit must cause a
+// graceful bail-out (return false), not a gsl::narrowing_error exception.
+TEST_CASE("rewrite_extern_constant_load bails out on values exceeding int32 range", "[elf][hardening]") {
+    // Build a 3-instruction sequence: LDDW pair + LDX DW r2, [r1+0].
+    // This is the pattern clang emits for: extern uint64_t LINUX_KERNEL_VERSION;
+    auto make_instructions = []() {
+        std::vector<EbpfInst> insts(3);
+        insts[0].opcode = INST_OP_LDDW_IMM;
+        insts[0].dst = 1;
+        insts[0].src = 0;
+        insts[0].offset = 0;
+        insts[0].imm = 0;
+        insts[1] = {};
+        // LDX DW = INST_CLS_LDX | INST_MODE_MEM | INST_SIZE_DW = 0x79
+        insts[2].opcode = static_cast<uint8_t>(INST_CLS_LDX | INST_MODE_MEM | INST_SIZE_DW);
+        insts[2].dst = 2;
+        insts[2].src = 1;
+        insts[2].offset = 0;
+        insts[2].imm = 0;
+        return insts;
+    };
+
+    SECTION("small value fits in int32 — rewrite succeeds") {
+        auto insts = make_instructions();
+        REQUIRE(rewrite_extern_constant_load(insts, 0, 42));
+    }
+
+    SECTION("INT32_MAX fits — rewrite succeeds") {
+        auto insts = make_instructions();
+        REQUIRE(rewrite_extern_constant_load(insts, 0, 0x7FFFFFFF));
+    }
+
+    SECTION("0x80000000 exceeds int32 — returns false without throwing") {
+        auto insts = make_instructions();
+        CHECK_NOTHROW(rewrite_extern_constant_load(insts, 0, 0x80000000ULL));
+        // Verify the function returns false (bail out, don't rewrite).
+        auto insts2 = make_instructions();
+        CHECK_FALSE(rewrite_extern_constant_load(insts2, 0, 0x80000000ULL));
+    }
+
+    SECTION("0x100000000 exceeds int32 — returns false without throwing") {
+        auto insts = make_instructions();
+        CHECK_NOTHROW(rewrite_extern_constant_load(insts, 0, 0x100000000ULL));
+        auto insts2 = make_instructions();
+        CHECK_FALSE(rewrite_extern_constant_load(insts2, 0, 0x100000000ULL));
+    }
+
+    SECTION("0xFFFFFFFF exceeds int32 as uint64 — returns false without throwing") {
+        auto insts = make_instructions();
+        CHECK_NOTHROW(rewrite_extern_constant_load(insts, 0, 0xFFFFFFFFULL));
+        auto insts2 = make_instructions();
+        CHECK_FALSE(rewrite_extern_constant_load(insts2, 0, 0xFFFFFFFFULL));
+    }
+
+    SECTION("large 64-bit value — returns false without throwing") {
+        auto insts = make_instructions();
+        CHECK_NOTHROW(rewrite_extern_constant_load(insts, 0, 0xDEADBEEFCAFEBABEULL));
+        auto insts2 = make_instructions();
+        CHECK_FALSE(rewrite_extern_constant_load(insts2, 0, 0xDEADBEEFCAFEBABEULL));
+    }
+}
+
 // Regression test: read_elf(istream, path) must work when path is not a real file.
 // The load_elf function uses file_size(path) for section-bounds validation, which
 // fails for non-file paths like "memory". The fix falls back to stream size.
