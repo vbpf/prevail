@@ -534,6 +534,15 @@ TEST_CASE("rewrite_extern_constant_load bails out on values exceeding int32 rang
         return insts;
     };
 
+    // Verify bail-out returns false, doesn't throw, and leaves instructions unmodified.
+    auto check_bailout_preserves_program = [&](const uint64_t value) {
+        const auto original = make_instructions();
+        auto insts = original;
+        CHECK_NOTHROW(rewrite_extern_constant_load(insts, 0, value));
+        CHECK_FALSE(rewrite_extern_constant_load(insts, 0, value));
+        CHECK(insts == original);
+    };
+
     SECTION("small value fits in int32 — rewrite succeeds") {
         auto insts = make_instructions();
         REQUIRE(rewrite_extern_constant_load(insts, 0, 42));
@@ -544,33 +553,20 @@ TEST_CASE("rewrite_extern_constant_load bails out on values exceeding int32 rang
         REQUIRE(rewrite_extern_constant_load(insts, 0, 0x7FFFFFFF));
     }
 
-    SECTION("0x80000000 exceeds int32 — returns false without throwing") {
-        auto insts = make_instructions();
-        CHECK_NOTHROW(rewrite_extern_constant_load(insts, 0, 0x80000000ULL));
-        // Verify the function returns false (bail out, don't rewrite).
-        auto insts2 = make_instructions();
-        CHECK_FALSE(rewrite_extern_constant_load(insts2, 0, 0x80000000ULL));
+    SECTION("0x80000000 exceeds int32 — bails out without mutation") {
+        check_bailout_preserves_program(0x80000000ULL);
     }
 
-    SECTION("0x100000000 exceeds int32 — returns false without throwing") {
-        auto insts = make_instructions();
-        CHECK_NOTHROW(rewrite_extern_constant_load(insts, 0, 0x100000000ULL));
-        auto insts2 = make_instructions();
-        CHECK_FALSE(rewrite_extern_constant_load(insts2, 0, 0x100000000ULL));
+    SECTION("0x100000000 exceeds int32 — bails out without mutation") {
+        check_bailout_preserves_program(0x100000000ULL);
     }
 
-    SECTION("0xFFFFFFFF exceeds int32 as uint64 — returns false without throwing") {
-        auto insts = make_instructions();
-        CHECK_NOTHROW(rewrite_extern_constant_load(insts, 0, 0xFFFFFFFFULL));
-        auto insts2 = make_instructions();
-        CHECK_FALSE(rewrite_extern_constant_load(insts2, 0, 0xFFFFFFFFULL));
+    SECTION("0xFFFFFFFF exceeds int32 as uint64 — bails out without mutation") {
+        check_bailout_preserves_program(0xFFFFFFFFULL);
     }
 
-    SECTION("large 64-bit value — returns false without throwing") {
-        auto insts = make_instructions();
-        CHECK_NOTHROW(rewrite_extern_constant_load(insts, 0, 0xDEADBEEFCAFEBABEULL));
-        auto insts2 = make_instructions();
-        CHECK_FALSE(rewrite_extern_constant_load(insts2, 0, 0xDEADBEEFCAFEBABEULL));
+    SECTION("large 64-bit value — bails out without mutation") {
+        check_bailout_preserves_program(0xDEADBEEFCAFEBABEULL);
     }
 }
 
