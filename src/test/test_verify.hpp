@@ -121,8 +121,9 @@ struct BoundedTestName {
     template <size_t N>
     explicit constexpr BoundedTestName(const char (&str)[N]) {
         if constexpr (N - 1 <= MAX_LEN) {
-            for (size_t i = 0; i < N; ++i)
+            for (size_t i = 0; i < N; ++i) {
                 data[i] = str[i];
+            }
         } else {
             // FNV-1a hash of full name for a unique suffix.
             uint32_t hash = 2166136261u;
@@ -132,8 +133,9 @@ struct BoundedTestName {
             }
             // Format: first (MAX_LEN - 6) chars + "..xxxx"
             constexpr size_t prefix_len = MAX_LEN - 6;
-            for (size_t i = 0; i < prefix_len; ++i)
+            for (size_t i = 0; i < prefix_len; ++i) {
                 data[i] = str[i];
+            }
             data[prefix_len] = '.';
             data[prefix_len + 1] = '.';
             constexpr char hex[] = "0123456789abcdef";
@@ -155,8 +157,8 @@ struct BoundedTestName {
 #define PREVAIL_CONCAT(a, b) PREVAIL_CONCAT_IMPL(a, b)
 #define PREVAIL_BOUNDED_NAME PREVAIL_CONCAT(_prevail_btn_, __LINE__)
 
-#define BOUNDED_TEST_CASE(name_literal, tags)                                                          \
-    static constexpr verify_test::BoundedTestName PREVAIL_BOUNDED_NAME(name_literal);                  \
+#define BOUNDED_TEST_CASE(name_literal, tags)                                         \
+    static constexpr verify_test::BoundedTestName PREVAIL_BOUNDED_NAME(name_literal); \
     TEST_CASE(PREVAIL_BOUNDED_NAME.data, tags)
 
 // Verify a program in a section that may have multiple programs in it.
@@ -206,88 +208,90 @@ struct BoundedTestName {
     VERIFY_PROGRAM(dirname, filename, section_name, "", _options, platform, should_pass, 1)
 
 #define TEST_SECTION(project, filename, section)                                               \
-    BOUNDED_TEST_CASE(project "/" filename " " section, "[verify][samples][" project "]") {            \
+    BOUNDED_TEST_CASE(project "/" filename " " section, "[verify][samples][" project "]") {    \
         VERIFY_SECTION(project, filename, section, {}, &prevail::g_ebpf_platform_linux, true); \
     }
 
-#define TEST_SECTION_SLOW(project, filename, section)                                          \
-    BOUNDED_TEST_CASE(project "/" filename " " section, "[verify][samples][slow][" project "]") {      \
-        VERIFY_SECTION(project, filename, section, {}, &prevail::g_ebpf_platform_linux, true); \
+#define TEST_SECTION_SLOW(project, filename, section)                                             \
+    BOUNDED_TEST_CASE(project "/" filename " " section, "[verify][samples][slow][" project "]") { \
+        VERIFY_SECTION(project, filename, section, {}, &prevail::g_ebpf_platform_linux, true);    \
     }
 
 #define TEST_PROGRAM(project, filename, section_name, program_name, count)                                       \
-    BOUNDED_TEST_CASE(project "/" filename " " program_name, "[verify][samples][" project "]") {                         \
+    BOUNDED_TEST_CASE(project "/" filename " " program_name, "[verify][samples][" project "]") {                 \
         VERIFY_PROGRAM(project, filename, section_name, program_name, {}, &prevail::g_ebpf_platform_linux, true, \
                        count);                                                                                   \
     }
 
 #define TEST_PROGRAM_FAIL(project, filename, section_name, program_name, count, kind)                            \
-    BOUNDED_TEST_CASE(project "/" filename " " program_name, "[!shouldfail][verify][samples][" project "]") {            \
+    BOUNDED_TEST_CASE(project "/" filename " " program_name, "[!shouldfail][verify][samples][" project "]") {    \
         INFO("issue_kind=" << verify_test::to_string(kind));                                                     \
         VERIFY_PROGRAM(project, filename, section_name, program_name, {}, &prevail::g_ebpf_platform_linux, true, \
                        count);                                                                                   \
     }
 
 #define TEST_PROGRAM_REJECT(project, filename, section_name, program_name, count)                                 \
-    BOUNDED_TEST_CASE(project "/" filename " " program_name, "[verify][samples][" project "]") {                          \
+    BOUNDED_TEST_CASE(project "/" filename " " program_name, "[verify][samples][" project "]") {                  \
         VERIFY_PROGRAM(project, filename, section_name, program_name, {}, &prevail::g_ebpf_platform_linux, false, \
                        count);                                                                                    \
     }
 
 #define TEST_PROGRAM_REJECT_FAIL(project, filename, section_name, program_name, count)                            \
-    BOUNDED_TEST_CASE(project "/" filename " " program_name, "[!shouldfail][verify][samples][" project "]") {             \
+    BOUNDED_TEST_CASE(project "/" filename " " program_name, "[!shouldfail][verify][samples][" project "]") {     \
         VERIFY_PROGRAM(project, filename, section_name, program_name, {}, &prevail::g_ebpf_platform_linux, false, \
                        count);                                                                                    \
     }
 
 #define TEST_SECTION_REJECT(project, filename, section)                                         \
-    BOUNDED_TEST_CASE(project "/" filename " " section, "[verify][samples][" project "]") {             \
+    BOUNDED_TEST_CASE(project "/" filename " " section, "[verify][samples][" project "]") {     \
         VERIFY_SECTION(project, filename, section, {}, &prevail::g_ebpf_platform_linux, false); \
     }
 
 #define TEST_SECTION_REJECT_IF_STRICT(project, filename, section)                                    \
-    BOUNDED_TEST_CASE(project "/" filename " " section, "[verify][samples][" project "]") {                  \
+    BOUNDED_TEST_CASE(project "/" filename " " section, "[verify][samples][" project "]") {          \
         prevail::ebpf_verifier_options_t options{};                                                  \
         VERIFY_SECTION(project, filename, section, options, &prevail::g_ebpf_platform_linux, true);  \
         options.strict = true;                                                                       \
         VERIFY_SECTION(project, filename, section, options, &prevail::g_ebpf_platform_linux, false); \
     }
 
-#define TEST_SECTION_FAIL(project, filename, section, kind)                                                        \
-    BOUNDED_TEST_CASE("expect failure " project "/" filename " " section, "[!shouldfail][verify][samples][" project "]") { \
-        INFO("issue_kind=" << verify_test::to_string(kind));                                                       \
-        VERIFY_SECTION(project, filename, section, {}, &prevail::g_ebpf_platform_linux, true);                     \
-    }
-
-#define TEST_SECTION_SKIP(project, filename, section, kind)                         \
-    BOUNDED_TEST_CASE(project "/" filename " " section, "[verify][samples][" project "]") { \
-        SKIP(verify_test::to_string(kind));                                         \
-    }
-
-#define TEST_PROGRAM_SKIP(project, filename, section_name, program_name, kind)           \
-    BOUNDED_TEST_CASE(project "/" filename " " program_name, "[verify][samples][" project "]") { \
-        SKIP(verify_test::to_string(kind));                                              \
-    }
-
-#define TEST_SECTION_REJECT_LOAD(project, filename, section)                                                        \
-    BOUNDED_TEST_CASE("expect load rejection " project "/" filename " " section, "[verify][samples][" project "]") {        \
-        REQUIRE_THROWS_AS(([&]() {                                                                                  \
-                              (void)verify_test::read_elf_cached("ebpf-samples/" project "/" filename, section, "", \
-                                                                 {}, &prevail::g_ebpf_platform_linux);              \
-                          }()),                                                                                     \
-                          std::runtime_error);                                                                      \
-    }
-
-#define TEST_SECTION_FAIL_SLOW(project, filename, section, kind)                               \
+#define TEST_SECTION_FAIL(project, filename, section, kind)                                    \
     BOUNDED_TEST_CASE("expect failure " project "/" filename " " section,                      \
-                      "[!shouldfail][verify][samples][slow][" project "]") {                           \
+                      "[!shouldfail][verify][samples][" project "]") {                         \
         INFO("issue_kind=" << verify_test::to_string(kind));                                   \
         VERIFY_SECTION(project, filename, section, {}, &prevail::g_ebpf_platform_linux, true); \
     }
 
-#define TEST_SECTION_REJECT_FAIL(project, filename, section)                                                       \
-    BOUNDED_TEST_CASE("expect failure " project "/" filename " " section, "[!shouldfail][verify][samples][" project "]") { \
-        VERIFY_SECTION(project, filename, section, {}, &prevail::g_ebpf_platform_linux, false);                    \
+#define TEST_SECTION_SKIP(project, filename, section, kind)                                 \
+    BOUNDED_TEST_CASE(project "/" filename " " section, "[verify][samples][" project "]") { \
+        SKIP(verify_test::to_string(kind));                                                 \
+    }
+
+#define TEST_PROGRAM_SKIP(project, filename, section_name, program_name, kind)                   \
+    BOUNDED_TEST_CASE(project "/" filename " " program_name, "[verify][samples][" project "]") { \
+        SKIP(verify_test::to_string(kind));                                                      \
+    }
+
+#define TEST_SECTION_REJECT_LOAD(project, filename, section)                                                         \
+    BOUNDED_TEST_CASE("expect load rejection " project "/" filename " " section, "[verify][samples][" project "]") { \
+        REQUIRE_THROWS_AS(([&]() {                                                                                   \
+                              (void)verify_test::read_elf_cached("ebpf-samples/" project "/" filename, section, "",  \
+                                                                 {}, &prevail::g_ebpf_platform_linux);               \
+                          }()),                                                                                      \
+                          std::runtime_error);                                                                       \
+    }
+
+#define TEST_SECTION_FAIL_SLOW(project, filename, section, kind)                               \
+    BOUNDED_TEST_CASE("expect failure " project "/" filename " " section,                      \
+                      "[!shouldfail][verify][samples][slow][" project "]") {                   \
+        INFO("issue_kind=" << verify_test::to_string(kind));                                   \
+        VERIFY_SECTION(project, filename, section, {}, &prevail::g_ebpf_platform_linux, true); \
+    }
+
+#define TEST_SECTION_REJECT_FAIL(project, filename, section)                                    \
+    BOUNDED_TEST_CASE("expect failure " project "/" filename " " section,                       \
+                      "[!shouldfail][verify][samples][" project "]") {                          \
+        VERIFY_SECTION(project, filename, section, {}, &prevail::g_ebpf_platform_linux, false); \
     }
 
 #define TEST_SECTION_LEGACY(dirname, filename, sectionname) TEST_SECTION(dirname, filename, sectionname)
