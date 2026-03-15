@@ -390,8 +390,8 @@ struct Unmarshaller {
     }
 
     [[nodiscard]]
-    auto makeLddw(const EbpfInst inst, const int32_t next_imm, const vector<EbpfInst>& insts,
-                  const Pc pc) const -> Instruction {
+    auto makeLddw(const EbpfInst inst, const int32_t next_imm, const vector<EbpfInst>& insts, const Pc pc) const
+        -> Instruction {
         if (pc >= insts.size() - 1) {
             throw InvalidInstruction(pc, "incomplete lddw");
         }
@@ -502,7 +502,8 @@ struct Unmarshaller {
         };
         const auto return_info = classify_call_return_type(proto.return_type);
         if (!return_info.has_value()) {
-            return mark_unsupported(std::string("helper prototype is unavailable on this platform: ") + helper_prototype_name);
+            return mark_unsupported(std::string("helper prototype is unavailable on this platform: ") +
+                                    helper_prototype_name);
         }
         res.return_ptr_type = return_info->pointer_type;
         res.return_nullable = return_info->pointer_nullable;
