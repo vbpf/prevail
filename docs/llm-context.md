@@ -490,6 +490,20 @@ Typical fixes:
 
 When analyzing failures, you may need more context. Here's how to request it:
 
+### MCP Server (Recommended for LLM Agents)
+
+If the `prevail_mcp` MCP server is available, use it for structured queries instead
+of parsing text output. The MCP server exposes the same analysis data as `prevail -v`
+and `prevail --failure-slice` through JSON tool calls:
+
+- **`get_slice`** — Backward slice with register relevance (replaces manual `-v` parsing)
+- **`get_invariant`** — Query pre/post state at specific PCs
+- **`get_instruction`** — Full detail for specific instructions
+- **`check_constraint`** — Test hypotheses about the verifier's state
+- **`get_source_mapping`** — Map between C source lines and BPF instructions
+
+See [src/mcp/README.md](../src/mcp/README.md) for the full tool reference.
+
 ### Verbose Output
 
 Run with `-v` flag for verbose output showing invariants at each step:
@@ -504,6 +518,14 @@ Request the full disassembly to see surrounding instructions:
 
 ```bash
 ./bin/prevail <elf-file> <section> --asm <disasm-file>
+```
+
+### Failure Slicing
+
+Run with `--failure-slice` for a minimal diagnostic showing only causal instructions:
+
+```bash
+./bin/prevail <elf-file> <section> --failure-slice
 ```
 
 ### Specific Invariant
