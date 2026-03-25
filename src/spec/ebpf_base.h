@@ -74,11 +74,17 @@ typedef struct _ebpf_context_descriptor {
 
 // Maximum number of nested function calls allowed in eBPF programs.
 // This limit helps prevent stack overflow and ensures predictable behavior.
+#ifndef MAX_CALL_STACK_FRAMES
 #define MAX_CALL_STACK_FRAMES 8
+#endif
 
 // Stack space allocated for each subprogram (in bytes).
 // This ensures each function call has its own dedicated stack space.
+#ifndef EBPF_SUBPROGRAM_STACK_SIZE
 #define EBPF_SUBPROGRAM_STACK_SIZE 512
+#endif
 
 // Total stack space usable with nested subprogram calls.
+#ifndef EBPF_TOTAL_STACK_SIZE
 #define EBPF_TOTAL_STACK_SIZE (MAX_CALL_STACK_FRAMES * EBPF_SUBPROGRAM_STACK_SIZE)
+#endif
