@@ -85,6 +85,4 @@ typedef struct _ebpf_context_descriptor {
 #endif
 
 // Total stack space usable with nested subprogram calls.
-#ifndef EBPF_TOTAL_STACK_SIZE
 #define EBPF_TOTAL_STACK_SIZE (MAX_CALL_STACK_FRAMES * EBPF_SUBPROGRAM_STACK_SIZE)
-#endif
