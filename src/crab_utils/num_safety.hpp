@@ -27,4 +27,10 @@ constexpr auto keep_signed(std::signed_integral auto x) -> decltype(x) { return 
 
 // a guard to ensure that the signedness of the result is the same as the input
 constexpr auto keep_unsigned(std::unsigned_integral auto x) -> decltype(x) { return x; }
+
+// check that narrowing to Narrow and widening back preserves the value
+template <std::integral Narrow>
+constexpr bool fits_narrow(std::integral auto value) {
+    return static_cast<decltype(value)>(static_cast<Narrow>(value)) == value;
+}
 } // namespace prevail

@@ -88,10 +88,10 @@ bool rewrite_extern_constant_load(std::vector<EbpfInst>& instructions, const siz
     // by the runtime. Bail out if the value cannot survive the int32 → int64
     // sign-extension round-trip; the caller will fall back to the original
     // LDDW+LDX instruction sequence.
-    const auto truncated = static_cast<int32_t>(narrowed_value);
-    if (static_cast<uint64_t>(static_cast<int64_t>(truncated)) != narrowed_value) {
+    if (!fits_narrow<int32_t>(narrowed_value)) {
         return false;
     }
+    const auto truncated = static_cast<int32_t>(narrowed_value);
 
     // Use mov-imm to materialize the resolved constant in the destination register of
     // the load, and neutralize the preceding LDDW pair.
