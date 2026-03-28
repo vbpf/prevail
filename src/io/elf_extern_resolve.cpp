@@ -1,5 +1,6 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
+#include <cstdint>
 #include <optional>
 #include <string_view>
 #include <vector>
@@ -83,6 +84,15 @@ bool rewrite_extern_constant_load(std::vector<EbpfInst>& instructions, const siz
         narrowed_value = static_cast<uint64_t>((static_cast<int64_t>(narrowed_value << shift)) >> shift);
     }
 
+    // BPF MOV imm has a 32-bit immediate field that is sign-extended to 64 bits
+    // by the runtime. Bail out if the value cannot survive the int32 → int64
+    // sign-extension round-trip; the caller will fall back to the original
+    // LDDW+LDX instruction sequence.
+    if (!fits_narrow<int32_t>(narrowed_value)) {
+        return false;
+    }
+    const auto truncated = static_cast<int32_t>(narrowed_value);
+
     // Use mov-imm to materialize the resolved constant in the destination register of
     // the load, and neutralize the preceding LDDW pair.
     const uint8_t mov_opcode = width == 8 || mode == INST_MODE_MEMSX
@@ -91,7 +101,7 @@ bool rewrite_extern_constant_load(std::vector<EbpfInst>& instructions, const siz
     load_inst.opcode = mov_opcode;
     load_inst.src = 0;
     load_inst.offset = 0;
-    load_inst.imm = gsl::narrow<int32_t>(narrowed_value);
+    load_inst.imm = truncated;
 
     lo_inst.get() = make_mov_reg_nop(lo_inst.get().dst);
     hi_inst.get() = make_mov_reg_nop(hi_inst.get().dst);
