@@ -154,6 +154,18 @@ struct AnalysisResult {
     std::vector<FailureSlice> compute_failure_slices(const Program& prog) const {
         return compute_failure_slices(prog, SliceParams{});
     }
+
+    /// Compute a backward slice from an arbitrary label with a given seed relevance.
+    /// This is the general form used by both compute_failure_slices (for errors) and
+    /// the MCP server (for arbitrary-PC tracing).
+    /// @param prog The program CFG.
+    /// @param label The label to slice backward from.
+    /// @param seed_relevance The initial set of relevant registers/stack offsets.
+    /// @param max_steps Maximum worklist items to process.
+    /// @return A FailureSlice containing the impacted labels and per-label relevance.
+    [[nodiscard]]
+    FailureSlice compute_slice_from_label(const Program& prog, const Label& label, const RelevantState& seed_relevance,
+                                          size_t max_steps = 200) const;
 };
 
 void print_error(std::ostream& os, const VerificationError& error);
