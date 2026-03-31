@@ -100,6 +100,8 @@ string(REGEX REPLACE "([][+.*()^$?|\\\\])" "\\\\\\1" prevail_source_dir_escaped 
 
 file(GLOB_RECURSE prevail_LIB_SRC CONFIGURE_DEPENDS "${prevail_source_dir}/src/*.cpp")
 list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${prevail_source_dir_escaped}/src/main\\.cpp$")
+list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${prevail_source_dir_escaped}/src/prevail_mcp\\.cpp$")
+list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${prevail_source_dir_escaped}/src/mcp/.*")
 list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${prevail_source_dir_escaped}/src/test/.*")
 
 add_library(prevail ${prevail_LIB_SRC})
@@ -193,6 +195,37 @@ else ()
     RUNTIME_OUTPUT_DIRECTORY "${prevail_binary_dir}")
 endif ()
 
+# MCP server
+option(prevail_ENABLE_MCP "Build MCP server" OFF)
+if (prevail_ENABLE_MCP)
+  FetchContent_Declare(nlohmann_json
+    GIT_REPOSITORY "https://github.com/nlohmann/json.git"
+    GIT_TAG "v3.12.0"
+    GIT_SHALLOW ON
+  )
+  FetchContent_MakeAvailable(nlohmann_json)
+
+  file(GLOB prevail_MCP_SRC CONFIGURE_DEPENDS "${prevail_source_dir}/src/mcp/*.cpp")
+  add_library(prevail_mcp_lib STATIC ${prevail_MCP_SRC})
+  target_link_libraries(prevail_mcp_lib PUBLIC prevail nlohmann_json::nlohmann_json)
+  target_include_directories(prevail_mcp_lib PUBLIC
+    "${prevail_source_dir}/src"
+  )
+
+  add_executable(prevail_mcp "${prevail_source_dir}/src/prevail_mcp.cpp")
+  target_link_libraries(prevail_mcp PRIVATE prevail_mcp_lib ${CMAKE_DL_LIBS})
+  if (CMAKE_CONFIGURATION_TYPES)
+    set_target_properties(prevail_mcp PROPERTIES
+      RUNTIME_OUTPUT_DIRECTORY_DEBUG "${prevail_binary_dir}"
+      RUNTIME_OUTPUT_DIRECTORY_RELEASE "${prevail_binary_dir}"
+      RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${prevail_binary_dir}"
+    )
+  else ()
+    set_target_properties(prevail_mcp PROPERTIES
+      RUNTIME_OUTPUT_DIRECTORY "${prevail_binary_dir}")
+  endif ()
+endif ()
+
 # Tests
 if (prevail_ENABLE_TESTS)
   FetchContent_Declare(Catch2
@@ -218,6 +251,11 @@ if (prevail_ENABLE_TESTS)
   target_link_libraries(run_yaml PRIVATE prevail ebpf_yaml_lib)
 
   target_link_libraries(tests PRIVATE prevail ebpf_yaml_lib bpf_conformance_core Catch2::Catch2WithMain Threads::Threads yaml-cpp::yaml-cpp)
+
+  if (prevail_ENABLE_MCP)
+    target_link_libraries(tests PRIVATE prevail_mcp_lib)
+    target_compile_definitions(tests PRIVATE PREVAIL_HAS_MCP)
+  endif ()
 
   if (CMAKE_CONFIGURATION_TYPES)
     set_target_properties(tests run_yaml PROPERTIES
@@ -249,6 +287,7 @@ install(TARGETS prevail libbtf GSL
 install(DIRECTORY "${prevail_source_dir}/src/"
   DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/prevail"
   FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h"
+  PATTERN "mcp/*" EXCLUDE
   PATTERN "test/*" EXCLUDE
 )
 
