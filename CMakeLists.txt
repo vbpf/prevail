@@ -33,6 +33,8 @@ message("Building tests: ${prevail_ENABLE_TESTS}")
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+option(prevail_ENABLE_LTO "Enable link-time optimization" ON)
+
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
   "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
   set(COMMON_FLAGS -Wall -Wfatal-errors)
@@ -42,11 +44,16 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
   check_type_size("long" SIZEOF_LONG)
   add_compile_definitions(SIZEOF_VOID_P=${SIZEOF_VOID_P} SIZEOF_LONG=${SIZEOF_LONG})
 
-  set(RELEASE_FLAGS -O2 -flto=auto)
-  include(CheckIPOSupported)
-  check_ipo_supported(RESULT ipo_supported)
-  if (ipo_supported)
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+  if (prevail_ENABLE_LTO)
+    set(RELEASE_FLAGS -O2 -flto=auto)
+
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT ipo_supported)
+    if (ipo_supported)
+      set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+    endif ()
+  else ()
+    set(RELEASE_FLAGS -O2)
   endif ()
 
   set(RELWITHDEBINFO_FLAGS ${RELEASE_FLAGS} -g3)
