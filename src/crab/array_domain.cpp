@@ -613,9 +613,17 @@ std::optional<Variable> ArrayDomain::store_type(TypeDomain& inv, const Interval&
         return v;
     } else {
         using namespace dsl_syntax;
-        // havoc the entire range
+        // Weak update: cannot perform a strong update because the index is
+        // not a singleton. Havoc the type cells in the range.
         const auto [lb, ub] = as_numbytes_range(idx, width);
-        num_bytes.havoc(lb, ub);
+        if (!is_num) {
+            // A non-numeric value may overwrite previously numeric bytes,
+            // so conservatively mark the range as non-numeric.
+            num_bytes.havoc(lb, ub);
+        }
+        // When is_num is true, the value being stored is numeric. Any byte
+        // that gets written will still be numeric, and bytes not written
+        // keep their existing status, so num_bytes is left unchanged.
     }
     return {};
 }
