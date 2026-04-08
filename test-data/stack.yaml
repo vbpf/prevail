@@ -768,6 +768,7 @@ post:
   - r5.stack_offset=[504, 508]
   - r5.type=stack
   - s[504...511].type=number
+---
 test-case: stack store 32bit records number type
 
 pre: ["r6.type=stack", "r6.stack_offset=0",
