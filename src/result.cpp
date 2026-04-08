@@ -536,13 +536,21 @@ FailureSlice AnalysisResult::compute_slice_from_label(const Program& prog, const
 
             if (instruction_contributes) {
                 // Only include contributing labels in the output slice.
-                slice_labels[current_label] = relevant_before;
+                // Merge (not assign) because a label may be revisited from
+                // a different successor with additional relevance.
+                auto& existing = slice_labels[current_label];
+                existing.registers.insert(relevant_before.registers.begin(), relevant_before.registers.end());
+                existing.stack_offsets.insert(relevant_before.stack_offsets.begin(),
+                                             relevant_before.stack_offsets.end());
             }
         } else {
             // No deps available: conservatively treat this label as contributing
             // and propagate all current relevance to predecessors.
             relevant_before = relevant_after;
-            slice_labels[current_label] = relevant_before;
+            auto& existing = slice_labels[current_label];
+            existing.registers.insert(relevant_before.registers.begin(), relevant_before.registers.end());
+            existing.stack_offsets.insert(relevant_before.stack_offsets.begin(),
+                                         relevant_before.stack_offsets.end());
         }
 
         // Add predecessors to worklist
@@ -630,8 +638,10 @@ std::vector<FailureSlice> AnalysisResult::compute_failure_slices(const Program& 
             }
         }
         // Fallback: if no failing assertion was identified (shouldn't happen),
-        // or if the failing assertion has no register deps, aggregate all assertions.
-        if (!found_failing || initial_relevance.registers.empty()) {
+        // aggregate all assertions. When the failing assertion was found but has
+        // no register deps, leave the seed empty so compute_slice_from_label
+        // enters conservative mode.
+        if (!found_failing) {
             for (const auto& assertion : assertions) {
                 for (const auto& reg : extract_assertion_registers(assertion)) {
                     initial_relevance.registers.insert(reg);
