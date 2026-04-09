@@ -28,20 +28,6 @@
 
 namespace prevail {
 
-/// Verification options that affect analysis results.
-/// Defaults come from the platform (PlatformOps::default_options()).
-struct VerificationOptions {
-    bool check_termination;
-    bool allow_division_by_zero;
-    bool strict;
-
-    bool operator==(const VerificationOptions& other) const {
-        return check_termination == other.check_termination &&
-               allow_division_by_zero == other.allow_division_by_zero && strict == other.strict;
-    }
-    bool operator!=(const VerificationOptions& other) const { return !(*this == other); }
-};
-
 /// Holds all outputs from a single verification run.
 /// The session is always "live" — it retains both pre-serialized invariants
 /// (for callers that iterate or display them) and the live AnalysisResult with
@@ -51,6 +37,9 @@ struct AnalysisSession {
     std::string elf_path;
     std::string section;
     std::string program_name;
+
+    // The verifier options used for this session.
+    prevail::ebpf_verifier_options_t options;
 
     // The instruction sequence (labels + instructions + btf_line_info).
     prevail::InstructionSeq inst_seq;
@@ -101,16 +90,19 @@ class AnalysisEngine {
 
     /// Run analysis on the given ELF file (or return the current session if it
     /// matches). Keeps TLS alive so check_constraint and slicing work without
-    /// re-analyzing. Option overrides are applied per-call against platform
-    /// defaults; omitted options revert to defaults (they do not persist from
-    /// previous calls).
-    /// @param type  Optional program type name override (e.g. "xdp", "bind").
+    /// re-analyzing.
+    ///
+    /// @param options  Verifier options. When null, uses platform defaults.
+    ///                 Only the fields that affect analysis results
+    ///                 (check_for_termination, allow_division_by_zero, strict)
+    ///                 are compared for cache invalidation; verbosity and other
+    ///                 flags are passed through to the verifier without affecting
+    ///                 session caching.
+    /// @param type     Optional program type name override (e.g. "xdp", "bind").
     /// @throws std::runtime_error on ELF parse, unmarshal, or analysis failure.
     const AnalysisSession& analyze(const std::string& elf_path, const std::string& section = "",
                                    const std::string& program = "", const std::string& type = "",
-                                   std::optional<bool> check_termination = std::nullopt,
-                                   std::optional<bool> allow_division_by_zero = std::nullopt,
-                                   std::optional<bool> strict = std::nullopt);
+                                   const prevail::ebpf_verifier_options_t* options = nullptr);
 
     /// Check constraints against the live AnalysisResult (re-analyzes if needed).
     /// @param mode_str  "consistent", "entailed", or "proven".
@@ -139,8 +131,9 @@ class AnalysisEngine {
     /// List all programs in an ELF file.
     std::vector<ProgramEntry> list_programs(const std::string& elf_path);
 
-    /// Get the current verification options.
-    const VerificationOptions& options() const { return current_opts_; }
+    /// Get the verifier options used for the current session.
+    /// Returns platform defaults if no session exists.
+    const prevail::ebpf_verifier_options_t& session_options() const;
 
     /// Get the platform pointer.
     const prevail::ebpf_platform_t* platform() const { return ops_->platform(); }
@@ -151,12 +144,15 @@ class AnalysisEngine {
   private:
     /// Check if the current session matches the requested program and options.
     bool session_matches(const std::string& elf_path, const std::string& section, const std::string& program,
-                         const std::string& type) const;
+                         const std::string& type, const prevail::ebpf_verifier_options_t& options) const;
+
+    /// Check if two option sets produce the same analysis results.
+    static bool analysis_options_equal(const prevail::ebpf_verifier_options_t& a,
+                                       const prevail::ebpf_verifier_options_t& b);
 
     PlatformOps* ops_;
     std::optional<AnalysisSession> session_;
     std::string session_type_;          // Program type override used for the current session.
-    VerificationOptions current_opts_;  // Current verification options (applied to session_).
 };
 
 } // namespace prevail

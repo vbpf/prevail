@@ -10,21 +10,25 @@
 
 namespace prevail {
 
-AnalysisEngine::AnalysisEngine(PlatformOps* ops) : ops_(ops) {
-    // Initialize options from platform defaults.
-    auto defaults = ops_->default_options();
-    current_opts_.check_termination = defaults.cfg_opts.check_for_termination;
-    current_opts_.allow_division_by_zero = defaults.allow_division_by_zero;
-    current_opts_.strict = defaults.strict;
+AnalysisEngine::AnalysisEngine(PlatformOps* ops) : ops_(ops) {}
+
+bool AnalysisEngine::analysis_options_equal(const prevail::ebpf_verifier_options_t& a,
+                                             const prevail::ebpf_verifier_options_t& b) {
+    return a.cfg_opts.check_for_termination == b.cfg_opts.check_for_termination &&
+           a.allow_division_by_zero == b.allow_division_by_zero && a.strict == b.strict;
 }
 
 bool AnalysisEngine::session_matches(const std::string& elf_path, const std::string& section,
-                                     const std::string& program, const std::string& type) const {
+                                     const std::string& program, const std::string& type,
+                                     const prevail::ebpf_verifier_options_t& options) const {
     if (!session_) {
         return false;
     }
     if (session_->elf_path != elf_path || session_->section != section || session_->program_name != program ||
         session_type_ != type) {
+        return false;
+    }
+    if (!analysis_options_equal(session_->options, options)) {
         return false;
     }
     // Re-analyze if the file has been modified since last analysis.
@@ -35,45 +39,32 @@ bool AnalysisEngine::session_matches(const std::string& elf_path, const std::str
     }
 }
 
+const prevail::ebpf_verifier_options_t& AnalysisEngine::session_options() const {
+    if (session_) {
+        return session_->options;
+    }
+    // No session — return platform defaults. Cache to avoid returning a dangling reference.
+    static thread_local prevail::ebpf_verifier_options_t defaults;
+    defaults = ops_->default_options();
+    return defaults;
+}
+
 std::vector<ProgramEntry> AnalysisEngine::list_programs(const std::string& elf_path) {
     return ops_->list_programs(elf_path);
 }
 
 const AnalysisSession& AnalysisEngine::analyze(const std::string& elf_path, const std::string& section,
                                                const std::string& program, const std::string& type,
-                                               std::optional<bool> check_termination,
-                                               std::optional<bool> allow_division_by_zero,
-                                               std::optional<bool> strict) {
-    // Build options from platform defaults, applying any explicit overrides.
-    // Options do not persist across calls — omitted options revert to defaults.
-    const auto defaults = ops_->default_options();
-    VerificationOptions new_opts{
-        defaults.cfg_opts.check_for_termination,
-        defaults.allow_division_by_zero,
-        defaults.strict,
-    };
-    if (check_termination.has_value()) {
-        new_opts.check_termination = *check_termination;
-    }
-    if (allow_division_by_zero.has_value()) {
-        new_opts.allow_division_by_zero = *allow_division_by_zero;
-    }
-    if (strict.has_value()) {
-        new_opts.strict = *strict;
-    }
-
-    // If options changed, invalidate the current session.
-    if (new_opts != current_opts_) {
-        session_.reset();
-        current_opts_ = new_opts;
-    }
+                                               const prevail::ebpf_verifier_options_t* options) {
+    // Use caller-provided options or platform defaults.
+    prevail::ebpf_verifier_options_t effective_options = options ? *options : ops_->default_options();
 
     // Reuse the current session if it matches.
-    if (session_matches(elf_path, section, program, type)) {
+    if (session_matches(elf_path, section, program, type, effective_options)) {
         return *session_;
     }
 
-    // Different program — discard old session and run fresh analysis.
+    // Different program or options — discard old session and run fresh analysis.
     session_.reset();
 
     ops_->prepare_tls(type);
@@ -98,15 +89,7 @@ const AnalysisSession& AnalysisEngine::analyze(const std::string& elf_path, cons
 
     auto tls_guard = std::make_unique<prevail::ThreadLocalGuard>();
 
-    prevail::ebpf_verifier_options_t options = ops_->default_options();
-    options.cfg_opts.check_for_termination = current_opts_.check_termination;
-    options.allow_division_by_zero = current_opts_.allow_division_by_zero;
-    options.strict = current_opts_.strict;
-    options.verbosity_opts.print_failures = true;
-    options.verbosity_opts.print_line_info = true;
-    options.verbosity_opts.collect_instruction_deps = true;
-
-    prevail::ElfObject elf(elf_path, options, ops_->platform());
+    prevail::ElfObject elf(elf_path, effective_options, ops_->platform());
     const auto& raw_progs = elf.get_programs(target_section, target_program);
 
     if (raw_progs.empty()) {
@@ -115,13 +98,13 @@ const AnalysisSession& AnalysisEngine::analyze(const std::string& elf_path, cons
     const auto& found = raw_progs.front();
 
     std::vector<std::vector<std::string>> notes;
-    auto prog_or_error = prevail::unmarshal(found, notes, options);
+    auto prog_or_error = prevail::unmarshal(found, notes, effective_options);
     if (auto* err = std::get_if<std::string>(&prog_or_error)) {
         throw std::runtime_error("Unmarshal error: " + *err);
     }
     auto& inst_seq = std::get<prevail::InstructionSeq>(prog_or_error);
 
-    prevail::Program prog = prevail::Program::from_sequence(inst_seq, found.info, options);
+    prevail::Program prog = prevail::Program::from_sequence(inst_seq, found.info, effective_options);
     prevail::AnalysisResult result = prevail::analyze(prog);
 
     // Build session with serialized invariants (while TLS is alive).
@@ -129,6 +112,7 @@ const AnalysisSession& AnalysisEngine::analyze(const std::string& elf_path, cons
     session.elf_path = elf_path;
     session.section = found.section_name;
     session.program_name = found.function_name;
+    session.options = effective_options;
     session.inst_seq = std::move(inst_seq);
     session.program = std::move(prog);
     session.failed = result.failed;

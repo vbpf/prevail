@@ -14,18 +14,19 @@ namespace prevail {
 class PrevailPlatformOps : public PlatformOps
 {
   public:
-    explicit PrevailPlatformOps(const prevail::ebpf_platform_t* platform) : platform_(platform) {}
+    explicit PrevailPlatformOps(const prevail::ebpf_platform_t* platform) : platform_(*platform) {}
+    explicit PrevailPlatformOps(prevail::ebpf_platform_t platform) : platform_(platform) {}
 
     [[nodiscard]] const prevail::ebpf_platform_t*
     platform() const override
     {
-        return platform_;
+        return &platform_;
     }
 
     [[nodiscard]] std::vector<ProgramEntry>
     list_programs(const std::string& elf_path) override
     {
-        prevail::ElfObject elf(elf_path, default_options(), platform_);
+        prevail::ElfObject elf(elf_path, default_options(), &platform_);
         std::vector<ProgramEntry> result;
         for (const auto& info : elf.list_programs()) {
             if (prevail::ElfObject::is_valid(info)) {
@@ -38,10 +39,6 @@ class PrevailPlatformOps : public PlatformOps
     void
     prepare_tls(const std::string& /*type_override*/) override
     {
-        // PREVAIL's ThreadLocalGuard handles cleanup on scope exit.
-        // The Linux platform resolves program types from section names
-        // via the platform's get_program_type() callback, so no
-        // global type override is needed.
         prevail::ebpf_verifier_clear_thread_local_state();
     }
 
@@ -49,7 +46,6 @@ class PrevailPlatformOps : public PlatformOps
     default_options() override
     {
         prevail::ebpf_verifier_options_t opts{};
-        // Match prevail defaults (termination not checked by default).
         opts.mock_map_fds = true;
         opts.setup_constraints = true;
         opts.allow_division_by_zero = true;
@@ -57,13 +53,8 @@ class PrevailPlatformOps : public PlatformOps
         return opts;
     }
 
-    // validate_elf: default (always true) — PREVAIL's read_elf handles
-    // malformed ELFs via exceptions.
-
-    // fallback_verify: default (empty) — no SEH recovery needed on Linux.
-
   private:
-    const prevail::ebpf_platform_t* platform_;
+    prevail::ebpf_platform_t platform_;
 };
 
 } // namespace prevail
