@@ -55,6 +55,7 @@ void add_global_variable_maps(const ELFIO::elfio& reader, ElfGlobalData& global,
             .value_size = gsl::narrow<uint32_t>(section->get_size()),
             .max_entries = 1,
             .inner_map_fd = DEFAULT_MAP_FD,
+            .name = section->get_name(),
         });
 
         global.variable_section_indices.insert(section->get_index());
