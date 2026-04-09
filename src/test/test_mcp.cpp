@@ -950,15 +950,19 @@ TEST_CASE("engine invalidates session when options change", "[mcp][engine]") {
     bool failed1 = s1.failed;  // Save before session is replaced.
     REQUIRE(failed1 == false);  // Default: allow_division_by_zero = true.
 
-    const auto& s2 = engine.analyze(path, "", "", "", std::nullopt, false);
+    prevail::ebpf_verifier_options_t opts2 = ops.default_options();
+    opts2.allow_division_by_zero = false;
+    opts2.verbosity_opts.print_failures = true;
+    opts2.verbosity_opts.collect_instruction_deps = true;
+    const auto& s2 = engine.analyze(path, "", "", "", &opts2);
     REQUIRE(s2.failed == true);  // Now: allow_division_by_zero = false.
 }
 
-TEST_CASE("engine options getter reflects current state", "[mcp][engine]") {
+TEST_CASE("engine session_options reflects current state", "[mcp][engine]") {
     prevail::PrevailPlatformOps ops(&g_ebpf_platform_linux);
     prevail::AnalysisEngine engine(&ops);
 
-    auto initial = engine.options();
+    const auto& initial = engine.session_options();
     REQUIRE(initial.allow_division_by_zero == true);
 }
 

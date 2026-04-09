@@ -16,6 +16,27 @@ using json = nlohmann::json;
 
 namespace prevail {
 
+/// Build verifier options from JSON args, starting from engine defaults.
+/// Applies check_termination, allow_division_by_zero, strict, and
+/// sets verbosity flags needed for MCP tools (print_failures, print_line_info,
+/// collect_instruction_deps).
+static prevail::ebpf_verifier_options_t build_options(const json& args, AnalysisEngine& engine) {
+    prevail::ebpf_verifier_options_t options = engine.ops()->default_options();
+    if (args.contains("check_termination")) {
+        options.cfg_opts.check_for_termination = args["check_termination"].get<bool>();
+    }
+    if (args.contains("allow_division_by_zero")) {
+        options.allow_division_by_zero = args["allow_division_by_zero"].get<bool>();
+    }
+    if (args.contains("strict")) {
+        options.strict = args["strict"].get<bool>();
+    }
+    options.verbosity_opts.print_failures = true;
+    options.verbosity_opts.print_line_info = true;
+    options.verbosity_opts.collect_instruction_deps = true;
+    return options;
+}
+
 // Helper: find the primary label for a given PC in the analysis session.
 // Returns the first label with .to == -1 (sequential flow), or the first available label.
 static prevail::Label find_label_for_pc(const AnalysisSession& session, int pc) {
@@ -65,17 +86,9 @@ static json handle_verify_program(const json& args, AnalysisEngine& engine) {
     const std::string section = args.value("section", "");
     const std::string program = args.value("program", "");
     const std::string type = args.value("program_type", "");
-    const auto opt_termination = args.contains("check_termination")
-                                     ? std::optional<bool>(args["check_termination"].get<bool>())
-                                     : std::nullopt;
-    const auto opt_div_zero = args.contains("allow_division_by_zero")
-                                  ? std::optional<bool>(args["allow_division_by_zero"].get<bool>())
-                                  : std::nullopt;
-    const auto opt_strict =
-        args.contains("strict") ? std::optional<bool>(args["strict"].get<bool>()) : std::nullopt;
+    auto options = build_options(args, engine);
 
-    const auto& session =
-        engine.analyze(elf_path, section, program, type, opt_termination, opt_div_zero, opt_strict);
+    const auto& session = engine.analyze(elf_path, section, program, type, &options);
 
     // Count errors.
     int error_count = 0;
@@ -568,17 +581,9 @@ static json handle_get_slice(const json& args, AnalysisEngine& engine) {
     const std::string program = args.value("program", "");
     const std::string type = args.value("program_type", "");
     const size_t trace_depth = std::min(args.value("trace_depth", static_cast<size_t>(200)), static_cast<size_t>(10000));
-    const auto opt_termination = args.contains("check_termination")
-                                     ? std::optional<bool>(args["check_termination"].get<bool>())
-                                     : std::nullopt;
-    const auto opt_div_zero = args.contains("allow_division_by_zero")
-                                  ? std::optional<bool>(args["allow_division_by_zero"].get<bool>())
-                                  : std::nullopt;
-    const auto opt_strict =
-        args.contains("strict") ? std::optional<bool>(args["strict"].get<bool>()) : std::nullopt;
+    auto options = build_options(args, engine);
 
-    const auto& session =
-        engine.analyze(elf_path, section, program, type, opt_termination, opt_div_zero, opt_strict);
+    const auto& session = engine.analyze(elf_path, section, program, type, &options);
 
     prevail::Label target_label = prevail::Label::entry;
 
@@ -749,11 +754,8 @@ static json handle_verify_assembly(const json& args, AnalysisEngine& engine) {
         throw std::runtime_error("map_key_size and map_value_size must be positive");
     }
 
-    // Set up verification options.
-    prevail::ebpf_verifier_options_t options = engine.ops()->default_options();
-    options.cfg_opts.check_for_termination = engine.options().check_termination;
-    options.allow_division_by_zero = engine.options().allow_division_by_zero;
-    options.strict = engine.options().strict;
+    // Set up verification options from the current session (or platform defaults).
+    prevail::ebpf_verifier_options_t options = engine.session_options();
     if (args.contains("check_termination")) {
         options.cfg_opts.check_for_termination = args["check_termination"].get<bool>();
     }
