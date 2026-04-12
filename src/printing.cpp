@@ -714,8 +714,7 @@ void print(const InstructionSeq& insts, std::ostream& out, const std::optional<c
 std::ostream& operator<<(std::ostream& o, const EbpfMapDescriptor& desc) {
     return o << "(" << "original_fd = " << desc.original_fd << ", " << "inner_map_fd = " << desc.inner_map_fd << ", "
              << "type = " << desc.type << ", " << "max_entries = " << desc.max_entries << ", "
-             << "value_size = " << desc.value_size << ", " << "key_size = " << desc.key_size << ", "
-             << "name = " << desc.name << ")";
+             << "value_size = " << desc.value_size << ", " << "key_size = " << desc.key_size << ")";
 }
 
 void print_map_descriptors(const std::vector<EbpfMapDescriptor>& descriptors, std::ostream& o) {
