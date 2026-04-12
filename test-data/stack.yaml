@@ -743,6 +743,54 @@ post:
   - s[0...7].svalue=0
   - s[0...7].uvalue=0
 ---
+test-case: numeric store through imprecise pointer preserves num_bytes
+
+pre: ["r2.type=stack", "r2.stack_offset=504",
+      "r3.type=number", "r3.svalue=0", "r3.uvalue=0",
+      "r5.type=stack", "r5.stack_offset=[504, 508]",
+      "r10.type=stack", "r10.stack_offset=512",
+      "s[504...511].type=number"]
+
+code:
+  <start>: |
+    *(u32 *)(r5 + 0) = r3
+
+post:
+  - r10.stack_offset=512
+  - r10.type=stack
+  - r2.stack_numeric_size=8
+  - r2.stack_offset=504
+  - r2.type=stack
+  - r3.svalue=0
+  - r3.type=number
+  - r3.uvalue=0
+  - r5.stack_numeric_size=4
+  - r5.stack_offset=[504, 508]
+  - r5.type=stack
+  - s[504...511].type=number
+---
+test-case: non-numeric store through imprecise pointer havocs num_bytes
+
+pre: ["r2.type=stack", "r2.stack_offset=504",
+      "r3.type=stack", "r3.stack_offset=100",
+      "r5.type=stack", "r5.stack_offset=[504, 508]",
+      "r10.type=stack", "r10.stack_offset=512",
+      "s[504...511].type=number"]
+
+code:
+  <start>: |
+    *(u64 *)(r5 + 0) = r3
+
+post:
+  - r10.stack_offset=512
+  - r10.type=stack
+  - r2.stack_offset=504
+  - r2.type=stack
+  - r3.stack_offset=100
+  - r3.type=stack
+  - r5.stack_offset=[504, 508]
+  - r5.type=stack
+---
 test-case: stack store 32bit records number type
 
 pre: ["r6.type=stack", "r6.stack_offset=0",
