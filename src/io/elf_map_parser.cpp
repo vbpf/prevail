@@ -55,6 +55,7 @@ void add_global_variable_maps(const ELFIO::elfio& reader, ElfGlobalData& global,
             .value_size = gsl::narrow<uint32_t>(section->get_size()),
             .max_entries = 1,
             .inner_map_fd = DEFAULT_MAP_FD,
+            .name = section->get_name(),
         });
 
         global.variable_section_indices.insert(section->get_index());
@@ -91,6 +92,7 @@ ElfGlobalData parse_btf_section(const parse_params_t& parse_params, const ELFIO:
                 .value_size = map.value_size,
                 .max_entries = map.max_entries,
                 .inner_map_fd = map.inner_map_type_id == 0 ? DEFAULT_MAP_FD : gsl::narrow<int>(map.inner_map_type_id),
+                .name = map.name,
             });
         }
     } catch (const std::exception& e) {
@@ -139,6 +141,7 @@ ElfGlobalData create_global_variable_maps(const ELFIO::elfio& reader) {
             .value_size = gsl::narrow<uint32_t>(section->get_size()),
             .max_entries = 1,
             .inner_map_fd = DEFAULT_MAP_FD,
+            .name = section->get_name(),
         });
 
         global.variable_section_indices.insert(section->get_index());
@@ -267,6 +270,7 @@ ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO
         }
 
         map_offsets[sym_details.name] = descriptor_index;
+        global.map_descriptors[descriptor_index].name = sym_details.name;
     }
 
     for (const auto section : global_sections(reader)) {
@@ -278,6 +282,7 @@ ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO
             .value_size = gsl::narrow<uint32_t>(section->get_size()),
             .max_entries = 1,
             .inner_map_fd = DEFAULT_MAP_FD,
+            .name = section->get_name(),
         });
         global.variable_section_indices.insert(section->get_index());
     }

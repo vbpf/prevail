@@ -87,11 +87,6 @@ class EbpfDomain final {
     [[nodiscard]]
     std::optional<int64_t> get_stack_offset(const Reg& reg) const;
 
-  private:
-    // private generic domain functions
-    void add_value_constraint(const LinearConstraint& cst);
-    void havoc(Variable var);
-
     [[nodiscard]]
     std::optional<uint32_t> get_map_type(const Reg& map_fd_reg) const;
     [[nodiscard]]
@@ -104,6 +99,11 @@ class EbpfDomain final {
     Interval get_map_max_entries(const Reg& map_fd_reg) const;
 
     bool get_map_fd_range(const Reg& map_fd_reg, int32_t* start_fd, int32_t* end_fd) const;
+
+  private:
+    // private generic domain functions
+    void add_value_constraint(const LinearConstraint& cst);
+    void havoc(Variable var);
 
     /// Type + numeric tracking
     TypeToNumDomain state;

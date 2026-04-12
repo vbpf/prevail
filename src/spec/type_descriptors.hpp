@@ -30,6 +30,7 @@ struct EbpfMapDescriptor {
     unsigned int value_size;
     unsigned int max_entries;
     int inner_map_fd;
+    std::string name; // Map name from ELF (empty if not available).
 };
 
 struct EbpfProgramType {
