@@ -291,28 +291,51 @@ ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO
     return global;
 }
 
+/// @brief Mark descriptors that serve only as inner map templates. At runtime
+/// the actual inner map can be any map with matching structure, not necessarily
+/// the template defined in the ELF.
+void mark_inner_map_templates(ElfGlobalData& global) {
+    for (const auto& desc : global.map_descriptors) {
+        if (desc.inner_map_fd != DEFAULT_MAP_FD) {
+            for (auto& inner_desc : global.map_descriptors) {
+                if (inner_desc.original_fd == desc.inner_map_fd) {
+                    inner_desc.is_inner_map_template = true;
+                }
+            }
+        }
+    }
+}
+
 } // namespace
 
 ElfGlobalData extract_global_data(const parse_params_t& params, const ELFIO::elfio& reader,
                                   const ELFIO::const_symbol_section_accessor& symbols) {
     if (reader.sections[".BTF"] && reader.sections[".maps"]) {
         try {
-            return parse_btf_section(params, reader);
+            auto global = parse_btf_section(params, reader);
+            mark_inner_map_templates(global);
+            return global;
         } catch (const UnmarshalError& e) {
             // BTF-defined maps can't be decoded; fall back to section-based map descriptors.
             std::cerr << "BTF map parsing failed, falling back to section-based maps: " << e.what() << std::endl;
         }
-        return parse_map_sections(params, reader, symbols);
+        auto global = parse_map_sections(params, reader, symbols);
+        mark_inner_map_templates(global);
+        return global;
     }
 
     const bool has_legacy_maps =
         std::ranges::any_of(reader.sections, [](const auto& s) { return is_map_section(s->get_name()); });
     if (has_legacy_maps) {
-        return parse_map_sections(params, reader, symbols);
+        auto global = parse_map_sections(params, reader, symbols);
+        mark_inner_map_templates(global);
+        return global;
     }
 
     if (reader.sections[".BTF"]) {
-        return parse_btf_section(params, reader);
+        auto global = parse_btf_section(params, reader);
+        mark_inner_map_templates(global);
+        return global;
     }
 
     return create_global_variable_maps(reader);
