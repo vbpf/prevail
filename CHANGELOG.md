@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.2.1 (2026-04-14)
+
+Bug fixes, API enhancements, and infrastructure updates.
+14 commits since v0.2.0.
+
+### API
+
+- Make stack size and call depth runtime parameters via `--stack-size`
+  and `--max-call-stack-frames` CLI options (#1070).
+- Add map name in `EbpfMapDescriptor` and make map-related functions
+  public in `EbpfDomain` (#1066). Note: inner map template names may
+  be misleading; see #1069.
+
+### Bug fixes
+
+- Fix stack numeric size lost through imprecise pointer stores (#1068).
+- Fix `rewrite_extern_constant_load` crash on values exceeding int32
+  range (#1054).
+- Fix heap-buffer-overflow in legacy maps section parsing.
+- Only use result from `get_helper_prototype` when valid.
+
+### ELF loader
+
+- Fix `load_elf` to support non-file istream paths and add regression
+  tests (#1048).
+- Add `.ksyms` kfunc relocation support.
+
+### Infrastructure
+
+- Upgrade to C++23.
+- Bump Catch2 from v3.13.0 to v3.14.0.
+- Bump external/bpf_conformance, external/libbtf.
+
 ## v0.2.0 (2026-02-22)
 
 Major expansion of type system, platform modeling, and safety guarantees.
