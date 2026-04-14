@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -61,8 +60,8 @@ struct ebpf_verifier_options_t {
     // Per-subprogram stack frame size in bytes.
     int subprogram_stack_size = EBPF_SUBPROGRAM_STACK_SIZE;
 
-    // Maximum valid subprogram stack size (bounded by int32 range used in the numeric domain).
-    static constexpr int max_subprogram_stack_size = std::numeric_limits<int32_t>::max() / MAX_CALL_STACK_FRAMES;
+    // Maximum valid subprogram stack size. 1 MB per frame is far beyond any realistic use.
+    static constexpr int max_subprogram_stack_size = 1024 * 1024;
 
     // Total stack size across all nested frames.
     [[nodiscard]]
