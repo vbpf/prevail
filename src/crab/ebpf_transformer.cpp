@@ -518,7 +518,7 @@ static void do_load_ctx(TypeToNumDomain& state, const Reg& target_reg, const Lin
             // EXPERIMENTAL: Explicit upper bound since packet_size is min_only.
             // This preserves the relational constraint (packet_offset <= packet_size)
             // while ensuring comparison checks have a concrete upper bound.
-            state.values.add_constraint(target.packet_offset < MAX_PACKET_SIZE);
+            state.values.add_constraint(target.packet_offset < max_packet_size());
         }
     } else if (addr == desc->meta) {
         if (width == offset_width) {
@@ -535,7 +535,7 @@ static void do_load_ctx(TypeToNumDomain& state, const Reg& target_reg, const Lin
     if (width == offset_width) {
         state.assign_type(target_reg, T_PACKET);
         state.values.add_constraint(4098 <= target.svalue);
-        state.values.add_constraint(target.svalue <= PTR_MAX);
+        state.values.add_constraint(target.svalue <= ptr_max());
     }
 }
 
@@ -1049,7 +1049,7 @@ void EbpfTransformer::assign_valid_ptr(const Reg& dst_reg, const bool maybe_null
     } else {
         dom.state.values.add_constraint(0 < reg.svalue);
     }
-    dom.state.values.add_constraint(reg.svalue <= PTR_MAX);
+    dom.state.values.add_constraint(reg.svalue <= ptr_max());
     dom.state.values.assign(reg.uvalue, reg.svalue);
 }
 

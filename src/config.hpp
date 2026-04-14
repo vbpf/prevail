@@ -61,8 +61,12 @@ struct ebpf_verifier_options_t {
     // Maximum number of nested function calls.
     int max_call_stack_frames = 8;
 
+    // Maximum packet size in bytes (upper bound on packet_size).
+    int max_packet_size = 0xffff;
+
     static constexpr int MAX_SUBPROGRAM_STACK_SIZE = 1024 * 1024;
     static constexpr int MAX_CALL_STACK_FRAMES_LIMIT = 128;
+    static constexpr int MAX_PACKET_SIZE_LIMIT = (1 << 30);
 
     [[nodiscard]]
     int total_stack_size() const noexcept {
@@ -79,6 +83,10 @@ struct ebpf_verifier_options_t {
             throw std::invalid_argument("max_call_stack_frames must be in [1, " +
                                         std::to_string(MAX_CALL_STACK_FRAMES_LIMIT) + "], got " +
                                         std::to_string(max_call_stack_frames));
+        }
+        if (max_packet_size <= 0 || max_packet_size > MAX_PACKET_SIZE_LIMIT) {
+            throw std::invalid_argument("max_packet_size must be in [1, " + std::to_string(MAX_PACKET_SIZE_LIMIT) +
+                                        "], got " + std::to_string(max_packet_size));
         }
     }
 

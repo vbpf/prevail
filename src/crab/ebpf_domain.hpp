@@ -4,9 +4,11 @@
 
 // This file is eBPF-specific, not derived from CRAB.
 
+#include <limits>
 #include <optional>
 
 #include "arith/variable.hpp"
+#include "config.hpp"
 #include "crab/array_domain.hpp"
 #include "crab/type_to_num.hpp"
 #include "string_constraints.hpp"
@@ -19,8 +21,8 @@ namespace prevail {
 // the offsets get replaced with 64-bit address pointers.  However, we currently
 // need to do pointer arithmetic on 64-bit numbers so for now we cap the interval
 // to 32 bits.
-constexpr int MAX_PACKET_SIZE = 0xffff;
-constexpr int64_t PTR_MAX = std::numeric_limits<int32_t>::max() - MAX_PACKET_SIZE;
+inline int max_packet_size() noexcept { return thread_local_options.max_packet_size; }
+inline int64_t ptr_max() noexcept { return std::numeric_limits<int32_t>::max() - thread_local_options.max_packet_size; }
 
 class EbpfDomain;
 
