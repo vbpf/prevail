@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <limits>
+#include <stdexcept>
+#include <string>
+
 #include "spec/ebpf_base.h"
 
 namespace prevail {
@@ -57,10 +61,25 @@ struct ebpf_verifier_options_t {
     // Per-subprogram stack frame size in bytes.
     int subprogram_stack_size = EBPF_SUBPROGRAM_STACK_SIZE;
 
+    // Maximum valid subprogram stack size (bounded by int32 range used in the numeric domain).
+    static constexpr int max_subprogram_stack_size = std::numeric_limits<int32_t>::max() / MAX_CALL_STACK_FRAMES;
+
     // Total stack size across all nested frames.
     [[nodiscard]]
     int total_stack_size() const noexcept {
         return MAX_CALL_STACK_FRAMES * subprogram_stack_size;
+    }
+
+    // Validate that the stack size is within acceptable bounds.
+    void validate_stack_size() const {
+        if (subprogram_stack_size <= 0) {
+            throw std::invalid_argument("subprogram_stack_size must be positive, got " +
+                                        std::to_string(subprogram_stack_size));
+        }
+        if (subprogram_stack_size > max_subprogram_stack_size) {
+            throw std::invalid_argument("subprogram_stack_size " + std::to_string(subprogram_stack_size) +
+                                        " is too large (max " + std::to_string(max_subprogram_stack_size) + ")");
+        }
     }
 
     verbosity_options_t verbosity_opts;

@@ -41,31 +41,40 @@ class BitsetDomain final {
     [[nodiscard]]
     StringInvariant to_set() const;
 
-    bool operator<=(const BitsetDomain& other) const noexcept {
+    bool operator<=(const BitsetDomain& other) const {
+        assert(non_numerical_bytes.size() == other.non_numerical_bytes.size());
         return (non_numerical_bytes | other.non_numerical_bytes) == other.non_numerical_bytes;
     }
 
-    bool operator==(const BitsetDomain& other) const noexcept {
+    bool operator==(const BitsetDomain& other) const {
+        assert(non_numerical_bytes.size() == other.non_numerical_bytes.size());
         return non_numerical_bytes == other.non_numerical_bytes;
     }
 
-    void operator|=(const BitsetDomain& other) noexcept { non_numerical_bytes |= other.non_numerical_bytes; }
+    void operator|=(const BitsetDomain& other) {
+        assert(non_numerical_bytes.size() == other.non_numerical_bytes.size());
+        non_numerical_bytes |= other.non_numerical_bytes;
+    }
 
-    BitsetDomain operator|(const BitsetDomain& other) const noexcept {
+    BitsetDomain operator|(const BitsetDomain& other) const {
+        assert(non_numerical_bytes.size() == other.non_numerical_bytes.size());
         return BitsetDomain{non_numerical_bytes | other.non_numerical_bytes};
     }
 
-    BitsetDomain operator&(const BitsetDomain& other) const noexcept {
+    BitsetDomain operator&(const BitsetDomain& other) const {
+        assert(non_numerical_bytes.size() == other.non_numerical_bytes.size());
         return BitsetDomain{non_numerical_bytes & other.non_numerical_bytes};
     }
 
     [[nodiscard]]
-    BitsetDomain widen(const BitsetDomain& other) const noexcept {
+    BitsetDomain widen(const BitsetDomain& other) const {
+        assert(non_numerical_bytes.size() == other.non_numerical_bytes.size());
         return BitsetDomain{non_numerical_bytes | other.non_numerical_bytes};
     }
 
     [[nodiscard]]
-    BitsetDomain narrow(const BitsetDomain& other) const noexcept {
+    BitsetDomain narrow(const BitsetDomain& other) const {
+        assert(non_numerical_bytes.size() == other.non_numerical_bytes.size());
         return BitsetDomain{non_numerical_bytes & other.non_numerical_bytes};
     }
 
