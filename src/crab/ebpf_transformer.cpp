@@ -187,10 +187,11 @@ void EbpfTransformer::havoc_subprogram_stack(const std::string& prefix) {
     if (!intv.is_singleton()) {
         return;
     }
-    const int64_t stack_start = intv.singleton()->cast_to<int64_t>() - EBPF_SUBPROGRAM_STACK_SIZE;
-    stack.havoc_type(dom.state.types, Interval{stack_start}, Interval{EBPF_SUBPROGRAM_STACK_SIZE});
+    const auto frame_size = thread_local_options.subprogram_stack_size;
+    const int64_t stack_start = intv.singleton()->cast_to<int64_t>() - frame_size;
+    stack.havoc_type(dom.state.types, Interval{stack_start}, Interval{frame_size});
     for (const DataKind kind : iterate_kinds()) {
-        stack.havoc(dom.state.values, kind, Interval{stack_start}, Interval{EBPF_SUBPROGRAM_STACK_SIZE});
+        stack.havoc(dom.state.values, kind, Interval{stack_start}, Interval{frame_size});
     }
 }
 
@@ -412,7 +413,7 @@ void EbpfTransformer::operator()(const Exit& a) {
 
     // Restore r10.
     constexpr Reg r10_reg{R10_STACK_POINTER};
-    add(r10_reg, EBPF_SUBPROGRAM_STACK_SIZE, 64);
+    add(r10_reg, thread_local_options.subprogram_stack_size, 64);
 
     // Scratch r1-r5: the callee may have clobbered them (caller-saved per BPF ABI).
     scratch_caller_saved_registers();
@@ -969,7 +970,7 @@ void EbpfTransformer::operator()(const CallLocal& call) {
 
     // Update r10.
     constexpr Reg r10_reg{R10_STACK_POINTER};
-    add(r10_reg, -EBPF_SUBPROGRAM_STACK_SIZE, 64);
+    add(r10_reg, -thread_local_options.subprogram_stack_size, 64);
 }
 
 void EbpfTransformer::operator()(const Callx& callx) {

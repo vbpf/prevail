@@ -80,9 +80,11 @@ std::optional<VerificationError> ebpf_domain_check(const EbpfDomain& dom, const 
 
 void EbpfChecker::check_access_stack(const LinearExpression& lb, const LinearExpression& ub) const {
     using namespace dsl_syntax;
-    require_value(dom.state, reg_pack(R10_STACK_POINTER).stack_offset - EBPF_SUBPROGRAM_STACK_SIZE <= lb,
-                  "Lower bound must be at least r10.stack_offset - EBPF_SUBPROGRAM_STACK_SIZE");
-    require_value(dom.state, ub <= EBPF_TOTAL_STACK_SIZE, "Upper bound must be at most EBPF_TOTAL_STACK_SIZE");
+    require_value(dom.state,
+                  reg_pack(R10_STACK_POINTER).stack_offset - thread_local_options.subprogram_stack_size <= lb,
+                  "Lower bound must be at least r10.stack_offset - subprogram_stack_size");
+    require_value(dom.state, ub <= thread_local_options.total_stack_size(),
+                  "Upper bound must be at most total_stack_size");
 }
 
 void EbpfChecker::check_access_context(const LinearExpression& lb, const LinearExpression& ub) const {

@@ -150,7 +150,7 @@ EbpfDomain EbpfDomain::calculate_constant_limits() {
         inv.add_value_constraint(r.svalue >= std::numeric_limits<int32_t>::min());
         inv.add_value_constraint(r.uvalue <= std::numeric_limits<uint32_t>::max());
         inv.add_value_constraint(r.uvalue >= 0);
-        inv.add_value_constraint(r.stack_offset <= EBPF_TOTAL_STACK_SIZE);
+        inv.add_value_constraint(r.stack_offset <= thread_local_options.total_stack_size());
         inv.add_value_constraint(r.stack_offset >= 0);
         inv.add_value_constraint(r.shared_offset <= r.shared_region_size);
         inv.add_value_constraint(r.shared_offset >= 0);
@@ -406,9 +406,10 @@ EbpfDomain EbpfDomain::setup_entry(const bool init_r1) {
 
     const auto r10 = reg_pack(R10_STACK_POINTER);
     constexpr Reg r10_reg{R10_STACK_POINTER};
-    inv.state.values.add_constraint(EBPF_TOTAL_STACK_SIZE <= r10.svalue);
+    const auto total_stack = thread_local_options.total_stack_size();
+    inv.state.values.add_constraint(total_stack <= r10.svalue);
     inv.state.values.add_constraint(r10.svalue <= PTR_MAX);
-    inv.state.values.assign(r10.stack_offset, EBPF_TOTAL_STACK_SIZE);
+    inv.state.values.assign(r10.stack_offset, total_stack);
     // stack_numeric_size would be 0, but TOP has the same result
     // so no need to assign it.
     inv.state.assign_type(r10_reg, T_STACK);

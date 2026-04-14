@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include "spec/ebpf_base.h"
+
 namespace prevail {
 struct prepare_cfg_options {
     /// When true, verifies that the program terminates.
@@ -51,6 +53,15 @@ struct ebpf_verifier_options_t {
 
     // True if the ELF file is built on a big endian system.
     bool big_endian = false;
+
+    // Per-subprogram stack frame size in bytes.
+    int subprogram_stack_size = EBPF_SUBPROGRAM_STACK_SIZE;
+
+    // Total stack size across all nested frames.
+    [[nodiscard]]
+    int total_stack_size() const noexcept {
+        return MAX_CALL_STACK_FRAMES * subprogram_stack_size;
+    }
 
     verbosity_options_t verbosity_opts;
 };

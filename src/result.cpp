@@ -7,6 +7,7 @@
 #include <sstream>
 #include <type_traits>
 
+#include "config.hpp"
 #include "crab/ebpf_domain.hpp"
 #include "ir/program.hpp"
 #include "result.hpp"
@@ -63,7 +64,7 @@ bool RelevantState::is_relevant_constraint(const std::string& constraint) const 
     std::vector<int64_t> abs_stack_offsets;
     abs_stack_offsets.reserve(stack_offsets.size());
     for (const auto& rel_offset : stack_offsets) {
-        abs_stack_offsets.push_back(EBPF_TOTAL_STACK_SIZE + rel_offset);
+        abs_stack_offsets.push_back(thread_local_options.total_stack_size() + rel_offset);
     }
 
     // Check for stack range pattern: s[start...end]
@@ -233,8 +234,10 @@ InstructionDeps extract_instruction_deps(const Instruction& ins, const EbpfDomai
                     } else if (const auto stack_off = pre_state.get_stack_offset(v.access.basereg)) {
                         // basereg is a stack pointer with known offset from R10
                         // Compute the actual stack slot: stack_off is absolute (e.g., 4096),
-                        // convert to relative from R10: relative = offset + (stack_off - EBPF_TOTAL_STACK_SIZE)
-                        deps.stack_read.insert(v.access.offset + (*stack_off - EBPF_TOTAL_STACK_SIZE));
+                        // convert to relative from R10: relative = offset + (stack_off -
+                        // thread_local_options.total_stack_size())
+                        deps.stack_read.insert(v.access.offset +
+                                               (*stack_off - thread_local_options.total_stack_size()));
                     }
                 } else {
                     // Store: *(basereg + offset) = value
@@ -245,7 +248,8 @@ InstructionDeps extract_instruction_deps(const Instruction& ins, const EbpfDomai
                     if (v.access.basereg.v == R10_STACK_POINTER) {
                         deps.stack_written.insert(v.access.offset);
                     } else if (const auto stack_off = pre_state.get_stack_offset(v.access.basereg)) {
-                        deps.stack_written.insert(v.access.offset + (*stack_off - EBPF_TOTAL_STACK_SIZE));
+                        deps.stack_written.insert(v.access.offset +
+                                                  (*stack_off - thread_local_options.total_stack_size()));
                     }
                 }
             } else if constexpr (std::is_same_v<T, Atomic>) {
@@ -259,7 +263,7 @@ InstructionDeps extract_instruction_deps(const Instruction& ins, const EbpfDomai
                     deps.stack_read.insert(v.access.offset);
                     deps.stack_written.insert(v.access.offset);
                 } else if (const auto stack_off = pre_state.get_stack_offset(v.access.basereg)) {
-                    const auto adjusted_off = v.access.offset + (*stack_off - EBPF_TOTAL_STACK_SIZE);
+                    const auto adjusted_off = v.access.offset + (*stack_off - thread_local_options.total_stack_size());
                     deps.stack_read.insert(adjusted_off);
                     deps.stack_written.insert(adjusted_off);
                 }

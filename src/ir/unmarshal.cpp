@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "config.hpp"
 #include "crab_utils/debug.hpp"
 #include "crab_utils/num_safety.hpp"
 #include "ir/unmarshal.hpp"
@@ -293,8 +294,8 @@ struct Unmarshaller {
             assert(!(isLoad && isImm));
             const uint8_t basereg = isLoad ? inst.src : inst.dst;
 
-            if (basereg == R10_STACK_POINTER &&
-                (inst.offset + opcode_to_width(inst.opcode) > 0 || inst.offset < -EBPF_TOTAL_STACK_SIZE)) {
+            if (basereg == R10_STACK_POINTER && (inst.offset + opcode_to_width(inst.opcode) > 0 ||
+                                                 inst.offset < -thread_local_options.total_stack_size())) {
                 note("Stack access out of bounds");
             }
             auto res = Mem{
@@ -322,8 +323,8 @@ struct Unmarshaller {
             if (inst.imm != 0) {
                 throw InvalidInstruction(pc, make_opcode_message("nonzero imm for", inst.opcode));
             }
-            if (inst.src == R10_STACK_POINTER &&
-                (inst.offset + opcode_to_width(inst.opcode) > 0 || inst.offset < -EBPF_TOTAL_STACK_SIZE)) {
+            if (inst.src == R10_STACK_POINTER && (inst.offset + opcode_to_width(inst.opcode) > 0 ||
+                                                  inst.offset < -thread_local_options.total_stack_size())) {
                 note("Stack access out of bounds");
             }
             return Mem{

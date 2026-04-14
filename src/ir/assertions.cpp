@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 
+#include "config.hpp"
 #include "ir/syntax.hpp"
 #include "platform.hpp"
 
@@ -232,7 +233,7 @@ class AssertExtractor {
         const int offset = ins.access.offset;
         if (basereg.v == R10_STACK_POINTER) {
             // We know we are accessing the stack.
-            if (offset < -EBPF_SUBPROGRAM_STACK_SIZE || offset + static_cast<int>(width.v) > 0) {
+            if (offset < -thread_local_options.subprogram_stack_size || offset + static_cast<int>(width.v) > 0) {
                 // This assertion will fail
                 res.emplace_back(make_valid_access(basereg, offset, width, false,
                                                    ins.is_load ? AccessType::read : AccessType::write));

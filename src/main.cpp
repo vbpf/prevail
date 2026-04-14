@@ -87,6 +87,11 @@ int main(int argc, char** argv) {
                  "Apply additional checks that would cause runtime failures")
         ->group("Features");
 
+    app.add_option("--stack-size", ebpf_verifier_options.subprogram_stack_size,
+                   "Per-subprogram stack frame size in bytes (default: 512)")
+        ->group("Features")
+        ->check(CLI::PositiveNumber);
+
     std::set<std::string> include_groups = get_conformance_group_names();
     app.add_option("--include_groups", include_groups, "Include conformance groups")
         ->group("Features")

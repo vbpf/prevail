@@ -15,6 +15,7 @@
 
 #include <yaml-cpp/yaml.h>
 
+#include "config.hpp"
 #include "ebpf_verifier.hpp"
 #include "ir/parse.hpp"
 #include "ir/syntax.hpp"
@@ -485,7 +486,7 @@ void add_stack_variable(std::set<std::string>& more, int& offset, const std::vec
     using TU = std::make_unsigned_t<TS>;
     constexpr size_t size = sizeof(TS);
     static_assert(sizeof(TU) == size);
-    const auto src = memory_bytes.data() + offset + memory_bytes.size() - EBPF_TOTAL_STACK_SIZE;
+    const auto src = memory_bytes.data() + offset + memory_bytes.size() - thread_local_options.total_stack_size();
     TS svalue;
     std::memcpy(&svalue, src, size);
     TU uvalue;
@@ -497,15 +498,16 @@ void add_stack_variable(std::set<std::string>& more, int& offset, const std::vec
 }
 
 StringInvariant stack_contents_invariant(const std::vector<std::byte>& memory_bytes) {
-    std::set<std::string> more = {"r1.type=stack",
-                                  "r1.stack_offset=" + std::to_string(EBPF_TOTAL_STACK_SIZE - memory_bytes.size()),
-                                  "r1.stack_numeric_size=" + std::to_string(memory_bytes.size()),
-                                  "r10.type=stack",
-                                  "r10.stack_offset=" + std::to_string(EBPF_TOTAL_STACK_SIZE),
-                                  "s[" + std::to_string(EBPF_TOTAL_STACK_SIZE - memory_bytes.size()) + "..." +
-                                      std::to_string(EBPF_TOTAL_STACK_SIZE - 1) + "].type=number"};
+    std::set<std::string> more = {
+        "r1.type=stack",
+        "r1.stack_offset=" + std::to_string(thread_local_options.total_stack_size() - memory_bytes.size()),
+        "r1.stack_numeric_size=" + std::to_string(memory_bytes.size()),
+        "r10.type=stack",
+        "r10.stack_offset=" + std::to_string(thread_local_options.total_stack_size()),
+        "s[" + std::to_string(thread_local_options.total_stack_size() - memory_bytes.size()) + "..." +
+            std::to_string(thread_local_options.total_stack_size() - 1) + "].type=number"};
 
-    int offset = EBPF_TOTAL_STACK_SIZE - gsl::narrow<int>(memory_bytes.size());
+    int offset = thread_local_options.total_stack_size() - gsl::narrow<int>(memory_bytes.size());
     if (offset % 2 != 0) {
         add_stack_variable<int8_t>(more, offset, memory_bytes);
     }
@@ -515,7 +517,7 @@ StringInvariant stack_contents_invariant(const std::vector<std::byte>& memory_by
     if (offset % 8 != 0) {
         add_stack_variable<int32_t>(more, offset, memory_bytes);
     }
-    while (offset < EBPF_TOTAL_STACK_SIZE) {
+    while (offset < thread_local_options.total_stack_size()) {
         add_stack_variable<int64_t>(more, offset, memory_bytes);
     }
 
@@ -543,7 +545,7 @@ ConformanceTestResult run_conformance_test_case(const std::vector<uint8_t>& memo
     StringInvariant pre_invariant = StringInvariant::top();
 
     if (!memory_bytes.empty()) {
-        if (memory_bytes.size() > EBPF_TOTAL_STACK_SIZE) {
+        if (memory_bytes.size() > thread_local_options.total_stack_size()) {
             std::cerr << "memory size overflow\n";
             return {};
         }
