@@ -127,6 +127,10 @@ Features:
           --allow-division-by-zero, --no-division-by-zero{false}
                               Handling potential division by zero. Default: allow
   -s,     --strict            Apply additional checks that would cause runtime failures
+          --stack-size INT:INT in [1 - 1048576]
+                              Per-subprogram stack frame size in bytes (default: 512)
+          --max-call-stack-frames INT:INT in [1 - 128]
+                              Maximum number of nested function calls (default: 8)
           --include_groups GROUPS:{atomic32,atomic64,base32,base64,callx,divmul32,divmul64,packet}
                               Include conformance groups
           --exclude_groups GROUPS:{atomic32,atomic64,base32,base64,callx,divmul32,divmul64,packet}
