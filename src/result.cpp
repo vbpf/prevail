@@ -234,8 +234,8 @@ InstructionDeps extract_instruction_deps(const Instruction& ins, const EbpfDomai
                     } else if (const auto stack_off = pre_state.get_stack_offset(v.access.basereg)) {
                         // basereg is a stack pointer with known offset from R10
                         // Compute the actual stack slot: stack_off is absolute (e.g., 4096),
-                        // convert to relative from R10: relative = offset + (stack_off -
-                        // thread_local_options.total_stack_size())
+                        // convert to relative from R10:
+                        //  relative = offset + (stack_off - thread_local_options.total_stack_size())
                         deps.stack_read.insert(v.access.offset +
                                                (*stack_off - thread_local_options.total_stack_size()));
                     }
