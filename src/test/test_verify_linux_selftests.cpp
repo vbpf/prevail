@@ -71,9 +71,7 @@ TEST_PROGRAM_FAIL("linux-selftests", "bloom_filter_map.o", "fentry/__x64_sys_get
 // register type refinement is too imprecise in this control-flow pattern
 TEST_SECTION_FAIL("linux-selftests", "freplace_get_constant.o", "freplace/get_constant",
                   verify_test::VerifyIssueKind::VerifierTypeTracking)
-// Type precision lost through loop join: r3 loaded from stack loses type after widening
-TEST_SECTION_FAIL("linux-selftests", "loop3.o", "raw_tracepoint/consume_skb",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking)
+TEST_SECTION("linux-selftests", "loop3.o", "raw_tracepoint/consume_skb")
 // register type refinement is too imprecise in this control-flow pattern
 TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check", 19,
                   verify_test::VerifyIssueKind::VerifierTypeTracking)

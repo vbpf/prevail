@@ -180,6 +180,12 @@ static const EbpfDomain& get_constant_limits() { return constant_limits.get(); }
 void EbpfDomain::clear_thread_local_state() { constant_limits.clear(); }
 
 EbpfDomain EbpfDomain::widen(const EbpfDomain& other, const bool to_constants) const {
+    if (is_bottom()) {
+        return other;
+    }
+    if (other.is_bottom()) {
+        return *this;
+    }
     EbpfDomain res{this->state.widen(other.state), stack.widen(other.stack)};
 
     if (to_constants) {

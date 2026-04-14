@@ -558,3 +558,51 @@ post:
   - pc[1]=r0.svalue+1
 
 messages: []
+
+---
+test-case: stack counter type preserved through widening (issue 1071)
+
+pre: [
+  "r1.type=ctx", "r1.ctx_offset=0", "r1.svalue=[1, 2147418112]",
+  "r2.type=number", "r2.svalue=4294967296", "r2.uvalue=4294967296",
+  "r10.type=stack", "r10.stack_offset=4096", "r10.svalue=[4096, 2147418112]",
+  "meta_offset=0",
+  "packet_size=0",
+]
+
+code:
+  <init>: |
+    r3 = 0
+    *(u64 *)(r10 - 8) = r3
+  <loop>: |
+    r3 = *(u64 *)(r10 - 8)
+    r3 += 1
+    *(u64 *)(r10 - 8) = r3
+    if r3 < r2 goto <loop>
+  <exit>: |
+    r0 = *(u64 *)(r10 - 8)
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=4294967296
+  - r0.uvalue=4294967296
+  - r2.type=number
+  - r2.svalue=4294967296
+  - r2.uvalue=r2.svalue
+  - r3.type=number
+  - r3.svalue=r2.svalue
+  - r3.uvalue=r2.svalue
+  - r10.type=stack
+  - r10.stack_offset=4096
+  - r10.svalue=[4096, 2147418112]
+  - r1.type=ctx
+  - r1.ctx_offset=0
+  - r1.svalue=[1, 2147418112]
+  - s[4088...4095].type=number
+  - s[4088...4095].svalue=r2.svalue
+  - s[4088...4095].uvalue=r2.svalue
+  - meta_offset=0
+  - packet_size=0
+
+messages: []
