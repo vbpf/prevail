@@ -49,7 +49,7 @@ EbpfDomain EbpfDomain::setup_entry(bool check_termination) {
     
     // R10 = stack frame pointer
     inv.assign_type(R10, T_STACK);
-    inv.assign(R10.stack_offset, EBPF_TOTAL_STACK_SIZE);
+    inv.assign(R10.stack_offset, total_stack_size);
     
     // R0, R2-R9 = uninitialized
     for (r in {R0, R2..R9}) {

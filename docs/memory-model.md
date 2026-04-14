@@ -8,7 +8,7 @@ eBPF programs can access several memory regions:
 
 | Region | Register | Description |
 |--------|----------|-------------|
-| Stack | R10 | Private stack (512 bytes per frame) |
+| Stack | R10 | Private stack (configurable, default 512 bytes per frame) |
 | Context | R1 | Program context (varies by type) |
 | Packet | Derived | Network packet data |
 | Shared | Derived | Shared memory regions |
@@ -22,14 +22,15 @@ eBPF programs can access several memory regions:
 R10 (frame pointer) ────────────────┐
                                     │
     ┌───────────────────────────────▼───────┐
-    │  Subprogram frame (512 bytes)         │  offset: -512 to 0
-    ├───────────────────────────────────────┤
-    │  Parent frame (512 bytes)             │  offset: -1024 to -512
-    ├───────────────────────────────────────┤
-    │  ...                                  │
-    └───────────────────────────────────────┘
-    
-Total: 512 bytes × max_call_depth
+    │  Subprogram frame               │  offset: -stack_size to 0
+    ├──────────────────────────────────┤
+    │  Parent frame                    │  offset: -2*stack_size to -stack_size
+    ├──────────────────────────────────┤
+    │  ...                             │
+    └──────────────────────────────────┘
+
+stack_size = subprogram_stack_size (default 512)
+Total: stack_size × max_call_stack_frames (default 8)
 ```
 
 ### Stack Tracking
@@ -104,8 +105,8 @@ void check_stack_access(Reg base, int offset, int width) {
     int abs_offset = stack_off.lb + offset;
     
     // Check bounds: must be within current frame
-    require(abs_offset >= EBPF_TOTAL_STACK_SIZE - EBPF_SUBPROGRAM_STACK_SIZE);
-    require(abs_offset + width <= EBPF_TOTAL_STACK_SIZE);
+    require(abs_offset >= total_stack_size - subprogram_stack_size);
+    require(abs_offset + width <= total_stack_size);
 }
 ```
 

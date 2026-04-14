@@ -134,7 +134,7 @@ Where:
 |------|-------------|
 | `number` | A scalar integer (not a pointer) |
 | `ctx` | Pointer to program context structure (e.g., `xdp_md`, `sk_buff`) |
-| `stack` | Pointer to stack memory (512 bytes per stack frame) |
+| `stack` | Pointer to stack memory |
 | `packet` | Pointer to packet data |
 | `shared` | Pointer to shared memory (e.g., map values) |
 | `map_fd` | Map file descriptor (not directly dereferenceable) |
@@ -543,9 +543,9 @@ For map-related errors, request:
 
 ### Stack Layout
 
-- Main program: offsets 0-511 (accessed as r10-1 through r10-512)
-- Subprograms: additional 512 bytes per call depth
-- Total: up to 4KB (8 frames × 512 bytes)
+- Main program: offsets 0 to subprogram_stack_size-1 (accessed as r10-1 through r10-subprogram_stack_size)
+- Subprograms: additional subprogram_stack_size bytes per call depth
+- Total: up to subprogram_stack_size × max_call_stack_frames
 
 ### Common Helper Patterns
 
