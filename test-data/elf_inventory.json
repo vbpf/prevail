@@ -8230,15 +8230,6 @@
                 "invalid": false
               }
             ]
-          },
-          "test_overrides": {
-            "sections": {
-              "raw_tracepoint/consume_skb": {
-                "kind": "VerifierTypeTracking",
-                "reason": "Type precision lost through loop join: r3 loaded from stack loses type after widening",
-                "status": "expected_failure"
-              }
-            }
           }
         },
         "loop4.o": {
