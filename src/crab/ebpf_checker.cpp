@@ -102,8 +102,8 @@ void EbpfChecker::check_access_packet(const LinearExpression& lb, const LinearEx
     if (packet_size) {
         require_value(dom.state, ub <= *packet_size, "Upper bound must be at most packet_size");
     } else {
-        require_value(dom.state, ub <= MAX_PACKET_SIZE,
-                      std::string{"Upper bound must be at most "} + std::to_string(MAX_PACKET_SIZE));
+        require_value(dom.state, ub <= max_packet_size(),
+                      std::string{"Upper bound must be at most "} + std::to_string(max_packet_size()));
     }
 }
 

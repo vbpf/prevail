@@ -97,6 +97,11 @@ int main(int argc, char** argv) {
         ->group("Features")
         ->check(CLI::Range(1, ebpf_verifier_options_t::MAX_CALL_STACK_FRAMES_LIMIT));
 
+    app.add_option("--max-packet-size", ebpf_verifier_options.max_packet_size,
+                   "Maximum packet size in bytes (default: 65535)")
+        ->group("Features")
+        ->check(CLI::Range(1, ebpf_verifier_options_t::MAX_PACKET_SIZE_LIMIT));
+
     std::set<std::string> include_groups = get_conformance_group_names();
     app.add_option("--include_groups", include_groups, "Include conformance groups")
         ->group("Features")

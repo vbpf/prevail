@@ -350,7 +350,7 @@ void EbpfDomain::initialize_packet() {
     inv.havoc(variable_registry->meta_offset());
 
     inv.add_value_constraint(0 <= variable_registry->packet_size());
-    inv.add_value_constraint(variable_registry->packet_size() < MAX_PACKET_SIZE);
+    inv.add_value_constraint(variable_registry->packet_size() < max_packet_size());
     const auto info = *thread_local_program_info;
     if (info.type.context_descriptor->meta >= 0) {
         inv.add_value_constraint(variable_registry->meta_offset() <= 0);
@@ -408,7 +408,7 @@ EbpfDomain EbpfDomain::setup_entry(const bool init_r1) {
     constexpr Reg r10_reg{R10_STACK_POINTER};
     const auto total_stack = thread_local_options.total_stack_size();
     inv.state.values.add_constraint(total_stack <= r10.svalue);
-    inv.state.values.add_constraint(r10.svalue <= PTR_MAX);
+    inv.state.values.add_constraint(r10.svalue <= ptr_max());
     inv.state.values.assign(r10.stack_offset, total_stack);
     // stack_numeric_size would be 0, but TOP has the same result
     // so no need to assign it.
@@ -418,7 +418,7 @@ EbpfDomain EbpfDomain::setup_entry(const bool init_r1) {
         const auto r1 = reg_pack(R1_ARG);
         constexpr Reg r1_reg{R1_ARG};
         inv.state.values.add_constraint(1 <= r1.svalue);
-        inv.state.values.add_constraint(r1.svalue <= PTR_MAX);
+        inv.state.values.add_constraint(r1.svalue <= ptr_max());
         inv.state.values.assign(r1.ctx_offset, 0);
         inv.state.assign_type(r1_reg, T_CTX);
     }
