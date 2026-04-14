@@ -359,7 +359,7 @@ static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const 
     for (const auto& macro_label : seen_labels) {
         const Label label{macro_label.from, macro_label.to, caller_label_str};
         if (const auto pins = std::get_if<CallLocal>(&builder.prog.instruction_at(label))) {
-            if (stack_frame_depth >= MAX_CALL_STACK_FRAMES) {
+            if (stack_frame_depth >= thread_local_options.max_call_stack_frames) {
                 throw InvalidControlFlow{"too many call stack frames"};
             }
             add_cfg_nodes(builder, label, pins->target);
@@ -641,7 +641,7 @@ static void validate_tail_call_chain_depth(const Program& prog, const Wto& wto, 
 Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo& info,
                                const ebpf_verifier_options_t& options) {
     thread_local_program_info.set(info);
-    options.validate_stack_size();
+    options.validate();
     thread_local_options = options;
     assert(info.platform != nullptr && "platform must be set before instruction feature validation");
     ResolvedKfuncCalls resolved_kfunc_calls;

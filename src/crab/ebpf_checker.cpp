@@ -126,8 +126,8 @@ void EbpfChecker::operator()(const Comparable& s) const {
             throw_fail("Cannot subtract pointers to non-singleton regions");
         }
         // And, to avoid wraparound errors, they must be within bounds.
-        this->operator()(ValidAccess{MAX_CALL_STACK_FRAMES, s.r1, 0, Imm{0}, false});
-        this->operator()(ValidAccess{MAX_CALL_STACK_FRAMES, s.r2, 0, Imm{0}, false});
+        this->operator()(ValidAccess{thread_local_options.max_call_stack_frames, s.r1, 0, Imm{0}, false});
+        this->operator()(ValidAccess{thread_local_options.max_call_stack_frames, s.r2, 0, Imm{0}, false});
     } else {
         // _Maybe_ different types, so r2 must be a number.
         // We checked in a previous assertion that r1 is a pointer or a number.

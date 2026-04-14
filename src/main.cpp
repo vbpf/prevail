@@ -90,7 +90,12 @@ int main(int argc, char** argv) {
     app.add_option("--stack-size", ebpf_verifier_options.subprogram_stack_size,
                    "Per-subprogram stack frame size in bytes (default: 512)")
         ->group("Features")
-        ->check(CLI::Range(1, ebpf_verifier_options_t::max_subprogram_stack_size));
+        ->check(CLI::Range(1, ebpf_verifier_options_t::MAX_SUBPROGRAM_STACK_SIZE));
+
+    app.add_option("--max-call-stack-frames", ebpf_verifier_options.max_call_stack_frames,
+                   "Maximum number of nested function calls (default: 8)")
+        ->group("Features")
+        ->check(CLI::Range(1, ebpf_verifier_options_t::MAX_CALL_STACK_FRAMES_LIMIT));
 
     std::set<std::string> include_groups = get_conformance_group_names();
     app.add_option("--include_groups", include_groups, "Include conformance groups")

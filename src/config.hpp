@@ -5,8 +5,6 @@
 #include <stdexcept>
 #include <string>
 
-#include "spec/ebpf_base.h"
-
 namespace prevail {
 struct prepare_cfg_options {
     /// When true, verifies that the program terminates.
@@ -60,24 +58,27 @@ struct ebpf_verifier_options_t {
     // Per-subprogram stack frame size in bytes.
     int subprogram_stack_size = 512;
 
-    // Maximum valid subprogram stack size. 1 MB per frame is far beyond any realistic use.
-    static constexpr int max_subprogram_stack_size = 1024 * 1024;
+    // Maximum number of nested function calls.
+    int max_call_stack_frames = 8;
 
-    // Total stack size across all nested frames.
+    static constexpr int MAX_SUBPROGRAM_STACK_SIZE = 1024 * 1024;
+    static constexpr int MAX_CALL_STACK_FRAMES_LIMIT = 128;
+
     [[nodiscard]]
     int total_stack_size() const noexcept {
-        return MAX_CALL_STACK_FRAMES * subprogram_stack_size;
+        return max_call_stack_frames * subprogram_stack_size;
     }
 
-    // Validate that the stack size is within acceptable bounds.
-    void validate_stack_size() const {
-        if (subprogram_stack_size <= 0) {
-            throw std::invalid_argument("subprogram_stack_size must be positive, got " +
+    void validate() const {
+        if (subprogram_stack_size <= 0 || subprogram_stack_size > MAX_SUBPROGRAM_STACK_SIZE) {
+            throw std::invalid_argument("subprogram_stack_size must be in [1, " +
+                                        std::to_string(MAX_SUBPROGRAM_STACK_SIZE) + "], got " +
                                         std::to_string(subprogram_stack_size));
         }
-        if (subprogram_stack_size > max_subprogram_stack_size) {
-            throw std::invalid_argument("subprogram_stack_size " + std::to_string(subprogram_stack_size) +
-                                        " is too large (max " + std::to_string(max_subprogram_stack_size) + ")");
+        if (max_call_stack_frames <= 0 || max_call_stack_frames > MAX_CALL_STACK_FRAMES_LIMIT) {
+            throw std::invalid_argument("max_call_stack_frames must be in [1, " +
+                                        std::to_string(MAX_CALL_STACK_FRAMES_LIMIT) + "], got " +
+                                        std::to_string(max_call_stack_frames));
         }
     }
 
