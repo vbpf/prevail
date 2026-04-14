@@ -534,6 +534,7 @@ static StringInvariant stack_contents_invariant(const std::vector<uint8_t>& memo
 
 ConformanceTestResult run_conformance_test_case(const std::vector<uint8_t>& memory_bytes,
                                                 std::span<const EbpfInst> instructions, bool debug) {
+    thread_local_options = {};
     ebpf_context_descriptor_t context_descriptor{64, -1, -1, -1};
     EbpfProgramType program_type = make_program_type("conformance_check", &context_descriptor);
 

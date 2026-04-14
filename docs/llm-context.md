@@ -231,7 +231,7 @@ Pre-invariant:[r10.type=stack, r10.stack_offset=1024]
 Error: 0: Lower bound must be at least r10.stack_offset - subprogram_stack_size
 ```
 
-**Fix**: Keep stack accesses within -512 to -1 of r10, or reduce local variable size.
+**Fix**: Keep stack accesses within -subprogram_stack_size to -1 of r10, or reduce local variable size.
 
 ---
 
