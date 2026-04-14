@@ -31,7 +31,7 @@ struct EbpfMapDescriptor {
     unsigned int max_entries;
     int inner_map_fd;
     std::string name;                  // Map name from ELF (empty if not available).
-    bool is_inner_map_template{false}; // True if this descriptor is only an inner map template.
+    bool is_inner_map_template{false}; // True if this descriptor is referenced as an inner map template.
 };
 
 struct EbpfProgramType {
