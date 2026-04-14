@@ -281,6 +281,12 @@ static void validate_instruction_feature_support(const InstructionSeq& insts, co
 
 /// Update a control-flow graph to inline function macros.
 static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const Label& entry_label) {
+    const string caller_label_str = to_string(caller_label);
+    const long stack_frame_depth = std::ranges::count(caller_label_str, STACK_FRAME_DELIMITER) + 2;
+    if (stack_frame_depth > thread_local_options.max_call_stack_frames) {
+        throw InvalidControlFlow{"too many call stack frames"};
+    }
+
     bool first = true;
 
     // Get the label of the node to go to on returning from the macro.
@@ -354,14 +360,9 @@ static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const 
     builder.remove_child(caller_label, exit_to_label);
 
     // Finally, recurse to replace any nested function macros.
-    string caller_label_str = to_string(caller_label);
-    const long stack_frame_depth = std::ranges::count(caller_label_str, STACK_FRAME_DELIMITER) + 2;
     for (const auto& macro_label : seen_labels) {
         const Label label{macro_label.from, macro_label.to, caller_label_str};
         if (const auto pins = std::get_if<CallLocal>(&builder.prog.instruction_at(label))) {
-            if (stack_frame_depth >= MAX_CALL_STACK_FRAMES) {
-                throw InvalidControlFlow{"too many call stack frames"};
-            }
             add_cfg_nodes(builder, label, pins->target);
         }
     }
@@ -641,6 +642,7 @@ static void validate_tail_call_chain_depth(const Program& prog, const Wto& wto, 
 Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo& info,
                                const ebpf_verifier_options_t& options) {
     thread_local_program_info.set(info);
+    options.validate();
     thread_local_options = options;
     assert(info.platform != nullptr && "platform must be set before instruction feature validation");
     ResolvedKfuncCalls resolved_kfunc_calls;

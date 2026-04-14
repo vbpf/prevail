@@ -72,7 +72,7 @@ Capability and configuration checks are described in `Notes / Evidence`; they do
 | Helper arg/return typing model | Supported | `src/ir/unmarshal.cpp`: `makeCall`; `src/platform.hpp`: `get_helper_prototype` |
 | Helper unavailable in platform tables | Supported | `src/ir/unmarshal.cpp`: helper-unavailable path in `makeJmp`; `src/ir/cfg_builder.cpp`: `check_instruction_feature_support` |
 | BPF-to-BPF non-recursive local call expansion | Supported | `src/ir/cfg_builder.cpp`; `src/elf_loader.cpp` |
-| Maximum call depth guard | Supported | `src/ir/cfg_builder.cpp`: `MAX_CALL_STACK_FRAMES` |
+| Maximum call depth guard | Supported | `src/ir/cfg_builder.cpp`: `max_call_stack_frames` option (default 8) |
 | Tail call chain depth guard | Supported | `src/ir/cfg_builder.cpp`: `validate_tail_call_chain_depth` (limit 33) |
 
 ### BTF/ELF Language-Relevant Handling

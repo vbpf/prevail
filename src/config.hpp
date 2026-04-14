@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <stdexcept>
+#include <string>
+
 namespace prevail {
 struct prepare_cfg_options {
     /// When true, verifies that the program terminates.
@@ -51,6 +54,33 @@ struct ebpf_verifier_options_t {
 
     // True if the ELF file is built on a big endian system.
     bool big_endian = false;
+
+    // Per-subprogram stack frame size in bytes.
+    int subprogram_stack_size = 512;
+
+    // Maximum number of nested function calls.
+    int max_call_stack_frames = 8;
+
+    static constexpr int MAX_SUBPROGRAM_STACK_SIZE = 1024 * 1024;
+    static constexpr int MAX_CALL_STACK_FRAMES_LIMIT = 128;
+
+    [[nodiscard]]
+    int total_stack_size() const noexcept {
+        return max_call_stack_frames * subprogram_stack_size;
+    }
+
+    void validate() const {
+        if (subprogram_stack_size <= 0 || subprogram_stack_size > MAX_SUBPROGRAM_STACK_SIZE) {
+            throw std::invalid_argument("subprogram_stack_size must be in [1, " +
+                                        std::to_string(MAX_SUBPROGRAM_STACK_SIZE) + "], got " +
+                                        std::to_string(subprogram_stack_size));
+        }
+        if (max_call_stack_frames <= 0 || max_call_stack_frames > MAX_CALL_STACK_FRAMES_LIMIT) {
+            throw std::invalid_argument("max_call_stack_frames must be in [1, " +
+                                        std::to_string(MAX_CALL_STACK_FRAMES_LIMIT) + "], got " +
+                                        std::to_string(max_call_stack_frames));
+        }
+    }
 
     verbosity_options_t verbosity_opts;
 };

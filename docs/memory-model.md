@@ -6,30 +6,31 @@ This document describes how Prevail models memory regions.
 
 eBPF programs can access several memory regions:
 
-| Region | Register | Description |
-|--------|----------|-------------|
-| Stack | R10 | Private stack (512 bytes per frame) |
-| Context | R1 | Program context (varies by type) |
-| Packet | Derived | Network packet data |
-| Shared | Derived | Shared memory regions |
-| Map Values | Derived | BPF map contents |
+| Region     | Register | Description                                               |
+|------------|----------|-----------------------------------------------------------|
+| Stack      | R10      | Private stack (configurable, default 512 bytes per frame) |
+| Context    | R1       | Program context (varies by type)                          |
+| Packet     | Derived  | Network packet data                                       |
+| Shared     | Derived  | Shared memory regions                                     |
+| Map Values | Derived  | BPF map contents                                          |
 
 ## Stack Memory
 
 ### Stack Layout
 
 ```text
-R10 (frame pointer) ────────────────┐
-                                    │
-    ┌───────────────────────────────▼───────┐
-    │  Subprogram frame (512 bytes)         │  offset: -512 to 0
-    ├───────────────────────────────────────┤
-    │  Parent frame (512 bytes)             │  offset: -1024 to -512
-    ├───────────────────────────────────────┤
-    │  ...                                  │
-    └───────────────────────────────────────┘
-    
-Total: 512 bytes × max_call_depth
+R10 (frame pointer) ───────────┐
+                               │
+    ┌──────────────────────────▼───────┐
+    │  Subprogram frame                │  offset: -stack_size to 0
+    ├──────────────────────────────────┤
+    │  Parent frame                    │  offset: -2*stack_size to -stack_size
+    ├──────────────────────────────────┤
+    │  ...                             │
+    └──────────────────────────────────┘
+
+stack_size = subprogram_stack_size (default 512)
+Total: stack_size × max_call_stack_frames (default 8)
 ```
 
 ### Stack Tracking
@@ -104,8 +105,8 @@ void check_stack_access(Reg base, int offset, int width) {
     int abs_offset = stack_off.lb + offset;
     
     // Check bounds: must be within current frame
-    require(abs_offset >= EBPF_TOTAL_STACK_SIZE - EBPF_SUBPROGRAM_STACK_SIZE);
-    require(abs_offset + width <= EBPF_TOTAL_STACK_SIZE);
+    require(abs_offset >= total_stack_size - subprogram_stack_size);
+    require(abs_offset + width <= total_stack_size);
 }
 ```
 
@@ -117,11 +118,11 @@ The context is a structure passed to the eBPF program.
 
 Different program types have different contexts:
 
-| Program Type | Context | Example Fields |
-|--------------|---------|----------------|
-| XDP | `xdp_md` | data, data_end, data_meta |
-| Socket Filter | `__sk_buff` | data, data_end, protocol |
-| Tracepoint | varies | Architecture-specific |
+| Program Type  | Context     | Example Fields            |
+|---------------|-------------|---------------------------|
+| XDP           | `xdp_md`    | data, data_end, data_meta |
+| Socket Filter | `__sk_buff` | data, data_end, protocol  |
+| Tracepoint    | varies      | Architecture-specific     |
 
 ### Context Access
 
@@ -289,15 +290,15 @@ void check_map_access(Reg ptr, int offset, int width) {
 
 ### Valid Operations
 
-| Base Type | Operation | Result Type |
-|-----------|-----------|-------------|
-| STACK | + number | STACK |
-| PACKET | + number | PACKET |
-| CTX | + number | CTX (if valid field) |
-| MAP | + number | MAP |
-| SHARED | + number | SHARED |
-| NUMBER | + pointer | Same as pointer |
-| Pointer | - pointer | NUMBER (if same type) |
+| Base Type | Operation | Result Type           |
+|-----------|-----------|-----------------------|
+| STACK     | + number  | STACK                 |
+| PACKET    | + number  | PACKET                |
+| CTX       | + number  | CTX (if valid field)  |
+| MAP       | + number  | MAP                   |
+| SHARED    | + number  | SHARED                |
+| NUMBER    | + pointer | Same as pointer       |
+| Pointer   | - pointer | NUMBER (if same type) |
 
 ### Offset Tracking
 
@@ -355,6 +356,7 @@ ldxdw r2, [r10-8]    ; r2 becomes CTX pointer
 ## Memory Aliasing
 
 Prevail assumes no aliasing between:
+
 - Stack and other memory regions
 - Different map values
 - Packet and context

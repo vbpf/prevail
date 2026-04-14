@@ -1164,4 +1164,4 @@ code:
 
 post: []
 messages:
-  - "0: Lower bound must be at least r10.stack_offset - EBPF_SUBPROGRAM_STACK_SIZE (valid_access(r1.offset) for comparison/subtraction)"
+  - "0: Lower bound must be at least r10.stack_offset - subprogram_stack_size (valid_access(r1.offset) for comparison/subtraction)"

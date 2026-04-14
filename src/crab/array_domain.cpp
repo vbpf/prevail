@@ -38,7 +38,7 @@ struct Cell final {
     auto operator<=>(const Cell&) const = default;
 
     // Return true if [o, o + sz) definitely overlaps with the cell.
-    // Offsets are bounded by EBPF_TOTAL_STACK_SIZE (4096), so wraparound cannot occur.
+    // Offsets are bounded by total_stack_size, so wraparound cannot occur.
     [[nodiscard]]
     bool overlap(const offset_t o, const unsigned sz) const {
         assert(sz > 0 && "overlap query with zero width");
@@ -47,7 +47,7 @@ struct Cell final {
 };
 
 static Interval cell_to_interval(const offset_t o, const unsigned size) {
-    assert(o <= EBPF_TOTAL_STACK_SIZE && "offset out of bounds");
+    assert(o <= thread_local_options.total_stack_size() && "offset out of bounds");
     const Number lb{gsl::narrow<int>(o)};
     return {lb, lb + size - 1};
 }
@@ -366,11 +366,11 @@ static std::optional<std::pair<offset_t, unsigned>> kill_and_find_var(const Havo
     return res;
 }
 static std::tuple<int, int> as_numbytes_range(const Interval& index, const Interval& width) {
-    return (index | (index + width)).bound(0, EBPF_TOTAL_STACK_SIZE);
+    return (index | (index + width)).bound(0, thread_local_options.total_stack_size());
 }
 
 bool ArrayDomain::all_num_lb_ub(const Interval& lb, const Interval& ub) const {
-    const auto [min_lb, max_ub] = (lb | ub).bound(0, EBPF_TOTAL_STACK_SIZE);
+    const auto [min_lb, max_ub] = (lb | ub).bound(0, thread_local_options.total_stack_size());
     if (min_lb > max_ub) {
         return false;
     }
@@ -653,9 +653,9 @@ void ArrayDomain::store_numbers(const Interval& _idx, const Interval& _width) {
         return;
     }
 
-    if (*idx_n + *width > EBPF_TOTAL_STACK_SIZE) {
-        CRAB_WARN("array expansion store range ignored because ",
-                  "the number of elements is larger than default limit of ", EBPF_TOTAL_STACK_SIZE);
+    if (*idx_n + *width > thread_local_options.total_stack_size()) {
+        CRAB_WARN("array expansion store range ignored because ", "the number of elements is larger than limit of ",
+                  thread_local_options.total_stack_size());
         return;
     }
     num_bytes.reset(idx_n->narrow<int>(), width->narrow<int>());

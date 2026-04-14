@@ -141,4 +141,4 @@ code:
 post: []
 
 messages:
-  - "0: Upper bound must be at most EBPF_TOTAL_STACK_SIZE (r2.type == number or r1.type == r2.type in {ctx, stack, packet})"
+  - "0: Upper bound must be at most total_stack_size (r2.type == number or r1.type == r2.type in {ctx, stack, packet})"

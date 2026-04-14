@@ -83,6 +83,7 @@ static Instruction shift32(const Reg dst, const Bin::Op op) {
 struct Unmarshaller {
     vector<vector<string>>& notes;
     const ProgramInfo& info;
+    int subprogram_stack_size = 512;
     // ReSharper disable once CppMemberFunctionMayBeConst
     void note(const string& what) { notes.back().emplace_back(what); }
     // ReSharper disable once CppMemberFunctionMayBeConst
@@ -294,7 +295,7 @@ struct Unmarshaller {
             const uint8_t basereg = isLoad ? inst.src : inst.dst;
 
             if (basereg == R10_STACK_POINTER &&
-                (inst.offset + opcode_to_width(inst.opcode) > 0 || inst.offset < -EBPF_TOTAL_STACK_SIZE)) {
+                (inst.offset + opcode_to_width(inst.opcode) > 0 || inst.offset < -subprogram_stack_size)) {
                 note("Stack access out of bounds");
             }
             auto res = Mem{
@@ -323,7 +324,7 @@ struct Unmarshaller {
                 throw InvalidInstruction(pc, make_opcode_message("nonzero imm for", inst.opcode));
             }
             if (inst.src == R10_STACK_POINTER &&
-                (inst.offset + opcode_to_width(inst.opcode) > 0 || inst.offset < -EBPF_TOTAL_STACK_SIZE)) {
+                (inst.offset + opcode_to_width(inst.opcode) > 0 || inst.offset < -subprogram_stack_size)) {
                 note("Stack access out of bounds");
             }
             return Mem{
@@ -783,6 +784,8 @@ struct Unmarshaller {
 
     vector<LabeledInstruction> unmarshal(vector<EbpfInst> const& insts,
                                          const prevail::ebpf_verifier_options_t& options) {
+        options.validate();
+        subprogram_stack_size = options.subprogram_stack_size;
         vector<LabeledInstruction> prog;
         int exit_count = 0;
         if (insts.empty()) {
