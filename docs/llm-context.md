@@ -93,7 +93,7 @@ Stack memory is tracked separately:
 
 **Stack Numbers summary**: The line `Stack: Numbers -> {[A...B], [C...D]}` shows which byte ranges are known to contain numeric (non-pointer) data. Empty `{}` means no stack bytes are proven numeric.
 
-Stack offsets `N` in `s[N]` / `s[N...M]` are absolute byte offsets within the total eBPF stack (`0..EBPF_TOTAL_STACK_SIZE-1`). For a given program point, the active stack frame is the interval `[r10.stack_offset-EBPF_SUBPROGRAM_STACK_SIZE, r10.stack_offset)`.
+Stack offsets `N` in `s[N]` / `s[N...M]` are absolute byte offsets within the total eBPF stack (`0..total_stack_size-1`). For a given program point, the active stack frame is the interval `[r10.stack_offset-subprogram_stack_size, r10.stack_offset)`.
 
 ### 2.4 Global State Variables
 
@@ -168,7 +168,7 @@ Where:
 | `Lower bound must be at least 0` | Offset is negative when it shouldn't be |
 | `Upper bound must be at most X` | Access extends past end of region |
 | `Lower bound must be at least meta_offset` | Packet access before metadata start |
-| `Lower bound must be at least r10.stack_offset - EBPF_SUBPROGRAM_STACK_SIZE` | Stack underflow |
+| `Lower bound must be at least r10.stack_offset - subprogram_stack_size` | Stack underflow |
 | `Stack content is not numeric` | Reading non-numeric data from stack |
 | `Possible null access` | Pointer might be NULL |
 | `Nonzero context offset` | Context pointer was modified before passing to helper |
@@ -219,7 +219,7 @@ if (data + sizeof(__u64) > data_end) return XDP_DROP;
 
 ### 4.3 Stack Out-of-Bounds Access
 
-**Symptom**: `Lower bound must be at least r10.stack_offset - EBPF_SUBPROGRAM_STACK_SIZE`
+**Symptom**: `Lower bound must be at least r10.stack_offset - subprogram_stack_size`
 
 **Cause**: Accessing stack memory beyond the allocated frame.
 
@@ -228,7 +228,7 @@ if (data + sizeof(__u64) > data_end) return XDP_DROP;
 ```text
 Pre-invariant:[r10.type=stack, r10.stack_offset=1024]
    0: *(u8 *)(r10 - 513) = 0
-Error: 0: Lower bound must be at least r10.stack_offset - EBPF_SUBPROGRAM_STACK_SIZE
+Error: 0: Lower bound must be at least r10.stack_offset - subprogram_stack_size
 ```
 
 **Fix**: Keep stack accesses within -512 to -1 of r10, or reduce local variable size.

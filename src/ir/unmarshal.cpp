@@ -83,7 +83,7 @@ static Instruction shift32(const Reg dst, const Bin::Op op) {
 struct Unmarshaller {
     vector<vector<string>>& notes;
     const ProgramInfo& info;
-    int total_stack_size = EBPF_TOTAL_STACK_SIZE;
+    int total_stack_size = MAX_CALL_STACK_FRAMES * 512;
     // ReSharper disable once CppMemberFunctionMayBeConst
     void note(const string& what) { notes.back().emplace_back(what); }
     // ReSharper disable once CppMemberFunctionMayBeConst

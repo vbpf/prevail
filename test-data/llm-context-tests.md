@@ -218,9 +218,9 @@ Skip any test marked as SLOW unless specifically requested.
 ./bin/prevail ebpf-samples/build/badhelpercall.o .text -v
 ```
 
-**Expected error**: `Upper bound must be at most EBPF_TOTAL_STACK_SIZE (valid_access(r1.offset, width=r2) for write)`
+**Expected error**: `Upper bound must be at most total_stack_size (valid_access(r1.offset, width=r2) for write)`
 **Pattern**: 4.3 - Stack Out-of-Bounds Access
-**Key invariant**: `r1.stack_offset=4095` with `r2.svalue=20` — writing 20 bytes at stack offset 4095 exceeds EBPF_TOTAL_STACK_SIZE (4096)
+**Key invariant**: `r1.stack_offset=4095` with `r2.svalue=20` — writing 20 bytes at stack offset 4095 exceeds total_stack_size (4096)
 **Fix**: Ensure stack pointer + access width stays within the current 512-byte stack frame (absolute offsets 3584–4096 for the main frame)
 
 ---

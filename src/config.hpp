@@ -58,7 +58,7 @@ struct ebpf_verifier_options_t {
     bool big_endian = false;
 
     // Per-subprogram stack frame size in bytes.
-    int subprogram_stack_size = EBPF_SUBPROGRAM_STACK_SIZE;
+    int subprogram_stack_size = 512;
 
     // Maximum valid subprogram stack size. 1 MB per frame is far beyond any realistic use.
     static constexpr int max_subprogram_stack_size = 1024 * 1024;
