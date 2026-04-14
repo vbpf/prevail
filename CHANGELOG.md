@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.2.2 (2026-04-15)
+
+### Bug fixes
+
+- Fix spurious widening precision loss in `EbpfDomain` that rejected
+  concretely-safe programs using numeric counters stored on the stack
+  across loops (#1071). Regression from #916.
+
 ## v0.2.1 (2026-04-14)
 
 Bug fixes, API enhancements, and infrastructure updates.
