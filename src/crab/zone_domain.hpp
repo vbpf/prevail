@@ -19,11 +19,10 @@
 
 #pragma once
 
+#include <flat_map>
 #include <memory>
 #include <optional>
 #include <utility>
-
-#include <boost/container/flat_map.hpp>
 
 #include "arith/linear_constraint.hpp"
 #include "arith/num_big.hpp"
@@ -41,7 +40,7 @@ class ZoneDomain final {
 
   public:
     using Graph = splitdbm::AdaptGraph;
-    using VertMap = boost::container::flat_map<Variable, splitdbm::VertId>;
+    using VertMap = std::flat_map<Variable, splitdbm::VertId>;
 
   private:
     using VariableVector = std::vector<Variable>;

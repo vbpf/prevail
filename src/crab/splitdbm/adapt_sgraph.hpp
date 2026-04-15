@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <flat_map>
 #include <ranges>
 #include <vector>
-
-#include <boost/container/flat_map.hpp>
 
 #include "crab/splitdbm/definitions.hpp"
 
@@ -17,7 +16,7 @@ class TreeSMap final {
     using Val = size_t;
 
   private:
-    using col = boost::container::flat_map<Key, Val>;
+    using col = std::flat_map<Key, Val>;
     col map;
 
   public:

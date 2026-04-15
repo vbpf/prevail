@@ -1,6 +1,7 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: Apache-2.0
 #include <cassert>
+#include <flat_map>
 #include <utility>
 
 #include "crab/var_registry.hpp"
@@ -357,7 +358,7 @@ bool ZoneDomain::operator<=(const ZoneDomain& o) const {
 }
 
 using RevMap = std::vector<std::optional<Variable>>;
-using VertMap = boost::container::flat_map<Variable, VertId>;
+using VertMap = std::flat_map<Variable, VertId>;
 
 [[nodiscard]]
 std::pair<VertMap, RevMap> result_mappings(const RevMap&& aligned_vars) {
@@ -400,7 +401,7 @@ std::tuple<AlignedPair, RevMap> ZoneDomain::make_union_alignment(const ZoneDomai
     RevMap aligned_vars = {std::nullopt};
     std::vector initial_potentials = {Weight(0)};
 
-    boost::container::flat_map<Variable, size_t> var_to_index;
+    std::flat_map<Variable, size_t> var_to_index;
     for (const auto& [var, left_vert] : left.vert_map_) {
         var_to_index.emplace(var, perm_left.size());
         perm_left.push_back(left_vert);
