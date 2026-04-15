@@ -38,10 +38,7 @@ class AssertExtractor {
     explicit AssertExtractor(const ProgramInfo& info, const std::optional<Label>& label)
         : info{info}, current_label{label} {}
 
-    vector<Assertion> operator()(const Undefined&) const {
-        // assert(false);
-        return {};
-    }
+    vector<Assertion> operator()(const Undefined&) const { return {}; }
 
     vector<Assertion> operator()(const IncrementLoopCounter& ipc) const { return {{BoundedLoopCount{ipc.name}}}; }
 
@@ -52,8 +49,8 @@ class AssertExtractor {
         case PseudoAddress::Kind::CODE_ADDR:
             // Type/offset semantics are handled during abstract transformation.
             return {};
-        case PseudoAddress::Kind::VARIABLE_ADDR:
-        case PseudoAddress::Kind::MAP_BY_IDX:
+        case PseudoAddress::Kind::VARIABLE_ADDR: [[fallthrough]];
+        case PseudoAddress::Kind::MAP_BY_IDX: [[fallthrough]];
         case PseudoAddress::Kind::MAP_VALUE_BY_IDX:
             assert(false && "unexpected LoadPseudo kind after CFG construction");
             return {};
@@ -92,7 +89,7 @@ class AssertExtractor {
                 res.emplace_back(TypeConstraint{arg.reg, TypeGroup::map_fd});
                 map_fd_reg = arg.reg;
                 break;
-            case ArgSingle::Kind::PTR_TO_MAP_KEY:
+            case ArgSingle::Kind::PTR_TO_MAP_KEY: [[fallthrough]];
             case ArgSingle::Kind::PTR_TO_MAP_VALUE:
                 assert(map_fd_reg);
                 res.emplace_back(TypeConstraint{arg.reg, TypeGroup::mem});
@@ -327,7 +324,7 @@ class AssertExtractor {
                 return {Assertion{TypeConstraint{ins.dst, TypeGroup::number}}};
             }
         }
-        assert(false);
+        std::unreachable();
     }
 };
 

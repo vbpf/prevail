@@ -107,8 +107,7 @@ static Condition::Op reverse(const Condition::Op op) {
     case Condition::Op::SET: return Condition::Op::NSET;
     case Condition::Op::NSET: return Condition::Op::SET;
     }
-    assert(false);
-    return {};
+    std::unreachable();
 }
 
 /// Get the inverse of a given comparison condition.

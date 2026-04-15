@@ -1179,8 +1179,8 @@ void EbpfTransformer::operator()(const Bin& bin) {
             dom.state.assign_type(bin.dst, T_NUM);
             dom.state.havoc_offsets(bin.dst);
             break;
-        case Bin::Op::MOVSX8:
-        case Bin::Op::MOVSX16:
+        case Bin::Op::MOVSX8: [[fallthrough]];
+        case Bin::Op::MOVSX16: [[fallthrough]];
         case Bin::Op::MOVSX32: CRAB_ERROR("Unsupported operation");
         case Bin::Op::ADD:
             if (imm == 0) {

@@ -372,13 +372,13 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
                 }
             }
             break;
-        case T_MAP:
+        case T_MAP: [[fallthrough]];
         case T_MAP_PROGRAMS:
             if (!is_comparison_check) {
                 throw_fail("FDs cannot be dereferenced directly");
             }
             break;
-        case T_SOCKET:
+        case T_SOCKET: [[fallthrough]];
         case T_BTF_ID:
             // TODO: implement proper access checks for these pointer types.
             if (!is_comparison_check) {
