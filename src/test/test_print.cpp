@@ -6,7 +6,6 @@
 #include <cctype>
 #include <fstream>
 #include <string>
-#include <variant>
 
 #if !defined(MAX_PATH)
 #define MAX_PATH (256)
@@ -35,10 +34,9 @@ void verify_printed_string(const std::string& file) {
     ElfObject elf{std::string(TEST_OBJECT_FILE_DIRECTORY) + file + ".o", {}, &g_ebpf_platform_linux};
     const auto& raw_progs = elf.get_programs();
     const RawProgram& raw_prog = raw_progs.back();
-    std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, thread_local_options);
-    auto program = std::get_if<InstructionSeq>(&prog_or_error);
-    REQUIRE(program != nullptr);
-    print(*program, generated_output, {});
+    std::expected<InstructionSeq, std::string> inst_seq = unmarshal(raw_prog, thread_local_options);
+    REQUIRE(inst_seq.has_value());
+    print(*inst_seq, generated_output, {});
     print_map_descriptors(raw_prog.info.map_descriptors, generated_output);
     std::ifstream expected_stream(std::string(TEST_ASM_FILE_DIRECTORY) + file + std::string(".asm"));
     REQUIRE(expected_stream);

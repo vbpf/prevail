@@ -559,9 +559,7 @@ TEST_CASE("rewrite_extern_constant_load bails out on values exceeding int32 rang
         REQUIRE(rewrite_extern_constant_load(insts, 0, 0xFFFFFFFFFFFFFFFFULL));
     }
 
-    SECTION("0x80000000 exceeds int32 — bails out without mutation") {
-        check_bailout_preserves_program(0x80000000ULL);
-    }
+    SECTION("0x80000000 exceeds int32 — bails out without mutation") { check_bailout_preserves_program(0x80000000ULL); }
 
     SECTION("0x100000000 exceeds int32 — bails out without mutation") {
         check_bailout_preserves_program(0x100000000ULL);

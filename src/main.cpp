@@ -201,16 +201,15 @@ int main(int argc, char** argv) {
     const RawProgram& raw_prog = raw_progs.back();
 
     // Convert the raw program section to a set of instructions.
-    std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, ebpf_verifier_options);
-    if (auto prog = std::get_if<string>(&prog_or_error)) {
-        std::cout << "unmarshaling error at " << *prog << "\n";
+    const auto inst_seq = unmarshal(raw_prog, ebpf_verifier_options);
+    if (!inst_seq.has_value()) {
+        std::cout << "unmarshaling error at " << inst_seq.error() << "\n";
         return 1;
     }
 
-    auto& inst_seq = std::get<InstructionSeq>(prog_or_error);
     if (!asmfile.empty()) {
         std::ofstream out{asmfile};
-        print(inst_seq, out, {});
+        print(*inst_seq, out, {});
         print_map_descriptors(thread_local_program_info->map_descriptors, out);
     }
 
@@ -226,7 +225,7 @@ int main(int argc, char** argv) {
             }
         }
         const auto verbosity = ebpf_verifier_options.verbosity_opts;
-        const Program prog = Program::from_sequence(inst_seq, raw_prog.info, ebpf_verifier_options);
+        const Program prog = Program::from_sequence(*inst_seq, raw_prog.info, ebpf_verifier_options);
 
         if (!dotfile.empty()) {
             print_dot(prog, dotfile);

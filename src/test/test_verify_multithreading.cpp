@@ -18,18 +18,16 @@ TEST_CASE("multithreading", "[verify][multithreading]") {
                                                           &prevail::g_ebpf_platform_linux);
     REQUIRE(raw_progs1.size() == 1);
     prevail::RawProgram raw_prog1 = raw_progs1.back();
-    auto prog_or_error1 = prevail::unmarshal(raw_prog1, {});
-    auto inst_seq1 = std::get_if<prevail::InstructionSeq>(&prog_or_error1);
-    REQUIRE(inst_seq1);
+    auto inst_seq1 = prevail::unmarshal(raw_prog1, {});
+    REQUIRE(inst_seq1.has_value());
     const prevail::Program prog1 = prevail::Program::from_sequence(*inst_seq1, raw_prog1.info, {});
 
     const auto& raw_progs2 = verify_test::read_elf_cached("ebpf-samples/bpf_cilium_test/bpf_netdev.o", "2/2", "", {},
                                                           &prevail::g_ebpf_platform_linux);
     REQUIRE(raw_progs2.size() == 1);
     prevail::RawProgram raw_prog2 = raw_progs2.back();
-    auto prog_or_error2 = prevail::unmarshal(raw_prog2, {});
-    auto inst_seq2 = std::get_if<prevail::InstructionSeq>(&prog_or_error2);
-    REQUIRE(inst_seq2);
+    auto inst_seq2 = prevail::unmarshal(raw_prog2, {});
+    REQUIRE(inst_seq2.has_value());
     const prevail::Program prog2 = prevail::Program::from_sequence(*inst_seq2, raw_prog2.info, {});
 
     bool res1 = false;

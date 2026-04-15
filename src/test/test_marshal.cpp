@@ -9,7 +9,6 @@
 #include "ir/marshal.hpp"
 #include "ir/program.hpp"
 #include "ir/unmarshal.hpp"
-#include "linux/gpl/spec_type_descriptors.hpp"
 
 using namespace prevail;
 
@@ -214,9 +213,9 @@ static const EbpfInstructionTemplate instruction_template[] = {
 static void check_unmarshal_succeed(const EbpfInst& ins, const ebpf_platform_t& platform = g_ebpf_platform_linux) {
     const ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
     constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
-    const InstructionSeq parsed =
-        std::get<InstructionSeq>(unmarshal(RawProgram{"", "", 0, "", {ins, exit, exit}, info}, thread_local_options));
-    REQUIRE(parsed.size() == 3);
+    const auto inst_seq = unmarshal(RawProgram{"", "", 0, "", {ins, exit, exit}, info}, thread_local_options);
+    REQUIRE(inst_seq.has_value());
+    REQUIRE(inst_seq->size() == 3);
 }
 
 // Verify that we can successfully unmarshal a 64-bit immediate instruction.
@@ -224,21 +223,21 @@ static void check_unmarshal_succeed(EbpfInst inst1, EbpfInst inst2,
                                     const ebpf_platform_t& platform = g_ebpf_platform_linux) {
     const ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
     constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
-    const InstructionSeq parsed = std::get<InstructionSeq>(
-        unmarshal(RawProgram{"", "", 0, "", {inst1, inst2, exit, exit}, info}, thread_local_options));
-    REQUIRE(parsed.size() == 3);
+    const auto inst_seq = unmarshal(RawProgram{"", "", 0, "", {inst1, inst2, exit, exit}, info}, thread_local_options);
+    REQUIRE(inst_seq.has_value());
+    REQUIRE(inst_seq->size() == 3);
 }
 
 // Verify that if we unmarshal an instruction and then re-marshal it,
 // we get what we expect.
 static void compare_unmarshal_marshal(const EbpfInst& ins, const EbpfInst& expected_result,
                                       const ebpf_platform_t& platform = g_ebpf_platform_linux) {
-    ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
+    const ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
     constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
-    const InstructionSeq inst_seq =
-        std::get<InstructionSeq>(unmarshal(RawProgram{"", "", 0, "", {ins, exit, exit}, info}, thread_local_options));
-    REQUIRE(inst_seq.size() == 3);
-    auto [_, single, _2] = inst_seq.front();
+    const auto inst_seq = unmarshal(RawProgram{"", "", 0, "", {ins, exit, exit}, info}, thread_local_options);
+    REQUIRE(inst_seq.has_value());
+    REQUIRE(inst_seq->size() == 3);
+    auto [_, single, _2] = inst_seq->front();
     (void)_;  // unused
     (void)_2; // unused
     std::vector<EbpfInst> marshaled = marshal(single, 0);
@@ -253,10 +252,10 @@ static void compare_unmarshal_marshal(const EbpfInst& ins1, const EbpfInst& ins2
     ProgramInfo info{.platform = &g_ebpf_platform_linux,
                      .type = g_ebpf_platform_linux.get_program_type("unspec", "unspec")};
     constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
-    InstructionSeq parsed = std::get<InstructionSeq>(
-        unmarshal(RawProgram{"", "", 0, "", {ins1, ins2, exit, exit}, info}, thread_local_options));
-    REQUIRE(parsed.size() == 3);
-    auto [_, single, _2] = parsed.front();
+    const auto inst_seq = unmarshal(RawProgram{"", "", 0, "", {ins1, ins2, exit, exit}, info}, thread_local_options);
+    REQUIRE(inst_seq.has_value());
+    REQUIRE(inst_seq->size() == 3);
+    auto [_, single, _2] = inst_seq->front();
     (void)_;  // unused
     (void)_2; // unused
     std::vector<EbpfInst> marshaled = marshal(single, 0);
@@ -272,10 +271,10 @@ static void compare_unmarshal_marshal(const EbpfInst& ins1, const EbpfInst& ins2
     ProgramInfo info{.platform = &g_ebpf_platform_linux,
                      .type = g_ebpf_platform_linux.get_program_type("unspec", "unspec")};
     constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
-    const InstructionSeq inst_seq = std::get<InstructionSeq>(
-        unmarshal(RawProgram{"", "", 0, "", {ins1, ins2, exit, exit}, info}, thread_local_options));
-    REQUIRE(inst_seq.size() == 3);
-    auto [_, single, _2] = inst_seq.front();
+    const auto inst_seq = unmarshal(RawProgram{"", "", 0, "", {ins1, ins2, exit, exit}, info}, thread_local_options);
+    REQUIRE(inst_seq.has_value());
+    REQUIRE(inst_seq->size() == 3);
+    auto [_, single, _2] = inst_seq->front();
     (void)_;  // unused
     (void)_2; // unused
     std::vector<EbpfInst> marshaled = marshal(single, 0);
@@ -290,11 +289,11 @@ static void compare_unmarshal_marshal(const EbpfInst& ins1, const EbpfInst& ins2
 // we get the original.
 static void compare_marshal_unmarshal(const Instruction& ins, bool double_cmd = false,
                                       const ebpf_platform_t& platform = g_ebpf_platform_linux) {
-    ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
-    const InstructionSeq inst_seq =
-        std::get<InstructionSeq>(unmarshal(RawProgram{"", "", 0, "", marshal(ins, 0), info}, thread_local_options));
-    REQUIRE(inst_seq.size() == 1);
-    auto [_, single, _2] = inst_seq.back();
+    const ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
+    const auto inst_seq = unmarshal(RawProgram{"", "", 0, "", marshal(ins, 0), info}, thread_local_options);
+    REQUIRE(inst_seq.has_value());
+    REQUIRE(inst_seq->size() == 1);
+    auto [_, single, _2] = inst_seq->back();
     (void)_;  // unused
     (void)_2; // unused
     REQUIRE(single == ins);
@@ -303,49 +302,44 @@ static void compare_marshal_unmarshal(const Instruction& ins, bool double_cmd = 
 static void check_marshal_unmarshal_fail(const Instruction& ins, const std::string& expected_error_message,
                                          const ebpf_platform_t& platform = g_ebpf_platform_linux) {
     const ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
-    auto result = unmarshal(RawProgram{"", "", 0, "", marshal(ins, 0), info}, thread_local_options);
-    auto* error_message = std::get_if<std::string>(&result);
-    REQUIRE(error_message != nullptr);
-    REQUIRE(*error_message == expected_error_message);
+    const auto result = unmarshal(RawProgram{"", "", 0, "", marshal(ins, 0), info}, thread_local_options);
+    REQUIRE(!result.has_value());
+    REQUIRE(result.error() == expected_error_message);
 }
 
-static void check_unmarshal_fail(EbpfInst inst, const std::string& expected_error_message,
+static void check_unmarshal_fail(const EbpfInst inst, const std::string& expected_error_message,
                                  const ebpf_platform_t& platform = g_ebpf_platform_linux) {
-    ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
-    std::vector insns = {inst};
-    auto result = unmarshal(RawProgram{"", "", 0, "", insns, info}, thread_local_options);
-    auto* error_message = std::get_if<std::string>(&result);
-    REQUIRE(error_message != nullptr);
-    REQUIRE(*error_message == expected_error_message);
+    const ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
+    const std::vector insns = {inst};
+    auto inst_seq = unmarshal(RawProgram{"", "", 0, "", insns, info}, thread_local_options);
+    REQUIRE(!inst_seq.has_value());
+    REQUIRE(inst_seq.error() == expected_error_message);
 }
 
-static void check_unmarshal_fail_goto(EbpfInst inst, const std::string& expected_error_message,
+static void check_unmarshal_fail_goto(const EbpfInst inst, const std::string& expected_error_message,
                                       const ebpf_platform_t& platform = g_ebpf_platform_linux) {
-    ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
+    const ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
     constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
-    std::vector insns{inst, exit, exit};
-    auto result = unmarshal(RawProgram{"", "", 0, "", insns, info}, thread_local_options);
-    auto* error_message = std::get_if<std::string>(&result);
-    REQUIRE(error_message != nullptr);
-    REQUIRE(*error_message == expected_error_message);
+    const std::vector insns{inst, exit, exit};
+    auto inst_seq = unmarshal(RawProgram{"", "", 0, "", insns, info}, thread_local_options);
+    REQUIRE(!inst_seq.has_value());
+    REQUIRE(inst_seq.error() == expected_error_message);
 }
 
 // Check that unmarshaling a 64-bit immediate instruction fails.
 static void check_unmarshal_fail(EbpfInst inst1, EbpfInst inst2, const std::string& expected_error_message,
                                  const ebpf_platform_t& platform = g_ebpf_platform_linux) {
-    ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
-    std::vector insns{inst1, inst2};
-    auto result = unmarshal(RawProgram{"", "", 0, "", insns, info}, thread_local_options);
-    auto* error_message = std::get_if<std::string>(&result);
-    REQUIRE(error_message != nullptr);
-    REQUIRE(*error_message == expected_error_message);
+    const ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
+    const std::vector insns{inst1, inst2};
+    auto inst_seq = unmarshal(RawProgram{"", "", 0, "", insns, info}, thread_local_options);
+    REQUIRE(!inst_seq.has_value());
+    REQUIRE(inst_seq.error() == expected_error_message);
 }
 
 static Call unmarshal_single_call(const EbpfInst& call_inst, const ProgramInfo& info) {
     constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
-    const auto parsed = unmarshal(RawProgram{"", "", 0, "", {call_inst, exit, exit}, info}, thread_local_options);
-    auto* inst_seq = std::get_if<InstructionSeq>(&parsed);
-    REQUIRE(inst_seq != nullptr);
+    const auto inst_seq = unmarshal(RawProgram{"", "", 0, "", {call_inst, exit, exit}, info}, thread_local_options);
+    REQUIRE(inst_seq.has_value());
     REQUIRE(inst_seq->size() == 3);
     auto* call = std::get_if<Call>(&std::get<1>((*inst_seq)[0]));
     REQUIRE(call != nullptr);
@@ -940,15 +934,15 @@ TEST_CASE("unmarshal builtin calls only when relocation-gated", "[disasm][marsha
     REQUIRE(has_assertion(assertions, ValidSize{Reg{3}, false}));
     REQUIRE(has_assertion(assertions, ValidAccess{1, Reg{1}, 0, Value{Reg{3}}, false, AccessType::write}));
 }
-#define FAIL_UNMARSHAL(dirname, filename, sectionname)                                                       \
-    TEST_CASE("Try unmarshalling bad program: " dirname "/" filename " " sectionname, "[unmarshal]") {       \
-        thread_local_options = {};                                                                           \
-        ElfObject elf{"ebpf-samples/" dirname "/" filename, {}, &g_ebpf_platform_linux};                     \
-        const auto& raw_progs = elf.get_programs(sectionname);                                               \
-        REQUIRE(raw_progs.size() == 1);                                                                      \
-        const RawProgram& raw_prog = raw_progs.back();                                                       \
-        std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, thread_local_options); \
-        REQUIRE(std::holds_alternative<std::string>(prog_or_error));                                         \
+#define FAIL_UNMARSHAL(dirname, filename, sectionname)                                                 \
+    TEST_CASE("Try unmarshalling bad program: " dirname "/" filename " " sectionname, "[unmarshal]") { \
+        thread_local_options = {};                                                                     \
+        ElfObject elf{"ebpf-samples/" dirname "/" filename, {}, &g_ebpf_platform_linux};               \
+        const auto& raw_progs = elf.get_programs(sectionname);                                         \
+        REQUIRE(raw_progs.size() == 1);                                                                \
+        const RawProgram& raw_prog = raw_progs.back();                                                 \
+        const auto inst_seq = unmarshal(raw_prog, thread_local_options);                               \
+        REQUIRE(!inst_seq.has_value());                                                                \
     }
 
 // Some intentional unmarshal failures
@@ -962,10 +956,10 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
     SECTION("unknown kfunc btf id") {
         RawProgram raw_prog{
             "", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1}, exit}, info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        auto inst_seq = unmarshal(raw_prog, {});
+        REQUIRE(inst_seq.has_value());
         REQUIRE_THROWS_WITH(
-            Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
+            Program::from_sequence(*inst_seq, info, {}),
             Catch::Matchers::ContainsSubstring("not implemented: kfunc prototype lookup failed for BTF id 1") &&
                 Catch::Matchers::ContainsSubstring("(at 0)"));
     }
@@ -973,9 +967,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
     SECTION("kfunc call by BTF id is accepted when prototype is known") {
         RawProgram raw_prog{
             "", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1000}, exit}, info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
+        auto inst_seq = unmarshal(raw_prog, {});
+        REQUIRE(inst_seq.has_value());
+        const Program prog = Program::from_sequence(*inst_seq, info, {});
         REQUIRE(verify(prog));
     }
 
@@ -987,9 +981,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
                             {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_LOCAL, .imm = 1}, exit,
                              EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1000}, exit},
                             info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
+        auto inst_seq = unmarshal(raw_prog, {});
+        REQUIRE(inst_seq.has_value());
+        const Program prog = Program::from_sequence(*inst_seq, info, {});
         REQUIRE(verify(prog));
     }
 
@@ -1001,9 +995,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
                             {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_LOCAL, .imm = 1}, exit,
                              EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 12}, exit},
                             info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
+        auto inst_seq = unmarshal(raw_prog, {});
+        REQUIRE(inst_seq.has_value());
+        const Program prog = Program::from_sequence(*inst_seq, info, {});
         REQUIRE(verify(prog));
     }
 
@@ -1016,9 +1010,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
                             {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1005},
                              EbpfInst{.opcode = mov64_imm, .dst = 0, .imm = 0}, exit},
                             info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
+        auto inst_seq = unmarshal(raw_prog, {});
+        REQUIRE(inst_seq.has_value());
+        const Program prog = Program::from_sequence(*inst_seq, info, {});
         const auto* call = std::get_if<Call>(&prog.instruction_at(Label{0}));
         REQUIRE(call != nullptr);
         REQUIRE(call->is_map_lookup);
@@ -1028,9 +1022,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
     SECTION("kfunc with acquire flag is accepted") {
         RawProgram raw_prog{
             "", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1002}, exit}, info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
+        auto inst_seq = unmarshal(raw_prog, {});
+        REQUIRE(inst_seq.has_value());
+        const Program prog = Program::from_sequence(*inst_seq, info, {});
         const auto* call = std::get_if<Call>(&prog.instruction_at(Label{0}));
         REQUIRE(call != nullptr);
         REQUIRE(call->name == "kfunc_test_acquire_flag");
@@ -1039,9 +1033,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
     SECTION("kfunc with release flag is rejected") {
         RawProgram raw_prog{
             "", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1008}, exit}, info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
+        auto inst_seq = unmarshal(raw_prog, {});
+        REQUIRE(inst_seq.has_value());
+        REQUIRE_THROWS_WITH(Program::from_sequence(*inst_seq, info, {}),
                             Catch::Matchers::ContainsSubstring("not implemented: kfunc has unsupported flags") &&
                                 Catch::Matchers::ContainsSubstring("(at 0)"));
     }
@@ -1049,10 +1043,10 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
     SECTION("kfunc program type gating is enforced") {
         RawProgram raw_prog{
             "", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1003}, exit}, info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        auto inst_seq = unmarshal(raw_prog, {});
+        REQUIRE(inst_seq.has_value());
         REQUIRE_THROWS_WITH(
-            Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
+            Program::from_sequence(*inst_seq, info, {}),
             Catch::Matchers::ContainsSubstring("not implemented: kfunc is unavailable for program type") &&
                 Catch::Matchers::ContainsSubstring("(at 0)"));
 
@@ -1060,19 +1054,19 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         RawProgram xdp_raw_prog{
             "",      "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1003}, exit},
             xdp_info};
-        auto xdp_prog_or_error = unmarshal(xdp_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(xdp_prog_or_error));
-        const Program xdp_prog = Program::from_sequence(std::get<InstructionSeq>(xdp_prog_or_error), xdp_info, {});
+        auto xdp_inst_seq = unmarshal(xdp_raw_prog, {});
+        REQUIRE(xdp_inst_seq.has_value());
+        const Program xdp_prog = Program::from_sequence(*xdp_inst_seq, xdp_info, {});
         REQUIRE(verify(xdp_prog));
     }
 
     SECTION("kfunc privileged gating is enforced") {
         RawProgram raw_prog{
             "", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1004}, exit}, info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        auto inst_seq = unmarshal(raw_prog, {});
+        REQUIRE(inst_seq.has_value());
         REQUIRE_THROWS_WITH(
-            Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
+            Program::from_sequence(*inst_seq, info, {}),
             Catch::Matchers::ContainsSubstring("not implemented: kfunc requires privileged program type") &&
                 Catch::Matchers::ContainsSubstring("(at 0)"));
 
@@ -1083,10 +1077,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         RawProgram kprobe_raw_prog{
             "",         "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1004}, exit},
             kprobe_info};
-        auto kprobe_prog_or_error = unmarshal(kprobe_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(kprobe_prog_or_error));
-        const Program kprobe_prog =
-            Program::from_sequence(std::get<InstructionSeq>(kprobe_prog_or_error), kprobe_info, {});
+        auto kprobe_inst_seq = unmarshal(kprobe_raw_prog, {});
+        REQUIRE(kprobe_inst_seq.has_value());
+        const Program kprobe_prog = Program::from_sequence(*kprobe_inst_seq, kprobe_info, {});
         REQUIRE(verify(kprobe_prog));
     }
 
@@ -1095,9 +1088,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
 
         RawProgram good_raw_prog{
             "", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1001}, exit}, info};
-        auto good_prog_or_error = unmarshal(good_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(good_prog_or_error));
-        const Program good_prog = Program::from_sequence(std::get<InstructionSeq>(good_prog_or_error), info, {});
+        auto good_inst_seq = unmarshal(good_raw_prog, {});
+        REQUIRE(good_inst_seq.has_value());
+        const Program good_prog = Program::from_sequence(*good_inst_seq, info, {});
         REQUIRE(verify(good_prog));
 
         RawProgram bad_raw_prog{"",
@@ -1107,9 +1100,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
                                 {EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 0},
                                  EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1001}, exit},
                                 info};
-        auto bad_prog_or_error = unmarshal(bad_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(bad_prog_or_error));
-        const Program bad_prog = Program::from_sequence(std::get<InstructionSeq>(bad_prog_or_error), info, {});
+        auto bad_inst_seq = unmarshal(bad_raw_prog, {});
+        REQUIRE(bad_inst_seq.has_value());
+        const Program bad_prog = Program::from_sequence(*bad_inst_seq, info, {});
         REQUIRE_FALSE(verify(bad_prog));
     }
 
@@ -1124,9 +1117,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
                                   EbpfInst{.opcode = mov64_imm, .dst = 2, .imm = 0},
                                   EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1006}, exit},
                                  info};
-        auto good_prog_or_error = unmarshal(good_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(good_prog_or_error));
-        const Program good_prog = Program::from_sequence(std::get<InstructionSeq>(good_prog_or_error), info, {});
+        auto good_inst_seq = unmarshal(good_raw_prog, {});
+        REQUIRE(good_inst_seq.has_value());
+        const Program good_prog = Program::from_sequence(*good_inst_seq, info, {});
         REQUIRE(verify(good_prog));
 
         RawProgram bad_size_raw_prog{"",
@@ -1137,10 +1130,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
                                       EbpfInst{.opcode = mov64_imm, .dst = 2, .imm = -1},
                                       EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1006}, exit},
                                      info};
-        auto bad_size_prog_or_error = unmarshal(bad_size_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(bad_size_prog_or_error));
-        const Program bad_size_prog =
-            Program::from_sequence(std::get<InstructionSeq>(bad_size_prog_or_error), info, {});
+        auto bad_size_inst_seq = unmarshal(bad_size_raw_prog, {});
+        REQUIRE(bad_size_inst_seq.has_value());
+        const Program bad_size_prog = Program::from_sequence(*bad_size_inst_seq, info, {});
         REQUIRE_FALSE(verify(bad_size_prog));
 
         RawProgram bad_nullability_raw_prog{
@@ -1151,10 +1143,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
             {EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 1}, EbpfInst{.opcode = mov64_imm, .dst = 2, .imm = 0},
              EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1006}, exit},
             info};
-        auto bad_nullability_prog_or_error = unmarshal(bad_nullability_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(bad_nullability_prog_or_error));
-        const Program bad_nullability_prog =
-            Program::from_sequence(std::get<InstructionSeq>(bad_nullability_prog_or_error), info, {});
+        auto bad_nullability_inst_seq = unmarshal(bad_nullability_raw_prog, {});
+        REQUIRE(bad_nullability_inst_seq.has_value());
+        const Program bad_nullability_prog = Program::from_sequence(*bad_nullability_inst_seq, info, {});
         REQUIRE_FALSE(verify(bad_nullability_prog));
     }
 
@@ -1172,9 +1163,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
                                   EbpfInst{.opcode = mov64_imm, .dst = 2, .imm = 4},
                                   EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1007}, exit},
                                  info};
-        auto good_prog_or_error = unmarshal(good_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(good_prog_or_error));
-        const Program good_prog = Program::from_sequence(std::get<InstructionSeq>(good_prog_or_error), info, {});
+        auto good_inst_seq = unmarshal(good_raw_prog, {});
+        REQUIRE(good_inst_seq.has_value());
+        const Program good_prog = Program::from_sequence(*good_inst_seq, info, {});
         REQUIRE(verify(good_prog));
 
         RawProgram bad_nullability_raw_prog{
@@ -1185,10 +1176,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
             {EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 0}, EbpfInst{.opcode = mov64_imm, .dst = 2, .imm = 4},
              EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1007}, exit},
             info};
-        auto bad_nullability_prog_or_error = unmarshal(bad_nullability_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(bad_nullability_prog_or_error));
-        const Program bad_nullability_prog =
-            Program::from_sequence(std::get<InstructionSeq>(bad_nullability_prog_or_error), info, {});
+        auto bad_nullability_inst_seq = unmarshal(bad_nullability_raw_prog, {});
+        REQUIRE(bad_nullability_inst_seq.has_value());
+        const Program bad_nullability_prog = Program::from_sequence(*bad_nullability_inst_seq, info, {});
         REQUIRE_FALSE(verify(bad_nullability_prog));
 
         RawProgram bad_size_raw_prog{"",
@@ -1200,10 +1190,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
                                       EbpfInst{.opcode = mov64_imm, .dst = 2, .imm = 0},
                                       EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1007}, exit},
                                      info};
-        auto bad_size_prog_or_error = unmarshal(bad_size_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(bad_size_prog_or_error));
-        const Program bad_size_prog =
-            Program::from_sequence(std::get<InstructionSeq>(bad_size_prog_or_error), info, {});
+        auto bad_size_inst_seq = unmarshal(bad_size_raw_prog, {});
+        REQUIRE(bad_size_inst_seq.has_value());
+        const Program bad_size_prog = Program::from_sequence(*bad_size_inst_seq, info, {});
         REQUIRE_FALSE(verify(bad_size_prog));
     }
 
@@ -1211,9 +1200,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         RawProgram raw_prog{
             "",  "", 0, "", {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 1, .src = 3, .imm = 7}, EbpfInst{}, exit},
             info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
+        auto inst_seq = unmarshal(raw_prog, {});
+        REQUIRE(inst_seq.has_value());
+        const Program prog = Program::from_sequence(*inst_seq, info, {});
         const auto* bin = std::get_if<Bin>(&prog.instruction_at(Label{0}));
         REQUIRE(bin != nullptr);
         REQUIRE(bin->op == Bin::Op::MOV);
@@ -1229,9 +1218,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         RawProgram raw_prog{
             "",  "", 0, "", {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = 4, .imm = 11}, EbpfInst{}, exit},
             info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
+        auto inst_seq = unmarshal(raw_prog, {});
+        REQUIRE(inst_seq.has_value());
+        const Program prog = Program::from_sequence(*inst_seq, info, {});
         const auto* pseudo = std::get_if<LoadPseudo>(&prog.instruction_at(Label{0}));
         REQUIRE(pseudo != nullptr);
         REQUIRE(pseudo->dst == Reg{2});
@@ -1247,9 +1236,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
             "",
             {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 3, .src = 0, .imm = 1}, EbpfInst{.imm = 2}, exit},
             info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
+        auto inst_seq = unmarshal(raw_prog, {});
+        REQUIRE(inst_seq.has_value());
+        const Program prog = Program::from_sequence(*inst_seq, info, {});
         const auto* bin = std::get_if<Bin>(&prog.instruction_at(Label{0}));
         REQUIRE(bin != nullptr);
         REQUIRE(bin->op == Bin::Op::MOV);
@@ -1269,9 +1258,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
             "",
             {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 3, .src = 0, .imm = -1}, EbpfInst{.imm = 0}, exit},
             info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
+        auto inst_seq = unmarshal(raw_prog, {});
+        REQUIRE(inst_seq.has_value());
+        const Program prog = Program::from_sequence(*inst_seq, info, {});
         const auto* bin = std::get_if<Bin>(&prog.instruction_at(Label{0}));
         REQUIRE(bin != nullptr);
         REQUIRE(bin->op == Bin::Op::MOV);
@@ -1291,9 +1280,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
             "",
             {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 7}, EbpfInst{}, exit},
             info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
+        auto inst_seq = unmarshal(raw_prog, {});
+        REQUIRE(inst_seq.has_value());
+        const Program prog = Program::from_sequence(*inst_seq, info, {});
         const auto* pseudo = std::get_if<LoadPseudo>(&prog.instruction_at(Label{0}));
         REQUIRE(pseudo != nullptr);
         REQUIRE(pseudo->addr.kind == PseudoAddress::Kind::CODE_ADDR);
@@ -1310,9 +1299,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
              EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 1}, EbpfInst{.opcode = mov64_imm, .dst = 3, .imm = 0},
              EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0}, EbpfInst{.opcode = INST_OP_CALL, .imm = 181}, exit},
             info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
+        auto inst_seq = unmarshal(raw_prog, {});
+        REQUIRE(inst_seq.has_value());
+        const Program prog = Program::from_sequence(*inst_seq, info, {});
         const auto* call = std::get_if<Call>(&prog.instruction_at(Label{5}));
         REQUIRE(call != nullptr);
         REQUIRE(call->is_supported);
@@ -1333,9 +1322,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
              EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0}, EbpfInst{.opcode = INST_OP_CALL, .imm = 181}, exit,
              EbpfInst{.opcode = mov64_imm, .dst = 0, .imm = 0}, exit},
             info};
-        auto good_prog_or_error = unmarshal(good_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(good_prog_or_error));
-        const Program good_prog = Program::from_sequence(std::get<InstructionSeq>(good_prog_or_error), info, {});
+        auto good_inst_seq = unmarshal(good_raw_prog, {});
+        REQUIRE(good_inst_seq.has_value());
+        const Program good_prog = Program::from_sequence(*good_inst_seq, info, {});
         REQUIRE(verify(good_prog));
 
         RawProgram bad_raw_prog{
@@ -1347,9 +1336,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
              EbpfInst{.opcode = mov64_imm, .dst = 3, .imm = 0}, EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0},
              EbpfInst{.opcode = INST_OP_CALL, .imm = 181}, exit},
             info};
-        auto bad_prog_or_error = unmarshal(bad_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(bad_prog_or_error));
-        const Program bad_prog = Program::from_sequence(std::get<InstructionSeq>(bad_prog_or_error), info, {});
+        auto bad_inst_seq = unmarshal(bad_raw_prog, {});
+        REQUIRE(bad_inst_seq.has_value());
+        const Program bad_prog = Program::from_sequence(*bad_inst_seq, info, {});
         REQUIRE_FALSE(verify(bad_prog));
     }
 
@@ -1365,9 +1354,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
              EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0}, EbpfInst{.opcode = INST_OP_CALL, .imm = 181}, exit,
              EbpfInst{.opcode = mov64_imm, .dst = 0, .imm = 0}, exit},
             info};
-        auto good_prog_or_error = unmarshal(good_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(good_prog_or_error));
-        const Program good_prog = Program::from_sequence(std::get<InstructionSeq>(good_prog_or_error), info, {});
+        auto good_inst_seq = unmarshal(good_raw_prog, {});
+        REQUIRE(good_inst_seq.has_value());
+        const Program good_prog = Program::from_sequence(*good_inst_seq, info, {});
         REQUIRE(verify(good_prog));
 
         RawProgram bad_raw_prog{
@@ -1380,9 +1369,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
              EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0}, EbpfInst{.opcode = INST_OP_CALL, .imm = 181}, exit,
              EbpfInst{.opcode = mov64_imm, .dst = 0, .imm = 0}, exit},
             info};
-        auto bad_prog_or_error = unmarshal(bad_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(bad_prog_or_error));
-        const Program bad_prog = Program::from_sequence(std::get<InstructionSeq>(bad_prog_or_error), info, {});
+        auto bad_inst_seq = unmarshal(bad_raw_prog, {});
+        REQUIRE(bad_inst_seq.has_value());
+        const Program bad_prog = Program::from_sequence(*bad_inst_seq, info, {});
         REQUIRE_FALSE(verify(bad_prog));
     }
 
@@ -1398,18 +1387,18 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
              EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0}, EbpfInst{.opcode = INST_OP_CALL, .imm = 181}, exit,
              EbpfInst{.opcode = INST_OP_JA16, .offset = -1}},
             info};
-        auto bad_prog_or_error = unmarshal(bad_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(bad_prog_or_error));
-        const Program bad_prog = Program::from_sequence(std::get<InstructionSeq>(bad_prog_or_error), info, {});
+        auto bad_inst_seq = unmarshal(bad_raw_prog, {});
+        REQUIRE(bad_inst_seq.has_value());
+        const Program bad_prog = Program::from_sequence(*bad_inst_seq, info, {});
         REQUIRE_FALSE(verify(bad_prog));
     }
 
     SECTION("helper id not usable on platform") {
         RawProgram raw_prog{"", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .imm = 0x7fff}, exit}, info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        auto inst_seq = unmarshal(raw_prog, {});
+        REQUIRE(inst_seq.has_value());
         REQUIRE_THROWS_WITH(
-            Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
+            Program::from_sequence(*inst_seq, info, {}),
             Catch::Matchers::ContainsSubstring("rejected: helper function is unavailable on this platform") &&
                 Catch::Matchers::ContainsSubstring("(at 0)"));
     }
@@ -1427,9 +1416,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
                                       .imm = 64},
                              exit},
                             pinfo};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), pinfo, {}),
+        auto inst_seq = unmarshal(raw_prog, {});
+        REQUIRE(inst_seq.has_value());
+        REQUIRE_THROWS_WITH(Program::from_sequence(*inst_seq, pinfo, {}),
                             Catch::Matchers::ContainsSubstring("rejected: requires conformance group base64") &&
                                 Catch::Matchers::ContainsSubstring("(at 0)"));
     }
@@ -1438,9 +1427,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         RawProgram raw_prog{
             "",  "", 0, "", {EbpfInst{.opcode = INST_OP_CALLX, .dst = 0, .src = INST_CALL_BTF_HELPER, .imm = 1}, exit},
             info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<std::string>(prog_or_error));
-        REQUIRE_THAT(std::get<std::string>(prog_or_error), Catch::Matchers::ContainsSubstring("bad instruction"));
+        auto inst_seq = unmarshal(raw_prog, {});
+        REQUIRE(!inst_seq.has_value());
+        REQUIRE_THAT(inst_seq.error(), Catch::Matchers::ContainsSubstring("bad instruction"));
     }
 
     SECTION("tail call chain depth above 33 is rejected") {
@@ -1450,9 +1439,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         }
         insts.push_back(exit);
         RawProgram raw_prog{"", "", 0, "", std::move(insts), info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
+        auto inst_seq = unmarshal(raw_prog, {});
+        REQUIRE(inst_seq.has_value());
+        REQUIRE_THROWS_WITH(Program::from_sequence(*inst_seq, info, {}),
                             Catch::Matchers::ContainsSubstring("tail call chain depth exceeds 33") &&
                                 Catch::Matchers::ContainsSubstring("(at"));
     }
@@ -1464,9 +1453,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         }
         insts.push_back(exit);
         RawProgram raw_prog{"", "", 0, "", std::move(insts), info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        REQUIRE_NOTHROW(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}));
+        auto inst_seq = unmarshal(raw_prog, {});
+        REQUIRE(inst_seq.has_value());
+        REQUIRE_NOTHROW(Program::from_sequence(*inst_seq, info, {}));
     }
 
     SECTION("tail call cycle does not inflate chain depth") {
@@ -1480,9 +1469,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
                                 EbpfInst{.opcode = INST_OP_JA16, .offset = -2},
                             },
                             info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        REQUIRE_NOTHROW(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}));
+        auto inst_seq = unmarshal(raw_prog, {});
+        REQUIRE(inst_seq.has_value());
+        REQUIRE_NOTHROW(Program::from_sequence(*inst_seq, info, {}));
     }
 }
 
@@ -1494,9 +1483,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         const auto& raw_progs = elf.get_programs(sectionname);                                                  \
         REQUIRE(raw_progs.size() == 1);                                                                         \
         RawProgram raw_prog = raw_progs.back();                                                                 \
-        std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, {});                      \
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));                                         \
-        REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), raw_prog.info, {}), \
+        const auto inst_seq = unmarshal(raw_prog, {});                                                          \
+        REQUIRE(inst_seq.has_value());                                                                          \
+        REQUIRE_THROWS_WITH(Program::from_sequence(*inst_seq, raw_prog.info, {}),                               \
                             Catch::Matchers::ContainsSubstring("rejected: requires conformance group packet")); \
     }
 

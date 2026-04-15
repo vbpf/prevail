@@ -22,9 +22,8 @@ static std::vector<FailureSlice> get_failure_slices(const std::string& filename,
     REQUIRE(raw_progs.size() == 1);
 
     const RawProgram& raw_prog = raw_progs.back();
-    auto prog_or_error = unmarshal(raw_prog, options);
-    auto inst_seq = std::get_if<InstructionSeq>(&prog_or_error);
-    REQUIRE(inst_seq != nullptr);
+    auto inst_seq = unmarshal(raw_prog, options);
+    REQUIRE(inst_seq.has_value());
 
     const Program prog = Program::from_sequence(*inst_seq, raw_prog.info, options);
     auto result = analyze(prog);
@@ -183,9 +182,8 @@ TEST_CASE("print_failure_slices produces structured output", "[failure_slice][pr
     REQUIRE(raw_progs.size() == 1);
 
     const RawProgram& raw_prog = raw_progs.back();
-    auto prog_or_error = unmarshal(raw_prog, options);
-    auto inst_seq = std::get_if<InstructionSeq>(&prog_or_error);
-    REQUIRE(inst_seq != nullptr);
+    auto inst_seq = unmarshal(raw_prog, options);
+    REQUIRE(inst_seq.has_value());
 
     const Program prog = Program::from_sequence(*inst_seq, raw_prog.info, options);
     auto result = analyze(prog);
@@ -218,9 +216,8 @@ TEST_CASE("passing program produces no failure slices", "[failure_slice][integra
     REQUIRE(raw_progs.size() == 1);
 
     const RawProgram& raw_prog = raw_progs.back();
-    auto prog_or_error = unmarshal(raw_prog, options);
-    auto inst_seq = std::get_if<InstructionSeq>(&prog_or_error);
-    REQUIRE(inst_seq != nullptr);
+    auto inst_seq = unmarshal(raw_prog, options);
+    REQUIRE(inst_seq.has_value());
 
     const Program prog = Program::from_sequence(*inst_seq, raw_prog.info, options);
     auto result = analyze(prog);
@@ -252,9 +249,8 @@ TEST_CASE("assume guard registers become relevant in slice", "[failure_slice][in
     ElfObject elf{sample, options, &g_ebpf_platform_linux};
     const auto& raw_progs = elf.get_programs("xdp");
     REQUIRE(raw_progs.size() == 1);
-    auto prog_or_error = unmarshal(raw_progs.back(), options);
-    auto inst_seq = std::get_if<InstructionSeq>(&prog_or_error);
-    REQUIRE(inst_seq != nullptr);
+    auto inst_seq = unmarshal(raw_progs.back(), options);
+    REQUIRE(inst_seq.has_value());
     const Program prog = Program::from_sequence(*inst_seq, raw_progs.back().info, options);
 
     bool found_assume_in_slice = false;

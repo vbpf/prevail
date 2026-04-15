@@ -1,6 +1,7 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
 #include <cassert>
+#include <expected>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -782,8 +783,7 @@ struct Unmarshaller {
         }
     }
 
-    vector<LabeledInstruction> unmarshal(vector<EbpfInst> const& insts,
-                                         const prevail::ebpf_verifier_options_t& options) {
+    vector<LabeledInstruction> unmarshal(vector<EbpfInst> const& insts, const ebpf_verifier_options_t& options) {
         options.validate();
         subprogram_stack_size = options.subprogram_stack_size;
         vector<LabeledInstruction> prog;
@@ -882,20 +882,20 @@ struct Unmarshaller {
     }
 };
 
-std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog, vector<vector<string>>& notes,
-                                                    const prevail::ebpf_verifier_options_t& options) {
+std::expected<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog, vector<vector<string>>& notes,
+                                                     const ebpf_verifier_options_t& options) {
     thread_local_program_info = raw_prog.info;
     try {
         return Unmarshaller{notes, raw_prog.info}.unmarshal(raw_prog.prog, options);
     } catch (InvalidInstruction& arg) {
         std::ostringstream ss;
         ss << arg.pc << ": " << arg.what() << "\n";
-        return ss.str();
+        return std::unexpected(ss.str());
     }
 }
 
-std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog,
-                                                    const prevail::ebpf_verifier_options_t& options) {
+std::expected<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog,
+                                                     const ebpf_verifier_options_t& options) {
     vector<vector<string>> notes;
     return unmarshal(raw_prog, notes, options);
 }

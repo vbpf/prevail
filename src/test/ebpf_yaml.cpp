@@ -558,24 +558,22 @@ ConformanceTestResult run_conformance_test_case(const std::vector<uint8_t>& memo
     raw_prog.info.platform = &platform;
 
     // Convert the raw program section to a set of instructions.
-    std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, {});
-    if (auto prog = std::get_if<std::string>(&prog_or_error)) {
-        std::cerr << "unmarshaling error at " << *prog << "\n";
-        return ConformanceTestResult{.success = false, .r0_value = Interval::top(), .error_reason = *prog};
+    const auto inst_seq = unmarshal(raw_prog, {});
+    if (!inst_seq.has_value()) {
+        std::cerr << "unmarshaling error at " << inst_seq.error() << "\n";
+        return ConformanceTestResult{.success = false, .r0_value = Interval::top(), .error_reason = inst_seq.error()};
     }
-
-    const InstructionSeq& inst_seq = std::get<InstructionSeq>(prog_or_error);
 
     ebpf_verifier_options_t options{};
     if (debug) {
-        print(inst_seq, std::cout, {});
+        print(*inst_seq, std::cout, {});
         options.verbosity_opts.print_failures = true;
         options.verbosity_opts.print_invariants = true;
         options.verbosity_opts.simplify = false;
     }
 
     try {
-        const Program prog = Program::from_sequence(inst_seq, info, options);
+        const Program prog = Program::from_sequence(*inst_seq, info, options);
         const AnalysisResult result = analyze(prog, pre_invariant);
         return ConformanceTestResult{.success = !result.failed, .r0_value = result.exit_value};
     } catch (const std::exception& ex) {
