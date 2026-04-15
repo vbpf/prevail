@@ -8,6 +8,8 @@
 #include "crab_utils/num_safety.hpp"
 #include "ir/marshal.hpp"
 
+#include "crab_utils/debug.hpp"
+
 using std::vector;
 
 namespace prevail {
@@ -19,7 +21,7 @@ static uint8_t op(const Condition::Op op) {
     case Op::GT: return 0x2;
     case Op::GE: return 0x3;
     case Op::SET: return 0x4;
-    case Op::NSET: assert(false);
+    case Op::NSET: CRAB_ERROR("Cannot marshal Condition::Op::NSET (operator `&!=`)");
     case Op::NE: return 0x5;
     case Op::SGT: return 0x6;
     case Op::SGE: return 0x7;
@@ -28,8 +30,7 @@ static uint8_t op(const Condition::Op op) {
     case Op::SLT: return 0xc;
     case Op::SLE: return 0xd;
     }
-    assert(false);
-    return {};
+    std::unreachable();
 }
 
 static uint8_t op(const Bin::Op op) {
@@ -38,23 +39,22 @@ static uint8_t op(const Bin::Op op) {
     case Op::ADD: return 0x0;
     case Op::SUB: return 0x1;
     case Op::MUL: return 0x2;
-    case Op::SDIV:
+    case Op::SDIV: [[fallthrough]];
     case Op::UDIV: return 0x3;
     case Op::OR: return 0x4;
     case Op::AND: return 0x5;
     case Op::LSH: return 0x6;
     case Op::RSH: return 0x7;
-    case Op::SMOD:
+    case Op::SMOD: [[fallthrough]];
     case Op::UMOD: return 0x9;
     case Op::XOR: return 0xa;
-    case Op::MOV:
-    case Op::MOVSX8:
-    case Op::MOVSX16:
+    case Op::MOV: [[fallthrough]];
+    case Op::MOVSX8: [[fallthrough]];
+    case Op::MOVSX16: [[fallthrough]];
     case Op::MOVSX32: return 0xb;
     case Op::ARSH: return 0xc;
     }
-    assert(false);
-    return {};
+    std::unreachable();
 }
 
 static int16_t offset(const Bin::Op op) {
@@ -72,7 +72,7 @@ static int16_t offset(const Bin::Op op) {
 static uint8_t imm_endian(const Un::Op op) {
     using Op = Un::Op;
     switch (op) {
-    case Op::NEG: assert(false); return 0;
+    case Op::NEG: std::unreachable();
     case Op::BE16:
     case Op::LE16:
     case Op::SWAP16: return 16;
@@ -83,8 +83,7 @@ static uint8_t imm_endian(const Un::Op op) {
     case Op::LE64:
     case Op::SWAP64: return 64;
     }
-    assert(false);
-    return {};
+    std::unreachable();
 }
 
 struct MarshalVisitor {
@@ -102,10 +101,7 @@ struct MarshalVisitor {
     std::function<auto(Label)->int16_t> label_to_offset16;
     std::function<auto(Label)->int32_t> label_to_offset32;
 
-    vector<EbpfInst> operator()(Undefined const& a) const {
-        assert(false);
-        return {};
-    }
+    vector<EbpfInst> operator()(Undefined const& a) const { return {}; }
 
     vector<EbpfInst> operator()(LoadMapFd const& b) const { return makeLddw(b.dst, INST_LD_MODE_MAP_FD, b.mapfd, 0); }
 
@@ -187,8 +183,7 @@ struct MarshalVisitor {
                 .imm = imm_endian(b.op),
             }};
         }
-        assert(false);
-        return {};
+        std::unreachable();
     }
 
     vector<EbpfInst> operator()(Call const& b) const {

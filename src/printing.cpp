@@ -279,8 +279,7 @@ std::ostream& operator<<(std::ostream& os, const ArgSingle::Kind kind) {
     case ArgSingle::Kind::PTR_TO_WRITABLE_LONG: return os << "out_long";
     case ArgSingle::Kind::PTR_TO_WRITABLE_INT: return os << "out_int";
     }
-    assert(false);
-    return os;
+    std::unreachable();
 }
 
 std::ostream& operator<<(std::ostream& os, const ArgPair::Kind kind) {
@@ -288,8 +287,7 @@ std::ostream& operator<<(std::ostream& os, const ArgPair::Kind kind) {
     case ArgPair::Kind::PTR_TO_READABLE_MEM: return os << "mem";
     case ArgPair::Kind::PTR_TO_WRITABLE_MEM: return os << "out";
     }
-    assert(false);
-    return os;
+    std::unreachable();
 }
 
 std::ostream& operator<<(std::ostream& os, const ArgSingle arg) {
@@ -335,8 +333,7 @@ std::ostream& operator<<(std::ostream& os, const Bin::Op op) {
     case Op::ARSH: return os << ">>>";
     case Op::XOR: return os << "^";
     }
-    assert(false);
-    return os;
+    std::unreachable();
 }
 
 std::ostream& operator<<(std::ostream& os, const Condition::Op op) {
@@ -355,8 +352,7 @@ std::ostream& operator<<(std::ostream& os, const Condition::Op op) {
     case Op::SGT: return os << "s>";
     case Op::SGE: return os << "s>=";
     }
-    assert(false);
-    return os;
+    std::unreachable();
 }
 
 static string size(const int w, const bool is_signed = false) {

@@ -645,7 +645,7 @@ void ZoneDomain::apply(const ArithBinOp op, const Variable x, const Variable y, 
     case ArithBinOp::SUB: assign(x, LinearExpression(y).subtract(z)); break;
     // For the rest of operations, we fall back on intervals.
     case ArithBinOp::MUL: set(x, get_interval(y) * get_interval(z)); break;
-    default: CRAB_ERROR("DBM: unreachable");
+    default: std::unreachable();
     }
     normalize();
 }

@@ -684,8 +684,7 @@ std::vector<LinearConstraint> FiniteDomain::assume_cst_reg(const Condition::Op o
         case Op::LT: return assume_unsigned_cst_interval(op, is64, dst_svalue, dst_uvalue, src_svalue, src_uvalue);
         }
     }
-    assert(false);
-    throw std::exception();
+    std::unreachable();
 }
 
 void FiniteDomain::assign(const Variable x, const std::optional<LinearExpression>& e) { dom.assign(x, e); }
@@ -711,7 +710,7 @@ void FiniteDomain::apply(const ArithBinOp op, const Variable x, const Variable y
     case ArithBinOp::ADD: assign(x, LinearExpression(y).plus(z)); break;
     case ArithBinOp::SUB: assign(x, LinearExpression(y).subtract(z)); break;
     case ArithBinOp::MUL: set(x, eval_interval(y, finite_width) * eval_interval(z, finite_width)); break;
-    default: CRAB_ERROR("DBM: unreachable");
+    default: std::unreachable();
     }
 }
 
@@ -721,7 +720,7 @@ void FiniteDomain::apply(const ArithBinOp op, const Variable x, const Variable y
     case ArithBinOp::ADD: assign(x, LinearExpression(y).plus(z)); break;
     case ArithBinOp::SUB: assign(x, LinearExpression(y).subtract(z)); break;
     case ArithBinOp::MUL: set(x, eval_interval(y, finite_width) * Interval{z}); break;
-    default: CRAB_ERROR("DBM: unreachable");
+    default: std::unreachable();
     }
 }
 
@@ -752,7 +751,7 @@ void FiniteDomain::apply(const SignedArithBinOp op, const Variable x, const Vari
     case SignedArithBinOp::UREM:
         set(x, eval_interval(y, finite_width).urem(Interval{read_imm_for_udiv_or_umod(k, finite_width)}));
         break;
-    default: CRAB_ERROR("DBM: unreachable");
+    default: std::unreachable();
     }
 }
 
@@ -763,7 +762,7 @@ void FiniteDomain::apply(const SignedArithBinOp op, const Variable x, const Vari
     case SignedArithBinOp::UDIV: set(x, eval_interval(y, finite_width).udiv(eval_interval(z, finite_width))); break;
     case SignedArithBinOp::SREM: set(x, eval_interval(y, finite_width).srem(eval_interval(z, finite_width))); break;
     case SignedArithBinOp::UREM: set(x, eval_interval(y, finite_width).urem(eval_interval(z, finite_width))); break;
-    default: CRAB_ERROR("DBM: unreachable");
+    default: std::unreachable();
     }
 }
 
@@ -783,7 +782,7 @@ void FiniteDomain::apply(const BitwiseBinOp op, const Variable x, const Variable
     case BitwiseBinOp::SHL: xi = yi.shl(zi); break;
     case BitwiseBinOp::LSHR: xi = yi.lshr(zi); break;
     case BitwiseBinOp::ASHR: xi = yi.ashr(zi); break;
-    default: CRAB_ERROR("DBM: unreachable");
+    default: std::unreachable();
     }
     xi.mask_value(finite_width);
     set(x, xi);
@@ -807,7 +806,7 @@ void FiniteDomain::apply(const BitwiseBinOp op, const Variable x, const Variable
     case BitwiseBinOp::SHL: xi = yi.shl(zi); break;
     case BitwiseBinOp::LSHR: xi = yi.lshr(zi); break;
     case BitwiseBinOp::ASHR: xi = yi.ashr(zi); break;
-    default: CRAB_ERROR("DBM: unreachable");
+    default: std::unreachable();
     }
     xi.mask_value(finite_width);
     set(x, xi);
