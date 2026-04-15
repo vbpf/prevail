@@ -8,6 +8,8 @@
 #include "crab_utils/num_safety.hpp"
 #include "ir/marshal.hpp"
 
+#include "crab_utils/debug.hpp"
+
 using std::vector;
 
 namespace prevail {
@@ -19,7 +21,7 @@ static uint8_t op(const Condition::Op op) {
     case Op::GT: return 0x2;
     case Op::GE: return 0x3;
     case Op::SET: return 0x4;
-    case Op::NSET: std::unreachable();
+    case Op::NSET: CRAB_ERROR("Cannot marshal Condition::Op::NSET (operator `&!=`)");
     case Op::NE: return 0x5;
     case Op::SGT: return 0x6;
     case Op::SGE: return 0x7;

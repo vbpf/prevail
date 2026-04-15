@@ -183,7 +183,7 @@ class AssertExtractor {
                 case Condition::Op::SLE: allow_pointers = false; break;
                 case Condition::Op::SGT: allow_pointers = false; break;
                 case Condition::Op::SGE: allow_pointers = false; break;
-                default: assert(!"unexpected condition");
+                default: std::unreachable();
                 }
 
                 // Only permit pointer comparisons if the operation is 64-bit.
