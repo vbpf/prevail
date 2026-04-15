@@ -9,8 +9,12 @@
 #include <thread>
 #include <unordered_map>
 
-#include "ebpf_verifier.hpp"
+#include "config.hpp"
 #include "io/elf_loader.hpp"
+#include "ir/program.hpp"
+#include "ir/unmarshal.hpp"
+#include "platform.hpp"
+#include "verifier.hpp"
 
 namespace verify_test {
 

@@ -4,8 +4,13 @@
 #include <ranges>
 #include <vector>
 
-#include "ebpf_verifier.hpp"
+#include "config.hpp"
 #include "io/elf_loader.hpp"
+#include "ir/program.hpp"
+#include "ir/unmarshal.hpp"
+#include "platform.hpp"
+#include "result.hpp"
+#include "verifier.hpp"
 
 // Avoid affecting other headers by macros.
 #include <CLI11/CLI11.hpp>

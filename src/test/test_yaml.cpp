@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 #include <catch2/catch_all.hpp>
 
-#include "ebpf_verifier.hpp"
 #include "test/ebpf_yaml.hpp"
 
 #define YAML_CASE(path)                                                                           \

@@ -16,9 +16,11 @@
 #include <yaml-cpp/yaml.h>
 
 #include "config.hpp"
-#include "ebpf_verifier.hpp"
 #include "ir/parse.hpp"
+#include "ir/program.hpp"
 #include "ir/syntax.hpp"
+#include "ir/unmarshal.hpp"
+#include "platform.hpp"
 #include "string_constraints.hpp"
 #include "test/ebpf_yaml.hpp"
 #include "verifier.hpp"

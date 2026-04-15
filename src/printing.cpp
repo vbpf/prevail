@@ -13,7 +13,9 @@
 #include "crab/interval.hpp"
 #include "crab/type_encoding.hpp"
 #include "crab/var_registry.hpp"
+#include "ir/program.hpp"
 #include "ir/syntax.hpp"
+#include "ir/unmarshal.hpp"
 #include "platform.hpp"
 #include "spec/function_prototypes.hpp"
 #include "verifier.hpp"
@@ -670,7 +672,7 @@ auto get_labels(const InstructionSeq& insts) {
     return pc_of_label;
 }
 
-void print(const InstructionSeq& insts, std::ostream& out, const std::optional<const Label>& label_to_print,
+void print(const InstructionSeq& insts, std::ostream& out, const std::optional<Label>& label_to_print,
            const bool print_line_info) {
     const auto pc_of_label = get_labels(insts);
     Pc pc = 0;
@@ -723,6 +725,17 @@ void print_map_descriptors(const std::vector<EbpfMapDescriptor>& descriptors, st
         o << "map " << i << ":" << desc << "\n";
         i++;
     }
+}
+
+bool disassemble(const RawProgram& raw_prog, const ebpf_verifier_options_t& options, std::ostream& out,
+                 const std::optional<Label>& label_to_print, const bool print_line_info) {
+    auto inst_seq = unmarshal(raw_prog, options);
+    if (!inst_seq.has_value()) {
+        out << "unmarshaling error at " << inst_seq.error();
+        return false;
+    }
+    print(*inst_seq, out, label_to_print, print_line_info);
+    return true;
 }
 
 std::ostream& operator<<(std::ostream& os, const btf_line_info_t& line_info) {

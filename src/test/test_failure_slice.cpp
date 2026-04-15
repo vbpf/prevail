@@ -5,7 +5,13 @@
 #include <filesystem>
 #include <sstream>
 
-#include "ebpf_verifier.hpp"
+#include "config.hpp"
+#include "io/elf_loader.hpp"
+#include "ir/program.hpp"
+#include "ir/unmarshal.hpp"
+#include "platform.hpp"
+#include "result.hpp"
+#include "verifier.hpp"
 
 using namespace prevail;
 

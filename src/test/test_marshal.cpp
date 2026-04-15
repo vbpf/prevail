@@ -5,10 +5,12 @@
 
 #include <catch2/catch_all.hpp>
 
-#include "ebpf_verifier.hpp"
+#include "io/elf_loader.hpp"
 #include "ir/marshal.hpp"
 #include "ir/program.hpp"
 #include "ir/unmarshal.hpp"
+#include "platform.hpp"
+#include "verifier.hpp"
 
 using namespace prevail;
 

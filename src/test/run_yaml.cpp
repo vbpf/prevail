@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include <iostream>
 
-#include "ebpf_verifier.hpp"
+#include "ir/unmarshal.hpp"
 #include "test/ebpf_yaml.hpp"
 
 // Avoid affecting other headers by macros.
