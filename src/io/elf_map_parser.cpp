@@ -310,35 +310,26 @@ void mark_inner_map_templates(ElfGlobalData& global) {
 
 ElfGlobalData extract_global_data(const parse_params_t& params, const ELFIO::elfio& reader,
                                   const ELFIO::const_symbol_section_accessor& symbols) {
+    ElfGlobalData global;
+
     if (reader.sections[".BTF"] && reader.sections[".maps"]) {
         try {
-            auto global = parse_btf_section(params, reader);
-            mark_inner_map_templates(global);
-            return global;
+            global = parse_btf_section(params, reader);
         } catch (const UnmarshalError& e) {
             // BTF-defined maps can't be decoded; fall back to section-based map descriptors.
             std::cerr << "BTF map parsing failed, falling back to section-based maps: " << e.what() << std::endl;
+            global = parse_map_sections(params, reader, symbols);
         }
-        auto global = parse_map_sections(params, reader, symbols);
-        mark_inner_map_templates(global);
-        return global;
+    } else if (std::ranges::any_of(reader.sections, [](const auto& s) { return is_map_section(s->get_name()); })) {
+        global = parse_map_sections(params, reader, symbols);
+    } else if (reader.sections[".BTF"]) {
+        global = parse_btf_section(params, reader);
+    } else {
+        global = create_global_variable_maps(reader);
     }
 
-    const bool has_legacy_maps =
-        std::ranges::any_of(reader.sections, [](const auto& s) { return is_map_section(s->get_name()); });
-    if (has_legacy_maps) {
-        auto global = parse_map_sections(params, reader, symbols);
-        mark_inner_map_templates(global);
-        return global;
-    }
-
-    if (reader.sections[".BTF"]) {
-        auto global = parse_btf_section(params, reader);
-        mark_inner_map_templates(global);
-        return global;
-    }
-
-    return create_global_variable_maps(reader);
+    mark_inner_map_templates(global);
+    return global;
 }
 
 void update_line_info(std::vector<RawProgram>& raw_programs, const ELFIO::section* btf_section,
