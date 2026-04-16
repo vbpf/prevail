@@ -10,10 +10,7 @@
 
 namespace prevail {
 
-// Transitional shims over VariableRegistry::reg_pack, using the thread-local
-// registry. Call sites that already hold a context should call
-// `context.variables.reg_pack(...)` directly (or, inside EbpfTransformer /
-// EbpfChecker, use the same-named member method).
+// Free-function shorthand for the global registry's reg_pack.
 inline RegPack reg_pack(const int i) { return variable_registry->reg_pack(i); }
 inline RegPack reg_pack(const Reg r) { return variable_registry->reg_pack(r.v); }
 

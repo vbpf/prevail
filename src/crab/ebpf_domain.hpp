@@ -79,7 +79,7 @@ class EbpfDomain final {
     /// signed/unsigned values to int32 range, stack offsets to total_stack_size,
     /// and so on. Inexpensive to compute (~100 constraints); not cached.
     static EbpfDomain calculate_constant_limits(const AnalysisContext& context);
-    ExtendedNumber get_loop_count_upper_bound(const VariableRegistry& variables) const;
+    ExtendedNumber get_loop_count_upper_bound() const;
     Interval get_r0() const;
 
     static EbpfDomain setup_entry(bool init_r1, const AnalysisContext& context);

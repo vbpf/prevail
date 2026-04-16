@@ -25,7 +25,6 @@ TEST_CASE("explicit AnalysisContext options drive checker behavior", "[analysis_
         .program_info = info,
         .options = options,
         .platform = *info.platform,
-        .variables = variable_registry.get(),
     };
 
     const EbpfDomain dom =

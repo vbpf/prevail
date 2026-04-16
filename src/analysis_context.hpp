@@ -11,22 +11,16 @@
 
 namespace prevail {
 
-/// Semantic inputs for one verifier analysis run.
+/// Per-analysis inputs threaded explicitly through the verifier.
 ///
-/// This first context is intentionally a thin wrapper over the objects that are
-/// still stored in thread-local compatibility state.  Passing it explicitly
-/// makes the checker and transformer dependencies auditable without changing
-/// ownership or lifetime rules in the same migration step.
+/// `VariableRegistry` is intentionally NOT here. The registry is a global
+/// name-interning service (like `malloc`), not per-analysis state: the same
+/// name always maps to the same id, so analyses can freely share one instance.
+/// Domain code reaches for the global `variable_registry` directly.
 struct AnalysisContext {
     const ProgramInfo& program_info;
     const ebpf_verifier_options_t& options;
     const ebpf_platform_t& platform;
-    // `variables` is const from the client's perspective: its public API is
-    // a pure function of already-known names. Factory calls like
-    // `variables.reg(...)` still intern new ids through an internal `mutable`
-    // cache. Callers never need to mutate the registry object itself, so we
-    // hold it by const reference. See var_registry.hpp for the rationale.
-    const VariableRegistry& variables;
 };
 
 [[nodiscard]]
@@ -37,7 +31,6 @@ inline AnalysisContext thread_local_analysis_context() {
         .program_info = program_info,
         .options = thread_local_options,
         .platform = *program_info.platform,
-        .variables = variable_registry.get(),
     };
 }
 

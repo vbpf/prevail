@@ -169,7 +169,7 @@ EbpfDomain EbpfDomain::calculate_constant_limits(const AnalysisContext& context)
     EbpfDomain inv = top(context);
     using namespace dsl_syntax;
     for (const int i : {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}) {
-        const auto r = context.variables.reg_pack(i);
+        const auto r = variable_registry->reg_pack(i);
         inv.add_value_constraint(r.svalue <= std::numeric_limits<int32_t>::max());
         inv.add_value_constraint(r.svalue >= std::numeric_limits<int32_t>::min());
         inv.add_value_constraint(r.uvalue <= std::numeric_limits<uint32_t>::max());
@@ -178,10 +178,10 @@ EbpfDomain EbpfDomain::calculate_constant_limits(const AnalysisContext& context)
         inv.add_value_constraint(r.stack_offset >= 0);
         inv.add_value_constraint(r.shared_offset <= r.shared_region_size);
         inv.add_value_constraint(r.shared_offset >= 0);
-        inv.add_value_constraint(r.packet_offset <= context.variables.packet_size());
+        inv.add_value_constraint(r.packet_offset <= variable_registry->packet_size());
         inv.add_value_constraint(r.packet_offset >= 0);
         if (context.options.cfg_opts.check_for_termination) {
-            for (const Variable counter : context.variables.get_loop_counters()) {
+            for (const Variable counter : variable_registry->get_loop_counters()) {
                 inv.add_value_constraint(counter <= std::numeric_limits<int32_t>::max());
                 inv.add_value_constraint(counter >= 0);
                 inv.add_value_constraint(counter <= r.svalue);
@@ -338,9 +338,9 @@ Interval EbpfDomain::get_map_max_entries(const Reg& map_fd_reg, const ebpf_platf
     return result;
 }
 
-ExtendedNumber EbpfDomain::get_loop_count_upper_bound(const VariableRegistry& variables) const {
+ExtendedNumber EbpfDomain::get_loop_count_upper_bound() const {
     ExtendedNumber ub{0};
-    for (const Variable counter : variables.get_loop_counters()) {
+    for (const Variable counter : variable_registry->get_loop_counters()) {
         ub = std::max(ub, state.values.eval_interval(counter).ub());
     }
     return ub;
@@ -369,16 +369,16 @@ std::ostream& operator<<(std::ostream& o, const EbpfDomain& dom) {
 void EbpfDomain::initialize_packet(const AnalysisContext& context) {
     using namespace dsl_syntax;
     EbpfDomain& inv = *this;
-    inv.havoc(context.variables.packet_size());
-    inv.havoc(context.variables.meta_offset());
+    inv.havoc(variable_registry->packet_size());
+    inv.havoc(variable_registry->meta_offset());
 
-    inv.add_value_constraint(0 <= context.variables.packet_size());
-    inv.add_value_constraint(context.variables.packet_size() < context.options.max_packet_size);
+    inv.add_value_constraint(0 <= variable_registry->packet_size());
+    inv.add_value_constraint(variable_registry->packet_size() < context.options.max_packet_size);
     if (context.program_info.type.context_descriptor->meta >= 0) {
-        inv.add_value_constraint(context.variables.meta_offset() <= 0);
-        inv.add_value_constraint(context.variables.meta_offset() >= -4098);
+        inv.add_value_constraint(variable_registry->meta_offset() <= 0);
+        inv.add_value_constraint(variable_registry->meta_offset() >= -4098);
     } else {
-        inv.state.values.assign(context.variables.meta_offset(), 0);
+        inv.state.values.assign(variable_registry->meta_offset(), 0);
     }
 }
 
@@ -428,7 +428,7 @@ EbpfDomain EbpfDomain::setup_entry(const bool init_r1, const AnalysisContext& co
 
     EbpfDomain inv = top(context);
 
-    const auto r10 = context.variables.reg_pack(R10_STACK_POINTER);
+    const auto r10 = variable_registry->reg_pack(R10_STACK_POINTER);
     constexpr Reg r10_reg{R10_STACK_POINTER};
     const auto total_stack = context.options.total_stack_size();
     inv.state.values.add_constraint(total_stack <= r10.svalue);
@@ -439,7 +439,7 @@ EbpfDomain EbpfDomain::setup_entry(const bool init_r1, const AnalysisContext& co
     inv.state.assign_type(r10_reg, T_STACK);
 
     if (init_r1) {
-        const auto r1 = context.variables.reg_pack(R1_ARG);
+        const auto r1 = variable_registry->reg_pack(R1_ARG);
         constexpr Reg r1_reg{R1_ARG};
         inv.state.values.add_constraint(1 <= r1.svalue);
         inv.state.values.add_constraint(r1.svalue <= ptr_max(context.options.max_packet_size));
