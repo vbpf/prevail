@@ -165,12 +165,8 @@ EbpfDomain EbpfDomain::operator&(const EbpfDomain& other) const {
     return EbpfDomain{std::move(res_state), *stack & *other.stack};
 }
 
-EbpfDomain EbpfDomain::calculate_constant_limits() {
-    // TODO(stage 3): take context explicitly. For now this factory must produce
-    // a non-bottom sized domain, so we read thread-local directly — this is the
-    // one remaining thread-local read in EbpfDomain, kept because the cache
-    // (LazyAllocator) is zero-arg.
-    EbpfDomain inv{TypeToNumDomain::top(), ArrayDomain{static_cast<size_t>(thread_local_options.total_stack_size())}};
+EbpfDomain EbpfDomain::calculate_constant_limits(const AnalysisContext& context) {
+    EbpfDomain inv = top(context);
     using namespace dsl_syntax;
     for (const int i : {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}) {
         const auto r = reg_pack(i);
@@ -178,14 +174,14 @@ EbpfDomain EbpfDomain::calculate_constant_limits() {
         inv.add_value_constraint(r.svalue >= std::numeric_limits<int32_t>::min());
         inv.add_value_constraint(r.uvalue <= std::numeric_limits<uint32_t>::max());
         inv.add_value_constraint(r.uvalue >= 0);
-        inv.add_value_constraint(r.stack_offset <= thread_local_options.total_stack_size());
+        inv.add_value_constraint(r.stack_offset <= context.options.total_stack_size());
         inv.add_value_constraint(r.stack_offset >= 0);
         inv.add_value_constraint(r.shared_offset <= r.shared_region_size);
         inv.add_value_constraint(r.shared_offset >= 0);
-        inv.add_value_constraint(r.packet_offset <= variable_registry->packet_size());
+        inv.add_value_constraint(r.packet_offset <= context.variables.packet_size());
         inv.add_value_constraint(r.packet_offset >= 0);
-        if (thread_local_options.cfg_opts.check_for_termination) {
-            for (const Variable counter : variable_registry->get_loop_counters()) {
+        if (context.options.cfg_opts.check_for_termination) {
+            for (const Variable counter : context.variables.get_loop_counters()) {
                 inv.add_value_constraint(counter <= std::numeric_limits<int32_t>::max());
                 inv.add_value_constraint(counter >= 0);
                 inv.add_value_constraint(counter <= r.svalue);
@@ -195,19 +191,7 @@ EbpfDomain EbpfDomain::calculate_constant_limits() {
     return inv;
 }
 
-// Lazy init via LazyAllocator<EbpfDomain, EbpfDomain::calculate_constant_limits> ensures
-// thread_local_options and variable_registry are populated before EbpfDomain::calculate_constant_limits
-// captures their state. LazyAllocator::get() has no reentrancy guard, but calculate_constant_limits
-// does not call get_constant_limits() or widen(to_constants=true), so recursion cannot occur.
-// Clamping via intersection (operator&) is sound because it only shrinks the domain by tightening
-// constraints element-wise, preserving the over-approximation required for soundness.
-static thread_local LazyAllocator<EbpfDomain, EbpfDomain::calculate_constant_limits> constant_limits;
-
-static const EbpfDomain& get_constant_limits() { return constant_limits.get(); }
-
-void EbpfDomain::clear_thread_local_state() { constant_limits.clear(); }
-
-EbpfDomain EbpfDomain::widen(const EbpfDomain& other, const bool to_constants) const {
+EbpfDomain EbpfDomain::widen(const EbpfDomain& other, const bool to_constants, const AnalysisContext& context) const {
     if (is_bottom()) {
         return other;
     }
@@ -217,7 +201,9 @@ EbpfDomain EbpfDomain::widen(const EbpfDomain& other, const bool to_constants) c
     EbpfDomain res{this->state.widen(other.state), stack->widen(*other.stack)};
 
     if (to_constants) {
-        return res & get_constant_limits();
+        // Clamping via intersection is sound because it only tightens
+        // constraints element-wise, preserving the over-approximation.
+        return res & calculate_constant_limits(context);
     }
     return res;
 }
@@ -397,11 +383,9 @@ void EbpfDomain::initialize_packet(const AnalysisContext& context) {
 }
 
 EbpfDomain EbpfDomain::from_constraints(const std::vector<std::pair<Variable, TypeSet>>& type_restrictions,
-                                        const std::vector<LinearConstraint>& value_constraints) {
-    // TODO(stage 3): take size/context explicitly. Test callers rely on the
-    // default thread-local size, which is why this still goes through the
-    // size-less ArrayDomain default ctor.
-    EbpfDomain inv{TypeToNumDomain::top(), ArrayDomain{}};
+                                        const std::vector<LinearConstraint>& value_constraints,
+                                        const size_t total_stack_size) {
+    EbpfDomain inv{TypeToNumDomain::top(), ArrayDomain{total_stack_size}};
 
     for (const auto& [var, ts] : type_restrictions) {
         inv.state.types.restrict_to(var, ts);

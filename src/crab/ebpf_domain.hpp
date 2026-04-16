@@ -72,19 +72,25 @@ class EbpfDomain final {
     EbpfDomain operator|(const EbpfDomain& other) const&;
     EbpfDomain operator|(const EbpfDomain& other) &&;
     EbpfDomain operator&(const EbpfDomain& other) const;
-    EbpfDomain widen(const EbpfDomain& other, bool to_constants) const;
+    EbpfDomain widen(const EbpfDomain& other, bool to_constants, const AnalysisContext& context) const;
     EbpfDomain narrow(const EbpfDomain& other) const;
 
-    static EbpfDomain calculate_constant_limits();
-    static void clear_thread_local_state();
+    /// Per-register clamping domain used by widen(to_constants=true) to bound
+    /// signed/unsigned values to int32 range, stack offsets to total_stack_size,
+    /// and so on. Inexpensive to compute (~100 constraints); not cached.
+    static EbpfDomain calculate_constant_limits(const AnalysisContext& context);
     ExtendedNumber get_loop_count_upper_bound(const VariableRegistry& variables) const;
     Interval get_r0() const;
 
     static EbpfDomain setup_entry(bool init_r1, const AnalysisContext& context);
     static EbpfDomain from_constraints(const std::set<std::string>& constraints, bool setup_constraints,
                                        const AnalysisContext& context);
+    /// Direct construction from typed constraints. The stack remains top at the
+    /// requested size; pure-semantics callers (tests) can omit it for the
+    /// default-options size.
     static EbpfDomain from_constraints(const std::vector<std::pair<Variable, TypeSet>>& type_restrictions,
-                                       const std::vector<LinearConstraint>& value_constraints);
+                                       const std::vector<LinearConstraint>& value_constraints,
+                                       size_t total_stack_size = ebpf_verifier_options_t{}.total_stack_size());
     void initialize_packet(const AnalysisContext& context);
 
     StringInvariant to_set() const;

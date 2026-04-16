@@ -19,9 +19,6 @@ class BitsetDomain final {
     // Top at the requested size. (`set()` = all non-numerical = no knowledge about any byte.)
     explicit BitsetDomain(const size_t size) : non_numerical_bytes(size) { non_numerical_bytes.set(); }
 
-    // TODO(stage 3): remove this default ctor once all callers pass a size.
-    BitsetDomain() : non_numerical_bytes(thread_local_options.total_stack_size()) { non_numerical_bytes.set(); }
-
     explicit BitsetDomain(bits_t non_numerical_bytes) noexcept : non_numerical_bytes{std::move(non_numerical_bytes)} {}
     BitsetDomain(const BitsetDomain&) = default;
     BitsetDomain(BitsetDomain&&) noexcept = default;

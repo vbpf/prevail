@@ -29,7 +29,6 @@ void ebpf_verifier_clear_thread_local_state() {
     thread_local_program_info.clear();
     clear_thread_local_state();
     ZoneDomain::clear_thread_local_state();
-    EbpfDomain::clear_thread_local_state();
 }
 
 class InterleavedFwdFixpointIterator final {
@@ -188,14 +187,15 @@ AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invaria
         EbpfDomain::from_constraints(entry_invariant.value(), context.options.setup_constraints, context));
 }
 
-static EbpfDomain extrapolate(const EbpfDomain& before, const EbpfDomain& after, const unsigned int iteration) {
+static EbpfDomain extrapolate(const EbpfDomain& before, const EbpfDomain& after, const unsigned int iteration,
+                              const AnalysisContext& context) {
     /// number of iterations until triggering widening
     constexpr auto _widening_delay = 2;
 
     if (iteration < _widening_delay) {
         return before | after;
     }
-    return before.widen(after, iteration == _widening_delay);
+    return before.widen(after, iteration == _widening_delay, context);
 }
 
 static EbpfDomain refine(const EbpfDomain& before, const EbpfDomain& after, const unsigned int iteration) {
@@ -265,7 +265,7 @@ void InterleavedFwdFixpointIterator::operator()(const std::shared_ptr<WtoCycle>&
             invariant = std::move(new_pre);
             break;
         } else {
-            invariant = extrapolate(invariant, new_pre, iteration);
+            invariant = extrapolate(invariant, new_pre, iteration, context);
         }
     }
 
