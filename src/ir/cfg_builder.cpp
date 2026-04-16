@@ -709,7 +709,7 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
 
     // Annotate the CFG by explicitly adding in assertions before every memory instruction.
     for (const auto& label : builder.prog.labels()) {
-        builder.set_assertions(label, get_assertions(builder.prog.instruction_at(label), info, label));
+        builder.set_assertions(label, get_assertions(builder.prog.instruction_at(label), info, options, label));
     }
     return std::move(builder.prog);
 }

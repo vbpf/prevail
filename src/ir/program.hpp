@@ -63,7 +63,7 @@ class InvalidControlFlow final : public std::runtime_error {
 };
 
 std::vector<Assertion> get_assertions(const Instruction& ins, const ProgramInfo& info,
-                                      const std::optional<Label>& label);
+                                      const ebpf_verifier_options_t& options, const std::optional<Label>& label);
 
 void print_program(const Program& prog, std::ostream& os, bool simplify);
 void print_dot(const Program& prog, const std::string& outfile);

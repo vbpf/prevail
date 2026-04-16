@@ -933,7 +933,7 @@ TEST_CASE("unmarshal builtin calls only when relocation-gated", "[disasm][marsha
     REQUIRE(gated.singles[0] == ArgSingle{ArgSingle::Kind::ANYTHING, false, Reg{2}});
     REQUIRE(gated.pairs[0] == ArgPair{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false});
 
-    const auto assertions = get_assertions(gated, info, Label{0});
+    const auto assertions = get_assertions(gated, info, ebpf_verifier_options_t{}, Label{0});
     REQUIRE(has_assertion(assertions, TypeConstraint{Reg{1}, TypeGroup::mem}));
     REQUIRE(has_assertion(assertions, TypeConstraint{Reg{2}, TypeGroup::number}));
     REQUIRE(has_assertion(assertions, TypeConstraint{Reg{3}, TypeGroup::number}));

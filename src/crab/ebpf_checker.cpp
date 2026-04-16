@@ -194,7 +194,7 @@ void EbpfChecker::operator()(const FuncConstraint& s) const {
                 throw_fail("invalid helper function id " + std::to_string(imm));
             }
             const Call call = make_call(imm, context.platform);
-            for (const Assertion& sub_assertion : get_assertions(call, context.program_info, {})) {
+            for (const Assertion& sub_assertion : get_assertions(call, context.program_info, context.options, {})) {
                 // TODO: create explicit sub assertions elsewhere
                 EbpfChecker{dom, sub_assertion, context}.visit();
             }
