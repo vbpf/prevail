@@ -84,6 +84,7 @@ struct Unmarshaller {
     vector<vector<string>>& notes;
     const ProgramInfo& info;
     int subprogram_stack_size = 512;
+    bool allow_division_by_zero = false;
     // ReSharper disable once CppMemberFunctionMayBeConst
     void note(const string& what) { notes.back().emplace_back(what); }
     // ReSharper disable once CppMemberFunctionMayBeConst
@@ -377,8 +378,7 @@ struct Unmarshaller {
                                .v = getBinValue(pc, inst),
                                .is64 = is64,
                            };
-                           if (!thread_local_options.allow_division_by_zero &&
-                               (op == Bin::Op::UDIV || op == Bin::Op::UMOD)) {
+                           if (!allow_division_by_zero && (op == Bin::Op::UDIV || op == Bin::Op::UMOD)) {
                                if (const auto pimm = std::get_if<Imm>(&res.v)) {
                                    if (pimm->v == 0) {
                                        note("division by zero");
@@ -786,6 +786,7 @@ struct Unmarshaller {
                                          const prevail::ebpf_verifier_options_t& options) {
         options.validate();
         subprogram_stack_size = options.subprogram_stack_size;
+        allow_division_by_zero = options.allow_division_by_zero;
         vector<LabeledInstruction> prog;
         int exit_count = 0;
         if (insts.empty()) {
