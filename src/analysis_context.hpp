@@ -21,7 +21,12 @@ struct AnalysisContext {
     const ProgramInfo& program_info;
     const ebpf_verifier_options_t& options;
     const ebpf_platform_t& platform;
-    VariableRegistry& variables;
+    // `variables` is const from the client's perspective: its public API is
+    // a pure function of already-known names. Factory calls like
+    // `variables.reg(...)` still intern new ids through an internal `mutable`
+    // cache. Callers never need to mutate the registry object itself, so we
+    // hold it by const reference. See var_registry.hpp for the rationale.
+    const VariableRegistry& variables;
 };
 
 [[nodiscard]]

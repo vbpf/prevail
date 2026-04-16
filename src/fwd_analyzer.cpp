@@ -19,10 +19,11 @@ namespace prevail {
 thread_local LazyAllocator<ProgramInfo> thread_local_program_info;
 thread_local ebpf_verifier_options_t thread_local_options;
 
-static void ebpf_verifier_clear_before_analysis(VariableRegistry& variables) {
-    clear_thread_local_state();
-    variables = VariableRegistry{};
-}
+// The ArrayDomain keeps a thread-local cache that is per-analysis state,
+// not per-caller state; reset it at the start of every run.
+// The VariableRegistry is the caller's responsibility (owned via the
+// AnalysisContext); see the back-compat `analyze(prog)` shim below.
+static void clear_analysis_thread_local_state() { clear_thread_local_state(); }
 
 void ebpf_verifier_clear_thread_local_state() {
     thread_local_program_info.clear();
@@ -158,20 +159,22 @@ class InterleavedFwdFixpointIterator final {
     static AnalysisResult run(const Program& prog, const AnalysisContext& context, EbpfDomain entry_inv);
 };
 
+// Back-compat shims: callers that don't thread an AnalysisContext reset the
+// thread-local registry so each run starts with fresh Variable ids.
 AnalysisResult analyze(const Program& prog) {
-    const AnalysisContext context = thread_local_analysis_context();
-    return analyze(prog, context);
+    variable_registry.clear();
+    return analyze(prog, thread_local_analysis_context());
 }
 
 AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invariant) {
-    const AnalysisContext context = thread_local_analysis_context();
-    return analyze(prog, entry_invariant, context);
+    variable_registry.clear();
+    return analyze(prog, entry_invariant, thread_local_analysis_context());
 }
 
 AnalysisResult analyze(const Program& prog, const AnalysisContext& context) {
     assert(&context.variables == &variable_registry.get() &&
            "domain helpers still require the thread-local variable registry during this migration step");
-    ebpf_verifier_clear_before_analysis(context.variables);
+    clear_analysis_thread_local_state();
     return InterleavedFwdFixpointIterator::run(prog, context,
                                                EbpfDomain::setup_entry(context.options.setup_constraints, context));
 }
@@ -179,7 +182,7 @@ AnalysisResult analyze(const Program& prog, const AnalysisContext& context) {
 AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invariant, const AnalysisContext& context) {
     assert(&context.variables == &variable_registry.get() &&
            "domain helpers still require the thread-local variable registry during this migration step");
-    ebpf_verifier_clear_before_analysis(context.variables);
+    clear_analysis_thread_local_state();
     return InterleavedFwdFixpointIterator::run(
         prog, context,
         EbpfDomain::from_constraints(entry_invariant.value(), context.options.setup_constraints, context));
