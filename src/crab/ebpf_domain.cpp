@@ -349,20 +349,19 @@ std::ostream& operator<<(std::ostream& o, const EbpfDomain& dom) {
     return o;
 }
 
-void EbpfDomain::initialize_packet() {
+void EbpfDomain::initialize_packet(const AnalysisContext& context) {
     using namespace dsl_syntax;
     EbpfDomain& inv = *this;
-    inv.havoc(variable_registry->packet_size());
-    inv.havoc(variable_registry->meta_offset());
+    inv.havoc(context.variables.packet_size());
+    inv.havoc(context.variables.meta_offset());
 
-    inv.add_value_constraint(0 <= variable_registry->packet_size());
-    inv.add_value_constraint(variable_registry->packet_size() < thread_local_options.max_packet_size);
-    const auto info = *thread_local_program_info;
-    if (info.type.context_descriptor->meta >= 0) {
-        inv.add_value_constraint(variable_registry->meta_offset() <= 0);
-        inv.add_value_constraint(variable_registry->meta_offset() >= -4098);
+    inv.add_value_constraint(0 <= context.variables.packet_size());
+    inv.add_value_constraint(context.variables.packet_size() < context.options.max_packet_size);
+    if (context.program_info.type.context_descriptor->meta >= 0) {
+        inv.add_value_constraint(context.variables.meta_offset() <= 0);
+        inv.add_value_constraint(context.variables.meta_offset() >= -4098);
     } else {
-        inv.state.values.assign(variable_registry->meta_offset(), 0);
+        inv.state.values.assign(context.variables.meta_offset(), 0);
     }
 }
 
@@ -379,10 +378,11 @@ EbpfDomain EbpfDomain::from_constraints(const std::vector<std::pair<Variable, Ty
     return inv;
 }
 
-EbpfDomain EbpfDomain::from_constraints(const std::set<std::string>& constraints, const bool setup_constraints) {
+EbpfDomain EbpfDomain::from_constraints(const std::set<std::string>& constraints, const bool setup_constraints,
+                                        const AnalysisContext& context) {
     EbpfDomain inv;
     if (setup_constraints) {
-        inv = setup_entry(false);
+        inv = setup_entry(false, context);
     }
     auto numeric_ranges = std::vector<Interval>();
     auto [type_equalities, type_restrictions, value_constraints] =
@@ -405,16 +405,16 @@ EbpfDomain EbpfDomain::from_constraints(const std::set<std::string>& constraints
     return inv;
 }
 
-EbpfDomain EbpfDomain::setup_entry(const bool init_r1) {
+EbpfDomain EbpfDomain::setup_entry(const bool init_r1, const AnalysisContext& context) {
     using namespace dsl_syntax;
 
     EbpfDomain inv;
 
     const auto r10 = reg_pack(R10_STACK_POINTER);
     constexpr Reg r10_reg{R10_STACK_POINTER};
-    const auto total_stack = thread_local_options.total_stack_size();
+    const auto total_stack = context.options.total_stack_size();
     inv.state.values.add_constraint(total_stack <= r10.svalue);
-    inv.state.values.add_constraint(r10.svalue <= ptr_max(thread_local_options.max_packet_size));
+    inv.state.values.add_constraint(r10.svalue <= ptr_max(context.options.max_packet_size));
     inv.state.values.assign(r10.stack_offset, total_stack);
     // stack_numeric_size would be 0, but TOP has the same result
     // so no need to assign it.
@@ -424,12 +424,12 @@ EbpfDomain EbpfDomain::setup_entry(const bool init_r1) {
         const auto r1 = reg_pack(R1_ARG);
         constexpr Reg r1_reg{R1_ARG};
         inv.state.values.add_constraint(1 <= r1.svalue);
-        inv.state.values.add_constraint(r1.svalue <= ptr_max(thread_local_options.max_packet_size));
+        inv.state.values.add_constraint(r1.svalue <= ptr_max(context.options.max_packet_size));
         inv.state.values.assign(r1.ctx_offset, 0);
         inv.state.assign_type(r1_reg, T_CTX);
     }
 
-    inv.initialize_packet();
+    inv.initialize_packet(context);
     return inv;
 }
 

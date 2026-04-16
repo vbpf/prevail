@@ -78,11 +78,12 @@ class EbpfDomain final {
     ExtendedNumber get_loop_count_upper_bound() const;
     Interval get_r0() const;
 
-    static EbpfDomain setup_entry(bool init_r1);
-    static EbpfDomain from_constraints(const std::set<std::string>& constraints, bool setup_constraints);
+    static EbpfDomain setup_entry(bool init_r1, const AnalysisContext& context);
+    static EbpfDomain from_constraints(const std::set<std::string>& constraints, bool setup_constraints,
+                                       const AnalysisContext& context);
     static EbpfDomain from_constraints(const std::vector<std::pair<Variable, TypeSet>>& type_restrictions,
                                        const std::vector<LinearConstraint>& value_constraints);
-    void initialize_packet();
+    void initialize_packet(const AnalysisContext& context);
 
     StringInvariant to_set() const;
 

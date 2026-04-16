@@ -199,7 +199,7 @@ void EbpfTransformer::havoc_subprogram_stack(const std::string& prefix) {
 
 void EbpfTransformer::forget_packet_pointers() {
     dom.state.havoc_all_locations_having_type(T_PACKET);
-    dom.initialize_packet();
+    dom.initialize_packet(context);
 }
 
 /** Linear constraint for a pointer comparison.

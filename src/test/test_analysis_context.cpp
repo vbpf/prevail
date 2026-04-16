@@ -28,7 +28,8 @@ TEST_CASE("explicit AnalysisContext options drive checker behavior", "[analysis_
         .variables = variable_registry.get(),
     };
 
-    const EbpfDomain dom = EbpfDomain::from_constraints({"r1.type=number", "r1.svalue=0", "r1.uvalue=0"}, false);
+    const EbpfDomain dom =
+        EbpfDomain::from_constraints({"r1.type=number", "r1.svalue=0", "r1.uvalue=0"}, false, context);
 
     REQUIRE_FALSE(ebpf_domain_check(dom, Assertion{ValidDivisor{Reg{1}, false}}, Label{0}, context).has_value());
 }

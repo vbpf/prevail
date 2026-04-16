@@ -173,7 +173,7 @@ AnalysisResult analyze(const Program& prog, const AnalysisContext& context) {
            "domain helpers still require the thread-local variable registry during this migration step");
     ebpf_verifier_clear_before_analysis(context.variables);
     return InterleavedFwdFixpointIterator::run(prog, context,
-                                               EbpfDomain::setup_entry(context.options.setup_constraints));
+                                               EbpfDomain::setup_entry(context.options.setup_constraints, context));
 }
 
 AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invariant, const AnalysisContext& context) {
@@ -181,7 +181,8 @@ AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invaria
            "domain helpers still require the thread-local variable registry during this migration step");
     ebpf_verifier_clear_before_analysis(context.variables);
     return InterleavedFwdFixpointIterator::run(
-        prog, context, EbpfDomain::from_constraints(entry_invariant.value(), context.options.setup_constraints));
+        prog, context,
+        EbpfDomain::from_constraints(entry_invariant.value(), context.options.setup_constraints, context));
 }
 
 static EbpfDomain extrapolate(const EbpfDomain& before, const EbpfDomain& after, const unsigned int iteration) {
