@@ -64,7 +64,7 @@ bool RelevantState::is_relevant_constraint(const std::string& constraint) const 
     std::vector<int64_t> abs_stack_offsets;
     abs_stack_offsets.reserve(stack_offsets.size());
     for (const auto& rel_offset : stack_offsets) {
-        abs_stack_offsets.push_back(thread_local_options.total_stack_size() + rel_offset);
+        abs_stack_offsets.push_back(total_stack_size + rel_offset);
     }
 
     // Check for stack range pattern: s[start...end]
@@ -113,7 +113,7 @@ bool RelevantState::is_relevant_constraint(const std::string& constraint) const 
 bool AnalysisResult::is_valid_after(const Label& label, const StringInvariant& state) const {
     const AnalysisContext context = thread_local_analysis_context();
     const EbpfDomain abstract_state =
-        EbpfDomain::from_constraints(state.value(), thread_local_options.setup_constraints, context);
+        EbpfDomain::from_constraints(state.value(), context.options.setup_constraints, context);
     return abstract_state <= invariants.at(label).post;
 }
 
@@ -131,7 +131,7 @@ ObservationCheckResult AnalysisResult::check_observation_at_label(const Label& l
     const EbpfDomain observed_state =
         observation.is_bottom()
             ? EbpfDomain::bottom()
-            : EbpfDomain::from_constraints(observation.value(), thread_local_options.setup_constraints, context);
+            : EbpfDomain::from_constraints(observation.value(), context.options.setup_constraints, context);
 
     if (observed_state.is_bottom()) {
         return {.ok = false, .message = "Observation constraints are unsatisfiable (domain is bottom)"};
@@ -199,7 +199,8 @@ std::map<Label, std::vector<std::string>> AnalysisResult::find_unreachable(const
 
 /// Extract the registers and stack offsets read/written by an instruction.
 /// Used to populate InstructionDeps during forward analysis.
-InstructionDeps extract_instruction_deps(const Instruction& ins, const EbpfDomain& pre_state) {
+InstructionDeps extract_instruction_deps(const Instruction& ins, const EbpfDomain& pre_state,
+                                         const int total_stack_size) {
     InstructionDeps deps;
 
     std::visit(
@@ -237,9 +238,8 @@ InstructionDeps extract_instruction_deps(const Instruction& ins, const EbpfDomai
                         // basereg is a stack pointer with known offset from R10
                         // Compute the actual stack slot: stack_off is absolute (e.g., 4096),
                         // convert to relative from R10:
-                        //  relative = offset + (stack_off - thread_local_options.total_stack_size())
-                        deps.stack_read.insert(v.access.offset +
-                                               (*stack_off - thread_local_options.total_stack_size()));
+                        //  relative = offset + (stack_off - total_stack_size)
+                        deps.stack_read.insert(v.access.offset + (*stack_off - total_stack_size));
                     }
                 } else {
                     // Store: *(basereg + offset) = value
@@ -250,8 +250,7 @@ InstructionDeps extract_instruction_deps(const Instruction& ins, const EbpfDomai
                     if (v.access.basereg.v == R10_STACK_POINTER) {
                         deps.stack_written.insert(v.access.offset);
                     } else if (const auto stack_off = pre_state.get_stack_offset(v.access.basereg)) {
-                        deps.stack_written.insert(v.access.offset +
-                                                  (*stack_off - thread_local_options.total_stack_size()));
+                        deps.stack_written.insert(v.access.offset + (*stack_off - total_stack_size));
                     }
                 }
             } else if constexpr (std::is_same_v<T, Atomic>) {
@@ -265,7 +264,7 @@ InstructionDeps extract_instruction_deps(const Instruction& ins, const EbpfDomai
                     deps.stack_read.insert(v.access.offset);
                     deps.stack_written.insert(v.access.offset);
                 } else if (const auto stack_off = pre_state.get_stack_offset(v.access.basereg)) {
-                    const auto adjusted_off = v.access.offset + (*stack_off - thread_local_options.total_stack_size());
+                    const auto adjusted_off = v.access.offset + (*stack_off - total_stack_size);
                     deps.stack_read.insert(adjusted_off);
                     deps.stack_written.insert(adjusted_off);
                 }
@@ -413,7 +412,7 @@ std::vector<FailureSlice> AnalysisResult::compute_failure_slices(const Program& 
         // Forward analysis stops at the first failing assertion, which may not be
         // assertions[0]. Replay the checks against the pre-state to identify
         // the actual failing assertion and seed relevance from it.
-        RelevantState initial_relevance;
+        RelevantState initial_relevance{.total_stack_size = context.options.total_stack_size()};
         const auto& assertions = prog.assertions_at(label);
         bool found_failing = false;
         for (const auto& assertion : assertions) {
@@ -490,7 +489,7 @@ std::vector<FailureSlice> AnalysisResult::compute_failure_slices(const Program& 
             }
 
             // Compute what's relevant BEFORE this instruction using deps
-            RelevantState relevant_before;
+            RelevantState relevant_before{.total_stack_size = context.options.total_stack_size()};
             const auto inv_it = invariants.find(current_label);
             if (inv_it != invariants.end() && inv_it->second.deps) {
                 const auto& deps = *inv_it->second.deps;

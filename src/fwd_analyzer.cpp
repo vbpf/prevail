@@ -77,7 +77,7 @@ class InterleavedFwdFixpointIterator final {
         // checks so that failing instructions still have deps recorded —
         // compute_failure_slices seeds its backward worklist from them.
         if (context.options.verbosity_opts.collect_instruction_deps) {
-            result.invariants.at(label).deps = extract_instruction_deps(ins, pre);
+            result.invariants.at(label).deps = extract_instruction_deps(ins, pre, context.options.total_stack_size());
         }
 
         if (!std::holds_alternative<IncrementLoopCounter>(ins)) {

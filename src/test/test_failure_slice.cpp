@@ -39,7 +39,7 @@ TEST_CASE("extract_instruction_deps for Bin instruction", "[failure_slice][deps]
     Instruction ins = bin_add;
     EbpfDomain dom = EbpfDomain::top();
 
-    auto deps = extract_instruction_deps(ins, dom);
+    auto deps = extract_instruction_deps(ins, dom, ebpf_verifier_options_t{}.total_stack_size());
 
     REQUIRE(deps.regs_written.contains(Reg{1}));
     REQUIRE(deps.regs_read.contains(Reg{1})); // ADD also reads dst
@@ -52,7 +52,7 @@ TEST_CASE("extract_instruction_deps for MOV instruction", "[failure_slice][deps]
     Instruction ins = bin_mov;
     EbpfDomain dom = EbpfDomain::top();
 
-    auto deps = extract_instruction_deps(ins, dom);
+    auto deps = extract_instruction_deps(ins, dom, ebpf_verifier_options_t{}.total_stack_size());
 
     REQUIRE(deps.regs_written.contains(Reg{1}));
     REQUIRE_FALSE(deps.regs_read.contains(Reg{1})); // MOV doesn't read dst
@@ -65,7 +65,7 @@ TEST_CASE("extract_instruction_deps for Mem load", "[failure_slice][deps]") {
     Instruction ins = mem_load;
     EbpfDomain dom = EbpfDomain::top();
 
-    auto deps = extract_instruction_deps(ins, dom);
+    auto deps = extract_instruction_deps(ins, dom, ebpf_verifier_options_t{}.total_stack_size());
 
     REQUIRE(deps.regs_written.contains(Reg{1}));
     REQUIRE(deps.regs_read.contains(Reg{10}));
@@ -78,7 +78,7 @@ TEST_CASE("extract_instruction_deps for Mem store", "[failure_slice][deps]") {
     Instruction ins = mem_store;
     EbpfDomain dom = EbpfDomain::top();
 
-    auto deps = extract_instruction_deps(ins, dom);
+    auto deps = extract_instruction_deps(ins, dom, ebpf_verifier_options_t{}.total_stack_size());
 
     REQUIRE(deps.regs_read.contains(Reg{10}));
     REQUIRE(deps.regs_read.contains(Reg{1}));

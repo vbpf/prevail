@@ -821,6 +821,7 @@ void print_invariants_filtered(std::ostream& os, const Program& prog, const bool
                     const auto& fl = relevance->at(first_filtered_label);
                     join_relevance.registers.insert(fl.registers.begin(), fl.registers.end());
                     join_relevance.stack_offsets.insert(fl.stack_offsets.begin(), fl.stack_offsets.end());
+                    join_relevance.total_stack_size = fl.total_stack_size;
                 }
                 for (const auto& parent : in_slice_parents) {
                     if (relevance->contains(parent)) {
