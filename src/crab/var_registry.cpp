@@ -11,7 +11,7 @@
 
 namespace prevail {
 
-Variable VariableRegistry::make(const std::string& name) {
+Variable VariableRegistry::make(const std::string& name) const {
     const auto it = std::ranges::find(names, name);
     if (it == names.end()) {
         names.emplace_back(name);
@@ -147,15 +147,15 @@ std::ostream& operator<<(std::ostream& o, const Variable& v) { return o << varia
 
 std::ostream& operator<<(std::ostream& o, const DataKind& s) { return o << name_of(s); }
 
-Variable VariableRegistry::reg(const DataKind kind, const int i) {
+Variable VariableRegistry::reg(const DataKind kind, const int i) const {
     return make("r" + std::to_string(i) + "." + name_of(kind));
 }
 
-Variable VariableRegistry::type_reg(const int i) {
+Variable VariableRegistry::type_reg(const int i) const {
     return make("r" + std::to_string(i) + "." + name_of(DataKind::types));
 }
 
-Variable VariableRegistry::stack_frame_var(const DataKind kind, const int i, const std::string& prefix) {
+Variable VariableRegistry::stack_frame_var(const DataKind kind, const int i, const std::string& prefix) const {
     return make(prefix + STACK_FRAME_DELIMITER + "r" + std::to_string(i) + "." + name_of(kind));
 }
 
@@ -169,12 +169,12 @@ static std::string mk_scalar_name(const DataKind kind, const Number& o, const Nu
     return os.str();
 }
 
-Variable VariableRegistry::cell_var(const DataKind array, const Number& offset, const Number& size) {
+Variable VariableRegistry::cell_var(const DataKind array, const Number& offset, const Number& size) const {
     return make(mk_scalar_name(array, offset.cast_to<uint64_t>(), size));
 }
 
 // Given a type variable, get the associated variable of a given kind.
-Variable VariableRegistry::kind_var(const DataKind kind, const Variable type_variable) {
+Variable VariableRegistry::kind_var(const DataKind kind, const Variable type_variable) const {
     const std::string name = VariableRegistry::name(type_variable);
     const auto dot_pos = name.rfind('.');
     if (dot_pos == std::string::npos) {
@@ -183,21 +183,21 @@ Variable VariableRegistry::kind_var(const DataKind kind, const Variable type_var
     return make(name.substr(0, dot_pos + 1) + name_of(kind));
 }
 
-Variable VariableRegistry::meta_offset() { return make("meta_offset"); }
-Variable VariableRegistry::packet_size() { return make("packet_size"); }
+Variable VariableRegistry::meta_offset() const { return make("meta_offset"); }
+Variable VariableRegistry::packet_size() const { return make("packet_size"); }
 
 bool VariableRegistry::is_min_only(const Variable& v) const {
     const auto& n = name(v);
     return n.ends_with(".stack_numeric_size") || n.ends_with(".shared_region_size") || n == "packet_size";
 }
 
-Variable VariableRegistry::loop_counter(const std::string& label) { return make("pc[" + label + "]"); }
+Variable VariableRegistry::loop_counter(const std::string& label) const { return make("pc[" + label + "]"); }
 
 static bool ends_with(const std::string& str, const std::string& suffix) {
     return str.size() >= suffix.size() && 0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix);
 }
 
-std::vector<Variable> VariableRegistry::get_type_variables() {
+std::vector<Variable> VariableRegistry::get_type_variables() const {
     std::vector<Variable> res;
     for (const std::string& name : names) {
         if (ends_with(name, ".type")) {
@@ -225,7 +225,7 @@ bool VariableRegistry::printing_order(const Variable& a, const Variable& b) {
     return variable_registry->name(a) < variable_registry->name(b);
 }
 
-std::vector<Variable> VariableRegistry::get_loop_counters() {
+std::vector<Variable> VariableRegistry::get_loop_counters() const {
     std::vector<Variable> res;
     for (const std::string& name : names) {
         if (name.starts_with("pc")) {

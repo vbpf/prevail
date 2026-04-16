@@ -12,12 +12,33 @@
 namespace prevail {
 
 // This singleton is eBPF-specific, to avoid lifetime issues and/or passing factory explicitly everywhere.
+//
+// The registry is a name-to-id memoization cache: `make(name)` returns the same
+// `Variable` for the same name across the lifetime of a registry, whether or
+// not `name` was already interned. The factory methods (`reg`, `cell_var`, ...)
+// compose a canonical name and call `make`, so they are logically pure
+// functions of their arguments. `names` is therefore declared `mutable` and all
+// public methods are `const`: callers treat the registry as immutable state.
+//
+// The registry is stored thread-locally, so `make`'s append path has no
+// concurrency concerns on the current design. Sharing a registry across
+// threads would require synchronization on `names`.
 class VariableRegistry final {
-    Variable make(const std::string& name);
-    std::vector<std::string> names;
+    Variable make(const std::string& name) const;
+    mutable std::vector<std::string> names;
 
   public:
     VariableRegistry();
+
+    // Copying would fork the name cache: two registries could then assign
+    // different ids to the same name (or the same id to different names),
+    // and since `Variable` is a bare index with no back-pointer, a Variable
+    // from one registry would silently misinterpret against the other.
+    // Move is fine — it transfers identity rather than duplicating it.
+    VariableRegistry(const VariableRegistry&) = delete;
+    VariableRegistry& operator=(const VariableRegistry&) = delete;
+    VariableRegistry(VariableRegistry&&) = default;
+    VariableRegistry& operator=(VariableRegistry&&) = default;
 
     [[nodiscard]]
     std::string name(const Variable& v) const;
@@ -31,21 +52,21 @@ class VariableRegistry final {
     [[nodiscard]]
     bool is_in_stack(const Variable& v) const;
 
-    std::vector<Variable> get_type_variables();
-    Variable reg(DataKind, int);
-    Variable type_reg(int);
-    Variable stack_frame_var(DataKind kind, int i, const std::string& prefix);
-    Variable cell_var(DataKind array, const Number& offset, const Number& size);
-    Variable kind_var(DataKind kind, Variable type_variable);
-    Variable meta_offset();
-    Variable packet_size();
+    std::vector<Variable> get_type_variables() const;
+    Variable reg(DataKind, int) const;
+    Variable type_reg(int) const;
+    Variable stack_frame_var(DataKind kind, int i, const std::string& prefix) const;
+    Variable cell_var(DataKind array, const Number& offset, const Number& size) const;
+    Variable kind_var(DataKind kind, Variable type_variable) const;
+    Variable meta_offset() const;
+    Variable packet_size() const;
 
     /// EXPERIMENTAL: Variables where only the lower bound is semantically meaningful.
     [[nodiscard]]
     bool is_min_only(const Variable& v) const;
 
-    std::vector<Variable> get_loop_counters();
-    Variable loop_counter(const std::string& label);
+    std::vector<Variable> get_loop_counters() const;
+    Variable loop_counter(const std::string& label) const;
     static bool printing_order(const Variable& a, const Variable& b);
 };
 

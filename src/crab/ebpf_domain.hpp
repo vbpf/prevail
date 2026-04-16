@@ -75,7 +75,7 @@ class EbpfDomain final {
 
     static EbpfDomain calculate_constant_limits();
     static void clear_thread_local_state();
-    ExtendedNumber get_loop_count_upper_bound(VariableRegistry& variables) const;
+    ExtendedNumber get_loop_count_upper_bound(const VariableRegistry& variables) const;
     Interval get_r0() const;
 
     static EbpfDomain setup_entry(bool init_r1, const AnalysisContext& context);

@@ -11,7 +11,7 @@ using namespace prevail;
 
 TEST_CASE("explicit AnalysisContext options drive checker behavior", "[analysis_context]") {
     ThreadLocalGuard guard;
-    variable_registry = VariableRegistry{};
+    variable_registry.clear();
     thread_local_options = {};
     thread_local_options.allow_division_by_zero = false;
 

@@ -321,7 +321,7 @@ Interval EbpfDomain::get_map_max_entries(const Reg& map_fd_reg, const ebpf_platf
     return result;
 }
 
-ExtendedNumber EbpfDomain::get_loop_count_upper_bound(VariableRegistry& variables) const {
+ExtendedNumber EbpfDomain::get_loop_count_upper_bound(const VariableRegistry& variables) const {
     ExtendedNumber ub{0};
     for (const Variable counter : variables.get_loop_counters()) {
         ub = std::max(ub, state.values.eval_interval(counter).ub());
