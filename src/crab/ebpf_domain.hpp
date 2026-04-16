@@ -7,6 +7,7 @@
 #include <limits>
 #include <optional>
 
+#include "analysis_context.hpp"
 #include "arith/variable.hpp"
 #include "config.hpp"
 #include "crab/array_domain.hpp"
@@ -32,12 +33,14 @@ struct VerificationError final : std::runtime_error {
 };
 std::string to_string(const VerificationError& error);
 
-void ebpf_domain_transform(EbpfDomain& inv, const Instruction& ins);
+void ebpf_domain_transform(EbpfDomain& inv, const Instruction& ins, const AnalysisContext& context);
+std::optional<VerificationError> ebpf_domain_check(const EbpfDomain& dom, const Assertion& assertion,
+                                                   const Label& where, const AnalysisContext& context);
 std::optional<VerificationError> ebpf_domain_check(const EbpfDomain& dom, const Assertion& assertion,
                                                    const Label& where);
 
 // TODO: make this an explicit instruction
-void ebpf_domain_initialize_loop_counter(EbpfDomain& dom, const Label& label);
+void ebpf_domain_initialize_loop_counter(EbpfDomain& dom, const Label& label, const AnalysisContext& context);
 
 class EbpfDomain final {
     friend class EbpfChecker;

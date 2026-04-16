@@ -382,6 +382,7 @@ std::set<Reg> extract_assertion_registers(const Assertion& assertion) {
 }
 
 std::vector<FailureSlice> AnalysisResult::compute_failure_slices(const Program& prog, const SliceParams params) const {
+    const AnalysisContext context = thread_local_analysis_context();
     const auto max_steps = params.max_steps;
     const auto max_slices = params.max_slices;
     std::vector<FailureSlice> slices;
@@ -414,7 +415,7 @@ std::vector<FailureSlice> AnalysisResult::compute_failure_slices(const Program& 
         const auto& assertions = prog.assertions_at(label);
         bool found_failing = false;
         for (const auto& assertion : assertions) {
-            if (ebpf_domain_check(inv_pair.pre, assertion, label)) {
+            if (ebpf_domain_check(inv_pair.pre, assertion, label, context)) {
                 for (const auto& reg : extract_assertion_registers(assertion)) {
                     initial_relevance.registers.insert(reg);
                 }
