@@ -35,6 +35,17 @@ class EbpfTransformer final {
     explicit EbpfTransformer(EbpfDomain& _dom, const AnalysisContext& context)
         : dom(_dom), context(context), stack(*_dom.stack) {}
 
+    // Convenience over context.variables.reg_pack — lets every member method
+    // keep saying `reg_pack(...)` without forwarding through the free shim.
+    [[nodiscard]]
+    RegPack reg_pack(const int i) const {
+        return context.variables.reg_pack(i);
+    }
+    [[nodiscard]]
+    RegPack reg_pack(const Reg r) const {
+        return context.variables.reg_pack(r.v);
+    }
+
     // abstract transformers
     void operator()(const Assume&);
 
@@ -488,7 +499,7 @@ static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, 
 
     const ebpf_context_descriptor_t* desc = context.program_info.type.context_descriptor;
 
-    const RegPack& target = reg_pack(target_reg);
+    const RegPack target = context.variables.reg_pack(target_reg.v);
 
     if (desc->end < 0) {
         state.havoc_register(target_reg);
@@ -550,12 +561,12 @@ static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, 
     }
 }
 
-static void do_load_packet_or_shared(TypeToNumDomain& state, const Reg& target_reg, const int width,
-                                     const bool is_signed) {
+static void do_load_packet_or_shared(TypeToNumDomain& state, const VariableRegistry& variables, const Reg& target_reg,
+                                     const int width, const bool is_signed) {
     if (state.values.is_bottom()) {
         return;
     }
-    const RegPack& target = reg_pack(target_reg);
+    const RegPack target = variables.reg_pack(target_reg.v);
 
     state.havoc_register(target_reg);
     state.assign_type(target_reg, T_NUM);
@@ -602,12 +613,12 @@ void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
         }
         case T_PACKET: {
             LinearExpression addr = mem_reg.packet_offset + offset;
-            do_load_packet_or_shared(state, target_reg, width, b.is_signed);
+            do_load_packet_or_shared(state, context.variables, target_reg, width, b.is_signed);
             break;
         }
         case T_SHARED: {
             LinearExpression addr = mem_reg.shared_offset + offset;
-            do_load_packet_or_shared(state, target_reg, width, b.is_signed);
+            do_load_packet_or_shared(state, context.variables, target_reg, width, b.is_signed);
             break;
         }
         case T_SOCKET:
@@ -615,7 +626,7 @@ void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
         case T_ALLOC_MEM: {
             // TODO: implement proper load semantics for these pointer types.
             // For now, treat like packet/shared (havoc the result).
-            do_load_packet_or_shared(state, target_reg, width, b.is_signed);
+            do_load_packet_or_shared(state, context.variables, target_reg, width, b.is_signed);
             break;
         }
         }

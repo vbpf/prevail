@@ -6,45 +6,16 @@
 #include "crab/add_bottom.hpp"
 #include "crab/interval.hpp"
 #include "crab/type_domain.hpp"
+#include "crab/var_registry.hpp"
 
 namespace prevail {
 
-struct RegPack {
-    Variable svalue; // int64_t value.
-    Variable uvalue; // uint64_t value.
-    Variable ctx_offset;
-    Variable map_fd;
-    Variable map_fd_programs;
-    Variable packet_offset;
-    Variable shared_offset;
-    Variable stack_offset;
-    Variable shared_region_size;
-    Variable stack_numeric_size;
-    Variable socket_offset;
-    Variable btf_id_offset;
-    Variable alloc_mem_offset;
-    Variable alloc_mem_size;
-};
-
-inline RegPack reg_pack(const int i) {
-    return {
-        .svalue = variable_registry->reg(DataKind::svalues, i),
-        .uvalue = variable_registry->reg(DataKind::uvalues, i),
-        .ctx_offset = variable_registry->reg(DataKind::ctx_offsets, i),
-        .map_fd = variable_registry->reg(DataKind::map_fds, i),
-        .map_fd_programs = variable_registry->reg(DataKind::map_fd_programs, i),
-        .packet_offset = variable_registry->reg(DataKind::packet_offsets, i),
-        .shared_offset = variable_registry->reg(DataKind::shared_offsets, i),
-        .stack_offset = variable_registry->reg(DataKind::stack_offsets, i),
-        .shared_region_size = variable_registry->reg(DataKind::shared_region_sizes, i),
-        .stack_numeric_size = variable_registry->reg(DataKind::stack_numeric_sizes, i),
-        .socket_offset = variable_registry->reg(DataKind::socket_offsets, i),
-        .btf_id_offset = variable_registry->reg(DataKind::btf_id_offsets, i),
-        .alloc_mem_offset = variable_registry->reg(DataKind::alloc_mem_offsets, i),
-        .alloc_mem_size = variable_registry->reg(DataKind::alloc_mem_sizes, i),
-    };
-}
-inline RegPack reg_pack(const Reg r) { return reg_pack(r.v); }
+// Transitional shims over VariableRegistry::reg_pack, using the thread-local
+// registry. Call sites that already hold a context should call
+// `context.variables.reg_pack(...)` directly (or, inside EbpfTransformer /
+// EbpfChecker, use the same-named member method).
+inline RegPack reg_pack(const int i) { return variable_registry->reg_pack(i); }
+inline RegPack reg_pack(const Reg r) { return variable_registry->reg_pack(r.v); }
 
 inline const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
     {T_CTX, {DataKind::ctx_offsets}},

@@ -169,7 +169,7 @@ EbpfDomain EbpfDomain::calculate_constant_limits(const AnalysisContext& context)
     EbpfDomain inv = top(context);
     using namespace dsl_syntax;
     for (const int i : {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}) {
-        const auto r = reg_pack(i);
+        const auto r = context.variables.reg_pack(i);
         inv.add_value_constraint(r.svalue <= std::numeric_limits<int32_t>::max());
         inv.add_value_constraint(r.svalue >= std::numeric_limits<int32_t>::min());
         inv.add_value_constraint(r.uvalue <= std::numeric_limits<uint32_t>::max());
@@ -428,7 +428,7 @@ EbpfDomain EbpfDomain::setup_entry(const bool init_r1, const AnalysisContext& co
 
     EbpfDomain inv = top(context);
 
-    const auto r10 = reg_pack(R10_STACK_POINTER);
+    const auto r10 = context.variables.reg_pack(R10_STACK_POINTER);
     constexpr Reg r10_reg{R10_STACK_POINTER};
     const auto total_stack = context.options.total_stack_size();
     inv.state.values.add_constraint(total_stack <= r10.svalue);
@@ -439,7 +439,7 @@ EbpfDomain EbpfDomain::setup_entry(const bool init_r1, const AnalysisContext& co
     inv.state.assign_type(r10_reg, T_STACK);
 
     if (init_r1) {
-        const auto r1 = reg_pack(R1_ARG);
+        const auto r1 = context.variables.reg_pack(R1_ARG);
         constexpr Reg r1_reg{R1_ARG};
         inv.state.values.add_constraint(1 <= r1.svalue);
         inv.state.values.add_constraint(r1.svalue <= ptr_max(context.options.max_packet_size));

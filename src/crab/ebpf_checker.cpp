@@ -27,6 +27,17 @@ class EbpfChecker final {
 
     void visit() { std::visit(*this, assertion); }
 
+    // Convenience over context.variables.reg_pack — lets every member method
+    // keep saying `reg_pack(...)` without forwarding through the free shim.
+    [[nodiscard]]
+    RegPack reg_pack(const int i) const {
+        return context.variables.reg_pack(i);
+    }
+    [[nodiscard]]
+    RegPack reg_pack(const Reg r) const {
+        return context.variables.reg_pack(r.v);
+    }
+
     void operator()(const Addable&) const;
     void operator()(const BoundedLoopCount&) const;
     void operator()(const Comparable&) const;

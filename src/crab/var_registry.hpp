@@ -11,6 +11,26 @@
 
 namespace prevail {
 
+/// The fan of variables that describe one register: every field is
+/// `VariableRegistry::reg(kind, i)` for the corresponding DataKind.
+/// Produced by `VariableRegistry::reg_pack(i)`.
+struct RegPack {
+    Variable svalue; // int64_t value.
+    Variable uvalue; // uint64_t value.
+    Variable ctx_offset;
+    Variable map_fd;
+    Variable map_fd_programs;
+    Variable packet_offset;
+    Variable shared_offset;
+    Variable stack_offset;
+    Variable shared_region_size;
+    Variable stack_numeric_size;
+    Variable socket_offset;
+    Variable btf_id_offset;
+    Variable alloc_mem_offset;
+    Variable alloc_mem_size;
+};
+
 // This singleton is eBPF-specific, to avoid lifetime issues and/or passing factory explicitly everywhere.
 //
 // The registry is a name-to-id memoization cache: `make(name)` returns the same
@@ -68,6 +88,10 @@ class VariableRegistry final {
     std::vector<Variable> get_loop_counters() const;
     Variable loop_counter(const std::string& label) const;
     static bool printing_order(const Variable& a, const Variable& b);
+
+    /// All variables associated with register `i`. A bulk version of `reg(kind, i)`.
+    [[nodiscard]]
+    RegPack reg_pack(int i) const;
 };
 
 extern thread_local LazyAllocator<VariableRegistry> variable_registry;

@@ -225,6 +225,25 @@ bool VariableRegistry::printing_order(const Variable& a, const Variable& b) {
     return variable_registry->name(a) < variable_registry->name(b);
 }
 
+RegPack VariableRegistry::reg_pack(const int i) const {
+    return {
+        .svalue = reg(DataKind::svalues, i),
+        .uvalue = reg(DataKind::uvalues, i),
+        .ctx_offset = reg(DataKind::ctx_offsets, i),
+        .map_fd = reg(DataKind::map_fds, i),
+        .map_fd_programs = reg(DataKind::map_fd_programs, i),
+        .packet_offset = reg(DataKind::packet_offsets, i),
+        .shared_offset = reg(DataKind::shared_offsets, i),
+        .stack_offset = reg(DataKind::stack_offsets, i),
+        .shared_region_size = reg(DataKind::shared_region_sizes, i),
+        .stack_numeric_size = reg(DataKind::stack_numeric_sizes, i),
+        .socket_offset = reg(DataKind::socket_offsets, i),
+        .btf_id_offset = reg(DataKind::btf_id_offsets, i),
+        .alloc_mem_offset = reg(DataKind::alloc_mem_offsets, i),
+        .alloc_mem_size = reg(DataKind::alloc_mem_sizes, i),
+    };
+}
+
 std::vector<Variable> VariableRegistry::get_loop_counters() const {
     std::vector<Variable> res;
     for (const std::string& name : names) {
