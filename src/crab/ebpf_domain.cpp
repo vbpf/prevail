@@ -224,7 +224,7 @@ bool EbpfDomain::get_map_fd_range(const Reg& map_fd_reg, int32_t* start_fd, int3
 }
 
 // All maps in the range must have the same type for us to use it.
-std::optional<uint32_t> EbpfDomain::get_map_type(const Reg& map_fd_reg) const {
+std::optional<uint32_t> EbpfDomain::get_map_type(const Reg& map_fd_reg, const ebpf_platform_t& platform) const {
     int32_t start_fd, end_fd;
     if (!get_map_fd_range(map_fd_reg, &start_fd, &end_fd)) {
         return {};
@@ -232,7 +232,7 @@ std::optional<uint32_t> EbpfDomain::get_map_type(const Reg& map_fd_reg) const {
 
     std::optional<uint32_t> type;
     for (int32_t map_fd = start_fd; map_fd <= end_fd; map_fd++) {
-        EbpfMapDescriptor* map = &thread_local_program_info->platform->get_map_descriptor(map_fd);
+        EbpfMapDescriptor* map = &platform.get_map_descriptor(map_fd);
         if (map == nullptr) {
             return {};
         }
@@ -246,7 +246,7 @@ std::optional<uint32_t> EbpfDomain::get_map_type(const Reg& map_fd_reg) const {
 }
 
 // All maps in the range must have the same inner map fd for us to use it.
-std::optional<uint32_t> EbpfDomain::get_map_inner_map_fd(const Reg& map_fd_reg) const {
+std::optional<uint32_t> EbpfDomain::get_map_inner_map_fd(const Reg& map_fd_reg, const ebpf_platform_t& platform) const {
     int start_fd, end_fd;
     if (!get_map_fd_range(map_fd_reg, &start_fd, &end_fd)) {
         return {};
@@ -254,7 +254,7 @@ std::optional<uint32_t> EbpfDomain::get_map_inner_map_fd(const Reg& map_fd_reg) 
 
     std::optional<uint32_t> inner_map_fd;
     for (int map_fd = start_fd; map_fd <= end_fd; map_fd++) {
-        EbpfMapDescriptor* map = &thread_local_program_info->platform->get_map_descriptor(map_fd);
+        EbpfMapDescriptor* map = &platform.get_map_descriptor(map_fd);
         if (map == nullptr) {
             return {};
         }
@@ -268,7 +268,7 @@ std::optional<uint32_t> EbpfDomain::get_map_inner_map_fd(const Reg& map_fd_reg) 
 }
 
 // We can deal with a range of key sizes.
-Interval EbpfDomain::get_map_key_size(const Reg& map_fd_reg) const {
+Interval EbpfDomain::get_map_key_size(const Reg& map_fd_reg, const ebpf_platform_t& platform) const {
     int start_fd, end_fd;
     if (!get_map_fd_range(map_fd_reg, &start_fd, &end_fd)) {
         return Interval::top();
@@ -276,7 +276,7 @@ Interval EbpfDomain::get_map_key_size(const Reg& map_fd_reg) const {
 
     Interval result = Interval::bottom();
     for (int map_fd = start_fd; map_fd <= end_fd; map_fd++) {
-        if (const EbpfMapDescriptor* map = &thread_local_program_info->platform->get_map_descriptor(map_fd)) {
+        if (const EbpfMapDescriptor* map = &platform.get_map_descriptor(map_fd)) {
             result = result | Interval{map->key_size};
         } else {
             return Interval::top();
@@ -286,7 +286,7 @@ Interval EbpfDomain::get_map_key_size(const Reg& map_fd_reg) const {
 }
 
 // We can deal with a range of value sizes.
-Interval EbpfDomain::get_map_value_size(const Reg& map_fd_reg) const {
+Interval EbpfDomain::get_map_value_size(const Reg& map_fd_reg, const ebpf_platform_t& platform) const {
     int start_fd, end_fd;
     if (!get_map_fd_range(map_fd_reg, &start_fd, &end_fd)) {
         return Interval::top();
@@ -294,7 +294,7 @@ Interval EbpfDomain::get_map_value_size(const Reg& map_fd_reg) const {
 
     Interval result = Interval::bottom();
     for (int map_fd = start_fd; map_fd <= end_fd; map_fd++) {
-        if (const EbpfMapDescriptor* map = &thread_local_program_info->platform->get_map_descriptor(map_fd)) {
+        if (const EbpfMapDescriptor* map = &platform.get_map_descriptor(map_fd)) {
             result = result | Interval(map->value_size);
         } else {
             return Interval::top();
@@ -304,7 +304,7 @@ Interval EbpfDomain::get_map_value_size(const Reg& map_fd_reg) const {
 }
 
 // We can deal with a range of max_entries values.
-Interval EbpfDomain::get_map_max_entries(const Reg& map_fd_reg) const {
+Interval EbpfDomain::get_map_max_entries(const Reg& map_fd_reg, const ebpf_platform_t& platform) const {
     int start_fd, end_fd;
     if (!get_map_fd_range(map_fd_reg, &start_fd, &end_fd)) {
         return Interval::top();
@@ -312,7 +312,7 @@ Interval EbpfDomain::get_map_max_entries(const Reg& map_fd_reg) const {
 
     Interval result = Interval::bottom();
     for (int map_fd = start_fd; map_fd <= end_fd; map_fd++) {
-        if (const EbpfMapDescriptor* map = &thread_local_program_info->platform->get_map_descriptor(map_fd)) {
+        if (const EbpfMapDescriptor* map = &platform.get_map_descriptor(map_fd)) {
             result = result | Interval(map->max_entries);
         } else {
             return Interval::top();
@@ -321,9 +321,9 @@ Interval EbpfDomain::get_map_max_entries(const Reg& map_fd_reg) const {
     return result;
 }
 
-ExtendedNumber EbpfDomain::get_loop_count_upper_bound() const {
+ExtendedNumber EbpfDomain::get_loop_count_upper_bound(VariableRegistry& variables) const {
     ExtendedNumber ub{0};
-    for (const Variable counter : variable_registry->get_loop_counters()) {
+    for (const Variable counter : variables.get_loop_counters()) {
         ub = std::max(ub, state.values.eval_interval(counter).ub());
     }
     return ub;

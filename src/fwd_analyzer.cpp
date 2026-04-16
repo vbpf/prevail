@@ -141,7 +141,7 @@ class InterleavedFwdFixpointIterator final {
         ExtendedNumber loop_count{0};
         // Gather the upper bound of loop counts from post-invariants.
         for (const auto& inv_pair : std::views::values(result.invariants)) {
-            loop_count = std::max(loop_count, inv_pair.post.get_loop_count_upper_bound());
+            loop_count = std::max(loop_count, inv_pair.post.get_loop_count_upper_bound(context.variables));
         }
         const auto m = loop_count.number();
         if (m && m->fits<int32_t>()) {

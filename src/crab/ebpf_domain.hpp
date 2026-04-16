@@ -75,7 +75,7 @@ class EbpfDomain final {
 
     static EbpfDomain calculate_constant_limits();
     static void clear_thread_local_state();
-    ExtendedNumber get_loop_count_upper_bound() const;
+    ExtendedNumber get_loop_count_upper_bound(VariableRegistry& variables) const;
     Interval get_r0() const;
 
     static EbpfDomain setup_entry(bool init_r1, const AnalysisContext& context);
@@ -95,15 +95,15 @@ class EbpfDomain final {
     std::optional<int64_t> get_stack_offset(const Reg& reg) const;
 
     [[nodiscard]]
-    std::optional<uint32_t> get_map_type(const Reg& map_fd_reg) const;
+    std::optional<uint32_t> get_map_type(const Reg& map_fd_reg, const ebpf_platform_t& platform) const;
     [[nodiscard]]
-    std::optional<uint32_t> get_map_inner_map_fd(const Reg& map_fd_reg) const;
+    std::optional<uint32_t> get_map_inner_map_fd(const Reg& map_fd_reg, const ebpf_platform_t& platform) const;
     [[nodiscard]]
-    Interval get_map_key_size(const Reg& map_fd_reg) const;
+    Interval get_map_key_size(const Reg& map_fd_reg, const ebpf_platform_t& platform) const;
     [[nodiscard]]
-    Interval get_map_value_size(const Reg& map_fd_reg) const;
+    Interval get_map_value_size(const Reg& map_fd_reg, const ebpf_platform_t& platform) const;
     [[nodiscard]]
-    Interval get_map_max_entries(const Reg& map_fd_reg) const;
+    Interval get_map_max_entries(const Reg& map_fd_reg, const ebpf_platform_t& platform) const;
 
     bool get_map_fd_range(const Reg& map_fd_reg, int32_t* start_fd, int32_t* end_fd) const;
 

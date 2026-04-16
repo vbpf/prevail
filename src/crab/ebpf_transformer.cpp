@@ -921,14 +921,14 @@ void EbpfTransformer::operator()(const Call& call) {
             assign_shared_map_value(std::nullopt);
             return;
         }
-        const auto map_type = dom.get_map_type(*maybe_fd_reg);
+        const auto map_type = dom.get_map_type(*maybe_fd_reg, context.platform);
         if (!map_type) {
             assign_shared_map_value(std::nullopt);
             return;
         }
         if (context.platform.get_map_type(*map_type).value_type == EbpfMapValueType::MAP) {
             // Map-of-maps: r0 is an inner map fd if known, otherwise an opaque shared pointer.
-            if (const auto inner_map_fd = dom.get_map_inner_map_fd(*maybe_fd_reg)) {
+            if (const auto inner_map_fd = dom.get_map_inner_map_fd(*maybe_fd_reg, context.platform)) {
                 do_load_mapfd(r0_reg, to_signed(*inner_map_fd), true);
             } else {
                 assign_shared_map_value(std::nullopt);
@@ -936,7 +936,7 @@ void EbpfTransformer::operator()(const Call& call) {
             return;
         }
         // Regular map: r0 is a shared pointer with known value size.
-        assign_shared_map_value(dom.get_map_value_size(*maybe_fd_reg));
+        assign_shared_map_value(dom.get_map_value_size(*maybe_fd_reg, context.platform));
     };
     if (call.is_map_lookup) {
         resolve_map_lookup();
