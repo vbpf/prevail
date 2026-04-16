@@ -663,10 +663,6 @@ void ArrayDomain::store_numbers(const Interval& _idx, const Interval& _width) {
 
 void ArrayDomain::set_to_top() { num_bytes.set_to_top(); }
 
-void ArrayDomain::set_to_bottom() { num_bytes.set_to_bottom(); }
-
-bool ArrayDomain::is_bottom() const { return num_bytes.is_bottom(); }
-
 bool ArrayDomain::is_top() const { return num_bytes.is_top(); }
 
 StringInvariant ArrayDomain::to_set() const { return num_bytes.to_set(); }

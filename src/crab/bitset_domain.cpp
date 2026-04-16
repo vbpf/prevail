@@ -36,9 +36,6 @@ std::ostream& operator<<(std::ostream& o, const BitsetDomain& b) {
 }
 
 StringInvariant BitsetDomain::to_set() const {
-    if (this->is_bottom()) {
-        return StringInvariant::bottom();
-    }
     if (this->is_top()) {
         return StringInvariant::top();
     }

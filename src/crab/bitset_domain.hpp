@@ -28,18 +28,14 @@ class BitsetDomain final {
     BitsetDomain& operator=(const BitsetDomain&) = default;
     BitsetDomain& operator=(BitsetDomain&&) noexcept = default;
 
+    // BitsetDomain has no bottom of its own; bottom for a container that
+    // needs one is represented externally (e.g. wrapping the stack in
+    // std::optional inside EbpfDomain).
     void set_to_top() noexcept { non_numerical_bytes.set(); }
-
-    void set_to_bottom() noexcept { non_numerical_bytes.reset(); }
 
     [[nodiscard]]
     bool is_top() const noexcept {
         return non_numerical_bytes.all();
-    }
-
-    [[nodiscard]]
-    bool is_bottom() const noexcept {
-        return false;
     }
 
     [[nodiscard]]

@@ -48,10 +48,9 @@ class ArrayDomain final {
     explicit ArrayDomain(const BitsetDomain& num_bytes) : num_bytes(num_bytes) {}
     ArrayDomain(const ArrayDomain& arr) = default;
 
+    // ArrayDomain has no bottom of its own; bottom is represented externally
+    // (EbpfDomain wraps the stack in std::optional).
     void set_to_top();
-    void set_to_bottom();
-    [[nodiscard]]
-    bool is_bottom() const;
     [[nodiscard]]
     bool is_top() const;
 
