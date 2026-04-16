@@ -22,8 +22,9 @@ namespace prevail {
 // the offsets get replaced with 64-bit address pointers.  However, we currently
 // need to do pointer arithmetic on 64-bit numbers so for now we cap the interval
 // to 32 bits.
-inline int max_packet_size() noexcept { return thread_local_options.max_packet_size; }
-inline int64_t ptr_max() noexcept { return std::numeric_limits<int32_t>::max() - thread_local_options.max_packet_size; }
+inline int64_t ptr_max(const int max_packet_size) noexcept {
+    return std::numeric_limits<int32_t>::max() - max_packet_size;
+}
 
 class EbpfDomain;
 

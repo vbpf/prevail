@@ -85,20 +85,18 @@ class EbpfTransformer final {
 
     void assign_valid_ptr(const Reg& dst_reg, bool maybe_null);
 
-    static void recompute_stack_numeric_size(TypeToNumDomain& state, ArrayDomain& stack, VariableRegistry& variables,
-                                             const Reg& reg);
+    void recompute_stack_numeric_size(TypeToNumDomain& state, const Reg& reg);
 
-    static void recompute_stack_numeric_size(TypeToNumDomain& state, const ArrayDomain& stack,
-                                             VariableRegistry& variables, Variable type_variable);
+    void recompute_stack_numeric_size(TypeToNumDomain& state, Variable type_variable);
 
-    static void do_load_stack(TypeToNumDomain& state, ArrayDomain& stack, VariableRegistry& variables,
-                              const Reg& target_reg, const LinearExpression& addr, int width, const Reg& src_reg);
+    void do_load_stack(TypeToNumDomain& state, const Reg& target_reg, const LinearExpression& addr, int width,
+                       const Reg& src_reg);
 
     void do_load(const Mem& b, const Reg& target_reg);
 
-    static void do_store_stack(TypeToNumDomain& state, ArrayDomain& stack, VariableRegistry& variables,
-                               const LinearExpression& symb_addr, int exact_width, const LinearExpression& val_svalue,
-                               const LinearExpression& val_uvalue, const std::optional<Reg>& opt_val_reg);
+    void do_store_stack(TypeToNumDomain& state, const LinearExpression& symb_addr, int exact_width,
+                        const LinearExpression& val_svalue, const LinearExpression& val_uvalue,
+                        const std::optional<Reg>& opt_val_reg);
 
     void do_mem_store(const Mem& b, const LinearExpression& val_svalue, const LinearExpression& val_uvalue,
                       const std::optional<Reg>& opt_val_reg);
@@ -111,10 +109,6 @@ class EbpfTransformer final {
 
     void ashr(const Reg& dst_reg, const LinearExpression& right_svalue, int finite_width);
 }; // end EbpfDomain
-
-static int64_t ptr_max(const AnalysisContext& context) noexcept {
-    return std::numeric_limits<int32_t>::max() - context.options.max_packet_size;
-}
 
 void ebpf_domain_transform(EbpfDomain& inv, const Instruction& ins, const AnalysisContext& context) {
     if (inv.is_bottom()) {
@@ -441,9 +435,8 @@ void EbpfTransformer::operator()(const Packet& a) {
     scratch_caller_saved_registers();
 }
 
-void EbpfTransformer::do_load_stack(TypeToNumDomain& state, ArrayDomain& stack, VariableRegistry& variables,
-                                    const Reg& target_reg, const LinearExpression& symb_addr, const int width,
-                                    const Reg& src_reg) {
+void EbpfTransformer::do_load_stack(TypeToNumDomain& state, const Reg& target_reg, const LinearExpression& symb_addr,
+                                    const int width, const Reg& src_reg) {
     const Interval addr = state.values.eval_interval(symb_addr);
     using namespace dsl_syntax;
     if (state.values.entail(width <= reg_pack(src_reg).stack_numeric_size)) {
@@ -468,7 +461,7 @@ void EbpfTransformer::do_load_stack(TypeToNumDomain& state, ArrayDomain& stack, 
         state.values.assign(target.uvalue, uresult);
         for (const TypeEncoding type : state.iterate_types(target_reg)) {
             for (const auto& kind : type_to_kinds.at(type)) {
-                const Variable dst_var = variables.reg(kind, target_reg.v);
+                const Variable dst_var = context.variables.reg(kind, target_reg.v);
                 state.values.assign(dst_var, stack.load(state.values, kind, addr, width));
             }
         }
@@ -544,7 +537,7 @@ static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, 
     if (width == offset_width) {
         state.assign_type(target_reg, T_PACKET);
         state.values.add_constraint(4098 <= target.svalue);
-        state.values.add_constraint(target.svalue <= ptr_max(context));
+        state.values.add_constraint(target.svalue <= ptr_max(context.options.max_packet_size));
     }
 }
 
@@ -578,7 +571,7 @@ void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
 
     if (b.access.basereg.v == R10_STACK_POINTER) {
         const LinearExpression addr = mem_reg.stack_offset + offset;
-        do_load_stack(dom.state, stack, context.variables, target_reg, addr, width, b.access.basereg);
+        do_load_stack(dom.state, target_reg, addr, width, b.access.basereg);
         return;
     }
     dom.state = dom.state.join_over_types(b.access.basereg, [&](TypeToNumDomain& state, TypeEncoding type) {
@@ -595,7 +588,7 @@ void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
         }
         case T_STACK: {
             const LinearExpression addr = mem_reg.stack_offset + offset;
-            do_load_stack(state, stack, context.variables, target_reg, addr, width, b.access.basereg);
+            do_load_stack(state, target_reg, addr, width, b.access.basereg);
             break;
         }
         case T_PACKET: {
@@ -620,8 +613,7 @@ void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
     });
 }
 
-void EbpfTransformer::do_store_stack(TypeToNumDomain& state, ArrayDomain& stack, VariableRegistry& variables,
-                                     const LinearExpression& symb_addr, const int exact_width,
+void EbpfTransformer::do_store_stack(TypeToNumDomain& state, const LinearExpression& symb_addr, const int exact_width,
                                      const LinearExpression& val_svalue, const LinearExpression& val_uvalue,
                                      const std::optional<Reg>& opt_val_reg) {
     const Interval addr = state.values.eval_interval(symb_addr);
@@ -641,7 +633,8 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& state, ArrayDomain& stack,
     } else {
         // opt_val_reg is unset when storing an immediate value.
         must_be_num = !opt_val_reg || state.is_in_group(*opt_val_reg, TS_NUM);
-        const LinearExpression val_type = must_be_num ? LinearExpression{T_NUM} : variables.type_reg(opt_val_reg->v);
+        const LinearExpression val_type =
+            must_be_num ? LinearExpression{T_NUM} : context.variables.type_reg(opt_val_reg->v);
         state.assign_type(stack.store_type(state.types, addr, width, must_be_num), val_type);
 
         if (exact_width == 8) {
@@ -653,7 +646,7 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& state, ArrayDomain& stack,
             if (!must_be_num) {
                 for (TypeEncoding type : state.iterate_types(*opt_val_reg)) {
                     for (const DataKind kind : type_to_kinds.at(type)) {
-                        const Variable src_var = variables.reg(kind, opt_val_reg->v);
+                        const Variable src_var = context.variables.reg(kind, opt_val_reg->v);
                         state.values.assign(stack.store(state.values, kind, addr, width), src_var);
                     }
                 }
@@ -680,12 +673,13 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& state, ArrayDomain& stack,
 
     // Update stack_numeric_size for any stack type variables.
     // stack_numeric_size holds the number of continuous bytes starting from stack_offset that are known to be numeric.
-    for (const Variable type_variable : variables.get_type_variables()) {
+    for (const Variable type_variable : context.variables.get_type_variables()) {
         if (!state.is_initialized(type_variable) || !state.may_have_type(type_variable, T_STACK)) {
             continue;
         }
-        const Variable stack_offset_variable = variables.kind_var(DataKind::stack_offsets, type_variable);
-        const Variable stack_numeric_size_variable = variables.kind_var(DataKind::stack_numeric_sizes, type_variable);
+        const Variable stack_offset_variable = context.variables.kind_var(DataKind::stack_offsets, type_variable);
+        const Variable stack_numeric_size_variable =
+            context.variables.kind_var(DataKind::stack_numeric_sizes, type_variable);
 
         using namespace dsl_syntax;
         // See if the variable's numeric interval overlaps with changed bytes.
@@ -695,7 +689,7 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& state, ArrayDomain& stack,
             if (!must_be_num) {
                 state.values.havoc(stack_numeric_size_variable);
             }
-            recompute_stack_numeric_size(state, stack, variables, type_variable);
+            recompute_stack_numeric_size(state, type_variable);
         }
     }
 }
@@ -742,16 +736,14 @@ void EbpfTransformer::do_mem_store(const Mem& b, const LinearExpression& val_sva
         if (r10_interval.is_singleton()) {
             const int32_t stack_offset = r10_interval.singleton()->cast_to<int32_t>();
             const Number base_addr{stack_offset};
-            do_store_stack(dom.state, stack, context.variables, base_addr + offset, width, val_svalue, val_uvalue,
-                           opt_val_reg);
+            do_store_stack(dom.state, base_addr + offset, width, val_svalue, val_uvalue, opt_val_reg);
             return;
         }
     }
     dom.state = dom.state.join_over_types(b.access.basereg, [&](TypeToNumDomain& state, const TypeEncoding type) {
         if (type == T_STACK) {
             const auto base_addr = LinearExpression(reg_pack(b.access.basereg).stack_offset);
-            do_store_stack(state, stack, context.variables, dsl_syntax::operator+(base_addr, offset), width, val_svalue,
-                           val_uvalue, opt_val_reg);
+            do_store_stack(state, dsl_syntax::operator+(base_addr, offset), width, val_svalue, val_uvalue, opt_val_reg);
         }
         // do nothing for any other type
     });
@@ -1058,28 +1050,27 @@ void EbpfTransformer::assign_valid_ptr(const Reg& dst_reg, const bool maybe_null
     } else {
         dom.state.values.add_constraint(0 < reg.svalue);
     }
-    dom.state.values.add_constraint(reg.svalue <= ptr_max(context));
+    dom.state.values.add_constraint(reg.svalue <= ptr_max(context.options.max_packet_size));
     dom.state.values.assign(reg.uvalue, reg.svalue);
 }
 
 // If nothing is known of the stack_numeric_size,
 // try to recompute the stack_numeric_size.
-void EbpfTransformer::recompute_stack_numeric_size(TypeToNumDomain& state, const ArrayDomain& stack,
-                                                   VariableRegistry& variables, const Variable type_variable) {
-    const Variable stack_numeric_size_variable = variables.kind_var(DataKind::stack_numeric_sizes, type_variable);
+void EbpfTransformer::recompute_stack_numeric_size(TypeToNumDomain& state, const Variable type_variable) {
+    const Variable stack_numeric_size_variable =
+        context.variables.kind_var(DataKind::stack_numeric_sizes, type_variable);
 
     if (state.may_have_type(type_variable, T_STACK)) {
         const int numeric_size =
-            stack.min_all_num_size(state.values, variables.kind_var(DataKind::stack_offsets, type_variable));
+            stack.min_all_num_size(state.values, context.variables.kind_var(DataKind::stack_offsets, type_variable));
         if (numeric_size > 0) {
             state.values.assign(stack_numeric_size_variable, numeric_size);
         }
     }
 }
 
-void EbpfTransformer::recompute_stack_numeric_size(TypeToNumDomain& state, ArrayDomain& stack,
-                                                   VariableRegistry& variables, const Reg& reg) {
-    recompute_stack_numeric_size(state, stack, variables, reg_type(reg));
+void EbpfTransformer::recompute_stack_numeric_size(TypeToNumDomain& state, const Reg& reg) {
+    recompute_stack_numeric_size(state, reg_type(reg));
 }
 
 void EbpfTransformer::add(const Reg& dst_reg, const int imm, const int finite_width) {
@@ -1094,7 +1085,7 @@ void EbpfTransformer::add(const Reg& dst_reg, const int imm, const int finite_wi
         } else if (imm < 0) {
             dom.state.values.havoc(dst.stack_numeric_size);
         }
-        recompute_stack_numeric_size(dom.state, stack, context.variables, dst_reg);
+        recompute_stack_numeric_size(dom.state, dst_reg);
     }
 }
 
@@ -1288,7 +1279,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
                                             using namespace dsl_syntax;
                                             if (state.values.intersect(src.svalue < 0)) {
                                                 state.values.havoc(dst.stack_numeric_size);
-                                                recompute_stack_numeric_size(state, stack, context.variables, bin.dst);
+                                                recompute_stack_numeric_size(state, bin.dst);
                                             } else {
                                                 state.values->apply_signed(ArithBinOp::SUB, dst.stack_numeric_size,
                                                                            dst.stack_numeric_size,
@@ -1353,7 +1344,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
                             using namespace dsl_syntax;
                             if (dom.state.values.intersect(src.svalue > 0)) {
                                 dom.state.values.havoc(dst.stack_numeric_size);
-                                recompute_stack_numeric_size(dom.state, stack, context.variables, bin.dst);
+                                recompute_stack_numeric_size(dom.state, bin.dst);
                             } else {
                                 dom.state.values->apply(ArithBinOp::ADD, dst.stack_numeric_size, dst.stack_numeric_size,
                                                         src.svalue);
