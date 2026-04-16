@@ -38,6 +38,10 @@ class ArrayDomain final {
     BitsetDomain num_bytes;
 
   public:
+    // Top at the requested size.
+    explicit ArrayDomain(const size_t stack_size) : num_bytes(BitsetDomain{stack_size}) {}
+
+    // TODO(stage 3): remove this default ctor once all callers pass a size.
     ArrayDomain() = default;
 
     // no move constructor to BitsetDomain, and therefore no copy-then-move for ArrayDomain

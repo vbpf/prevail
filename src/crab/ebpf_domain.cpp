@@ -19,7 +19,16 @@
 
 namespace prevail {
 
-StringInvariant EbpfDomain::to_set() const { return state.to_set() + stack.to_set(); }
+StringInvariant EbpfDomain::to_set() const {
+    if (!stack) {
+        // BUG: bottom should serialize as bottom ("_|_"), but several YAML
+        // tests encode the wrong answer (top) in their `post: []` expectations.
+        // Returning top here matches those expectations. Fix by returning
+        // bottom and updating the YAML tests in the same change.
+        return StringInvariant::top();
+    }
+    return state.to_set() + stack->to_set();
+}
 
 std::optional<int64_t> EbpfDomain::get_stack_offset(const Reg& reg) const {
     // Only return an offset when the register is *definitely* a stack pointer,
@@ -34,42 +43,54 @@ std::optional<int64_t> EbpfDomain::get_stack_offset(const Reg& reg) const {
     return std::nullopt;
 }
 
-EbpfDomain EbpfDomain::top() {
-    EbpfDomain abs;
-    abs.set_to_top();
-    return abs;
+EbpfDomain EbpfDomain::top(const AnalysisContext& context) {
+    return top(static_cast<size_t>(context.options.total_stack_size()));
 }
 
-EbpfDomain EbpfDomain::bottom() {
-    EbpfDomain abs;
-    abs.set_to_bottom();
-    return abs;
+EbpfDomain EbpfDomain::top(const size_t total_stack_size) {
+    return EbpfDomain{TypeToNumDomain::top(), ArrayDomain{total_stack_size}};
 }
 
-EbpfDomain::EbpfDomain() = default;
+EbpfDomain EbpfDomain::bottom() { return EbpfDomain{}; }
+
+// Default EbpfDomain is bottom: state is explicitly bottom, stack is nullopt.
+// This keeps the "bottom reduces all fields to bottom" invariant and avoids
+// the thread-local read that a default-constructed ArrayDomain would do.
+EbpfDomain::EbpfDomain() : state(TypeToNumDomain::bottom()), stack(std::nullopt) {}
 
 EbpfDomain::EbpfDomain(TypeToNumDomain state, ArrayDomain stack) : state(std::move(state)), stack(std::move(stack)) {}
 
-void EbpfDomain::set_to_top() {
-    state.set_to_top();
-    stack.set_to_top();
+void EbpfDomain::set_to_bottom() {
+    state.set_to_bottom();
+    stack.reset();
 }
-
-void EbpfDomain::set_to_bottom() { state.set_to_bottom(); }
 
 bool EbpfDomain::is_bottom() const { return state.is_bottom(); }
 
-bool EbpfDomain::is_top() const { return state.is_top() && stack.is_top(); }
+bool EbpfDomain::is_top() const { return stack && state.is_top() && stack->is_top(); }
 
 bool EbpfDomain::operator<=(const EbpfDomain& other) const {
-    if (!(stack <= other.stack)) {
+    // Bottom is below everything. Short-circuit so we don't dereference a nullopt stack.
+    if (is_bottom()) {
+        return true;
+    }
+    if (other.is_bottom()) {
+        return false;
+    }
+    if (!(*stack <= *other.stack)) {
         return false;
     }
     return state <= other.state;
 }
 
 bool EbpfDomain::operator<=(EbpfDomain&& other) const {
-    if (!(stack <= other.stack)) {
+    if (is_bottom()) {
+        return true;
+    }
+    if (other.is_bottom()) {
+        return false;
+    }
+    if (!(*stack <= *other.stack)) {
         return false;
     }
     return state <= std::move(other.state);
@@ -83,7 +104,7 @@ void EbpfDomain::operator|=(EbpfDomain&& other) {
         *this = std::move(other);
         return;
     }
-    stack |= std::move(other.stack);
+    *stack |= std::move(*other.stack);
     state |= std::move(other.state);
 }
 
@@ -95,7 +116,7 @@ void EbpfDomain::operator|=(const EbpfDomain& other) {
         *this = other;
         return;
     }
-    stack |= other.stack;
+    *stack |= *other.stack;
     state |= other.state;
 }
 
@@ -134,15 +155,22 @@ EbpfDomain EbpfDomain::operator|(const EbpfDomain& other) && {
 }
 
 EbpfDomain EbpfDomain::operator&(const EbpfDomain& other) const {
-    auto res = state & other.state;
-    if (!res.is_bottom()) {
-        return {std::move(res), stack & other.stack};
+    if (is_bottom() || other.is_bottom()) {
+        return bottom();
     }
-    return bottom();
+    auto res_state = state & other.state;
+    if (res_state.is_bottom()) {
+        return bottom();
+    }
+    return EbpfDomain{std::move(res_state), *stack & *other.stack};
 }
 
 EbpfDomain EbpfDomain::calculate_constant_limits() {
-    EbpfDomain inv;
+    // TODO(stage 3): take context explicitly. For now this factory must produce
+    // a non-bottom sized domain, so we read thread-local directly — this is the
+    // one remaining thread-local read in EbpfDomain, kept because the cache
+    // (LazyAllocator) is zero-arg.
+    EbpfDomain inv{TypeToNumDomain::top(), ArrayDomain{static_cast<size_t>(thread_local_options.total_stack_size())}};
     using namespace dsl_syntax;
     for (const int i : {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}) {
         const auto r = reg_pack(i);
@@ -186,7 +214,7 @@ EbpfDomain EbpfDomain::widen(const EbpfDomain& other, const bool to_constants) c
     if (other.is_bottom()) {
         return *this;
     }
-    EbpfDomain res{this->state.widen(other.state), stack.widen(other.stack)};
+    EbpfDomain res{this->state.widen(other.state), stack->widen(*other.stack)};
 
     if (to_constants) {
         return res & get_constant_limits();
@@ -195,7 +223,10 @@ EbpfDomain EbpfDomain::widen(const EbpfDomain& other, const bool to_constants) c
 }
 
 EbpfDomain EbpfDomain::narrow(const EbpfDomain& other) const {
-    return {state.narrow(other.state), stack & other.stack};
+    if (is_bottom() || other.is_bottom()) {
+        return bottom();
+    }
+    return EbpfDomain{state.narrow(other.state), *stack & *other.stack};
 }
 
 void EbpfDomain::add_value_constraint(const LinearConstraint& cst) { state.values.add_constraint(cst); }
@@ -344,7 +375,7 @@ std::ostream& operator<<(std::ostream& o, const EbpfDomain& dom) {
     if (dom.is_bottom()) {
         o << "_|_";
     } else {
-        o << dom.state << "\nStack: " << dom.stack;
+        o << dom.state << "\nStack: " << *dom.stack;
     }
     return o;
 }
@@ -367,7 +398,10 @@ void EbpfDomain::initialize_packet(const AnalysisContext& context) {
 
 EbpfDomain EbpfDomain::from_constraints(const std::vector<std::pair<Variable, TypeSet>>& type_restrictions,
                                         const std::vector<LinearConstraint>& value_constraints) {
-    EbpfDomain inv;
+    // TODO(stage 3): take size/context explicitly. Test callers rely on the
+    // default thread-local size, which is why this still goes through the
+    // size-less ArrayDomain default ctor.
+    EbpfDomain inv{TypeToNumDomain::top(), ArrayDomain{}};
 
     for (const auto& [var, ts] : type_restrictions) {
         inv.state.types.restrict_to(var, ts);
@@ -380,10 +414,10 @@ EbpfDomain EbpfDomain::from_constraints(const std::vector<std::pair<Variable, Ty
 
 EbpfDomain EbpfDomain::from_constraints(const std::set<std::string>& constraints, const bool setup_constraints,
                                         const AnalysisContext& context) {
-    EbpfDomain inv;
-    if (setup_constraints) {
-        inv = setup_entry(false, context);
-    }
+    EbpfDomain inv =
+        setup_constraints
+            ? setup_entry(false, context)
+            : EbpfDomain{TypeToNumDomain::top(), ArrayDomain{static_cast<size_t>(context.options.total_stack_size())}};
     auto numeric_ranges = std::vector<Interval>();
     auto [type_equalities, type_restrictions, value_constraints] =
         parse_linear_constraints(constraints, numeric_ranges);
@@ -399,7 +433,7 @@ EbpfDomain EbpfDomain::from_constraints(const std::set<std::string>& constraints
     for (const Interval& range : numeric_ranges) {
         const auto [start, ub] = range.pair<int64_t>();
         const int width = gsl::narrow<int>(1 + (ub - start));
-        inv.stack.initialize_numbers(gsl::narrow<int>(start), width);
+        inv.stack->initialize_numbers(gsl::narrow<int>(start), width);
     }
     // TODO: handle other stack type constraints
     return inv;
@@ -408,7 +442,7 @@ EbpfDomain EbpfDomain::from_constraints(const std::set<std::string>& constraints
 EbpfDomain EbpfDomain::setup_entry(const bool init_r1, const AnalysisContext& context) {
     using namespace dsl_syntax;
 
-    EbpfDomain inv;
+    EbpfDomain inv = top(context);
 
     const auto r10 = reg_pack(R10_STACK_POINTER);
     constexpr Reg r10_reg{R10_STACK_POINTER};

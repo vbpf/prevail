@@ -29,8 +29,11 @@ class EbpfTransformer final {
     ArrayDomain& stack;
 
   public:
+    // Precondition: `_dom` is non-bottom, so `_dom.stack` has a value.
+    // The transformer is constructed inside ebpf_domain_transform after a
+    // bottom check, so the deref here is safe.
     explicit EbpfTransformer(EbpfDomain& _dom, const AnalysisContext& context)
-        : dom(_dom), context(context), stack(_dom.stack) {}
+        : dom(_dom), context(context), stack(*_dom.stack) {}
 
     // abstract transformers
     void operator()(const Assume&);
@@ -116,13 +119,19 @@ void ebpf_domain_transform(EbpfDomain& inv, const Instruction& ins, const Analys
     }
     const auto pre = inv;
     std::visit(EbpfTransformer{inv, context}, ins);
-    if (inv.is_bottom() && !std::holds_alternative<Assume>(ins)) {
-        // Fail. raise an exception to stop the analysis.
-        std::stringstream msg;
-        msg << "Bug! pre-invariant:\n"
-            << pre << "\n followed by instruction: " << ins << "\n"
-            << "leads to bottom";
-        throw std::logic_error(msg.str());
+    if (inv.is_bottom()) {
+        // Internal transformer mutations (e.g. Assume driving values to bottom)
+        // can leave state bottom but stack still materialized. Restore the
+        // invariant that bottom reduces all fields to bottom.
+        inv.set_to_bottom();
+        if (!std::holds_alternative<Assume>(ins)) {
+            // Fail. raise an exception to stop the analysis.
+            std::stringstream msg;
+            msg << "Bug! pre-invariant:\n"
+                << pre << "\n followed by instruction: " << ins << "\n"
+                << "leads to bottom";
+            throw std::logic_error(msg.str());
+        }
     }
 }
 

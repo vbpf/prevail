@@ -54,9 +54,11 @@ class EbpfDomain final {
     EbpfDomain(TypeToNumDomain state, ArrayDomain stack);
 
     // Generic abstract domain operations
-    static EbpfDomain top();
+    static EbpfDomain top(const AnalysisContext& context);
+    // Size-only overload, convenient when callers have a stack size but no full context
+    // (e.g. tests that exercise pure domain semantics).
+    static EbpfDomain top(size_t total_stack_size);
     static EbpfDomain bottom();
-    void set_to_top();
     void set_to_bottom();
     [[nodiscard]]
     bool is_bottom() const;
@@ -118,7 +120,14 @@ class EbpfDomain final {
     /// Represents the stack as a memory region, i.e., an array of bytes,
     /// allowing mapping to variable in the m_inv numeric domains
     /// while dealing with overlapping byte ranges.
-    ArrayDomain stack;
+    ///
+    /// Wrapped in `std::optional` to add an explicit bottom: ArrayDomain /
+    /// BitsetDomain have no meaningful bottom of their own (AddBottom from
+    /// outside). Invariant: `state.is_bottom() <=> !stack.has_value()`.
+    /// The bitset inside a materialized `ArrayDomain` must be sized to the
+    /// run's `total_stack_size` — enforced implicitly by every non-bottom
+    /// construction path going through a context-aware factory.
+    std::optional<ArrayDomain> stack;
 };
 
 } // namespace prevail
