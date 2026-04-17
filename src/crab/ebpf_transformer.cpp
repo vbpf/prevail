@@ -1491,6 +1491,11 @@ void EbpfTransformer::operator()(const IncrementLoopCounter& ins) {
 }
 
 void ebpf_domain_initialize_loop_counter(EbpfDomain& dom, const Label& label, const AnalysisContext& context) {
+    // EbpfTransformer's ctor dereferences `dom.stack`, which only has a value
+    // when `dom` is non-bottom. Skip bottom domains before constructing one.
+    if (dom.is_bottom()) {
+        return;
+    }
     EbpfTransformer{dom, context}.initialize_loop_counter(label);
 }
 } // namespace prevail

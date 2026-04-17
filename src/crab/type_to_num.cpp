@@ -1,5 +1,6 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
+#include <cassert>
 #include <ranges>
 
 #include "arith/variable.hpp"
@@ -207,6 +208,10 @@ TypeToNumDomain::join_over_types(const Reg& reg,
 }
 
 void TypeToNumDomain::havoc_all_locations_having_type(const TypeEncoding type) {
+    // Precondition: caller must have checked !is_bottom(). Currently survives a
+    // bottom domain only because TypeDomain::variables_with_type returns empty
+    // when bottom; encode the assumption so a future change there fails loudly.
+    assert(!is_bottom());
     for (const Variable type_variable : types.variables_with_type(type)) {
         types.havoc_type(type_variable);
         values.havoc(variable_registry.kind_var(DataKind::svalues, type_variable));

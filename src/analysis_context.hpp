@@ -5,13 +5,16 @@
 #include <cassert>
 
 #include "config.hpp"
-#include "crab/var_registry.hpp"
 #include "platform.hpp"
 #include "spec/type_descriptors.hpp"
 
 namespace prevail {
 
 /// Per-analysis inputs threaded explicitly through the verifier.
+///
+/// Non-owning: holds references to a `ProgramInfo`, options, and platform that
+/// must outlive every call that receives this context. An `AnalysisContext` is
+/// scoped to a single analysis; do not cache one beyond the call that built it.
 ///
 /// `VariableRegistry` is intentionally NOT here. The registry is a global
 /// name-interning service (like `malloc`), not per-analysis state: the same
