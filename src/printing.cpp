@@ -407,9 +407,7 @@ struct AssertionPrinterVisitor {
 
     void operator()(ValidCallbackTarget const& a) { _os << "valid_callback_target(" << a.reg << ")"; }
 
-    void operator()(ZeroCtxOffset const& a) {
-        _os << variable_registry.reg(DataKind::ctx_offsets, a.reg.v) << " == 0";
-    }
+    void operator()(ZeroCtxOffset const& a) { _os << variable_registry.reg(DataKind::ctx_offsets, a.reg.v) << " == 0"; }
 
     void operator()(Comparable const& a) {
         if (a.or_r2_is_number) {
@@ -628,9 +626,7 @@ struct CommandPrinterVisitor {
         print(b.cond);
     }
 
-    void operator()(IncrementLoopCounter const& a) {
-        os_ << variable_registry.loop_counter(to_string(a.name)) << "++";
-    }
+    void operator()(IncrementLoopCounter const& a) { os_ << variable_registry.loop_counter(to_string(a.name)) << "++"; }
 };
 // ReSharper restore CppMemberFunctionMayBeConst
 

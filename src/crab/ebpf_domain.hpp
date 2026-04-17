@@ -116,9 +116,16 @@ class EbpfDomain final {
     bool get_map_fd_range(const Reg& map_fd_reg, int32_t* start_fd, int32_t* end_fd) const;
 
   private:
-    // private generic domain functions
+    // Generic domain mutators. All maintain the
+    // `state.is_bottom() <=> !stack` invariant via normalize_after_state_mutation.
     void add_value_constraint(const LinearConstraint& cst);
+    void assume_eq_types(Variable v1, Variable v2);
+    void restrict_type(Variable v, const TypeSet& ts);
     void havoc(Variable var);
+
+    // Restore the bottom invariant after a `state` mutation that may have
+    // driven it to bottom.
+    void normalize_after_state_mutation();
 
     /// Type + numeric tracking
     TypeToNumDomain state;

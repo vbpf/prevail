@@ -215,7 +215,30 @@ EbpfDomain EbpfDomain::narrow(const EbpfDomain& other) const {
     return EbpfDomain{state.narrow(other.state), *stack & *other.stack};
 }
 
-void EbpfDomain::add_value_constraint(const LinearConstraint& cst) { state.values.add_constraint(cst); }
+// State mutators on EbpfDomain are responsible for maintaining the
+// "state.is_bottom() <=> !stack" invariant: if a constraint drives the
+// numeric (or type) sub-domain to bottom, drop the stack so that observers
+// don't read a materialized stack on a bottom domain.
+void EbpfDomain::normalize_after_state_mutation() {
+    if (state.is_bottom()) {
+        stack.reset();
+    }
+}
+
+void EbpfDomain::add_value_constraint(const LinearConstraint& cst) {
+    state.values.add_constraint(cst);
+    normalize_after_state_mutation();
+}
+
+void EbpfDomain::assume_eq_types(const Variable v1, const Variable v2) {
+    state.assume_eq_types(v1, v2);
+    normalize_after_state_mutation();
+}
+
+void EbpfDomain::restrict_type(const Variable v, const TypeSet& ts) {
+    state.types.restrict_to(v, ts);
+    normalize_after_state_mutation();
+}
 
 void EbpfDomain::havoc(const Variable var) {
     // TODO: type inv?
@@ -388,7 +411,7 @@ EbpfDomain EbpfDomain::from_constraints(const std::vector<std::pair<Variable, Ty
     EbpfDomain inv{TypeToNumDomain::top(), ArrayDomain{total_stack_size}};
 
     for (const auto& [var, ts] : type_restrictions) {
-        inv.state.types.restrict_to(var, ts);
+        inv.restrict_type(var, ts);
     }
     for (const auto& cst : value_constraints) {
         inv.add_value_constraint(cst);
@@ -406,13 +429,16 @@ EbpfDomain EbpfDomain::from_constraints(const std::set<std::string>& constraints
     auto [type_equalities, type_restrictions, value_constraints] =
         parse_linear_constraints(constraints, numeric_ranges);
     for (const auto& [v1, v2] : type_equalities) {
-        inv.state.assume_eq_types(v1, v2);
+        inv.assume_eq_types(v1, v2);
     }
     for (const auto& [var, ts] : type_restrictions) {
-        inv.state.types.restrict_to(var, ts);
+        inv.restrict_type(var, ts);
     }
     for (const auto& cst : value_constraints) {
         inv.add_value_constraint(cst);
+    }
+    if (inv.is_bottom()) {
+        return inv;
     }
     for (const Interval& range : numeric_ranges) {
         const auto [start, ub] = range.pair<int64_t>();
