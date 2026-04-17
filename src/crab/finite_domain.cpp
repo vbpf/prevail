@@ -17,7 +17,7 @@ using NumAbsDomain = ZoneDomain;
 
 Interval FiniteDomain::eval_interval(const Variable v, const int finite_width) const {
     const Interval span = dom.eval_interval(v);
-    return variable_registry->is_unsigned(v) ? span.zero_extend(finite_width) : span.sign_extend(finite_width);
+    return variable_registry.is_unsigned(v) ? span.zero_extend(finite_width) : span.sign_extend(finite_width);
 }
 
 static std::vector<LinearConstraint> assume_bit_cst_interval(const Condition::Op op, const bool is64,

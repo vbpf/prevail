@@ -11,8 +11,8 @@
 namespace prevail {
 
 // Free-function shorthand for the global registry's reg_pack.
-inline RegPack reg_pack(const int i) { return variable_registry->reg_pack(i); }
-inline RegPack reg_pack(const Reg r) { return variable_registry->reg_pack(r.v); }
+inline RegPack reg_pack(const int i) { return variable_registry.reg_pack(i); }
+inline RegPack reg_pack(const Reg r) { return variable_registry.reg_pack(r.v); }
 
 inline const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
     {T_CTX, {DataKind::ctx_offsets}},

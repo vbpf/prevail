@@ -113,13 +113,13 @@ TypeToNumDomain TypeToNumDomain::operator&(TypeToNumDomain&& other) const {
 
 std::vector<Variable> TypeToNumDomain::get_nonexistent_kind_variables() const {
     std::vector<Variable> res;
-    for (const Variable v : variable_registry->get_type_variables()) {
+    for (const Variable v : variable_registry.get_type_variables()) {
         for (const auto& [type, kinds] : type_to_kinds) {
             if (types.may_have_type(v, type)) {
                 continue;
             }
             for (const auto kind : kinds) {
-                Variable type_offset = variable_registry->kind_var(kind, v);
+                Variable type_offset = variable_registry.kind_var(kind, v);
                 res.push_back(type_offset);
             }
         }
@@ -131,7 +131,7 @@ std::vector<std::tuple<Variable, Interval>>
 TypeToNumDomain::collect_type_dependent_constraints(const TypeToNumDomain& right) const {
     std::vector<std::tuple<Variable, Interval>> result;
 
-    for (const Variable& type_var : variable_registry->get_type_variables()) {
+    for (const Variable& type_var : variable_registry.get_type_variables()) {
         for (const auto& [type, kinds] : type_to_kinds) {
             if (kinds.empty()) {
                 continue;
@@ -145,7 +145,7 @@ TypeToNumDomain::collect_type_dependent_constraints(const TypeToNumDomain& right
                 // Identify which domain contains the constraints.
                 const NumAbsDomain& source = in_left ? values : right.values;
                 for (const DataKind kind : kinds) {
-                    Variable var = variable_registry->kind_var(kind, type_var);
+                    Variable var = variable_registry.kind_var(kind, type_var);
                     Interval value = source.eval_interval(var);
                     if (!value.is_top()) {
                         result.emplace_back(var, value);
@@ -187,7 +187,7 @@ TypeToNumDomain::join_over_types(const Reg& reg,
         for (const auto& [other_type, kinds] : valid_type_to_kinds) {
             if (other_type != type) {
                 for (const auto kind : kinds) {
-                    tmp.values.havoc(variable_registry->kind_var(kind, reg_type(reg)));
+                    tmp.values.havoc(variable_registry.kind_var(kind, reg_type(reg)));
                 }
             }
         }
@@ -198,13 +198,13 @@ TypeToNumDomain::join_over_types(const Reg& reg,
 }
 
 void TypeToNumDomain::havoc_all_locations_having_type(const TypeEncoding type) {
-    for (const Variable type_variable : variable_registry->get_type_variables()) {
+    for (const Variable type_variable : variable_registry.get_type_variables()) {
         if (types.may_have_type(type_variable, type)) {
             types.havoc_type(type_variable);
-            values.havoc(variable_registry->kind_var(DataKind::svalues, type_variable));
-            values.havoc(variable_registry->kind_var(DataKind::uvalues, type_variable));
+            values.havoc(variable_registry.kind_var(DataKind::svalues, type_variable));
+            values.havoc(variable_registry.kind_var(DataKind::uvalues, type_variable));
             for (const DataKind kind : type_to_kinds.at(type)) {
-                values.havoc(variable_registry->kind_var(kind, type_variable));
+                values.havoc(variable_registry.kind_var(kind, type_variable));
             }
         }
     }
@@ -221,13 +221,13 @@ void TypeToNumDomain::assign(const Reg& lhs, const Reg& rhs) {
 
     for (const auto& type : types.iterate_types(lhs)) {
         for (const auto& kind : type_to_kinds.at(type)) {
-            values.havoc(variable_registry->kind_var(kind, reg_type(lhs)));
+            values.havoc(variable_registry.kind_var(kind, reg_type(lhs)));
         }
     }
     for (const auto& type : types.iterate_types(rhs)) {
         for (const auto kind : type_to_kinds.at(type)) {
-            const auto lhs_var = variable_registry->kind_var(kind, reg_type(lhs));
-            values.assign(lhs_var, variable_registry->kind_var(kind, reg_type(rhs)));
+            const auto lhs_var = variable_registry.kind_var(kind, reg_type(lhs));
+            values.assign(lhs_var, variable_registry.kind_var(kind, reg_type(rhs)));
         }
     }
 }

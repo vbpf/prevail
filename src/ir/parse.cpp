@@ -318,10 +318,10 @@ static InstructionSeq parse_program(std::istream& is) {
 
 static Variable special_var(const std::string& s) {
     if (s == "packet_size") {
-        return variable_registry->packet_size();
+        return variable_registry.packet_size();
     }
     if (s == "meta_offset") {
-        return variable_registry->meta_offset();
+        return variable_registry.meta_offset();
     }
     throw std::runtime_error(std::string() + "Bad special variable: " + s);
 }
@@ -345,29 +345,29 @@ TypeValueConstraints parse_linear_constraints(const std::set<std::string>& const
             value_csts.push_back(d <= ub);
         } else if (regex_match(cst_text, m, regex(SPECIAL_VAR "=" REG DOT KIND))) {
             LinearExpression d = special_var(m[1]);
-            LinearExpression s = variable_registry->reg(regkind(m[3]), regnum(m[2]));
+            LinearExpression s = variable_registry.reg(regkind(m[3]), regnum(m[2]));
             value_csts.push_back(d == s);
         } else if (regex_match(cst_text, m, regex(REG DOT KIND "=" SPECIAL_VAR))) {
-            LinearExpression d = variable_registry->reg(regkind(m[2]), regnum(m[1]));
+            LinearExpression d = variable_registry.reg(regkind(m[2]), regnum(m[1]));
             LinearExpression s = special_var(m[3]);
             value_csts.push_back(d == s);
         } else if (regex_match(cst_text, m, regex(REG DOT KIND "=" REG DOT KIND))) {
-            LinearExpression d = variable_registry->reg(regkind(m[2]), regnum(m[1]));
-            LinearExpression s = variable_registry->reg(regkind(m[4]), regnum(m[3]));
+            LinearExpression d = variable_registry.reg(regkind(m[2]), regnum(m[1]));
+            LinearExpression s = variable_registry.reg(regkind(m[4]), regnum(m[3]));
             value_csts.push_back(d == s);
         } else if (regex_match(cst_text, m,
                                regex(REG DOT "type"
                                              "=" REG DOT "type"))) {
-            Variable d = variable_registry->type_reg(regnum(m[1]));
-            Variable s = variable_registry->type_reg(regnum(m[2]));
+            Variable d = variable_registry.type_reg(regnum(m[1]));
+            Variable s = variable_registry.type_reg(regnum(m[2]));
             type_equalities.push_back({d, s});
         } else if (regex_match(cst_text, m,
                                regex(REG DOT "type"
                                              "=" TYPE))) {
-            Variable d = variable_registry->type_reg(regnum(m[1]));
+            Variable d = variable_registry.type_reg(regnum(m[1]));
             type_restrictions.push_back({d, TypeSet{string_to_type_encoding(m[2])}});
         } else if (regex_match(cst_text, m, regex(REG DOT "type" IN TYPE_SET))) {
-            Variable d = variable_registry->type_reg(regnum(m[1]));
+            Variable d = variable_registry.type_reg(regnum(m[1]));
             const std::string inside = m[2]; // everything between the braces
 
             // Tokenize items inside {...} using the existing TYPE regex.
@@ -389,7 +389,7 @@ TypeValueConstraints parse_linear_constraints(const std::set<std::string>& const
 
             type_restrictions.push_back({d, ts});
         } else if (regex_match(cst_text, m, regex(REG DOT KIND "=" IMM))) {
-            Variable d = variable_registry->reg(regkind(m[2]), regnum(m[1]));
+            Variable d = variable_registry.reg(regkind(m[2]), regnum(m[1]));
             Number value;
             if (m[2] == "uvalue") {
                 value = unsigned_number(m[3]);
@@ -398,7 +398,7 @@ TypeValueConstraints parse_linear_constraints(const std::set<std::string>& const
             }
             value_csts.push_back(d == value);
         } else if (regex_match(cst_text, m, regex(REG DOT KIND "=" INTERVAL))) {
-            Variable d = variable_registry->reg(regkind(m[2]), regnum(m[1]));
+            Variable d = variable_registry.reg(regkind(m[2]), regnum(m[1]));
             Number lb, ub;
             if (m[2] == "uvalue") {
                 lb = unsigned_number(m[3]);
@@ -410,8 +410,8 @@ TypeValueConstraints parse_linear_constraints(const std::set<std::string>& const
             value_csts.push_back(lb <= d);
             value_csts.push_back(d <= ub);
         } else if (regex_match(cst_text, m, regex(REG DOT KIND "-" REG DOT KIND "<=" IMM))) {
-            Variable d = variable_registry->reg(regkind(m[2]), regnum(m[1]));
-            Variable s = variable_registry->reg(regkind(m[4]), regnum(m[3]));
+            Variable d = variable_registry.reg(regkind(m[2]), regnum(m[1]));
+            Variable s = variable_registry.reg(regkind(m[4]), regnum(m[3]));
             Number diff = signed_number(m[5]);
             value_csts.push_back(d - s <= diff);
         } else if (regex_match(cst_text, m,
@@ -423,7 +423,7 @@ TypeValueConstraints parse_linear_constraints(const std::set<std::string>& const
             } else {
                 Number lb = signed_number(m[1]);
                 Number ub = signed_number(m[2]);
-                Variable d = variable_registry->cell_var(DataKind::types, lb, ub - lb + 1);
+                Variable d = variable_registry.cell_var(DataKind::types, lb, ub - lb + 1);
                 type_restrictions.push_back({d, TypeSet{type}});
             }
         } else if (regex_match(cst_text, m,
@@ -431,14 +431,14 @@ TypeValueConstraints parse_linear_constraints(const std::set<std::string>& const
                                      "=" IMM))) {
             Number lb = signed_number(m[1]);
             Number ub = signed_number(m[2]);
-            Variable d = variable_registry->cell_var(DataKind::svalues, lb, ub - lb + 1);
+            Variable d = variable_registry.cell_var(DataKind::svalues, lb, ub - lb + 1);
             value_csts.push_back(d == signed_number(m[3]));
         } else if (regex_match(cst_text, m,
                                regex("s" ARRAY_RANGE DOT "uvalue"
                                      "=" IMM))) {
             Number lb = signed_number(m[1]);
             Number ub = signed_number(m[2]);
-            Variable d = variable_registry->cell_var(DataKind::uvalues, lb, ub - lb + 1);
+            Variable d = variable_registry.cell_var(DataKind::uvalues, lb, ub - lb + 1);
             value_csts.push_back(d == unsigned_number(m[3]));
         } else {
             throw std::runtime_error(std::string("Unknown constraint: ") + cst_text);

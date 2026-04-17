@@ -66,7 +66,7 @@ Bound ZoneDomain::get_ub(const std::optional<VertId>& v) const {
 Bound ZoneDomain::get_lb(const Variable x) const { return get_lb(get_vertid(x)); }
 
 Bound ZoneDomain::get_ub(const Variable x) const {
-    if (variable_registry->is_min_only(x)) {
+    if (variable_registry.is_min_only(x)) {
         return PLUS_INFINITY;
     }
     return get_ub(get_vertid(x));
@@ -262,7 +262,7 @@ bool ZoneDomain::add_linear_leq(const LinearExpression& exp) {
 
     // Apply upper bounds
     for (const auto& [var, n] : ubs) {
-        if (variable_registry->is_min_only(var)) {
+        if (variable_registry.is_min_only(var)) {
             continue;
         }
         const VertId vert = get_vert(var);
@@ -314,7 +314,7 @@ bool ZoneDomain::add_univar_disequation(Variable x, const Number& n) {
             return false;
         }
     }
-    if (new_i.ub().is_finite() && !variable_registry->is_min_only(x)) {
+    if (new_i.ub().is_finite() && !variable_registry.is_min_only(x)) {
         if (!core_->strengthen_bound(v, Side::RIGHT, Weight{*new_i.ub().number()})) {
             return false;
         }
@@ -592,7 +592,7 @@ void ZoneDomain::assign(Variable lhs, const LinearExpression& e) {
     }
 
     VertId vert = core_->assign_vertex(core_->potential_at_zero() + e_val, diffs_from, diffs_to, lb_w,
-                                       (ub_w && !variable_registry->is_min_only(lhs)) ? ub_w : std::nullopt);
+                                       (ub_w && !variable_registry.is_min_only(lhs)) ? ub_w : std::nullopt);
 
     assert(vert <= rev_map_.size());
     if (vert == rev_map_.size()) {
@@ -630,7 +630,7 @@ void ZoneDomain::set(const Variable x, const Interval& intv) {
     }
 
     const VertId v = get_vert(x);
-    if (intv.ub().is_finite() && !variable_registry->is_min_only(x)) {
+    if (intv.ub().is_finite() && !variable_registry.is_min_only(x)) {
         core_->set_bound(v, Side::RIGHT, Weight{*intv.ub().number()});
     }
     if (intv.lb().is_finite()) {
@@ -722,7 +722,7 @@ StringInvariant ZoneDomain::to_set() const {
         if (vs == least) {
             representatives.insert(least);
         } else {
-            result.insert(variable_registry->name(vs) + "=" + variable_registry->name(least));
+            result.insert(variable_registry.name(vs) + "=" + variable_registry.name(least));
         }
     }
 
@@ -750,7 +750,7 @@ StringInvariant ZoneDomain::to_set() const {
             continue;
         }
         const bool has_lb = g.elem(v, 0);
-        const bool has_ub = g.elem(0, v) && !variable_registry->is_min_only(*pvar);
+        const bool has_ub = g.elem(0, v) && !variable_registry.is_min_only(*pvar);
         if (!has_lb && !has_ub) {
             continue;
         }
@@ -762,7 +762,7 @@ StringInvariant ZoneDomain::to_set() const {
 
         std::stringstream elem;
         elem << variable;
-        if (variable_registry->is_min_only(variable)) {
+        if (variable_registry.is_min_only(variable)) {
             // One-sided variables: display just the lower bound
             elem << "=" << v_out.lb();
         } else {

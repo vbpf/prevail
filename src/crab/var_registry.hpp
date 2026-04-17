@@ -7,7 +7,6 @@
 #include "arith/num_big.hpp"
 #include "arith/variable.hpp"
 #include "crab/type_encoding.hpp"
-#include "crab_utils/lazy_allocator.hpp"
 
 namespace prevail {
 
@@ -31,20 +30,16 @@ struct RegPack {
     Variable alloc_mem_size;
 };
 
-// This singleton is eBPF-specific, to avoid lifetime issues and/or passing factory explicitly everywhere.
+// Variables are represented throughout the domains as compact interned ids
+// rather than as structured eBPF variable keys. The registry owns the mapping
+// between canonical variable descriptions and ids, and provides the eBPF-specific
+// constructors/classifiers for those descriptions.
 //
-// The registry is a name-to-id memoization cache: `make(name)` returns the same
-// `Variable` for the same name across the lifetime of a registry, whether or
-// not `name` was already interned. The factory methods (`reg`, `cell_var`, ...)
-// compose a canonical name and call `make`, so they are logically pure
-// functions of their arguments. `names` is therefore declared `mutable` and all
-// public methods are `const`: callers treat the registry as immutable state.
-//
-// The registry is stored thread-locally, so `make`'s append path has no
+// The registry is stored thread-locally, so `intern`'s append path has no
 // concurrency concerns on the current design. Sharing a registry across
 // threads would require synchronization on `names`.
 class VariableRegistry final {
-    Variable make(const std::string& name) const;
+    Variable intern(const std::string& name) const;
     mutable std::vector<std::string> names;
 
   public:
@@ -94,6 +89,12 @@ class VariableRegistry final {
     RegPack reg_pack(int i) const;
 };
 
-extern thread_local LazyAllocator<VariableRegistry> variable_registry;
+// Direct thread_local rather than wrapped in LazyAllocator because:
+// (a) the registry is needed by every analysis, so lazy construction buys
+//     nothing — first-touch initialization is fine.
+// (b) the registry is a global interning service with no notion of clearing
+//     between runs (names accumulate monotonically, like a string pool), so
+//     LazyAllocator's clear/set/operator= API would only invite misuse.
+extern thread_local VariableRegistry variable_registry;
 
 } // namespace prevail

@@ -295,7 +295,7 @@ std::ostream& operator<<(std::ostream& os, const TypeGroup ts) {
 // TypeDomain -- DSU-based implementation
 // ============================================================================
 
-Variable reg_type(const Reg& lhs) { return variable_registry->type_reg(lhs.v); }
+Variable reg_type(const Reg& lhs) { return variable_registry.type_reg(lhs.v); }
 
 // -- State definition --------------------------------------------------------
 
@@ -445,17 +445,17 @@ StringInvariant TypeDomain::State::to_set() const {
         if (const auto te = ts.as_singleton()) {
             for (const Variable& m : sorted) {
                 // Stack type variables with type=number are implicit (not printed)
-                if (*te == T_NUM && variable_registry->is_in_stack(m)) {
+                if (*te == T_NUM && variable_registry.is_in_stack(m)) {
                     continue;
                 }
-                result.insert(variable_registry->name(m) + "=" + ts.to_string());
+                result.insert(variable_registry.name(m) + "=" + ts.to_string());
             }
         } else {
-            const std::string first_name = variable_registry->name(sorted[0]);
+            const std::string first_name = variable_registry.name(sorted[0]);
             result.insert(first_name + " in " + ts.to_string());
 
             for (size_t i = 1; i < sorted.size(); i++) {
-                result.insert(variable_registry->name(sorted[i]) + "=" + first_name);
+                result.insert(variable_registry.name(sorted[i]) + "=" + first_name);
             }
         }
     }

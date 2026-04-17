@@ -103,7 +103,7 @@ void EbpfChecker::check_access_context(const LinearExpression& lb, const LinearE
 void EbpfChecker::check_access_packet(const LinearExpression& lb, const LinearExpression& ub,
                                       const std::optional<Variable> packet_size) const {
     using namespace dsl_syntax;
-    require_value(dom.state, lb >= variable_registry->meta_offset(), "Lower bound must be at least meta_offset");
+    require_value(dom.state, lb >= variable_registry.meta_offset(), "Lower bound must be at least meta_offset");
     if (packet_size) {
         require_value(dom.state, ub <= *packet_size, "Upper bound must be at most packet_size");
     } else {
@@ -117,7 +117,7 @@ void EbpfChecker::check_access_shared(const LinearExpression& lb, const LinearEx
     using namespace dsl_syntax;
     require_value(dom.state, lb >= 0, "Lower bound must be at least 0");
     require_value(dom.state, ub <= shared_region_size,
-                  std::string("Upper bound must be at most ") + variable_registry->name(shared_region_size));
+                  std::string("Upper bound must be at most ") + variable_registry.name(shared_region_size));
 }
 
 void EbpfChecker::operator()(const Comparable& s) const {
@@ -176,7 +176,7 @@ void EbpfChecker::operator()(const BoundedLoopCount& s) const {
     // Enforces an upper bound on loop iterations by checking that the loop counter
     // does not exceed the specified limit
     using namespace dsl_syntax;
-    const auto counter = variable_registry->loop_counter(to_string(s.name));
+    const auto counter = variable_registry.loop_counter(to_string(s.name));
     require_value(dom.state, counter <= BoundedLoopCount::limit, "Loop counter is too large");
 }
 
@@ -269,7 +269,7 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
                     } else if (s.key) {
                         // Look up the value pointed to by the key pointer.
                         Variable key_value =
-                            variable_registry->cell_var(DataKind::svalues, offset_num.value(), sizeof(uint32_t));
+                            variable_registry.cell_var(DataKind::svalues, offset_num.value(), sizeof(uint32_t));
 
                         if (auto max_entries = dom.get_map_max_entries(s.map_fd_reg, context.platform).lb().number()) {
                             require_value(dom.state, key_value < *max_entries, "Array index overflow");
@@ -317,7 +317,7 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
         case T_PACKET: {
             auto [lb, ub] = lb_ub_access_pair(s, reg.packet_offset);
             const std::optional<Variable> packet_size =
-                is_comparison_check ? std::optional<Variable>{} : variable_registry->packet_size();
+                is_comparison_check ? std::optional<Variable>{} : variable_registry.packet_size();
             check_access_packet(lb, ub, packet_size);
             // if within bounds, it can never be null
             // Context memory is both readable and writable.

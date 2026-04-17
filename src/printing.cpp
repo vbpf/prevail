@@ -393,7 +393,7 @@ struct AssertionPrinterVisitor {
     }
 
     void operator()(const BoundedLoopCount& a) {
-        _os << variable_registry->loop_counter(to_string(a.name)) << " < " << BoundedLoopCount::limit;
+        _os << variable_registry.loop_counter(to_string(a.name)) << " < " << BoundedLoopCount::limit;
     }
 
     void operator()(ValidSize const& a) {
@@ -408,14 +408,14 @@ struct AssertionPrinterVisitor {
     void operator()(ValidCallbackTarget const& a) { _os << "valid_callback_target(" << a.reg << ")"; }
 
     void operator()(ZeroCtxOffset const& a) {
-        _os << variable_registry->reg(DataKind::ctx_offsets, a.reg.v) << " == 0";
+        _os << variable_registry.reg(DataKind::ctx_offsets, a.reg.v) << " == 0";
     }
 
     void operator()(Comparable const& a) {
         if (a.or_r2_is_number) {
             _os << TypeConstraint{a.r2, TypeGroup::number} << " or ";
         }
-        _os << variable_registry->type_reg(a.r1.v) << " == " << variable_registry->type_reg(a.r2.v) << " in "
+        _os << variable_registry.type_reg(a.r1.v) << " == " << variable_registry.type_reg(a.r2.v) << " in "
             << TypeGroup::singleton_ptr;
     }
 
@@ -427,10 +427,10 @@ struct AssertionPrinterVisitor {
 
     void operator()(TypeConstraint const& tc) {
         const string cmp_op = is_singleton_type(tc.types) ? "==" : "in";
-        _os << variable_registry->type_reg(tc.reg.v) << " " << cmp_op << " " << tc.types;
+        _os << variable_registry.type_reg(tc.reg.v) << " " << cmp_op << " " << tc.types;
     }
 
-    void operator()(FuncConstraint const& fc) { _os << variable_registry->type_reg(fc.reg.v) << " is helper"; }
+    void operator()(FuncConstraint const& fc) { _os << variable_registry.type_reg(fc.reg.v) << " is helper"; }
 };
 
 // ReSharper disable CppMemberFunctionMayBeConst
@@ -629,7 +629,7 @@ struct CommandPrinterVisitor {
     }
 
     void operator()(IncrementLoopCounter const& a) {
-        os_ << variable_registry->loop_counter(to_string(a.name)) << "++";
+        os_ << variable_registry.loop_counter(to_string(a.name)) << "++";
     }
 };
 // ReSharper restore CppMemberFunctionMayBeConst
