@@ -22,7 +22,8 @@ namespace prevail {
 
 class EbpfChecker final {
   public:
-    explicit EbpfChecker(const EbpfDomain& dom, Assertion assertion) : assertion{std::move(assertion)}, dom(dom) {}
+    explicit EbpfChecker(const EbpfDomain& dom, Assertion assertion, const AnalysisContext& context)
+        : assertion{std::move(assertion)}, dom(dom), context(context) {}
 
     void visit() { std::visit(*this, assertion); }
 
@@ -62,15 +63,16 @@ class EbpfChecker final {
     const Assertion assertion;
 
     const EbpfDomain& dom;
+    const AnalysisContext& context;
 };
 
 std::optional<VerificationError> ebpf_domain_check(const EbpfDomain& dom, const Assertion& assertion,
-                                                   const Label& where) {
+                                                   const Label& where, const AnalysisContext& context) {
     if (dom.is_bottom()) {
         return {};
     }
     try {
-        EbpfChecker{dom, assertion}.visit();
+        EbpfChecker{dom, assertion, context}.visit();
     } catch (VerificationError& error) {
         error.where = where;
         return {error};
@@ -78,32 +80,35 @@ std::optional<VerificationError> ebpf_domain_check(const EbpfDomain& dom, const 
     return {};
 }
 
+std::optional<VerificationError> ebpf_domain_check(const EbpfDomain& dom, const Assertion& assertion,
+                                                   const Label& where) {
+    return ebpf_domain_check(dom, assertion, where, thread_local_analysis_context());
+}
+
 void EbpfChecker::check_access_stack(const LinearExpression& lb, const LinearExpression& ub) const {
     using namespace dsl_syntax;
-    require_value(dom.state,
-                  reg_pack(R10_STACK_POINTER).stack_offset - thread_local_options.subprogram_stack_size <= lb,
+    require_value(dom.state, reg_pack(R10_STACK_POINTER).stack_offset - context.options.subprogram_stack_size <= lb,
                   "Lower bound must be at least r10.stack_offset - subprogram_stack_size");
-    require_value(dom.state, ub <= thread_local_options.total_stack_size(),
-                  "Upper bound must be at most total_stack_size");
+    require_value(dom.state, ub <= context.options.total_stack_size(), "Upper bound must be at most total_stack_size");
 }
 
 void EbpfChecker::check_access_context(const LinearExpression& lb, const LinearExpression& ub) const {
     using namespace dsl_syntax;
     require_value(dom.state, lb >= 0, "Lower bound must be at least 0");
-    require_value(dom.state, ub <= thread_local_program_info->type.context_descriptor->size,
+    require_value(dom.state, ub <= context.program_info.type.context_descriptor->size,
                   std::string("Upper bound must be at most ") +
-                      std::to_string(thread_local_program_info->type.context_descriptor->size));
+                      std::to_string(context.program_info.type.context_descriptor->size));
 }
 
 void EbpfChecker::check_access_packet(const LinearExpression& lb, const LinearExpression& ub,
                                       const std::optional<Variable> packet_size) const {
     using namespace dsl_syntax;
-    require_value(dom.state, lb >= variable_registry->meta_offset(), "Lower bound must be at least meta_offset");
+    require_value(dom.state, lb >= variable_registry.meta_offset(), "Lower bound must be at least meta_offset");
     if (packet_size) {
         require_value(dom.state, ub <= *packet_size, "Upper bound must be at most packet_size");
     } else {
-        require_value(dom.state, ub <= max_packet_size(),
-                      std::string{"Upper bound must be at most "} + std::to_string(max_packet_size()));
+        require_value(dom.state, ub <= context.options.max_packet_size,
+                      std::string{"Upper bound must be at most "} + std::to_string(context.options.max_packet_size));
     }
 }
 
@@ -112,7 +117,7 @@ void EbpfChecker::check_access_shared(const LinearExpression& lb, const LinearEx
     using namespace dsl_syntax;
     require_value(dom.state, lb >= 0, "Lower bound must be at least 0");
     require_value(dom.state, ub <= shared_region_size,
-                  std::string("Upper bound must be at most ") + variable_registry->name(shared_region_size));
+                  std::string("Upper bound must be at most ") + variable_registry.name(shared_region_size));
 }
 
 void EbpfChecker::operator()(const Comparable& s) const {
@@ -126,8 +131,8 @@ void EbpfChecker::operator()(const Comparable& s) const {
             throw_fail("Cannot subtract pointers to non-singleton regions");
         }
         // And, to avoid wraparound errors, they must be within bounds.
-        this->operator()(ValidAccess{thread_local_options.max_call_stack_frames, s.r1, 0, Imm{0}, false});
-        this->operator()(ValidAccess{thread_local_options.max_call_stack_frames, s.r2, 0, Imm{0}, false});
+        this->operator()(ValidAccess{context.options.max_call_stack_frames, s.r1, 0, Imm{0}, false});
+        this->operator()(ValidAccess{context.options.max_call_stack_frames, s.r2, 0, Imm{0}, false});
     } else {
         // _Maybe_ different types, so r2 must be a number.
         // We checked in a previous assertion that r1 is a pointer or a number.
@@ -148,7 +153,7 @@ void EbpfChecker::operator()(const ValidDivisor& s) const {
     if (!dom.state.implies_superset(s.reg, TS_POINTER, s.reg, TS_NUM)) {
         throw_fail("Only numbers can be used as divisors");
     }
-    if (!thread_local_options.allow_division_by_zero) {
+    if (!context.options.allow_division_by_zero) {
         const auto reg = reg_pack(s.reg);
         const auto v = s.is_signed ? reg.svalue : reg.uvalue;
         require_value(dom.state, v != 0, "Possible division by zero");
@@ -171,7 +176,7 @@ void EbpfChecker::operator()(const BoundedLoopCount& s) const {
     // Enforces an upper bound on loop iterations by checking that the loop counter
     // does not exceed the specified limit
     using namespace dsl_syntax;
-    const auto counter = variable_registry->loop_counter(to_string(s.name));
+    const auto counter = variable_registry.loop_counter(to_string(s.name));
     require_value(dom.state, counter <= BoundedLoopCount::limit, "Loop counter is too large");
 }
 
@@ -185,13 +190,13 @@ void EbpfChecker::operator()(const FuncConstraint& s) const {
         if (sn->fits<int32_t>()) {
             // We can now process it as if the id was immediate.
             const int32_t imm = sn->cast_to<int32_t>();
-            if (!thread_local_program_info->platform->is_helper_usable(imm)) {
+            if (!context.platform.is_helper_usable(imm)) {
                 throw_fail("invalid helper function id " + std::to_string(imm));
             }
-            const Call call = make_call(imm, *thread_local_program_info->platform);
-            for (const Assertion& sub_assertion : get_assertions(call, *thread_local_program_info, {})) {
+            const Call call = make_call(imm, context.platform);
+            for (const Assertion& sub_assertion : get_assertions(call, context.program_info, context.options, {})) {
                 // TODO: create explicit sub assertions elsewhere
-                EbpfChecker{dom, sub_assertion}.visit();
+                EbpfChecker{dom, sub_assertion, context}.visit();
             }
             return;
         }
@@ -213,10 +218,10 @@ void EbpfChecker::operator()(const ValidCallbackTarget& s) const {
     }
 
     const int32_t callback_label = callback_target->cast_to<int32_t>();
-    if (!thread_local_program_info->callback_target_labels.contains(callback_label)) {
+    if (!context.program_info.callback_target_labels.contains(callback_label)) {
         throw_fail("callback function pointer does not reference a valid callback entry");
     }
-    if (!thread_local_program_info->callback_targets_with_exit.contains(callback_label)) {
+    if (!context.program_info.callback_targets_with_exit.contains(callback_label)) {
         throw_fail("callback function does not have a reachable exit");
     }
 }
@@ -224,18 +229,18 @@ void EbpfChecker::operator()(const ValidCallbackTarget& s) const {
 void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
     using namespace dsl_syntax;
 
-    const auto fd_type = dom.get_map_type(s.map_fd_reg);
+    const auto fd_type = dom.get_map_type(s.map_fd_reg, context.platform);
 
     const auto access_reg = reg_pack(s.access_reg);
     int width;
     if (s.key) {
-        const auto key_size = dom.get_map_key_size(s.map_fd_reg).singleton();
+        const auto key_size = dom.get_map_key_size(s.map_fd_reg, context.platform).singleton();
         if (!key_size.has_value()) {
             throw_fail("Map key size is not singleton");
         }
         width = key_size->narrow<int>();
     } else {
-        const auto value_size = dom.get_map_value_size(s.map_fd_reg).singleton();
+        const auto value_size = dom.get_map_value_size(s.map_fd_reg, context.platform).singleton();
         if (!value_size.has_value()) {
             throw_fail("Map value size is not singleton");
         }
@@ -245,7 +250,7 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
     for (const auto access_reg_type : dom.state.enumerate_types(s.access_reg)) {
         if (access_reg_type == T_STACK) {
             Interval offset = dom.state.values.eval_interval(access_reg.stack_offset);
-            if (!dom.stack.all_num_width(offset, Interval{width})) {
+            if (!dom.stack->all_num_width(offset, Interval{width})) {
                 auto lb_is = offset.lb().number();
                 std::string lb_s = lb_is && lb_is->fits<int32_t>() ? std::to_string(lb_is->narrow<int32_t>()) : "-oo";
                 Interval ub = offset + Interval{width};
@@ -253,8 +258,8 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
                 std::string ub_s = ub_is && ub_is->fits<int32_t>() ? std::to_string(ub_is->narrow<int32_t>()) : "oo";
                 require_value(dom.state, LinearConstraint::false_const(),
                               "Illegal map update with a non-numerical value [" + lb_s + "-" + ub_s + ")");
-            } else if (thread_local_options.strict && fd_type.has_value()) {
-                EbpfMapType map_type = thread_local_program_info->platform->get_map_type(*fd_type);
+            } else if (context.options.strict && fd_type.has_value()) {
+                EbpfMapType map_type = context.platform.get_map_type(*fd_type);
                 if (map_type.is_array) {
                     // Get offset value.
                     Variable key_ptr = access_reg.stack_offset;
@@ -264,9 +269,9 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
                     } else if (s.key) {
                         // Look up the value pointed to by the key pointer.
                         Variable key_value =
-                            variable_registry->cell_var(DataKind::svalues, offset_num.value(), sizeof(uint32_t));
+                            variable_registry.cell_var(DataKind::svalues, offset_num.value(), sizeof(uint32_t));
 
-                        if (auto max_entries = dom.get_map_max_entries(s.map_fd_reg).lb().number()) {
+                        if (auto max_entries = dom.get_map_max_entries(s.map_fd_reg, context.platform).lb().number()) {
                             require_value(dom.state, key_value < *max_entries, "Array index overflow");
                         } else {
                             throw_fail("Max entries is not finite");
@@ -312,7 +317,7 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
         case T_PACKET: {
             auto [lb, ub] = lb_ub_access_pair(s, reg.packet_offset);
             const std::optional<Variable> packet_size =
-                is_comparison_check ? std::optional<Variable>{} : variable_registry->packet_size();
+                is_comparison_check ? std::optional<Variable>{} : variable_registry.packet_size();
             check_access_packet(lb, ub, packet_size);
             // if within bounds, it can never be null
             // Context memory is both readable and writable.
@@ -323,7 +328,7 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             check_access_stack(lb, ub);
             // if within bounds, it can never be null
             if (s.access_type == AccessType::read &&
-                !dom.stack.all_num_lb_ub(dom.state.values.eval_interval(lb), dom.state.values.eval_interval(ub))) {
+                !dom.stack->all_num_lb_ub(dom.state.values.eval_interval(lb), dom.state.values.eval_interval(ub))) {
 
                 if (s.offset < 0) {
                     throw_fail("Stack content is not numeric");

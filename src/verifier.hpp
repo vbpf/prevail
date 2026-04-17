@@ -4,6 +4,7 @@
 
 #include <exception>
 
+#include "analysis_context.hpp"
 #include "ir/program.hpp"
 #include "result.hpp"
 
@@ -11,6 +12,8 @@ namespace prevail {
 
 AnalysisResult analyze(const Program& prog);
 AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invariant);
+AnalysisResult analyze(const Program& prog, const AnalysisContext& context);
+AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invariant, const AnalysisContext& context);
 void ebpf_verifier_clear_thread_local_state();
 inline bool verify(const Program& prog) {
     try {

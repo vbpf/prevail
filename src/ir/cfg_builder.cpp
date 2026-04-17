@@ -279,10 +279,11 @@ static void validate_instruction_feature_support(const InstructionSeq& insts, co
 }
 
 /// Update a control-flow graph to inline function macros.
-static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const Label& entry_label) {
+static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const Label& entry_label,
+                          const int max_call_stack_frames) {
     const string caller_label_str = to_string(caller_label);
     const long stack_frame_depth = std::ranges::count(caller_label_str, STACK_FRAME_DELIMITER) + 2;
-    if (stack_frame_depth > thread_local_options.max_call_stack_frames) {
+    if (stack_frame_depth > max_call_stack_frames) {
         throw InvalidControlFlow{"too many call stack frames"};
     }
 
@@ -362,7 +363,7 @@ static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const 
     for (const auto& macro_label : seen_labels) {
         const Label label{macro_label.from, macro_label.to, caller_label_str};
         if (const auto pins = std::get_if<CallLocal>(&builder.prog.instruction_at(label))) {
-            add_cfg_nodes(builder, label, pins->target);
+            add_cfg_nodes(builder, label, pins->target, max_call_stack_frames);
         }
     }
 }
@@ -379,7 +380,7 @@ static uint64_t merge_imm32_to_u64(const Imm64Parts parts) {
 
 /// Resolve a LoadPseudo to a concrete instruction before abstract interpretation.
 /// VARIABLE_ADDR and CODE_ADDR are lowered to immediate scalar loads.
-static Instruction resolve_pseudo_load(const LoadPseudo& pseudo) {
+static Instruction resolve_pseudo_load(const LoadPseudo& pseudo, const ProgramInfo& info) {
     if (pseudo.addr.kind == PseudoAddress::Kind::VARIABLE_ADDR || pseudo.addr.kind == PseudoAddress::Kind::CODE_ADDR) {
         return Bin{
             .op = Bin::Op::MOV,
@@ -390,7 +391,7 @@ static Instruction resolve_pseudo_load(const LoadPseudo& pseudo) {
         };
     }
 
-    const auto& descriptors = thread_local_program_info->map_descriptors;
+    const auto& descriptors = info.map_descriptors;
     if (pseudo.addr.imm < 0 || static_cast<size_t>(pseudo.addr.imm) >= descriptors.size()) {
         throw InvalidControlFlow{"invalid map index " + std::to_string(pseudo.addr.imm) + " (have " +
                                  std::to_string(descriptors.size()) + " maps)"};
@@ -406,14 +407,15 @@ static Instruction resolve_pseudo_load(const LoadPseudo& pseudo) {
 }
 
 /// Convert an instruction sequence to a control-flow graph (CFG).
-static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const bool must_have_exit,
+static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const ProgramInfo& info,
+                                         const bool must_have_exit, const int max_call_stack_frames,
                                          const ResolvedKfuncCalls& resolved_kfunc_calls) {
     CfgBuilder builder;
-    assert(thread_local_program_info->platform != nullptr && "platform must be set before CFG construction");
+    assert(info.platform != nullptr && "platform must be set before CFG construction");
 
     // First, add all instructions to the CFG without connecting
     for (const auto& [label, inst, _] : insts) {
-        assert(!check_instruction_feature_support(inst, *thread_local_program_info->platform).has_value() &&
+        assert(!check_instruction_feature_support(inst, *info.platform).has_value() &&
                "instruction support must be validated before CFG construction");
         if (std::holds_alternative<Undefined>(inst)) {
             continue;
@@ -430,7 +432,7 @@ static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const bool
                 // Keep CODE_ADDR as LoadPseudo so abstract transformation can type it as T_FUNC.
                 builder.insert(label, inst);
             } else {
-                builder.insert(label, resolve_pseudo_load(*pseudo));
+                builder.insert(label, resolve_pseudo_load(*pseudo, info));
             }
         } else {
             builder.insert(label, inst);
@@ -489,7 +491,7 @@ static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const bool
     // results of the first pass.
     for (const auto& [label, inst, _] : insts) {
         if (const auto pins = std::get_if<CallLocal>(&inst)) {
-            add_cfg_nodes(builder, label, pins->target);
+            add_cfg_nodes(builder, label, pins->target, max_call_stack_frames);
         }
     }
 
@@ -648,7 +650,8 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
     validate_instruction_feature_support(inst_seq, info, &resolved_kfunc_calls);
 
     // Convert the instruction sequence to a deterministic control-flow graph.
-    CfgBuilder builder = instruction_seq_to_cfg(inst_seq, options.cfg_opts.must_have_exit, resolved_kfunc_calls);
+    CfgBuilder builder = instruction_seq_to_cfg(inst_seq, info, options.cfg_opts.must_have_exit,
+                                                options.max_call_stack_frames, resolved_kfunc_calls);
 
     const Wto wto{builder.prog.cfg()};
     validate_tail_call_chain_depth(builder.prog, wto, *info.platform);
@@ -709,7 +712,7 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
 
     // Annotate the CFG by explicitly adding in assertions before every memory instruction.
     for (const auto& label : builder.prog.labels()) {
-        builder.set_assertions(label, get_assertions(builder.prog.instruction_at(label), info, label));
+        builder.set_assertions(label, get_assertions(builder.prog.instruction_at(label), info, options, label));
     }
     return std::move(builder.prog);
 }

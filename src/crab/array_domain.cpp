@@ -61,7 +61,7 @@ static bool symbolic_overlap(const Cell& c, const Interval& range) {
 std::ostream& operator<<(std::ostream& o, const Cell& c) { return o << "cell(" << c.offset << "," << c.size << ")"; }
 
 static Variable cell_var(const DataKind kind, const Cell& c) {
-    return variable_registry->cell_var(kind, c.offset, c.size);
+    return variable_registry.cell_var(kind, c.offset, c.size);
 }
 
 // Map offsets to cells.
@@ -397,7 +397,7 @@ int ArrayDomain::min_all_num_size(const NumAbsDomain& inv, const Variable offset
 
 // Get one byte of a value.
 std::optional<uint8_t> get_value_byte(const NumAbsDomain& inv, const offset_t o, const int width) {
-    const Variable v = variable_registry->cell_var(DataKind::svalues, (o / width) * width, width);
+    const Variable v = variable_registry.cell_var(DataKind::svalues, (o / width) * width, width);
     const std::optional<Number> t = inv.eval_interval(v).singleton();
     if (!t) {
         return {};
@@ -662,10 +662,6 @@ void ArrayDomain::store_numbers(const Interval& _idx, const Interval& _width) {
 }
 
 void ArrayDomain::set_to_top() { num_bytes.set_to_top(); }
-
-void ArrayDomain::set_to_bottom() { num_bytes.set_to_bottom(); }
-
-bool ArrayDomain::is_bottom() const { return num_bytes.is_bottom(); }
 
 bool ArrayDomain::is_top() const { return num_bytes.is_top(); }
 

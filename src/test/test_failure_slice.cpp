@@ -37,9 +37,9 @@ TEST_CASE("extract_instruction_deps for Bin instruction", "[failure_slice][deps]
     // r1 = r1 + r2 should read r1, r2 and write r1
     Bin bin_add{Bin::Op::ADD, Reg{1}, Reg{2}, true, false};
     Instruction ins = bin_add;
-    EbpfDomain dom = EbpfDomain::top();
+    EbpfDomain dom = EbpfDomain::top(static_cast<size_t>(ebpf_verifier_options_t{}.total_stack_size()));
 
-    auto deps = extract_instruction_deps(ins, dom);
+    auto deps = extract_instruction_deps(ins, dom, ebpf_verifier_options_t{}.total_stack_size());
 
     REQUIRE(deps.regs_written.contains(Reg{1}));
     REQUIRE(deps.regs_read.contains(Reg{1})); // ADD also reads dst
@@ -50,9 +50,9 @@ TEST_CASE("extract_instruction_deps for MOV instruction", "[failure_slice][deps]
     // r1 = r2 should read r2 and write r1 (but not read r1)
     Bin bin_mov{Bin::Op::MOV, Reg{1}, Reg{2}, true, false};
     Instruction ins = bin_mov;
-    EbpfDomain dom = EbpfDomain::top();
+    EbpfDomain dom = EbpfDomain::top(static_cast<size_t>(ebpf_verifier_options_t{}.total_stack_size()));
 
-    auto deps = extract_instruction_deps(ins, dom);
+    auto deps = extract_instruction_deps(ins, dom, ebpf_verifier_options_t{}.total_stack_size());
 
     REQUIRE(deps.regs_written.contains(Reg{1}));
     REQUIRE_FALSE(deps.regs_read.contains(Reg{1})); // MOV doesn't read dst
@@ -63,9 +63,9 @@ TEST_CASE("extract_instruction_deps for Mem load", "[failure_slice][deps]") {
     // r1 = *(r10 - 8) should read r10, write r1, and read stack[-8]
     Mem mem_load{Deref{8, Reg{10}, -8}, Reg{1}, true};
     Instruction ins = mem_load;
-    EbpfDomain dom = EbpfDomain::top();
+    EbpfDomain dom = EbpfDomain::top(static_cast<size_t>(ebpf_verifier_options_t{}.total_stack_size()));
 
-    auto deps = extract_instruction_deps(ins, dom);
+    auto deps = extract_instruction_deps(ins, dom, ebpf_verifier_options_t{}.total_stack_size());
 
     REQUIRE(deps.regs_written.contains(Reg{1}));
     REQUIRE(deps.regs_read.contains(Reg{10}));
@@ -76,9 +76,9 @@ TEST_CASE("extract_instruction_deps for Mem store", "[failure_slice][deps]") {
     // *(r10 - 8) = r1 should read r10, r1 and write stack[-8]
     Mem mem_store{Deref{8, Reg{10}, -8}, Reg{1}, false};
     Instruction ins = mem_store;
-    EbpfDomain dom = EbpfDomain::top();
+    EbpfDomain dom = EbpfDomain::top(static_cast<size_t>(ebpf_verifier_options_t{}.total_stack_size()));
 
-    auto deps = extract_instruction_deps(ins, dom);
+    auto deps = extract_instruction_deps(ins, dom, ebpf_verifier_options_t{}.total_stack_size());
 
     REQUIRE(deps.regs_read.contains(Reg{10}));
     REQUIRE(deps.regs_read.contains(Reg{1}));

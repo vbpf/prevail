@@ -43,8 +43,10 @@ struct InstructionDeps {
 /// Extract the registers and stack offsets read/written by an instruction.
 /// @param ins The instruction to analyze.
 /// @param pre_state The abstract state before the instruction (for resolving pointer values).
+/// @param total_stack_size The configured stack size; used to normalize absolute stack offsets
+///        back into R10-relative ones when tracking reads/writes through derived pointers.
 /// @return The dependencies of the instruction.
-InstructionDeps extract_instruction_deps(const Instruction& ins, const EbpfDomain& pre_state);
+InstructionDeps extract_instruction_deps(const Instruction& ins, const EbpfDomain& pre_state, int total_stack_size);
 
 /// Extract the registers referenced by an assertion.
 /// Used to seed backward slicing from the point of failure.
@@ -64,6 +66,7 @@ struct InvariantMapPair {
 struct RelevantState {
     std::set<Reg> registers;
     std::set<int64_t> stack_offsets; // Relative stack offsets (e.g., Mem.access.offset values like -8)
+    int total_stack_size = 0;        // Used to translate relative stack offsets to absolute "s[...]" names.
 
     /// Check if a constraint string (e.g., "r1.type=number") involves a relevant register.
     [[nodiscard]]

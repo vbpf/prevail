@@ -7,11 +7,10 @@
 #include "crab/var_registry.hpp"
 #include "arith/variable.hpp"
 #include "cfg/label.hpp"
-#include "crab_utils/lazy_allocator.hpp"
 
 namespace prevail {
 
-Variable VariableRegistry::make(const std::string& name) {
+Variable VariableRegistry::intern(const std::string& name) const {
     const auto it = std::ranges::find(names, name);
     if (it == names.end()) {
         names.emplace_back(name);
@@ -141,22 +140,22 @@ static std::vector<std::string> default_variable_names() {
 
 VariableRegistry::VariableRegistry() : names(default_variable_names()) {}
 
-thread_local LazyAllocator<VariableRegistry> variable_registry;
+thread_local VariableRegistry variable_registry;
 
-std::ostream& operator<<(std::ostream& o, const Variable& v) { return o << variable_registry->name(v); }
+std::ostream& operator<<(std::ostream& o, const Variable& v) { return o << variable_registry.name(v); }
 
 std::ostream& operator<<(std::ostream& o, const DataKind& s) { return o << name_of(s); }
 
-Variable VariableRegistry::reg(const DataKind kind, const int i) {
-    return make("r" + std::to_string(i) + "." + name_of(kind));
+Variable VariableRegistry::reg(const DataKind kind, const int i) const {
+    return intern("r" + std::to_string(i) + "." + name_of(kind));
 }
 
-Variable VariableRegistry::type_reg(const int i) {
-    return make("r" + std::to_string(i) + "." + name_of(DataKind::types));
+Variable VariableRegistry::type_reg(const int i) const {
+    return intern("r" + std::to_string(i) + "." + name_of(DataKind::types));
 }
 
-Variable VariableRegistry::stack_frame_var(const DataKind kind, const int i, const std::string& prefix) {
-    return make(prefix + STACK_FRAME_DELIMITER + "r" + std::to_string(i) + "." + name_of(kind));
+Variable VariableRegistry::stack_frame_var(const DataKind kind, const int i, const std::string& prefix) const {
+    return intern(prefix + STACK_FRAME_DELIMITER + "r" + std::to_string(i) + "." + name_of(kind));
 }
 
 static std::string mk_scalar_name(const DataKind kind, const Number& o, const Number& size) {
@@ -169,43 +168,29 @@ static std::string mk_scalar_name(const DataKind kind, const Number& o, const Nu
     return os.str();
 }
 
-Variable VariableRegistry::cell_var(const DataKind array, const Number& offset, const Number& size) {
-    return make(mk_scalar_name(array, offset.cast_to<uint64_t>(), size));
+Variable VariableRegistry::cell_var(const DataKind array, const Number& offset, const Number& size) const {
+    return intern(mk_scalar_name(array, offset.cast_to<uint64_t>(), size));
 }
 
 // Given a type variable, get the associated variable of a given kind.
-Variable VariableRegistry::kind_var(const DataKind kind, const Variable type_variable) {
+Variable VariableRegistry::kind_var(const DataKind kind, const Variable type_variable) const {
     const std::string name = VariableRegistry::name(type_variable);
     const auto dot_pos = name.rfind('.');
     if (dot_pos == std::string::npos) {
         CRAB_ERROR("Variable name '", name, "' does not contain a dot");
     }
-    return make(name.substr(0, dot_pos + 1) + name_of(kind));
+    return intern(name.substr(0, dot_pos + 1) + name_of(kind));
 }
 
-Variable VariableRegistry::meta_offset() { return make("meta_offset"); }
-Variable VariableRegistry::packet_size() { return make("packet_size"); }
+Variable VariableRegistry::meta_offset() const { return intern("meta_offset"); }
+Variable VariableRegistry::packet_size() const { return intern("packet_size"); }
 
 bool VariableRegistry::is_min_only(const Variable& v) const {
     const auto& n = name(v);
     return n.ends_with(".stack_numeric_size") || n.ends_with(".shared_region_size") || n == "packet_size";
 }
 
-Variable VariableRegistry::loop_counter(const std::string& label) { return make("pc[" + label + "]"); }
-
-static bool ends_with(const std::string& str, const std::string& suffix) {
-    return str.size() >= suffix.size() && 0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix);
-}
-
-std::vector<Variable> VariableRegistry::get_type_variables() {
-    std::vector<Variable> res;
-    for (const std::string& name : names) {
-        if (ends_with(name, ".type")) {
-            res.push_back(make(name));
-        }
-    }
-    return res;
-}
+Variable VariableRegistry::loop_counter(const std::string& label) const { return intern("pc[" + label + "]"); }
 
 std::string VariableRegistry::name(const Variable& v) const { return names.at(v._id); }
 
@@ -222,14 +207,33 @@ bool VariableRegistry::is_unsigned(const Variable& v) const {
 bool VariableRegistry::is_in_stack(const Variable& v) const { return name(v)[0] == 's'; }
 
 bool VariableRegistry::printing_order(const Variable& a, const Variable& b) {
-    return variable_registry->name(a) < variable_registry->name(b);
+    return variable_registry.name(a) < variable_registry.name(b);
 }
 
-std::vector<Variable> VariableRegistry::get_loop_counters() {
+RegPack VariableRegistry::reg_pack(const int i) const {
+    return {
+        .svalue = reg(DataKind::svalues, i),
+        .uvalue = reg(DataKind::uvalues, i),
+        .ctx_offset = reg(DataKind::ctx_offsets, i),
+        .map_fd = reg(DataKind::map_fds, i),
+        .map_fd_programs = reg(DataKind::map_fd_programs, i),
+        .packet_offset = reg(DataKind::packet_offsets, i),
+        .shared_offset = reg(DataKind::shared_offsets, i),
+        .stack_offset = reg(DataKind::stack_offsets, i),
+        .shared_region_size = reg(DataKind::shared_region_sizes, i),
+        .stack_numeric_size = reg(DataKind::stack_numeric_sizes, i),
+        .socket_offset = reg(DataKind::socket_offsets, i),
+        .btf_id_offset = reg(DataKind::btf_id_offsets, i),
+        .alloc_mem_offset = reg(DataKind::alloc_mem_offsets, i),
+        .alloc_mem_size = reg(DataKind::alloc_mem_sizes, i),
+    };
+}
+
+std::vector<Variable> VariableRegistry::get_loop_counters() const {
     std::vector<Variable> res;
     for (const std::string& name : names) {
         if (name.starts_with("pc")) {
-            res.push_back(make(name));
+            res.push_back(intern(name));
         }
     }
     return res;

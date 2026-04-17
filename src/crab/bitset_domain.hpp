@@ -16,7 +16,8 @@ class BitsetDomain final {
     bits_t non_numerical_bytes;
 
   public:
-    BitsetDomain() : non_numerical_bytes(thread_local_options.total_stack_size()) { non_numerical_bytes.set(); }
+    // Top at the requested size. (`set()` = all non-numerical = no knowledge about any byte.)
+    explicit BitsetDomain(const size_t size) : non_numerical_bytes(size) { non_numerical_bytes.set(); }
 
     explicit BitsetDomain(bits_t non_numerical_bytes) noexcept : non_numerical_bytes{std::move(non_numerical_bytes)} {}
     BitsetDomain(const BitsetDomain&) = default;
@@ -24,18 +25,14 @@ class BitsetDomain final {
     BitsetDomain& operator=(const BitsetDomain&) = default;
     BitsetDomain& operator=(BitsetDomain&&) noexcept = default;
 
+    // BitsetDomain has no bottom of its own; bottom for a container that
+    // needs one is represented externally (e.g. wrapping the stack in
+    // std::optional inside EbpfDomain).
     void set_to_top() noexcept { non_numerical_bytes.set(); }
-
-    void set_to_bottom() noexcept { non_numerical_bytes.reset(); }
 
     [[nodiscard]]
     bool is_top() const noexcept {
         return non_numerical_bytes.all();
-    }
-
-    [[nodiscard]]
-    bool is_bottom() const noexcept {
-        return false;
     }
 
     [[nodiscard]]

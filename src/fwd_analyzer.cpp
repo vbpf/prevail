@@ -1,9 +1,11 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: Apache-2.0
+#include <cassert>
 #include <ranges>
 #include <utility>
 #include <variant>
 
+#include "analysis_context.hpp"
 #include "cfg/cfg.hpp"
 #include "cfg/wto.hpp"
 #include "config.hpp"
@@ -17,23 +19,26 @@ namespace prevail {
 thread_local LazyAllocator<ProgramInfo> thread_local_program_info;
 thread_local ebpf_verifier_options_t thread_local_options;
 
-static void ebpf_verifier_clear_before_analysis() {
-    clear_thread_local_state();
-    variable_registry.clear();
-}
+// The ArrayDomain keeps a thread-local cache that is per-analysis state,
+// not per-caller state; reset it at the start of every run.
+static void clear_analysis_thread_local_state() { clear_thread_local_state(); }
 
 void ebpf_verifier_clear_thread_local_state() {
     thread_local_program_info.clear();
     clear_thread_local_state();
     ZoneDomain::clear_thread_local_state();
-    EbpfDomain::clear_thread_local_state();
 }
 
 class InterleavedFwdFixpointIterator final {
     const Program& _prog;
     const Cfg& _cfg;
     const Wto _wto;
+    const AnalysisContext& context;
     AnalysisResult& result;
+    /// Counter Variables for *this* program's loop heads. Computed once
+    /// from `_wto`. Used wherever we previously asked the registry "what
+    /// loop counters exist?" — that's analysis-specific, not registry data.
+    std::vector<Variable> _loop_counters;
 
     /// number of narrowing iterations. If the narrowing operator is
     /// indeed a narrowing operator this parameter is not
@@ -72,8 +77,8 @@ class InterleavedFwdFixpointIterator final {
         // created during initialization.  This must also run before assertion
         // checks so that failing instructions still have deps recorded —
         // compute_failure_slices seeds its backward worklist from them.
-        if (thread_local_options.verbosity_opts.collect_instruction_deps) {
-            result.invariants.at(label).deps = extract_instruction_deps(ins, pre);
+        if (context.options.verbosity_opts.collect_instruction_deps) {
+            result.invariants.at(label).deps = extract_instruction_deps(ins, pre, context.options.total_stack_size());
         }
 
         if (!std::holds_alternative<IncrementLoopCounter>(ins)) {
@@ -82,13 +87,13 @@ class InterleavedFwdFixpointIterator final {
             }
             for (const auto& assertion : _prog.assertions_at(label)) {
                 // Avoid redundant errors.
-                if (auto error = ebpf_domain_check(pre, assertion, label)) {
+                if (auto error = ebpf_domain_check(pre, assertion, label, context)) {
                     set_error(label, std::move(*error));
                     return;
                 }
             }
         }
-        ebpf_domain_transform(pre, ins);
+        ebpf_domain_transform(pre, ins, context);
 
         result.invariants.at(label).post = std::move(pre);
     }
@@ -104,21 +109,26 @@ class InterleavedFwdFixpointIterator final {
         return res;
     }
 
-    explicit InterleavedFwdFixpointIterator(const Program& prog, AnalysisResult& result)
-        : _prog(prog), _cfg(prog.cfg()), _wto(prog.cfg()), result(result) {
+    explicit InterleavedFwdFixpointIterator(const Program& prog, const AnalysisContext& context, AnalysisResult& result)
+        : _prog(prog), _cfg(prog.cfg()), _wto(prog.cfg()), context(context), result(result) {
         for (const auto& label : _cfg.labels()) {
             result.invariants.emplace(label, InvariantMapPair{EbpfDomain::bottom(), {}, EbpfDomain::bottom()});
+        }
+        if (context.options.cfg_opts.check_for_termination) {
+            _wto.for_each_loop_head([&](const Label& label) {
+                _loop_counters.push_back(variable_registry.loop_counter(to_string(label)));
+            });
         }
     }
 
     static std::optional<VerificationError> check_loop_bound(const Program& prog, const Label& label,
-                                                             const EbpfDomain& pre) {
+                                                             const EbpfDomain& pre, const AnalysisContext& context) {
         if (std::holds_alternative<IncrementLoopCounter>(prog.instruction_at(label))) {
             const auto assertions = prog.assertions_at(label);
             if (assertions.size() != 1) {
                 CRAB_ERROR("Expected exactly 1 assertion for IncrementLoopCounter");
             }
-            return ebpf_domain_check(pre, assertions.front(), label);
+            return ebpf_domain_check(pre, assertions.front(), label, context);
         }
         return {};
     }
@@ -128,7 +138,7 @@ class InterleavedFwdFixpointIterator final {
             if (inv_pair.pre.is_bottom()) {
                 continue;
             }
-            if (auto error = check_loop_bound(prog, label, inv_pair.pre)) {
+            if (auto error = check_loop_bound(prog, label, inv_pair.pre, context)) {
                 set_error(label, std::move(*error));
             }
         }
@@ -138,7 +148,7 @@ class InterleavedFwdFixpointIterator final {
         ExtendedNumber loop_count{0};
         // Gather the upper bound of loop counts from post-invariants.
         for (const auto& inv_pair : std::views::values(result.invariants)) {
-            loop_count = std::max(loop_count, inv_pair.post.get_loop_count_upper_bound());
+            loop_count = std::max(loop_count, inv_pair.post.get_loop_count_upper_bound(_loop_counters));
         }
         const auto m = loop_count.number();
         if (m && m->fits<int32_t>()) {
@@ -152,28 +162,38 @@ class InterleavedFwdFixpointIterator final {
 
     void operator()(const std::shared_ptr<WtoCycle>& cycle);
 
-    static AnalysisResult run(const Program& prog, EbpfDomain entry_inv);
+    static AnalysisResult run(const Program& prog, const AnalysisContext& context, EbpfDomain entry_inv);
 };
 
-AnalysisResult analyze(const Program& prog) {
-    ebpf_verifier_clear_before_analysis();
-    return InterleavedFwdFixpointIterator::run(prog, EbpfDomain::setup_entry(thread_local_options.setup_constraints));
-}
+// Back-compat shims for callers that don't construct an AnalysisContext.
+AnalysisResult analyze(const Program& prog) { return analyze(prog, thread_local_analysis_context()); }
 
 AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invariant) {
-    ebpf_verifier_clear_before_analysis();
-    return InterleavedFwdFixpointIterator::run(
-        prog, EbpfDomain::from_constraints(entry_invariant.value(), thread_local_options.setup_constraints));
+    return analyze(prog, entry_invariant, thread_local_analysis_context());
 }
 
-static EbpfDomain extrapolate(const EbpfDomain& before, const EbpfDomain& after, const unsigned int iteration) {
+AnalysisResult analyze(const Program& prog, const AnalysisContext& context) {
+    clear_analysis_thread_local_state();
+    return InterleavedFwdFixpointIterator::run(prog, context,
+                                               EbpfDomain::setup_entry(context.options.setup_constraints, context));
+}
+
+AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invariant, const AnalysisContext& context) {
+    clear_analysis_thread_local_state();
+    return InterleavedFwdFixpointIterator::run(
+        prog, context,
+        EbpfDomain::from_constraints(entry_invariant.value(), context.options.setup_constraints, context));
+}
+
+static EbpfDomain extrapolate(const EbpfDomain& before, const EbpfDomain& after, const unsigned int iteration,
+                              const AnalysisContext& context, const std::span<const Variable> loop_counters) {
     /// number of iterations until triggering widening
     constexpr auto _widening_delay = 2;
 
     if (iteration < _widening_delay) {
         return before | after;
     }
-    return before.widen(after, iteration == _widening_delay);
+    return before.widen(after, iteration == _widening_delay, context, loop_counters);
 }
 
 static EbpfDomain refine(const EbpfDomain& before, const EbpfDomain& after, const unsigned int iteration) {
@@ -243,7 +263,7 @@ void InterleavedFwdFixpointIterator::operator()(const std::shared_ptr<WtoCycle>&
             invariant = std::move(new_pre);
             break;
         } else {
-            invariant = extrapolate(invariant, new_pre, iteration);
+            invariant = extrapolate(invariant, new_pre, iteration, context, _loop_counters);
         }
     }
 
@@ -270,23 +290,24 @@ void InterleavedFwdFixpointIterator::operator()(const std::shared_ptr<WtoCycle>&
         }
     }
 }
-AnalysisResult InterleavedFwdFixpointIterator::run(const Program& prog, EbpfDomain entry_inv) {
+AnalysisResult InterleavedFwdFixpointIterator::run(const Program& prog, const AnalysisContext& context,
+                                                   EbpfDomain entry_inv) {
     // Go over the CFG in weak topological order (accounting for loops).
     AnalysisResult result;
-    InterleavedFwdFixpointIterator analyzer(prog, result);
-    if (thread_local_options.cfg_opts.check_for_termination) {
+    InterleavedFwdFixpointIterator analyzer(prog, context, result);
+    if (context.options.cfg_opts.check_for_termination) {
         // Initialize loop counters for potential loop headers.
         // This enables enforcement of upper bounds on loop iterations
         // during program verification.
         // TODO: Consider making this an instruction instead of an explicit call.
         analyzer._wto.for_each_loop_head(
-            [&](const Label& label) { ebpf_domain_initialize_loop_counter(entry_inv, label); });
+            [&](const Label& label) { ebpf_domain_initialize_loop_counter(entry_inv, label, context); });
     }
     analyzer.set_pre(prog.cfg().entry_label(), std::move(entry_inv));
     for (const auto& component : analyzer._wto) {
         std::visit(analyzer, component);
     }
-    if (!result.failed && thread_local_options.cfg_opts.check_for_termination) {
+    if (!result.failed && context.options.cfg_opts.check_for_termination) {
         analyzer.find_termination_errors(prog);
         if (!result.failed) {
             result.max_loop_count = analyzer.max_loop_count();
