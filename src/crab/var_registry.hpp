@@ -67,7 +67,6 @@ class VariableRegistry final {
     [[nodiscard]]
     bool is_in_stack(const Variable& v) const;
 
-    std::vector<Variable> get_type_variables() const;
     Variable reg(DataKind, int) const;
     Variable type_reg(int) const;
     Variable stack_frame_var(DataKind kind, int i, const std::string& prefix) const;

@@ -113,7 +113,7 @@ TypeToNumDomain TypeToNumDomain::operator&(TypeToNumDomain&& other) const {
 
 std::vector<Variable> TypeToNumDomain::get_nonexistent_kind_variables() const {
     std::vector<Variable> res;
-    for (const Variable v : variable_registry.get_type_variables()) {
+    for (const Variable v : types.variables()) {
         for (const auto& [type, kinds] : type_to_kinds) {
             if (types.may_have_type(v, type)) {
                 continue;
@@ -131,7 +131,16 @@ std::vector<std::tuple<Variable, Interval>>
 TypeToNumDomain::collect_type_dependent_constraints(const TypeToNumDomain& right) const {
     std::vector<std::tuple<Variable, Interval>> result;
 
-    for (const Variable& type_var : variable_registry.get_type_variables()) {
+    // A variable tracked in only one side can still have differing type info
+    // (the other side treats it as top), so we iterate the union.
+    std::set<Variable> type_vars;
+    for (const Variable v : types.variables()) {
+        type_vars.insert(v);
+    }
+    for (const Variable v : right.types.variables()) {
+        type_vars.insert(v);
+    }
+    for (const Variable& type_var : type_vars) {
         for (const auto& [type, kinds] : type_to_kinds) {
             if (kinds.empty()) {
                 continue;
@@ -198,14 +207,12 @@ TypeToNumDomain::join_over_types(const Reg& reg,
 }
 
 void TypeToNumDomain::havoc_all_locations_having_type(const TypeEncoding type) {
-    for (const Variable type_variable : variable_registry.get_type_variables()) {
-        if (types.may_have_type(type_variable, type)) {
-            types.havoc_type(type_variable);
-            values.havoc(variable_registry.kind_var(DataKind::svalues, type_variable));
-            values.havoc(variable_registry.kind_var(DataKind::uvalues, type_variable));
-            for (const DataKind kind : type_to_kinds.at(type)) {
-                values.havoc(variable_registry.kind_var(kind, type_variable));
-            }
+    for (const Variable type_variable : types.variables_with_type(type)) {
+        types.havoc_type(type_variable);
+        values.havoc(variable_registry.kind_var(DataKind::svalues, type_variable));
+        values.havoc(variable_registry.kind_var(DataKind::uvalues, type_variable));
+        for (const DataKind kind : type_to_kinds.at(type)) {
+            values.havoc(variable_registry.kind_var(kind, type_variable));
         }
     }
 }

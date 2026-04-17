@@ -137,6 +137,19 @@ class TypeDomain {
     [[nodiscard]]
     bool is_in_group(const Reg& r, TypeSet types) const;
 
+    /// The variables this domain currently has information for. Narrowly
+    /// intended for TypeToNumDomain::operator<= / operator|= helpers that
+    /// need to iterate the per-variable structure. For everything else,
+    /// prefer `variables_with_type`. Bottom and top both return empty.
+    [[nodiscard]]
+    std::vector<Variable> variables() const;
+
+    /// Variables whose TypeSet may contain `type`. Use this when the question
+    /// is "which variables might have type T?" (e.g., havoc all packet-typed
+    /// locations).
+    [[nodiscard]]
+    std::vector<Variable> variables_with_type(TypeEncoding type) const;
+
     [[nodiscard]]
     StringInvariant to_set() const;
     friend std::ostream& operator<<(std::ostream& o, const TypeDomain& dom);

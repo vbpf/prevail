@@ -682,8 +682,8 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& state, const LinearExpress
 
     // Update stack_numeric_size for any stack type variables.
     // stack_numeric_size holds the number of continuous bytes starting from stack_offset that are known to be numeric.
-    for (const Variable type_variable : variable_registry.get_type_variables()) {
-        if (!state.is_initialized(type_variable) || !state.may_have_type(type_variable, T_STACK)) {
+    for (const Variable type_variable : state.types.variables_with_type(T_STACK)) {
+        if (!state.is_initialized(type_variable)) {
             continue;
         }
         const Variable stack_offset_variable = variable_registry.kind_var(DataKind::stack_offsets, type_variable);

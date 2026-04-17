@@ -842,6 +842,31 @@ void TypeDomain::havoc_type(const Variable& v) {
     }
 }
 
+std::vector<Variable> TypeDomain::variables() const {
+    if (!state_) {
+        return {};
+    }
+    std::vector<Variable> res;
+    res.reserve(state_->var_ids.vars().size());
+    for (const auto& v : state_->var_ids.vars() | std::views::keys) {
+        res.push_back(v);
+    }
+    return res;
+}
+
+std::vector<Variable> TypeDomain::variables_with_type(const TypeEncoding type) const {
+    if (!state_) {
+        return {};
+    }
+    std::vector<Variable> res;
+    for (const auto& v : state_->var_ids.vars() | std::views::keys) {
+        if (may_have_type(v, type)) {
+            res.push_back(v);
+        }
+    }
+    return res;
+}
+
 // -- Query methods -----------------------------------------------------------
 
 TypeSet TypeDomain::get_typeset(const Variable v) const {

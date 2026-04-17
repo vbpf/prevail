@@ -192,20 +192,6 @@ bool VariableRegistry::is_min_only(const Variable& v) const {
 
 Variable VariableRegistry::loop_counter(const std::string& label) const { return intern("pc[" + label + "]"); }
 
-static bool ends_with(const std::string& str, const std::string& suffix) {
-    return str.size() >= suffix.size() && 0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix);
-}
-
-std::vector<Variable> VariableRegistry::get_type_variables() const {
-    std::vector<Variable> res;
-    for (const std::string& name : names) {
-        if (ends_with(name, ".type")) {
-            res.push_back(intern(name));
-        }
-    }
-    return res;
-}
-
 std::string VariableRegistry::name(const Variable& v) const { return names.at(v._id); }
 
 [[nodiscard]]
