@@ -35,6 +35,10 @@ class InterleavedFwdFixpointIterator final {
     const Wto _wto;
     const AnalysisContext& context;
     AnalysisResult& result;
+    /// Counter Variables for *this* program's loop heads. Computed once
+    /// from `_wto`. Used wherever we previously asked the registry "what
+    /// loop counters exist?" — that's analysis-specific, not registry data.
+    std::vector<Variable> _loop_counters;
 
     /// number of narrowing iterations. If the narrowing operator is
     /// indeed a narrowing operator this parameter is not
@@ -110,6 +114,11 @@ class InterleavedFwdFixpointIterator final {
         for (const auto& label : _cfg.labels()) {
             result.invariants.emplace(label, InvariantMapPair{EbpfDomain::bottom(), {}, EbpfDomain::bottom()});
         }
+        if (context.options.cfg_opts.check_for_termination) {
+            _wto.for_each_loop_head([&](const Label& label) {
+                _loop_counters.push_back(variable_registry.loop_counter(to_string(label)));
+            });
+        }
     }
 
     static std::optional<VerificationError> check_loop_bound(const Program& prog, const Label& label,
@@ -139,7 +148,7 @@ class InterleavedFwdFixpointIterator final {
         ExtendedNumber loop_count{0};
         // Gather the upper bound of loop counts from post-invariants.
         for (const auto& inv_pair : std::views::values(result.invariants)) {
-            loop_count = std::max(loop_count, inv_pair.post.get_loop_count_upper_bound());
+            loop_count = std::max(loop_count, inv_pair.post.get_loop_count_upper_bound(_loop_counters));
         }
         const auto m = loop_count.number();
         if (m && m->fits<int32_t>()) {
@@ -177,14 +186,14 @@ AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invaria
 }
 
 static EbpfDomain extrapolate(const EbpfDomain& before, const EbpfDomain& after, const unsigned int iteration,
-                              const AnalysisContext& context) {
+                              const AnalysisContext& context, const std::span<const Variable> loop_counters) {
     /// number of iterations until triggering widening
     constexpr auto _widening_delay = 2;
 
     if (iteration < _widening_delay) {
         return before | after;
     }
-    return before.widen(after, iteration == _widening_delay, context);
+    return before.widen(after, iteration == _widening_delay, context, loop_counters);
 }
 
 static EbpfDomain refine(const EbpfDomain& before, const EbpfDomain& after, const unsigned int iteration) {
@@ -254,7 +263,7 @@ void InterleavedFwdFixpointIterator::operator()(const std::shared_ptr<WtoCycle>&
             invariant = std::move(new_pre);
             break;
         } else {
-            invariant = extrapolate(invariant, new_pre, iteration, context);
+            invariant = extrapolate(invariant, new_pre, iteration, context, _loop_counters);
         }
     }
 

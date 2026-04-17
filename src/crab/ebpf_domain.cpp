@@ -165,7 +165,8 @@ EbpfDomain EbpfDomain::operator&(const EbpfDomain& other) const {
     return EbpfDomain{std::move(res_state), *stack & *other.stack};
 }
 
-EbpfDomain EbpfDomain::calculate_constant_limits(const AnalysisContext& context) {
+EbpfDomain EbpfDomain::calculate_constant_limits(const AnalysisContext& context,
+                                                 const std::span<const Variable> loop_counters) {
     EbpfDomain inv = top(context);
     using namespace dsl_syntax;
     for (const int i : {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}) {
@@ -180,18 +181,17 @@ EbpfDomain EbpfDomain::calculate_constant_limits(const AnalysisContext& context)
         inv.add_value_constraint(r.shared_offset >= 0);
         inv.add_value_constraint(r.packet_offset <= variable_registry.packet_size());
         inv.add_value_constraint(r.packet_offset >= 0);
-        if (context.options.cfg_opts.check_for_termination) {
-            for (const Variable counter : variable_registry.get_loop_counters()) {
-                inv.add_value_constraint(counter <= std::numeric_limits<int32_t>::max());
-                inv.add_value_constraint(counter >= 0);
-                inv.add_value_constraint(counter <= r.svalue);
-            }
+        for (const Variable counter : loop_counters) {
+            inv.add_value_constraint(counter <= std::numeric_limits<int32_t>::max());
+            inv.add_value_constraint(counter >= 0);
+            inv.add_value_constraint(counter <= r.svalue);
         }
     }
     return inv;
 }
 
-EbpfDomain EbpfDomain::widen(const EbpfDomain& other, const bool to_constants, const AnalysisContext& context) const {
+EbpfDomain EbpfDomain::widen(const EbpfDomain& other, const bool to_constants, const AnalysisContext& context,
+                             const std::span<const Variable> loop_counters) const {
     if (is_bottom()) {
         return other;
     }
@@ -203,7 +203,7 @@ EbpfDomain EbpfDomain::widen(const EbpfDomain& other, const bool to_constants, c
     if (to_constants) {
         // Clamping via intersection is sound because it only tightens
         // constraints element-wise, preserving the over-approximation.
-        return res & calculate_constant_limits(context);
+        return res & calculate_constant_limits(context, loop_counters);
     }
     return res;
 }
@@ -361,9 +361,9 @@ Interval EbpfDomain::get_map_max_entries(const Reg& map_fd_reg, const ebpf_platf
     return result;
 }
 
-ExtendedNumber EbpfDomain::get_loop_count_upper_bound() const {
+ExtendedNumber EbpfDomain::get_loop_count_upper_bound(const std::span<const Variable> loop_counters) const {
     ExtendedNumber ub{0};
-    for (const Variable counter : variable_registry.get_loop_counters()) {
+    for (const Variable counter : loop_counters) {
         ub = std::max(ub, state.values.eval_interval(counter).ub());
     }
     return ub;

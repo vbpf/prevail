@@ -6,6 +6,7 @@
 
 #include <limits>
 #include <optional>
+#include <span>
 
 #include "analysis_context.hpp"
 #include "arith/variable.hpp"
@@ -72,14 +73,22 @@ class EbpfDomain final {
     EbpfDomain operator|(const EbpfDomain& other) const&;
     EbpfDomain operator|(const EbpfDomain& other) &&;
     EbpfDomain operator&(const EbpfDomain& other) const;
-    EbpfDomain widen(const EbpfDomain& other, bool to_constants, const AnalysisContext& context) const;
+    EbpfDomain widen(const EbpfDomain& other, bool to_constants, const AnalysisContext& context,
+                     std::span<const Variable> loop_counters) const;
     EbpfDomain narrow(const EbpfDomain& other) const;
 
     /// Per-register clamping domain used by widen(to_constants=true) to bound
     /// signed/unsigned values to int32 range, stack offsets to total_stack_size,
     /// and so on. Inexpensive to compute (~100 constraints); not cached.
-    static EbpfDomain calculate_constant_limits(const AnalysisContext& context);
-    ExtendedNumber get_loop_count_upper_bound() const;
+    /// `loop_counters` is the set of counter Variables for *this* program's
+    /// loop heads — passed in rather than queried from variable_registry,
+    /// because the registry has no notion of "this analysis."
+    static EbpfDomain calculate_constant_limits(const AnalysisContext& context,
+                                                std::span<const Variable> loop_counters);
+    /// Maximum upper bound across the given loop counter variables in this
+    /// domain. The caller supplies the counter set (per-program loop heads),
+    /// not the registry — see calculate_constant_limits for the rationale.
+    ExtendedNumber get_loop_count_upper_bound(std::span<const Variable> loop_counters) const;
     Interval get_r0() const;
 
     static EbpfDomain setup_entry(bool init_r1, const AnalysisContext& context);
