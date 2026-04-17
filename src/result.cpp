@@ -381,30 +381,249 @@ std::set<Reg> extract_assertion_registers(const Assertion& assertion) {
         assertion);
 }
 
+FailureSlice AnalysisResult::compute_slice_from_label(const Program& prog, const Label& label,
+                                                      const RelevantState& seed_relevance, size_t max_steps) const {
+    FailureSlice slice{
+        .failing_label = label,
+        .error = VerificationError(""),
+        .relevance = {},
+    };
+
+    // Copy error if present at this label.
+    const auto label_it = invariants.find(label);
+    if (label_it != invariants.end() && label_it->second.error) {
+        slice.error = *label_it->second.error;
+    }
+
+    // `visited` tracks all explored labels for deduplication during backward traversal.
+    // `slice_labels` tracks only labels that interact with relevant registers (the output slice).
+    std::map<Label, RelevantState> visited;
+    std::set<Label> conservative_visited; // Dedup for empty-relevance labels in conservative mode
+    std::map<Label, RelevantState> slice_labels;
+
+    // Worklist: (label, relevant_state_after_this_label)
+    std::vector<std::pair<Label, RelevantState>> worklist;
+    worklist.emplace_back(label, seed_relevance);
+
+    // When the seed has no register/stack deps (e.g., BoundedLoopCount),
+    // perform a conservative backward walk so the slice still shows the
+    // loop structure and control flow leading to the failure.
+    const bool conservative_mode = seed_relevance.registers.empty() && seed_relevance.stack_offsets.empty();
+
+    size_t steps = 0;
+
+    // Hoist the parent lookup for the target label outside the hot loop;
+    // it is invariant and parents_of() may return a temporary.
+    const auto parents_of_target = prog.cfg().parents_of(label);
+
+    while (!worklist.empty() && steps < max_steps) {
+        auto [current_label, relevant_after] = worklist.back();
+        worklist.pop_back();
+
+        // Skip if nothing is relevant — unless we're in conservative mode
+        // (empty-seed assertions like BoundedLoopCount) or this is the target label.
+        if (!conservative_mode && current_label != label && relevant_after.registers.empty() &&
+            relevant_after.stack_offsets.empty()) {
+            continue;
+        }
+
+        // Merge with existing relevance at this label (for deduplication)
+        auto& existing = visited[current_label];
+        const size_t prev_size = existing.registers.size() + existing.stack_offsets.size();
+        existing.registers.insert(relevant_after.registers.begin(), relevant_after.registers.end());
+        existing.stack_offsets.insert(relevant_after.stack_offsets.begin(), relevant_after.stack_offsets.end());
+        const size_t new_size = existing.registers.size() + existing.stack_offsets.size();
+
+        // If no new relevance was added, skip (already processed with same or broader relevance).
+        // In conservative mode with empty relevance, use a separate visited set for dedup.
+        if (new_size == prev_size) {
+            if (prev_size > 0) {
+                continue;
+            }
+            // Empty relevance (conservative mode): skip if we already visited this label
+            if (!conservative_visited.insert(current_label).second) {
+                continue;
+            }
+        }
+
+        // Compute what's relevant BEFORE this instruction using deps
+        RelevantState relevant_before;
+        const auto inv_it = invariants.find(current_label);
+        if (inv_it != invariants.end() && inv_it->second.deps) {
+            const auto& deps = *inv_it->second.deps;
+
+            // Start with what's relevant after
+            relevant_before = relevant_after;
+
+            // Remove registers that are written by this instruction
+            // (they weren't relevant before their definition)
+            for (const auto& reg : deps.regs_written) {
+                relevant_before.registers.erase(reg);
+            }
+
+            // Remove registers that are clobbered (killed without reading).
+            // These stop propagation for post-instruction uses but don't add read-deps.
+            for (const auto& reg : deps.regs_clobbered) {
+                relevant_before.registers.erase(reg);
+            }
+
+            // Determine if this instruction contributes to the slice.
+            // An instruction contributes when it writes to a relevant register/stack slot,
+            // or when it is a control-flow decision (Jmp/Assume) that reads relevant registers.
+            bool instruction_contributes = false;
+            for (const auto& reg : deps.regs_written) {
+                if (relevant_after.registers.contains(reg)) {
+                    instruction_contributes = true;
+                    break;
+                }
+            }
+            for (const auto& offset : deps.stack_written) {
+                if (relevant_after.stack_offsets.contains(offset)) {
+                    instruction_contributes = true;
+                    break;
+                }
+            }
+
+            // Control-flow instructions (Jmp/Assume) that read relevant registers
+            // contribute to the slice because they shape the path to the target.
+            if (!instruction_contributes) {
+                const auto& ins = prog.instruction_at(current_label);
+                if (std::holds_alternative<Jmp>(ins) || std::holds_alternative<Assume>(ins)) {
+                    for (const auto& reg : deps.regs_read) {
+                        if (relevant_after.registers.contains(reg)) {
+                            instruction_contributes = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Immediate path guard: when the current label is a direct predecessor
+            // of the target label and is an Assume instruction, its condition
+            // registers are causally relevant — they determine reachability.
+            if (std::holds_alternative<Assume>(prog.instruction_at(current_label))) {
+                if (std::find(parents_of_target.begin(), parents_of_target.end(), current_label) !=
+                    parents_of_target.end()) {
+                    instruction_contributes = true;
+                }
+            }
+
+            // At the target label, the assertion depends on registers the instruction
+            // reads (e.g., base pointer r3 in a store). Since stores write to memory
+            // not registers, instruction_contributes would be false without this.
+            if (current_label == label) {
+                instruction_contributes = true;
+            }
+
+            // In conservative mode (empty seed, e.g., BoundedLoopCount), include all
+            // reachable labels so the slice shows the loop structure and control flow.
+            if (conservative_mode) {
+                instruction_contributes = true;
+            }
+
+            if (instruction_contributes) {
+                for (const auto& reg : deps.regs_read) {
+                    relevant_before.registers.insert(reg);
+                }
+                for (const auto& offset : deps.stack_read) {
+                    relevant_before.stack_offsets.insert(offset);
+                }
+            }
+
+            // Remove stack locations that are written by this instruction,
+            // but preserve offsets that are also read (read-modify-write, e.g., Atomic).
+            for (const auto& offset : deps.stack_written) {
+                if (!deps.stack_read.contains(offset)) {
+                    relevant_before.stack_offsets.erase(offset);
+                }
+            }
+
+            if (instruction_contributes) {
+                // Only include contributing labels in the output slice.
+                // Merge (not assign) because a label may be revisited from
+                // a different successor with additional relevance.
+                auto& existing = slice_labels[current_label];
+                existing.registers.insert(relevant_before.registers.begin(), relevant_before.registers.end());
+                existing.stack_offsets.insert(relevant_before.stack_offsets.begin(),
+                                             relevant_before.stack_offsets.end());
+            }
+        } else {
+            // No deps available: conservatively treat this label as contributing
+            // and propagate all current relevance to predecessors.
+            relevant_before = relevant_after;
+            auto& existing = slice_labels[current_label];
+            existing.registers.insert(relevant_before.registers.begin(), relevant_before.registers.end());
+            existing.stack_offsets.insert(relevant_before.stack_offsets.begin(),
+                                         relevant_before.stack_offsets.end());
+        }
+
+        // Add predecessors to worklist
+        for (const auto& parent : prog.cfg().parents_of(current_label)) {
+            worklist.emplace_back(parent, relevant_before);
+        }
+
+        ++steps;
+    }
+
+    // Expand join points: for any traversed label that is a join point
+    // (≥2 predecessors) where at least one predecessor is already in the slice,
+    // add the join-point label itself and all predecessors that have invariants.
+    // This ensures the causal trace shows converging paths that cause precision loss.
+    // Note: predecessors may not be in `visited` if the worklist budget was exhausted
+    // before reaching them, so we check the invariant map directly.
+    std::map<Label, RelevantState> join_expansion;
+    for (const auto& [v_label, v_relevance] : visited) {
+        const auto& parents = prog.cfg().parents_of(v_label);
+        if (parents.size() < 2) {
+            continue;
+        }
+        // Check that at least one predecessor is in the slice (this join is relevant)
+        bool has_slice_parent = false;
+        for (const auto& parent : parents) {
+            if (slice_labels.contains(parent)) {
+                has_slice_parent = true;
+                break;
+            }
+        }
+        if (!has_slice_parent) {
+            continue;
+        }
+        // Include the join-point label itself so the printing code can display
+        // per-predecessor state at this join.
+        if (!slice_labels.contains(v_label)) {
+            join_expansion[v_label] = v_relevance;
+        }
+        // Include all predecessors so the join display is complete.
+        // Use visited relevance if available, otherwise use the join-point's relevance.
+        for (const auto& parent : parents) {
+            if (slice_labels.contains(parent) || join_expansion.contains(parent)) {
+                continue;
+            }
+            const auto& rel = visited.contains(parent) ? visited.at(parent) : v_relevance;
+            join_expansion[parent] = rel;
+        }
+    }
+    slice_labels.insert(join_expansion.begin(), join_expansion.end());
+
+    // Build the slice from contributing labels only
+    slice.relevance = std::move(slice_labels);
+    return slice;
+}
+
 std::vector<FailureSlice> AnalysisResult::compute_failure_slices(const Program& prog, const SliceParams params) const {
-    const auto max_steps = params.max_steps;
     const auto max_slices = params.max_slices;
     std::vector<FailureSlice> slices;
 
-    // Find all labels with errors
     for (const auto& [label, inv_pair] : invariants) {
         if (inv_pair.pre.is_bottom()) {
-            continue; // Unreachable
+            continue;
         }
         if (!inv_pair.error) {
-            continue; // No error here
+            continue;
         }
-
-        // Check if we've reached the max slices limit
         if (max_slices > 0 && slices.size() >= max_slices) {
             break;
         }
-
-        FailureSlice slice{
-            .failing_label = label,
-            .error = *inv_pair.error,
-            .relevance = {},
-        };
 
         // Seed relevant registers from the actual failing assertion.
         // Forward analysis stops at the first failing assertion, which may not be
@@ -423,8 +642,10 @@ std::vector<FailureSlice> AnalysisResult::compute_failure_slices(const Program& 
             }
         }
         // Fallback: if no failing assertion was identified (shouldn't happen),
-        // or if the failing assertion has no register deps, aggregate all assertions.
-        if (!found_failing || initial_relevance.registers.empty()) {
+        // aggregate all assertions. When the failing assertion was found but has
+        // no register deps, leave the seed empty so compute_slice_from_label
+        // enters conservative mode.
+        if (!found_failing) {
             for (const auto& assertion : assertions) {
                 for (const auto& reg : extract_assertion_registers(assertion)) {
                     initial_relevance.registers.insert(reg);
@@ -432,218 +653,7 @@ std::vector<FailureSlice> AnalysisResult::compute_failure_slices(const Program& 
             }
         }
 
-        // Always include the failing label in the slice, even if no registers were extracted
-        // (e.g., BoundedLoopCount has no register deps)
-
-        // `visited` tracks all explored labels for deduplication during backward traversal.
-        // `slice_labels` tracks only labels that interact with relevant registers (the output slice).
-        std::map<Label, RelevantState> visited;
-        std::set<Label> conservative_visited; // Dedup for empty-relevance labels in conservative mode
-        std::map<Label, RelevantState> slice_labels;
-
-        // Worklist: (label, relevant_state_after_this_label)
-        std::vector<std::pair<Label, RelevantState>> worklist;
-        worklist.emplace_back(label, initial_relevance);
-
-        // When the seed has no register/stack deps (e.g., BoundedLoopCount),
-        // perform a conservative backward walk so the slice still shows the
-        // loop structure and control flow leading to the failure.
-        const bool conservative_mode = initial_relevance.registers.empty() && initial_relevance.stack_offsets.empty();
-
-        size_t steps = 0;
-
-        // Hoist the parent lookup for the failing label outside the hot loop;
-        // it is invariant and parents_of() may return a temporary.
-        const auto parents_of_fail = prog.cfg().parents_of(label);
-
-        while (!worklist.empty() && steps < max_steps) {
-            auto [current_label, relevant_after] = worklist.back();
-            worklist.pop_back();
-
-            // Skip if nothing is relevant — unless we're in conservative mode
-            // (empty-seed assertions like BoundedLoopCount) or this is the failing label.
-            if (!conservative_mode && current_label != label && relevant_after.registers.empty() &&
-                relevant_after.stack_offsets.empty()) {
-                continue;
-            }
-
-            // Merge with existing relevance at this label (for deduplication)
-            auto& existing = visited[current_label];
-            const size_t prev_size = existing.registers.size() + existing.stack_offsets.size();
-            existing.registers.insert(relevant_after.registers.begin(), relevant_after.registers.end());
-            existing.stack_offsets.insert(relevant_after.stack_offsets.begin(), relevant_after.stack_offsets.end());
-            const size_t new_size = existing.registers.size() + existing.stack_offsets.size();
-
-            // If no new relevance was added, skip (already processed with same or broader relevance).
-            // In conservative mode with empty relevance, use a separate visited set for dedup.
-            if (new_size == prev_size) {
-                if (prev_size > 0) {
-                    continue;
-                }
-                // Empty relevance (conservative mode): skip if we already visited this label
-                if (!conservative_visited.insert(current_label).second) {
-                    continue;
-                }
-            }
-
-            // Compute what's relevant BEFORE this instruction using deps
-            RelevantState relevant_before;
-            const auto inv_it = invariants.find(current_label);
-            if (inv_it != invariants.end() && inv_it->second.deps) {
-                const auto& deps = *inv_it->second.deps;
-
-                // Start with what's relevant after
-                relevant_before = relevant_after;
-
-                // Remove registers that are written by this instruction
-                // (they weren't relevant before their definition)
-                for (const auto& reg : deps.regs_written) {
-                    relevant_before.registers.erase(reg);
-                }
-
-                // Remove registers that are clobbered (killed without reading).
-                // These stop propagation for post-instruction uses but don't add read-deps.
-                for (const auto& reg : deps.regs_clobbered) {
-                    relevant_before.registers.erase(reg);
-                }
-
-                // Determine if this instruction contributes to the slice.
-                // An instruction contributes when it writes to a relevant register/stack slot,
-                // or when it is a control-flow decision (Jmp/Assume) that reads relevant registers.
-                bool instruction_contributes = false;
-                for (const auto& reg : deps.regs_written) {
-                    if (relevant_after.registers.contains(reg)) {
-                        instruction_contributes = true;
-                        break;
-                    }
-                }
-                for (const auto& offset : deps.stack_written) {
-                    if (relevant_after.stack_offsets.contains(offset)) {
-                        instruction_contributes = true;
-                        break;
-                    }
-                }
-
-                // Control-flow instructions (Jmp/Assume) that read relevant registers
-                // contribute to the slice because they shape the path to the failure.
-                if (!instruction_contributes) {
-                    const auto& ins = prog.instruction_at(current_label);
-                    if (std::holds_alternative<Jmp>(ins) || std::holds_alternative<Assume>(ins)) {
-                        for (const auto& reg : deps.regs_read) {
-                            if (relevant_after.registers.contains(reg)) {
-                                instruction_contributes = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                // Immediate path guard: when the current label is a direct predecessor
-                // of the failing label and is an Assume instruction, its condition
-                // registers are causally relevant — they determine reachability.
-                if (std::holds_alternative<Assume>(prog.instruction_at(current_label))) {
-                    if (std::find(parents_of_fail.begin(), parents_of_fail.end(), current_label) !=
-                        parents_of_fail.end()) {
-                        instruction_contributes = true;
-                    }
-                }
-
-                // At the failing label, the assertion depends on registers the instruction
-                // reads (e.g., base pointer r3 in a store). Since stores write to memory
-                // not registers, instruction_contributes would be false without this.
-                if (current_label == label) {
-                    instruction_contributes = true;
-                }
-
-                // In conservative mode (empty seed, e.g., BoundedLoopCount), include all
-                // reachable labels so the slice shows the loop structure and control flow.
-                if (conservative_mode) {
-                    instruction_contributes = true;
-                }
-
-                if (instruction_contributes) {
-                    for (const auto& reg : deps.regs_read) {
-                        relevant_before.registers.insert(reg);
-                    }
-                    for (const auto& offset : deps.stack_read) {
-                        relevant_before.stack_offsets.insert(offset);
-                    }
-                }
-
-                // Remove stack locations that are written by this instruction,
-                // but preserve offsets that are also read (read-modify-write, e.g., Atomic).
-                // Done before storing to slice_labels for consistency with register handling
-                // (written registers are removed before storage at lines 476-478).
-                for (const auto& offset : deps.stack_written) {
-                    if (!deps.stack_read.contains(offset)) {
-                        relevant_before.stack_offsets.erase(offset);
-                    }
-                }
-
-                if (instruction_contributes) {
-                    // Only include contributing labels in the output slice.
-                    // Store relevant_before so pre-invariant filtering shows the
-                    // instruction's read-deps (the true upstream dependencies).
-                    slice_labels[current_label] = relevant_before;
-                }
-            } else {
-                // No deps available: conservatively treat this label as contributing
-                // and propagate all current relevance to predecessors.
-                relevant_before = relevant_after;
-                slice_labels[current_label] = relevant_before;
-            }
-
-            // Add predecessors to worklist
-            for (const auto& parent : prog.cfg().parents_of(current_label)) {
-                worklist.emplace_back(parent, relevant_before);
-            }
-
-            ++steps;
-        }
-
-        // Expand join points: for any traversed label that is a join point
-        // (≥2 predecessors) where at least one predecessor is already in the slice,
-        // add the join-point label itself and all predecessors that have invariants.
-        // This ensures the causal trace shows converging paths that cause precision loss.
-        // Note: predecessors may not be in `visited` if the worklist budget was exhausted
-        // before reaching them, so we check the invariant map directly.
-        std::map<Label, RelevantState> join_expansion;
-        for (const auto& [v_label, v_relevance] : visited) {
-            const auto& parents = prog.cfg().parents_of(v_label);
-            if (parents.size() < 2) {
-                continue;
-            }
-            // Check that at least one predecessor is in the slice (this join is relevant)
-            bool has_slice_parent = false;
-            for (const auto& parent : parents) {
-                if (slice_labels.contains(parent)) {
-                    has_slice_parent = true;
-                    break;
-                }
-            }
-            if (!has_slice_parent) {
-                continue;
-            }
-            // Include the join-point label itself so the printing code can display
-            // per-predecessor state at this join.
-            if (!slice_labels.contains(v_label)) {
-                join_expansion[v_label] = v_relevance;
-            }
-            // Include all predecessors so the join display is complete.
-            // Use visited relevance if available, otherwise use the join-point's relevance.
-            for (const auto& parent : parents) {
-                if (slice_labels.contains(parent) || join_expansion.contains(parent)) {
-                    continue;
-                }
-                const auto& rel = visited.contains(parent) ? visited.at(parent) : v_relevance;
-                join_expansion[parent] = rel;
-            }
-        }
-        slice_labels.insert(join_expansion.begin(), join_expansion.end());
-
-        // Build the slice from contributing labels only
-        slice.relevance = std::move(slice_labels);
-        slices.push_back(std::move(slice));
+        slices.push_back(compute_slice_from_label(prog, label, initial_relevance, params.max_steps));
     }
 
     return slices;
