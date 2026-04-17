@@ -300,7 +300,7 @@ std::optional<uint32_t> EbpfDomain::get_map_inner_map_fd(const Reg& map_fd_reg, 
         }
         if (!inner_map_fd.has_value()) {
             inner_map_fd = map->inner_map_fd;
-        } else if (map->type != *inner_map_fd) {
+        } else if (map->inner_map_fd != *inner_map_fd) {
             return {};
         }
     }
