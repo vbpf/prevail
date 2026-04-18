@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include <cassert>
-
 #include "config.hpp"
-#include "platform.hpp"
 #include "spec/type_descriptors.hpp"
 
 namespace prevail {
@@ -25,16 +22,5 @@ struct AnalysisContext {
     const ebpf_verifier_options_t& options;
     const ebpf_platform_t& platform;
 };
-
-[[nodiscard]]
-inline AnalysisContext thread_local_analysis_context() {
-    const ProgramInfo& program_info = thread_local_program_info.get();
-    assert(program_info.platform != nullptr && "program_info.platform must be set before analysis");
-    return AnalysisContext{
-        .program_info = program_info,
-        .options = thread_local_options,
-        .platform = *program_info.platform,
-    };
-}
 
 } // namespace prevail

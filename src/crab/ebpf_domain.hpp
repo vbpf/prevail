@@ -38,8 +38,6 @@ std::string to_string(const VerificationError& error);
 void ebpf_domain_transform(EbpfDomain& inv, const Instruction& ins, const AnalysisContext& context);
 std::optional<VerificationError> ebpf_domain_check(const EbpfDomain& dom, const Assertion& assertion,
                                                    const Label& where, const AnalysisContext& context);
-std::optional<VerificationError> ebpf_domain_check(const EbpfDomain& dom, const Assertion& assertion,
-                                                   const Label& where);
 
 // TODO: make this an explicit instruction
 void ebpf_domain_initialize_loop_counter(EbpfDomain& dom, const Label& label, const AnalysisContext& context);
@@ -114,7 +112,7 @@ class EbpfDomain final {
     [[nodiscard]]
     std::optional<uint32_t> get_map_type(const Reg& map_fd_reg, const AnalysisContext& context) const;
     [[nodiscard]]
-    std::optional<uint32_t> get_map_inner_map_fd(const Reg& map_fd_reg, const AnalysisContext& context) const;
+    std::optional<int> get_map_inner_map_fd(const Reg& map_fd_reg, const AnalysisContext& context) const;
     [[nodiscard]]
     Interval get_map_key_size(const Reg& map_fd_reg, const AnalysisContext& context) const;
     [[nodiscard]]

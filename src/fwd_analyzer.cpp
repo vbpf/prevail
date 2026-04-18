@@ -16,15 +16,11 @@
 
 namespace prevail {
 
-thread_local LazyAllocator<ProgramInfo> thread_local_program_info;
 thread_local ebpf_verifier_options_t thread_local_options;
 
-// The ArrayDomain keeps a thread-local cache that is per-analysis state,
-// not per-caller state; reset it at the start of every run.
 static void clear_analysis_thread_local_state() { clear_thread_local_state(); }
 
 void ebpf_verifier_clear_thread_local_state() {
-    thread_local_program_info.clear();
     clear_thread_local_state();
     ZoneDomain::clear_thread_local_state();
 }
@@ -165,11 +161,14 @@ class InterleavedFwdFixpointIterator final {
     static AnalysisResult run(const Program& prog, const AnalysisContext& context, EbpfDomain entry_inv);
 };
 
-// Back-compat shims for callers that don't construct an AnalysisContext.
-AnalysisResult analyze(const Program& prog) { return analyze(prog, thread_local_analysis_context()); }
+AnalysisResult analyze(const Program& prog) {
+    const auto& info = prog.info();
+    return analyze(prog, AnalysisContext{info, thread_local_options, *info.platform});
+}
 
 AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invariant) {
-    return analyze(prog, entry_invariant, thread_local_analysis_context());
+    const auto& info = prog.info();
+    return analyze(prog, entry_invariant, AnalysisContext{info, thread_local_options, *info.platform});
 }
 
 AnalysisResult analyze(const Program& prog, const AnalysisContext& context) {

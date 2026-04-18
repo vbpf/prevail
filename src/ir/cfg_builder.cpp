@@ -704,8 +704,6 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, ProgramInfo& info
         }
     }
 
-    thread_local_program_info.set(info);
-
     // Detect loops using Weak Topological Ordering (WTO) and insert counters at loop entry points. WTO provides a
     // hierarchical decomposition of the CFG that identifies all strongly connected components (cycles) and their entry
     // points. These entry points serve as natural locations for loop counters that help verify program termination.
@@ -719,6 +717,7 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, ProgramInfo& info
     for (const auto& label : builder.prog.labels()) {
         builder.set_assertions(label, get_assertions(builder.prog.instruction_at(label), info, options, label));
     }
+    builder.prog.m_info = std::move(info);
     return std::move(builder.prog);
 }
 

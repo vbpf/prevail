@@ -10,6 +10,7 @@
 #include "config.hpp"
 #include "crab_utils/debug.hpp"
 #include "ir/syntax.hpp"
+#include "spec/type_descriptors.hpp"
 
 namespace prevail {
 class Program {
@@ -21,10 +22,11 @@ class Program {
     std::map<Label, std::vector<Assertion>> m_assertions{{Label::entry, {}}, {Label::exit, {}}};
     Cfg m_cfg;
 
-    // TODO: add ProgramInfo field
+    ProgramInfo m_info;
 
   public:
     const Cfg& cfg() const { return m_cfg; }
+    const ProgramInfo& info() const { return m_info; }
 
     //! return a view of the labels, including entry and exit
     [[nodiscard]]

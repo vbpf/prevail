@@ -3,9 +3,8 @@
 
 #include "test_verify.hpp"
 
-static void test_analyze_thread(const prevail::Program* prog, prevail::ProgramInfo* info, bool* res) {
+static void test_analyze_thread(const prevail::Program* prog, bool* res) {
     try {
-        prevail::thread_local_program_info.set(*info);
         *res = prevail::verify(*prog);
     } catch (...) {
         *res = false;
@@ -34,8 +33,8 @@ TEST_CASE("multithreading", "[verify][multithreading]") {
 
     bool res1 = false;
     bool res2 = false;
-    std::thread a(test_analyze_thread, &prog1, &raw_prog1.info, &res1);
-    std::thread b(test_analyze_thread, &prog2, &raw_prog2.info, &res2);
+    std::thread a(test_analyze_thread, &prog1, &res1);
+    std::thread b(test_analyze_thread, &prog2, &res2);
     a.join();
     b.join();
 

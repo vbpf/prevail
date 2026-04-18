@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-#include "crab_utils/lazy_allocator.hpp"
 #include "spec/ebpf_base.h"
 #include "spec/vm_isa.hpp"
 
@@ -85,5 +84,4 @@ void print_map_descriptors(const std::vector<EbpfMapDescriptor>& descriptors, st
 
 std::ostream& operator<<(std::ostream& os, const btf_line_info_t& line_info);
 
-extern thread_local LazyAllocator<ProgramInfo> thread_local_program_info;
 } // namespace prevail

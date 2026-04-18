@@ -120,18 +120,20 @@ struct AnalysisResult {
     Interval exit_value = Interval::top();
 
     [[nodiscard]]
-    bool is_valid_after(const Label& label, const StringInvariant& state) const;
+    bool is_valid_after(const Label& label, const StringInvariant& state, const AnalysisContext& context) const;
 
     [[nodiscard]]
-    ObservationCheckResult
-    check_observation_at_label(const Label& label, InvariantPoint point, const StringInvariant& observation,
-                               ObservationCheckMode mode = ObservationCheckMode::consistent) const;
+    ObservationCheckResult check_observation_at_label(const Label& label, InvariantPoint point,
+                                                      const StringInvariant& observation, ObservationCheckMode mode,
+                                                      const AnalysisContext& context) const;
 
     [[nodiscard]]
-    bool is_consistent_before(const Label& label, const StringInvariant& observation) const;
+    bool is_consistent_before(const Label& label, const StringInvariant& observation,
+                              const AnalysisContext& context) const;
 
     [[nodiscard]]
-    bool is_consistent_after(const Label& label, const StringInvariant& observation) const;
+    bool is_consistent_after(const Label& label, const StringInvariant& observation,
+                             const AnalysisContext& context) const;
 
     [[nodiscard]]
     StringInvariant invariant_at(const Label& label) const;
@@ -151,11 +153,12 @@ struct AnalysisResult {
     /// Compute failure slices for verification errors.
     /// Returns one slice per failure, each containing the set of impacted labels.
     [[nodiscard]]
-    std::vector<FailureSlice> compute_failure_slices(const Program& prog, SliceParams params) const;
+    std::vector<FailureSlice> compute_failure_slices(const Program& prog, SliceParams params,
+                                                     const AnalysisContext& context) const;
 
     [[nodiscard]]
-    std::vector<FailureSlice> compute_failure_slices(const Program& prog) const {
-        return compute_failure_slices(prog, SliceParams{});
+    std::vector<FailureSlice> compute_failure_slices(const Program& prog, const AnalysisContext& context) const {
+        return compute_failure_slices(prog, SliceParams{}, context);
     }
 
     /// Compute a backward slice from an arbitrary label with a given seed relevance.
@@ -171,7 +174,7 @@ struct AnalysisResult {
                                           size_t max_steps = 200) const;
 };
 
-void print_error(std::ostream& os, const VerificationError& error);
+void print_error(std::ostream& os, const VerificationError& error, const Program& prog);
 void print_invariants(std::ostream& os, const Program& prog, bool simplify, const AnalysisResult& result);
 void print_unreachable(std::ostream& os, const Program& prog, const AnalysisResult& result);
 

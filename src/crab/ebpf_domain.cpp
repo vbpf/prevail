@@ -14,7 +14,6 @@
 #include "crab/array_domain.hpp"
 #include "crab/ebpf_domain.hpp"
 #include "crab/var_registry.hpp"
-#include "crab_utils/lazy_allocator.hpp"
 #include "ir/unmarshal.hpp"
 
 namespace prevail {
@@ -282,13 +281,13 @@ std::optional<uint32_t> EbpfDomain::get_map_type(const Reg& map_fd_reg, const An
     return type;
 }
 
-std::optional<uint32_t> EbpfDomain::get_map_inner_map_fd(const Reg& map_fd_reg, const AnalysisContext& context) const {
+std::optional<int> EbpfDomain::get_map_inner_map_fd(const Reg& map_fd_reg, const AnalysisContext& context) const {
     int start_fd, end_fd;
     if (!get_map_fd_range(map_fd_reg, &start_fd, &end_fd)) {
         return {};
     }
 
-    std::optional<uint32_t> inner_map_fd;
+    std::optional<int> inner_map_fd;
     for (int map_fd = start_fd; map_fd <= end_fd; map_fd++) {
         const auto& map = context.platform.get_map_descriptor(map_fd, context.program_info);
         if (!inner_map_fd.has_value()) {

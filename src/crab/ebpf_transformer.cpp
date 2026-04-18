@@ -938,7 +938,7 @@ void EbpfTransformer::operator()(const Call& call) {
         if (context.platform.get_map_type(*map_type).value_type == EbpfMapValueType::MAP) {
             // Map-of-maps: r0 is an inner map fd if known, otherwise an opaque shared pointer.
             if (const auto inner_map_fd = dom.get_map_inner_map_fd(*maybe_fd_reg, context)) {
-                do_load_mapfd(r0_reg, to_signed(*inner_map_fd), true);
+                do_load_mapfd(r0_reg, *inner_map_fd, true);
             } else {
                 assign_shared_map_value(std::nullopt);
             }

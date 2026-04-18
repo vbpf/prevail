@@ -80,11 +80,6 @@ std::optional<VerificationError> ebpf_domain_check(const EbpfDomain& dom, const 
     return {};
 }
 
-std::optional<VerificationError> ebpf_domain_check(const EbpfDomain& dom, const Assertion& assertion,
-                                                   const Label& where) {
-    return ebpf_domain_check(dom, assertion, where, thread_local_analysis_context());
-}
-
 void EbpfChecker::check_access_stack(const LinearExpression& lb, const LinearExpression& ub) const {
     using namespace dsl_syntax;
     require_value(dom.state, reg_pack(R10_STACK_POINTER).stack_offset - context.options.subprogram_stack_size <= lb,
