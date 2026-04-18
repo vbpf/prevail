@@ -644,8 +644,9 @@ static void validate_tail_call_chain_depth(const Program& prog, const Wto& wto, 
     }
 }
 
-Program Program::from_sequence(const InstructionSeq& inst_seq, ProgramInfo& info,
+Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo& info,
                                const ebpf_verifier_options_t& options) {
+    ProgramInfo mutable_info = info;
     options.validate();
     thread_local_options = options;
     assert(info.platform != nullptr && "platform must be set before instruction feature validation");
@@ -661,8 +662,8 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, ProgramInfo& info
 
     // Record valid callback targets for PTR_TO_FUNC: top-level concrete instruction labels
     // (no stack-frame prefix, not synthetic jump labels, and not Exit instructions).
-    info.callback_target_labels.clear();
-    info.callback_targets_with_exit.clear();
+    mutable_info.callback_target_labels.clear();
+    mutable_info.callback_targets_with_exit.clear();
     for (const Label& label : builder.prog.labels()) {
         if (label == Label::entry || label == Label::exit || label.isjump() || !label.stack_frame_prefix.empty()) {
             continue;
@@ -670,7 +671,7 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, ProgramInfo& info
         if (std::holds_alternative<Exit>(builder.prog.instruction_at(label))) {
             continue;
         }
-        info.callback_target_labels.insert(label.from);
+        mutable_info.callback_target_labels.insert(label.from);
     }
 
     // Basic callback body check: callback target must be able to reach a top-level Exit.
@@ -697,10 +698,10 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, ProgramInfo& info
         }
         return false;
     };
-    for (const int32_t label_num : info.callback_target_labels) {
+    for (const int32_t label_num : mutable_info.callback_target_labels) {
         const Label label{gsl::narrow<int>(label_num)};
         if (has_reachable_top_level_exit(label)) {
-            info.callback_targets_with_exit.insert(label_num);
+            mutable_info.callback_targets_with_exit.insert(label_num);
         }
     }
 
@@ -717,7 +718,7 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, ProgramInfo& info
     for (const auto& label : builder.prog.labels()) {
         builder.set_assertions(label, get_assertions(builder.prog.instruction_at(label), info, options, label));
     }
-    builder.prog.m_info = std::move(info);
+    builder.prog.m_info = std::move(mutable_info);
     return std::move(builder.prog);
 }
 

@@ -22,9 +22,6 @@ class MalformedElf final : public UnmarshalError {
     explicit MalformedElf(const std::string& what) : UnmarshalError(what) {}
 };
 
-int create_map_crab(const EbpfMapType& map_type, uint32_t key_size, uint32_t value_size, uint32_t max_entries,
-                    ebpf_verifier_options_t options, std::map<EquivalenceKey, int>& cache);
-
 const EbpfMapDescriptor* find_map_descriptor(int map_fd, const ProgramInfo& info);
 
 struct ElfProgramInfo {

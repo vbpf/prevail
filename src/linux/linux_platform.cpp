@@ -113,7 +113,7 @@ struct BpfLoadMapDef {
 };
 
 static int create_map_linux(uint32_t map_type, uint32_t key_size, uint32_t value_size, uint32_t max_entries,
-                            ebpf_verifier_options_t options, std::map<EquivalenceKey, int>& cache);
+                            ebpf_verifier_options_t);
 
 // Allow for comma as a separator between multiple prefixes, to make
 // the preprocessor treat a prefix list as one macro argument.
@@ -253,10 +253,26 @@ EbpfMapType get_map_type_linux(uint32_t platform_specific_type) {
     return type;
 }
 
+// Assign a synthetic mock FD for a map, deduplicating against already-parsed descriptors.
+// Pure function of the accumulated descriptor table — no external state needed.
+static int allocate_mock_map_fd(const std::vector<EbpfMapDescriptor>& map_descriptors, const EbpfMapType& map_type,
+                                const uint32_t key_size, const uint32_t value_size, const uint32_t max_entries) {
+    const EquivalenceKey equiv{map_type.value_type, key_size, value_size, map_type.is_array ? max_entries : 0};
+    for (const auto& desc : map_descriptors) {
+        const EbpfMapType existing_type = get_map_type_linux(desc.type);
+        const EquivalenceKey existing{existing_type.value_type, desc.key_size, desc.value_size,
+                                      existing_type.is_array ? desc.max_entries : 0};
+        if (existing == equiv) {
+            return desc.original_fd;
+        }
+    }
+    // +1 so 0 is the null FD
+    return gsl::narrow<int>(map_descriptors.size()) + 1;
+}
+
 void parse_maps_section_linux(std::vector<EbpfMapDescriptor>& map_descriptors, const char* data,
                               const size_t map_def_size, const int map_count, const ebpf_platform_t* platform,
                               const ebpf_verifier_options_t options) {
-    // Copy map definitions from the ELF section into a local list.
     auto mapdefs = std::vector<BpfLoadMapDef>();
     for (int i = 0; i < map_count; i++) {
         BpfLoadMapDef def = {0};
@@ -264,18 +280,18 @@ void parse_maps_section_linux(std::vector<EbpfMapDescriptor>& map_descriptors, c
         mapdefs.emplace_back(def);
     }
 
-    // Add map definitions into the map_descriptors list.
-    std::map<EquivalenceKey, int> cache;
     for (const auto& s : mapdefs) {
-        EbpfMapType type = get_map_type_linux(s.type);
+        const int fd = options.mock_map_fds
+                           ? allocate_mock_map_fd(map_descriptors, get_map_type_linux(s.type), s.key_size, s.value_size,
+                                                  s.max_entries)
+                           : create_map_linux(s.type, s.key_size, s.value_size, s.max_entries, options);
         map_descriptors.emplace_back(EbpfMapDescriptor{
-            .original_fd = create_map_linux(s.type, s.key_size, s.value_size, s.max_entries, options, cache),
+            .original_fd = fd,
             .type = s.type,
             .key_size = s.key_size,
             .value_size = s.value_size,
             .max_entries = s.max_entries,
-            .inner_map_fd = gsl::narrow<int32_t>(s.inner_map_idx) // Temporarily fill in the index. This will be
-                                                                  // replaced in the resolve_inner_map_references pass.
+            .inner_map_fd = gsl::narrow<int32_t>(s.inner_map_idx),
         });
     }
 }
@@ -300,13 +316,7 @@ static int do_bpf(const bpf_cmd cmd, bpf_attr& attr) { return syscall(321, cmd, 
  *  This function requires admin privileges.
  */
 static int create_map_linux(const uint32_t map_type, const uint32_t key_size, const uint32_t value_size,
-                            const uint32_t max_entries, const ebpf_verifier_options_t options,
-                            std::map<EquivalenceKey, int>& cache) {
-    if (options.mock_map_fds) {
-        const EbpfMapType type = get_map_type_linux(map_type);
-        return create_map_crab(type, key_size, value_size, max_entries, options, cache);
-    }
-
+                            const uint32_t max_entries, const ebpf_verifier_options_t) {
 #if __linux__
     bpf_attr attr{};
     memset(&attr, '\0', sizeof(attr));
