@@ -332,18 +332,11 @@ static int create_map_linux(const uint32_t map_type, const uint32_t key_size, co
 #endif
 }
 
-EbpfMapDescriptor& get_map_descriptor_linux(const int map_fd) {
-    // First check if we already have the map descriptor cached.
-    EbpfMapDescriptor* map = find_map_descriptor(map_fd);
+const EbpfMapDescriptor& get_map_descriptor_linux(const int map_fd, const ProgramInfo& info) {
+    const EbpfMapDescriptor* map = find_map_descriptor(map_fd, info);
     if (map != nullptr) {
         return *map;
     }
-
-    // This fd was not created from the maps section of an ELF file,
-    // but it may be an fd created by an app before calling the verifier.
-    // In this case, we would like to query the map descriptor info
-    // (key size, value size) from the execution context, but this is
-    // not yet supported on Linux.
 
     throw UnmarshalError("map_fd " + std::to_string(map_fd) + " not found");
 }

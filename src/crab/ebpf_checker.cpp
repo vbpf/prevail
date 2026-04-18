@@ -229,18 +229,18 @@ void EbpfChecker::operator()(const ValidCallbackTarget& s) const {
 void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
     using namespace dsl_syntax;
 
-    const auto fd_type = dom.get_map_type(s.map_fd_reg, context.platform);
+    const auto fd_type = dom.get_map_type(s.map_fd_reg, context);
 
     const auto access_reg = reg_pack(s.access_reg);
     int width;
     if (s.key) {
-        const auto key_size = dom.get_map_key_size(s.map_fd_reg, context.platform).singleton();
+        const auto key_size = dom.get_map_key_size(s.map_fd_reg, context).singleton();
         if (!key_size.has_value()) {
             throw_fail("Map key size is not singleton");
         }
         width = key_size->narrow<int>();
     } else {
-        const auto value_size = dom.get_map_value_size(s.map_fd_reg, context.platform).singleton();
+        const auto value_size = dom.get_map_value_size(s.map_fd_reg, context).singleton();
         if (!value_size.has_value()) {
             throw_fail("Map value size is not singleton");
         }
@@ -271,7 +271,7 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
                         Variable key_value =
                             variable_registry.cell_var(DataKind::svalues, offset_num.value(), sizeof(uint32_t));
 
-                        if (auto max_entries = dom.get_map_max_entries(s.map_fd_reg, context.platform).lb().number()) {
+                        if (auto max_entries = dom.get_map_max_entries(s.map_fd_reg, context).lb().number()) {
                             require_value(dom.state, key_value < *max_entries, "Array index overflow");
                         } else {
                             throw_fail("Max entries is not finite");

@@ -87,7 +87,7 @@ static EbpfMapDescriptor test_map_descriptor = {.original_fd = 0,
                                                 .max_entries = 4,
                                                 .inner_map_fd = 0};
 
-static EbpfMapDescriptor& ebpf_get_map_descriptor(int) { return test_map_descriptor; }
+static const EbpfMapDescriptor& ebpf_get_map_descriptor(int, const ProgramInfo&) { return test_map_descriptor; }
 
 ebpf_platform_t g_platform_test = {.get_program_type = ebpf_get_program_type,
                                    .get_helper_prototype = ebpf_get_helper_prototype,

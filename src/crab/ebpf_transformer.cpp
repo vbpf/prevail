@@ -930,14 +930,14 @@ void EbpfTransformer::operator()(const Call& call) {
             assign_shared_map_value(std::nullopt);
             return;
         }
-        const auto map_type = dom.get_map_type(*maybe_fd_reg, context.platform);
+        const auto map_type = dom.get_map_type(*maybe_fd_reg, context);
         if (!map_type) {
             assign_shared_map_value(std::nullopt);
             return;
         }
         if (context.platform.get_map_type(*map_type).value_type == EbpfMapValueType::MAP) {
             // Map-of-maps: r0 is an inner map fd if known, otherwise an opaque shared pointer.
-            if (const auto inner_map_fd = dom.get_map_inner_map_fd(*maybe_fd_reg, context.platform)) {
+            if (const auto inner_map_fd = dom.get_map_inner_map_fd(*maybe_fd_reg, context)) {
                 do_load_mapfd(r0_reg, to_signed(*inner_map_fd), true);
             } else {
                 assign_shared_map_value(std::nullopt);
@@ -945,7 +945,7 @@ void EbpfTransformer::operator()(const Call& call) {
             return;
         }
         // Regular map: r0 is a shared pointer with known value size.
-        assign_shared_map_value(dom.get_map_value_size(*maybe_fd_reg, context.platform));
+        assign_shared_map_value(dom.get_map_value_size(*maybe_fd_reg, context));
     };
     if (call.is_map_lookup) {
         resolve_map_lookup();
@@ -1006,7 +1006,7 @@ void EbpfTransformer::operator()(const Callx& callx) {
 }
 
 void EbpfTransformer::do_load_mapfd(const Reg& dst_reg, const int mapfd, const bool maybe_null) {
-    const EbpfMapDescriptor& desc = context.platform.get_map_descriptor(mapfd);
+    const auto& desc = context.platform.get_map_descriptor(mapfd, context.program_info);
     const EbpfMapType& type = context.platform.get_map_type(desc.type);
     const RegPack& dst = reg_pack(dst_reg);
     if (type.value_type == EbpfMapValueType::PROGRAM) {
@@ -1027,7 +1027,7 @@ void EbpfTransformer::operator()(const LoadMapFd& ins) {
 }
 
 void EbpfTransformer::do_load_map_address(const Reg& dst_reg, const int mapfd, const int32_t offset) {
-    const EbpfMapDescriptor& desc = context.platform.get_map_descriptor(mapfd);
+    const auto& desc = context.platform.get_map_descriptor(mapfd, context.program_info);
     const EbpfMapType& type = context.platform.get_map_type(desc.type);
 
     if (type.value_type == EbpfMapValueType::PROGRAM) {

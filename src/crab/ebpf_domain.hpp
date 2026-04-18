@@ -112,15 +112,15 @@ class EbpfDomain final {
     std::optional<int64_t> get_stack_offset(const Reg& reg) const;
 
     [[nodiscard]]
-    std::optional<uint32_t> get_map_type(const Reg& map_fd_reg, const ebpf_platform_t& platform) const;
+    std::optional<uint32_t> get_map_type(const Reg& map_fd_reg, const AnalysisContext& context) const;
     [[nodiscard]]
-    std::optional<uint32_t> get_map_inner_map_fd(const Reg& map_fd_reg, const ebpf_platform_t& platform) const;
+    std::optional<uint32_t> get_map_inner_map_fd(const Reg& map_fd_reg, const AnalysisContext& context) const;
     [[nodiscard]]
-    Interval get_map_key_size(const Reg& map_fd_reg, const ebpf_platform_t& platform) const;
+    Interval get_map_key_size(const Reg& map_fd_reg, const AnalysisContext& context) const;
     [[nodiscard]]
-    Interval get_map_value_size(const Reg& map_fd_reg, const ebpf_platform_t& platform) const;
+    Interval get_map_value_size(const Reg& map_fd_reg, const AnalysisContext& context) const;
     [[nodiscard]]
-    Interval get_map_max_entries(const Reg& map_fd_reg, const ebpf_platform_t& platform) const;
+    Interval get_map_max_entries(const Reg& map_fd_reg, const AnalysisContext& context) const;
 
     bool get_map_fd_range(const Reg& map_fd_reg, int32_t* start_fd, int32_t* end_fd) const;
 

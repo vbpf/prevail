@@ -6,10 +6,10 @@
 // that supports eBPF can have an ebpf_platform_t struct that the verifier
 // can use to call platform-specific functions.
 
-#include <bpf_conformance_core/bpf_conformance.h>
-#include <cstdint>
 #include <optional>
 #include <string>
+
+#include <bpf_conformance_core/bpf_conformance.h>
 
 #include "config.hpp"
 #include "spec/function_prototypes.hpp"
@@ -39,11 +39,6 @@ typedef std::optional<Call> (*ebpf_get_builtin_call_fn)(int32_t id);
 typedef std::optional<Call> (*ebpf_resolve_kfunc_call_fn)(int32_t btf_id, const ProgramInfo* info,
                                                           std::string* why_not);
 
-#if 0
-// Return an fd for a map created with the given parameters.
-typedef int (*ebpf_create_map_fn)(uint32_t map_type, uint32_t key_size, uint32_t value_size, uint32_t max_entries, ebpf_verifier_options_t options);
-#endif
-
 // Parse map records and allocate map fd's.
 // In the future we may want to move map fd allocation after the verifier step.
 typedef void (*ebpf_parse_maps_section_fn)(std::vector<EbpfMapDescriptor>& map_descriptors, const char* data,
@@ -51,7 +46,7 @@ typedef void (*ebpf_parse_maps_section_fn)(std::vector<EbpfMapDescriptor>& map_d
                                            ebpf_verifier_options_t options);
 typedef void (*ebpf_resolve_inner_map_references_fn)(std::vector<EbpfMapDescriptor>& map_descriptors);
 
-typedef EbpfMapDescriptor& (*ebpf_get_map_descriptor_fn)(int map_fd);
+typedef const EbpfMapDescriptor& (*ebpf_get_map_descriptor_fn)(int map_fd, const ProgramInfo& info);
 
 struct ebpf_platform_t {
     ebpf_get_program_type_fn get_program_type;
@@ -71,7 +66,7 @@ struct ebpf_platform_t {
     ebpf_resolve_inner_map_references_fn resolve_inner_map_references;
     bpf_conformance_groups_t supported_conformance_groups;
 
-    bool supports_group(bpf_conformance_groups_t group) const {
+    bool supports_group(const bpf_conformance_groups_t group) const {
         return (supported_conformance_groups & group) == group;
     }
 };
