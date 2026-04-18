@@ -249,7 +249,17 @@ install(TARGETS prevail libbtf GSL
 install(DIRECTORY "${prevail_source_dir}/src/"
   DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/prevail"
   FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h"
-  PATTERN "test/*" EXCLUDE
+  PATTERN "test" EXCLUDE
+  PATTERN "ir" EXCLUDE
+)
+
+# ir/ holds both public and internal headers; list the public ones explicitly.
+install(FILES
+  "${prevail_source_dir}/src/ir/marshal.hpp"
+  "${prevail_source_dir}/src/ir/parse.hpp"
+  "${prevail_source_dir}/src/ir/program.hpp"
+  "${prevail_source_dir}/src/ir/syntax.hpp"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/prevail/ir"
 )
 
 # Install convenience header to top-level include/

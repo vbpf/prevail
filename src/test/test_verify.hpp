@@ -4,14 +4,17 @@
 
 #include <catch2/catch_all.hpp>
 #include <mutex>
-#include <ranges>
 #include <string>
 #include <string_view>
 #include <thread>
 #include <unordered_map>
 
-#include "ebpf_verifier.hpp"
+#include "config.hpp"
 #include "io/elf_loader.hpp"
+#include "ir/program.hpp"
+#include "ir/unmarshal.hpp"
+#include "platform.hpp"
+#include "verifier.hpp"
 
 namespace verify_test {
 
@@ -174,18 +177,16 @@ struct BoundedTestName {
                 matched_program = true;                                                                              \
                 INFO("function_name=" << raw_prog.function_name);                                                    \
                 if (should_pass) {                                                                                   \
-                    const auto prog_or_error = prevail::unmarshal(raw_prog, prevail::thread_local_options);          \
-                    const auto inst_seq = std::get_if<prevail::InstructionSeq>(&prog_or_error);                      \
-                    REQUIRE(inst_seq);                                                                               \
+                    const auto inst_seq = prevail::unmarshal(raw_prog, prevail::thread_local_options);               \
+                    REQUIRE(inst_seq.has_value());                                                                   \
                     const prevail::Program prog =                                                                    \
                         prevail::Program::from_sequence(*inst_seq, raw_prog.info, prevail::thread_local_options);    \
                     REQUIRE(prevail::verify(prog) == true);                                                          \
                 } else {                                                                                             \
                     bool rejected = false;                                                                           \
                     try {                                                                                            \
-                        const auto prog_or_error = prevail::unmarshal(raw_prog, prevail::thread_local_options);      \
-                        const auto inst_seq = std::get_if<prevail::InstructionSeq>(&prog_or_error);                  \
-                        if (!inst_seq) {                                                                             \
+                        const auto inst_seq = prevail::unmarshal(raw_prog, prevail::thread_local_options);           \
+                        if (!inst_seq.has_value()) {                                                                 \
                             rejected = true;                                                                         \
                         } else {                                                                                     \
                             const prevail::Program prog = prevail::Program::from_sequence(                           \

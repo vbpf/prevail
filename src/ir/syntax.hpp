@@ -457,7 +457,7 @@ inline std::ostream& operator<<(std::ostream& os, Value const& a) {
 std::ostream& operator<<(std::ostream& os, const Assertion& a);
 std::string to_string(const Assertion& constraint);
 
-void print(const InstructionSeq& insts, std::ostream& out, const std::optional<const Label>& label_to_print,
+void print(const InstructionSeq& insts, std::ostream& out, const std::optional<Label>& label_to_print,
            bool print_line_info = false);
 
 int size(const Instruction& inst);

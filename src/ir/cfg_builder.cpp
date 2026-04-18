@@ -14,6 +14,7 @@
 #include "config.hpp"
 #include "ir/program.hpp"
 #include "ir/syntax.hpp"
+#include "ir/unmarshal.hpp"
 #include "platform.hpp"
 
 using std::optional;
@@ -715,6 +716,16 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
         builder.set_assertions(label, get_assertions(builder.prog.instruction_at(label), info, options, label));
     }
     return std::move(builder.prog);
+}
+
+std::optional<Program> Program::from_raw(const RawProgram& raw_prog, std::vector<std::vector<std::string>>& notes,
+                                         const ebpf_verifier_options_t& options) {
+    auto inst_seq = unmarshal(raw_prog, notes, options);
+    if (!inst_seq.has_value()) {
+        notes.push_back({std::move(inst_seq).error()});
+        return std::nullopt;
+    }
+    return from_sequence(*inst_seq, raw_prog.info, options);
 }
 
 std::set<BasicBlock> BasicBlock::collect_basic_blocks(const Cfg& cfg, const bool simplify) {
