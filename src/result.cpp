@@ -110,8 +110,8 @@ bool RelevantState::is_relevant_constraint(const std::string& constraint) const 
     return true;
 }
 
-bool AnalysisResult::is_valid_after(const Label& label, const StringInvariant& state) const {
-    const AnalysisContext context = thread_local_analysis_context();
+bool AnalysisResult::is_valid_after(const Label& label, const StringInvariant& state,
+                                    const AnalysisContext& context) const {
     const EbpfDomain abstract_state =
         EbpfDomain::from_constraints(state.value(), context.options.setup_constraints, context);
     return abstract_state <= invariants.at(label).post;
@@ -119,7 +119,8 @@ bool AnalysisResult::is_valid_after(const Label& label, const StringInvariant& s
 
 ObservationCheckResult AnalysisResult::check_observation_at_label(const Label& label, const InvariantPoint point,
                                                                   const StringInvariant& observation,
-                                                                  const ObservationCheckMode mode) const {
+                                                                  const ObservationCheckMode mode,
+                                                                  const AnalysisContext& context) const {
     const auto it = invariants.find(label);
     if (it == invariants.end()) {
         return {.ok = false, .message = "No invariant available for label " + to_string(label)};
@@ -127,7 +128,6 @@ ObservationCheckResult AnalysisResult::check_observation_at_label(const Label& l
     const auto& inv_pair = it->second;
     const EbpfDomain& abstract_state = (point == InvariantPoint::pre) ? inv_pair.pre : inv_pair.post;
 
-    const AnalysisContext context = thread_local_analysis_context();
     const EbpfDomain observed_state =
         observation.is_bottom()
             ? EbpfDomain::bottom()
@@ -159,12 +159,18 @@ ObservationCheckResult AnalysisResult::check_observation_at_label(const Label& l
     return {.ok = false, .message = "Unsupported observation check mode"};
 }
 
-bool AnalysisResult::is_consistent_before(const Label& label, const StringInvariant& observation) const {
-    return check_observation_at_label(label, InvariantPoint::pre, observation, ObservationCheckMode::consistent).ok;
+bool AnalysisResult::is_consistent_before(const Label& label, const StringInvariant& observation,
+                                          const AnalysisContext& context) const {
+    return check_observation_at_label(label, InvariantPoint::pre, observation, ObservationCheckMode::consistent,
+                                      context)
+        .ok;
 }
 
-bool AnalysisResult::is_consistent_after(const Label& label, const StringInvariant& observation) const {
-    return check_observation_at_label(label, InvariantPoint::post, observation, ObservationCheckMode::consistent).ok;
+bool AnalysisResult::is_consistent_after(const Label& label, const StringInvariant& observation,
+                                         const AnalysisContext& context) const {
+    return check_observation_at_label(label, InvariantPoint::post, observation, ObservationCheckMode::consistent,
+                                      context)
+        .ok;
 }
 
 StringInvariant AnalysisResult::invariant_at(const Label& label) const { return invariants.at(label).post.to_set(); }
@@ -610,8 +616,8 @@ FailureSlice AnalysisResult::compute_slice_from_label(const Program& prog, const
     return slice;
 }
 
-std::vector<FailureSlice> AnalysisResult::compute_failure_slices(const Program& prog, const SliceParams params) const {
-    const AnalysisContext context = thread_local_analysis_context();
+std::vector<FailureSlice> AnalysisResult::compute_failure_slices(const Program& prog, const SliceParams params,
+                                                                 const AnalysisContext& context) const {
     const auto max_slices = params.max_slices;
     std::vector<FailureSlice> slices;
 

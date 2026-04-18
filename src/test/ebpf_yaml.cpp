@@ -40,11 +40,13 @@ static EbpfMapType ebpf_get_map_type(const uint32_t platform_specific_type) {
     return g_ebpf_platform_linux.get_map_type(platform_specific_type);
 }
 
-static EbpfHelperPrototype ebpf_get_helper_prototype(const int32_t n) {
-    return g_ebpf_platform_linux.get_helper_prototype(n);
+static EbpfHelperPrototype ebpf_get_helper_prototype(const int32_t n, const EbpfProgramType& program_type) {
+    return g_ebpf_platform_linux.get_helper_prototype(n, program_type);
 }
 
-static bool ebpf_is_helper_usable(const int32_t n) { return g_ebpf_platform_linux.is_helper_usable(n); }
+static bool ebpf_is_helper_usable(const int32_t n, const EbpfProgramType& program_type) {
+    return g_ebpf_platform_linux.is_helper_usable(n, program_type);
+}
 
 static std::optional<int32_t> ebpf_resolve_builtin_call(const std::string& name) {
     if (!g_ebpf_platform_linux.resolve_builtin_call) {
@@ -85,7 +87,7 @@ static EbpfMapDescriptor test_map_descriptor = {.original_fd = 0,
                                                 .max_entries = 4,
                                                 .inner_map_fd = 0};
 
-static EbpfMapDescriptor& ebpf_get_map_descriptor(int) { return test_map_descriptor; }
+static const EbpfMapDescriptor& ebpf_get_map_descriptor(int, const ProgramInfo&) { return test_map_descriptor; }
 
 ebpf_platform_t g_platform_test = {.get_program_type = ebpf_get_program_type,
                                    .get_helper_prototype = ebpf_get_helper_prototype,
@@ -292,7 +294,7 @@ static InstructionSeq raw_cfg_to_instruction_seq(const vector<std::tuple<string,
     for (const auto& [label_name, raw_block] : raw_blocks) {
         for (const string& line : raw_block) {
             try {
-                const Instruction& ins = parse_instruction(line, label_name_to_label);
+                const Instruction& ins = parse_instruction(line, label_name_to_label, {});
                 if (std::holds_alternative<Undefined>(ins)) {
                     std::cout << "text:" << line << "; ins: " << ins << "\n";
                 }
@@ -415,7 +417,8 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
     thread_local_options = test_case.options;
     try {
         const Program prog = Program::from_sequence(test_case.instruction_seq, info, test_case.options);
-        const AnalysisResult result = analyze(prog, test_case.assumed_pre_invariant);
+        const AnalysisContext context{prog.info(), test_case.options, *prog.info().platform};
+        const AnalysisResult result = analyze(prog, test_case.assumed_pre_invariant, context);
         const StringInvariant actual_last_invariant = result.invariant_at(Label::exit);
         std::set<string> actual_messages;
         if (auto error = result.find_first_error()) {
@@ -430,7 +433,7 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
         // Evaluate optional observation checks.
         for (const auto& obs : test_case.observations) {
             const ObservationCheckResult check =
-                result.check_observation_at_label(obs.label, obs.point, obs.constraints, obs.mode);
+                result.check_observation_at_label(obs.label, obs.point, obs.constraints, obs.mode, context);
             if (!check.ok) {
                 const std::string point_s = (obs.point == InvariantPoint::pre) ? "pre" : "post";
                 const std::string mode_s = (obs.mode == ObservationCheckMode::consistent) ? "consistent" : "entailed";
@@ -468,17 +471,6 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
             .messages = make_diff(actual_messages, test_case.expected_messages),
         };
     }
-}
-
-template <typename T>
-    requires std::is_trivially_copyable_v<T>
-static vector<T> vector_of(const std::vector<std::byte>& bytes) {
-    auto data = bytes.data();
-    const auto size = bytes.size();
-    if (size % sizeof(T) != 0 || size > std::numeric_limits<uint32_t>::max() || !data) {
-        throw std::runtime_error("Invalid argument to vector_of");
-    }
-    return {reinterpret_cast<const T*>(data), reinterpret_cast<const T*>(data + size)};
 }
 
 template <std::signed_integral TS>
@@ -527,8 +519,7 @@ StringInvariant stack_contents_invariant(const std::vector<std::byte>& memory_by
 // Helper to convert uint8_t memory to stack invariant
 static StringInvariant stack_contents_invariant(const std::vector<uint8_t>& memory_bytes) {
     std::vector<std::byte> bytes(memory_bytes.size());
-    std::transform(memory_bytes.begin(), memory_bytes.end(), bytes.begin(),
-                   [](uint8_t b) { return static_cast<std::byte>(b); });
+    std::ranges::transform(memory_bytes, bytes.begin(), [](uint8_t b) { return static_cast<std::byte>(b); });
     return stack_contents_invariant(bytes);
 }
 
@@ -576,7 +567,7 @@ ConformanceTestResult run_conformance_test_case(const std::vector<uint8_t>& memo
 
     try {
         const Program prog = Program::from_sequence(inst_seq, info, options);
-        const AnalysisResult result = analyze(prog, pre_invariant);
+        const AnalysisResult result = analyze(prog, pre_invariant, options);
         return ConformanceTestResult{.success = !result.failed, .r0_value = result.exit_value};
     } catch (const std::exception& ex) {
         // Catch exceptions thrown in ebpf_domain.cpp.

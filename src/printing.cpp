@@ -15,7 +15,6 @@
 #include "crab/var_registry.hpp"
 #include "ir/syntax.hpp"
 #include "platform.hpp"
-#include "spec/function_prototypes.hpp"
 #include "verifier.hpp"
 
 using std::optional;
@@ -106,13 +105,13 @@ string to_string(Label const& label) {
 
 struct LineInfoPrinter {
     std::ostream& os;
+    const std::map<size_t, btf_line_info_t> line_info_map;
+    bool print_line_info_enabled{};
     std::string previous_source_line;
 
     void print_line_info(const Label& label) {
-        if (thread_local_options.verbosity_opts.print_line_info) {
-            const auto& line_info_map = thread_local_program_info.get().line_info;
+        if (print_line_info_enabled) {
             const auto& line_info = line_info_map.find(label.from);
-            // Print line info only once.
             if (line_info != line_info_map.end() && line_info->second.source_line != previous_source_line) {
                 os << "\n" << line_info->second << "\n";
                 previous_source_line = line_info->second.source_line;
@@ -124,7 +123,8 @@ struct LineInfoPrinter {
 struct DetailedPrinter : LineInfoPrinter {
     const Program& prog;
 
-    DetailedPrinter(std::ostream& os, const Program& prog) : LineInfoPrinter{os}, prog(prog) {}
+    DetailedPrinter(std::ostream& os, const Program& prog)
+        : LineInfoPrinter{os, prog.info().line_info, thread_local_options.verbosity_opts.print_line_info}, prog(prog) {}
 
     void print_labels(const std::string& direction, const std::set<Label>& labels) {
         auto [it, et] = std::pair{labels.begin(), labels.end()};
@@ -190,7 +190,7 @@ void print_invariants(std::ostream& os, const Program& prog, const bool simplify
                 if (label != bb.last_label()) {
                     os << "After " << current.pre << "\n";
                 }
-                print_error(os, *current.error);
+                print_error(os, *current.error, prog);
                 os << "\n";
                 return;
             }
@@ -250,8 +250,8 @@ std::string to_string(const VerificationError& error) {
     return ss.str();
 }
 
-void print_error(std::ostream& os, const VerificationError& error) {
-    LineInfoPrinter printer{os};
+void print_error(std::ostream& os, const VerificationError& error, const Program& prog) {
+    LineInfoPrinter printer{os, prog.info().line_info, thread_local_options.verbosity_opts.print_line_info};
     if (const auto& label = error.where) {
         printer.print_line_info(*label);
         os << *label << ": ";
@@ -434,8 +434,6 @@ struct AssertionPrinterVisitor {
 // ReSharper disable CppMemberFunctionMayBeConst
 struct CommandPrinterVisitor {
     std::ostream& os_;
-
-    void visit(const auto& item) { std::visit(*this, item); }
 
     void operator()(Undefined const& a) { os_ << "Undefined{" << a.opcode << "}"; }
 
@@ -931,7 +929,7 @@ void print_invariants_filtered(std::ostream& os, const Program& prog, const bool
             const auto& current = result.invariants.at(label);
             if (current.error) {
                 os << "\nVerification error:\n";
-                print_error(os, *current.error);
+                print_error(os, *current.error, prog);
                 os << "\n";
             }
         }

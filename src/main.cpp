@@ -198,7 +198,7 @@ int main(int argc, char** argv) {
         }
         return load_error.has_value() ? 1 : 64;
     }
-    const RawProgram& raw_prog = raw_progs.back();
+    RawProgram& raw_prog = raw_progs.back();
 
     // Convert the raw program section to a set of instructions.
     std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, ebpf_verifier_options);
@@ -211,7 +211,7 @@ int main(int argc, char** argv) {
     if (!asmfile.empty()) {
         std::ofstream out{asmfile};
         print(inst_seq, out, {});
-        print_map_descriptors(thread_local_program_info->map_descriptors, out);
+        print_map_descriptors(raw_prog.info.map_descriptors, out);
     }
 
     // Convert the instruction sequence to a control-flow graph.
@@ -244,7 +244,7 @@ int main(int argc, char** argv) {
             }
             if (verbosity.print_failures) {
                 if (auto verification_error = result.find_first_error()) {
-                    print_error(std::cout, *verification_error);
+                    print_error(std::cout, *verification_error, prog);
                 }
             }
             if (failure_slice && result.failed) {
@@ -252,7 +252,8 @@ int main(int argc, char** argv) {
                 AnalysisResult::SliceParams slice_params;
                 slice_params.max_steps = failure_slice_depth;
                 slice_params.max_slices = 1;
-                auto slices = result.compute_failure_slices(prog, slice_params);
+                const AnalysisContext context{prog.info(), ebpf_verifier_options, *prog.info().platform};
+                auto slices = result.compute_failure_slices(prog, slice_params, context);
                 print_failure_slices(std::cout, prog, verbosity.simplify, result, slices);
             } else if (failure_slice && !result.failed) {
                 std::cout << "Program passed verification; no failure slices to display.\n";
@@ -274,7 +275,7 @@ int main(int argc, char** argv) {
                 // Print the first error if not already printed by -v or -f.
                 if (!verbosity.print_invariants && !verbosity.print_failures && !failure_slice) {
                     if (auto verification_error = result.find_first_error()) {
-                        print_error(std::cout, *verification_error);
+                        print_error(std::cout, *verification_error, prog);
                     }
                     std::cout << "Hint: run with --failure-slice for a causal trace, or -v for full invariants.\n";
                 }

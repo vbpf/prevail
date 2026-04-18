@@ -255,18 +255,8 @@ const std::vector<RawProgram>& ElfObject::get_programs(const std::string& desire
 // Free functions
 // ---------------------------------------------------------------------------
 
-int create_map_crab(const EbpfMapType& map_type, const uint32_t key_size, const uint32_t value_size,
-                    const uint32_t max_entries, ebpf_verifier_options_t) {
-    const EquivalenceKey equiv{map_type.value_type, key_size, value_size, map_type.is_array ? max_entries : 0};
-    if (!thread_local_program_info->cache.contains(equiv)) {
-        // +1 so 0 is the null FD
-        thread_local_program_info->cache[equiv] = gsl::narrow<int>(thread_local_program_info->cache.size()) + 1;
-    }
-    return thread_local_program_info->cache.at(equiv);
-}
-
-EbpfMapDescriptor* find_map_descriptor(const int map_fd) {
-    for (EbpfMapDescriptor& map : thread_local_program_info->map_descriptors) {
+const EbpfMapDescriptor* find_map_descriptor(const int map_fd, const ProgramInfo& info) {
+    for (const EbpfMapDescriptor& map : info.map_descriptors) {
         if (map.original_fd == map_fd) {
             return &map;
         }

@@ -80,11 +80,6 @@ std::optional<VerificationError> ebpf_domain_check(const EbpfDomain& dom, const 
     return {};
 }
 
-std::optional<VerificationError> ebpf_domain_check(const EbpfDomain& dom, const Assertion& assertion,
-                                                   const Label& where) {
-    return ebpf_domain_check(dom, assertion, where, thread_local_analysis_context());
-}
-
 void EbpfChecker::check_access_stack(const LinearExpression& lb, const LinearExpression& ub) const {
     using namespace dsl_syntax;
     require_value(dom.state, reg_pack(R10_STACK_POINTER).stack_offset - context.options.subprogram_stack_size <= lb,
@@ -190,10 +185,10 @@ void EbpfChecker::operator()(const FuncConstraint& s) const {
         if (sn->fits<int32_t>()) {
             // We can now process it as if the id was immediate.
             const int32_t imm = sn->cast_to<int32_t>();
-            if (!context.platform.is_helper_usable(imm)) {
+            if (!context.platform.is_helper_usable(imm, context.program_info.type)) {
                 throw_fail("invalid helper function id " + std::to_string(imm));
             }
-            const Call call = make_call(imm, context.platform);
+            const Call call = make_call(imm, context.platform, context.program_info.type);
             for (const Assertion& sub_assertion : get_assertions(call, context.program_info, context.options, {})) {
                 // TODO: create explicit sub assertions elsewhere
                 EbpfChecker{dom, sub_assertion, context}.visit();
@@ -229,18 +224,18 @@ void EbpfChecker::operator()(const ValidCallbackTarget& s) const {
 void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
     using namespace dsl_syntax;
 
-    const auto fd_type = dom.get_map_type(s.map_fd_reg, context.platform);
+    const auto fd_type = dom.get_map_type(s.map_fd_reg, context);
 
     const auto access_reg = reg_pack(s.access_reg);
     int width;
     if (s.key) {
-        const auto key_size = dom.get_map_key_size(s.map_fd_reg, context.platform).singleton();
+        const auto key_size = dom.get_map_key_size(s.map_fd_reg, context).singleton();
         if (!key_size.has_value()) {
             throw_fail("Map key size is not singleton");
         }
         width = key_size->narrow<int>();
     } else {
-        const auto value_size = dom.get_map_value_size(s.map_fd_reg, context.platform).singleton();
+        const auto value_size = dom.get_map_value_size(s.map_fd_reg, context).singleton();
         if (!value_size.has_value()) {
             throw_fail("Map value size is not singleton");
         }
@@ -271,7 +266,7 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
                         Variable key_value =
                             variable_registry.cell_var(DataKind::svalues, offset_num.value(), sizeof(uint32_t));
 
-                        if (auto max_entries = dom.get_map_max_entries(s.map_fd_reg, context.platform).lb().number()) {
+                        if (auto max_entries = dom.get_map_max_entries(s.map_fd_reg, context).lb().number()) {
                             require_value(dom.state, key_value < *max_entries, "Array index overflow");
                         } else {
                             throw_fail("Max entries is not finite");

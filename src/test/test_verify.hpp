@@ -162,45 +162,45 @@ struct BoundedTestName {
     TEST_CASE(PREVAIL_BOUNDED_NAME.data, tags)
 
 // Verify a program in a section that may have multiple programs in it.
-#define VERIFY_PROGRAM(dirname, filename, section_name, program_name, _options, platform, should_pass, count)        \
-    do {                                                                                                             \
-        prevail::thread_local_options = _options;                                                                    \
-        const auto& raw_progs = verify_test::read_elf_cached("ebpf-samples/" dirname "/" filename, section_name, "", \
-                                                             prevail::thread_local_options, platform);               \
-        REQUIRE(raw_progs.size() == count);                                                                          \
-        bool matched_program = false;                                                                                \
-        for (const auto& raw_prog : raw_progs) {                                                                     \
-            if (count == 1 || raw_prog.function_name == program_name) {                                              \
-                matched_program = true;                                                                              \
-                INFO("function_name=" << raw_prog.function_name);                                                    \
-                if (should_pass) {                                                                                   \
-                    const auto prog_or_error = prevail::unmarshal(raw_prog, prevail::thread_local_options);          \
-                    const auto inst_seq = std::get_if<prevail::InstructionSeq>(&prog_or_error);                      \
-                    REQUIRE(inst_seq);                                                                               \
-                    const prevail::Program prog =                                                                    \
-                        prevail::Program::from_sequence(*inst_seq, raw_prog.info, prevail::thread_local_options);    \
-                    REQUIRE(prevail::verify(prog) == true);                                                          \
-                } else {                                                                                             \
-                    bool rejected = false;                                                                           \
-                    try {                                                                                            \
-                        const auto prog_or_error = prevail::unmarshal(raw_prog, prevail::thread_local_options);      \
-                        const auto inst_seq = std::get_if<prevail::InstructionSeq>(&prog_or_error);                  \
-                        if (!inst_seq) {                                                                             \
-                            rejected = true;                                                                         \
-                        } else {                                                                                     \
-                            const prevail::Program prog = prevail::Program::from_sequence(                           \
-                                *inst_seq, raw_prog.info, prevail::thread_local_options);                            \
-                            rejected = (prevail::verify(prog) == false);                                             \
-                        }                                                                                            \
-                    } catch (const std::runtime_error& ex) {                                                         \
-                        INFO("rejected_by_exception=" << ex.what());                                                 \
-                        rejected = true;                                                                             \
-                    }                                                                                                \
-                    REQUIRE(rejected);                                                                               \
-                }                                                                                                    \
-            }                                                                                                        \
-        }                                                                                                            \
-        REQUIRE(matched_program);                                                                                    \
+#define VERIFY_PROGRAM(dirname, filename, section_name, program_name, _options, platform, should_pass, count)     \
+    do {                                                                                                          \
+        prevail::thread_local_options = _options;                                                                 \
+        auto raw_progs = verify_test::read_elf_cached("ebpf-samples/" dirname "/" filename, section_name, "",     \
+                                                      prevail::thread_local_options, platform);                   \
+        REQUIRE(raw_progs.size() == count);                                                                       \
+        bool matched_program = false;                                                                             \
+        for (auto& raw_prog : raw_progs) {                                                                        \
+            if (count == 1 || raw_prog.function_name == program_name) {                                           \
+                matched_program = true;                                                                           \
+                INFO("function_name=" << raw_prog.function_name);                                                 \
+                if (should_pass) {                                                                                \
+                    const auto prog_or_error = prevail::unmarshal(raw_prog, prevail::thread_local_options);       \
+                    const auto inst_seq = std::get_if<prevail::InstructionSeq>(&prog_or_error);                   \
+                    REQUIRE(inst_seq);                                                                            \
+                    const prevail::Program prog =                                                                 \
+                        prevail::Program::from_sequence(*inst_seq, raw_prog.info, prevail::thread_local_options); \
+                    REQUIRE(prevail::verify(prog) == true);                                                       \
+                } else {                                                                                          \
+                    bool rejected = false;                                                                        \
+                    try {                                                                                         \
+                        const auto prog_or_error = prevail::unmarshal(raw_prog, prevail::thread_local_options);   \
+                        const auto inst_seq = std::get_if<prevail::InstructionSeq>(&prog_or_error);               \
+                        if (!inst_seq) {                                                                          \
+                            rejected = true;                                                                      \
+                        } else {                                                                                  \
+                            const prevail::Program prog = prevail::Program::from_sequence(                        \
+                                *inst_seq, raw_prog.info, prevail::thread_local_options);                         \
+                            rejected = (prevail::verify(prog) == false);                                          \
+                        }                                                                                         \
+                    } catch (const std::runtime_error& ex) {                                                      \
+                        INFO("rejected_by_exception=" << ex.what());                                              \
+                        rejected = true;                                                                          \
+                    }                                                                                             \
+                    REQUIRE(rejected);                                                                            \
+                }                                                                                                 \
+            }                                                                                                     \
+        }                                                                                                         \
+        REQUIRE(matched_program);                                                                                 \
     } while (0)
 
 // Verify a section with only one program in it.

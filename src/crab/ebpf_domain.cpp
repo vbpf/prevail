@@ -14,7 +14,6 @@
 #include "crab/array_domain.hpp"
 #include "crab/ebpf_domain.hpp"
 #include "crab/var_registry.hpp"
-#include "crab_utils/lazy_allocator.hpp"
 #include "ir/unmarshal.hpp"
 
 namespace prevail {
@@ -264,7 +263,7 @@ bool EbpfDomain::get_map_fd_range(const Reg& map_fd_reg, int32_t* start_fd, int3
 }
 
 // All maps in the range must have the same type for us to use it.
-std::optional<uint32_t> EbpfDomain::get_map_type(const Reg& map_fd_reg, const ebpf_platform_t& platform) const {
+std::optional<uint32_t> EbpfDomain::get_map_type(const Reg& map_fd_reg, const AnalysisContext& context) const {
     int32_t start_fd, end_fd;
     if (!get_map_fd_range(map_fd_reg, &start_fd, &end_fd)) {
         return {};
@@ -272,43 +271,35 @@ std::optional<uint32_t> EbpfDomain::get_map_type(const Reg& map_fd_reg, const eb
 
     std::optional<uint32_t> type;
     for (int32_t map_fd = start_fd; map_fd <= end_fd; map_fd++) {
-        EbpfMapDescriptor* map = &platform.get_map_descriptor(map_fd);
-        if (map == nullptr) {
-            return {};
-        }
+        const auto& map = context.platform.get_map_descriptor(map_fd, context.program_info);
         if (!type.has_value()) {
-            type = map->type;
-        } else if (map->type != *type) {
+            type = map.type;
+        } else if (map.type != *type) {
             return {};
         }
     }
     return type;
 }
 
-// All maps in the range must have the same inner map fd for us to use it.
-std::optional<uint32_t> EbpfDomain::get_map_inner_map_fd(const Reg& map_fd_reg, const ebpf_platform_t& platform) const {
+std::optional<int> EbpfDomain::get_map_inner_map_fd(const Reg& map_fd_reg, const AnalysisContext& context) const {
     int start_fd, end_fd;
     if (!get_map_fd_range(map_fd_reg, &start_fd, &end_fd)) {
         return {};
     }
 
-    std::optional<uint32_t> inner_map_fd;
+    std::optional<int> inner_map_fd;
     for (int map_fd = start_fd; map_fd <= end_fd; map_fd++) {
-        EbpfMapDescriptor* map = &platform.get_map_descriptor(map_fd);
-        if (map == nullptr) {
-            return {};
-        }
+        const auto& map = context.platform.get_map_descriptor(map_fd, context.program_info);
         if (!inner_map_fd.has_value()) {
-            inner_map_fd = map->inner_map_fd;
-        } else if (map->inner_map_fd != *inner_map_fd) {
+            inner_map_fd = map.inner_map_fd;
+        } else if (map.inner_map_fd != *inner_map_fd) {
             return {};
         }
     }
     return inner_map_fd;
 }
 
-// We can deal with a range of key sizes.
-Interval EbpfDomain::get_map_key_size(const Reg& map_fd_reg, const ebpf_platform_t& platform) const {
+Interval EbpfDomain::get_map_key_size(const Reg& map_fd_reg, const AnalysisContext& context) const {
     int start_fd, end_fd;
     if (!get_map_fd_range(map_fd_reg, &start_fd, &end_fd)) {
         return Interval::top();
@@ -316,17 +307,13 @@ Interval EbpfDomain::get_map_key_size(const Reg& map_fd_reg, const ebpf_platform
 
     Interval result = Interval::bottom();
     for (int map_fd = start_fd; map_fd <= end_fd; map_fd++) {
-        if (const EbpfMapDescriptor* map = &platform.get_map_descriptor(map_fd)) {
-            result = result | Interval{map->key_size};
-        } else {
-            return Interval::top();
-        }
+        const auto& map = context.platform.get_map_descriptor(map_fd, context.program_info);
+        result = result | Interval{map.key_size};
     }
     return result;
 }
 
-// We can deal with a range of value sizes.
-Interval EbpfDomain::get_map_value_size(const Reg& map_fd_reg, const ebpf_platform_t& platform) const {
+Interval EbpfDomain::get_map_value_size(const Reg& map_fd_reg, const AnalysisContext& context) const {
     int start_fd, end_fd;
     if (!get_map_fd_range(map_fd_reg, &start_fd, &end_fd)) {
         return Interval::top();
@@ -334,17 +321,13 @@ Interval EbpfDomain::get_map_value_size(const Reg& map_fd_reg, const ebpf_platfo
 
     Interval result = Interval::bottom();
     for (int map_fd = start_fd; map_fd <= end_fd; map_fd++) {
-        if (const EbpfMapDescriptor* map = &platform.get_map_descriptor(map_fd)) {
-            result = result | Interval(map->value_size);
-        } else {
-            return Interval::top();
-        }
+        const auto& map = context.platform.get_map_descriptor(map_fd, context.program_info);
+        result = result | Interval(map.value_size);
     }
     return result;
 }
 
-// We can deal with a range of max_entries values.
-Interval EbpfDomain::get_map_max_entries(const Reg& map_fd_reg, const ebpf_platform_t& platform) const {
+Interval EbpfDomain::get_map_max_entries(const Reg& map_fd_reg, const AnalysisContext& context) const {
     int start_fd, end_fd;
     if (!get_map_fd_range(map_fd_reg, &start_fd, &end_fd)) {
         return Interval::top();
@@ -352,11 +335,8 @@ Interval EbpfDomain::get_map_max_entries(const Reg& map_fd_reg, const ebpf_platf
 
     Interval result = Interval::bottom();
     for (int map_fd = start_fd; map_fd <= end_fd; map_fd++) {
-        if (const EbpfMapDescriptor* map = &platform.get_map_descriptor(map_fd)) {
-            result = result | Interval(map->max_entries);
-        } else {
-            return Interval::top();
-        }
+        const auto& map = context.platform.get_map_descriptor(map_fd, context.program_info);
+        result = result | Interval(map.max_entries);
     }
     return result;
 }

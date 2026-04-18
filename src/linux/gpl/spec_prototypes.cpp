@@ -1,5 +1,6 @@
 #include "linux/gpl/spec_type_descriptors.hpp"
 #include "platform.hpp"
+#include <set>
 #include <string_view>
 
 namespace prevail {
@@ -2627,7 +2628,7 @@ std::optional<int32_t> resolve_helper_id_linux(const std::string& name) {
     return std::nullopt;
 }
 
-bool is_helper_usable_linux(const int32_t n) {
+bool is_helper_usable_linux(const int32_t n, const EbpfProgramType& program_type) {
     if (n >= static_cast<int>(std::size(prototypes)) || n < 0) {
         return false;
     }
@@ -2641,27 +2642,25 @@ bool is_helper_usable_linux(const int32_t n) {
     // Until attach-type-level helper gating is modeled, keep a conservative
     // program-type allowlist here instead of treating them as fully generic.
     if (n == 46) { // bpf_get_socket_cookie
-        const std::string_view program_type = thread_local_program_info->type.name;
-        const bool allowed = program_type == "socket_filter" || program_type == "sched_act" ||
-                             program_type == "sched_cls" || program_type == "sk_skb" || program_type == "cgroup_skb" ||
-                             program_type == "cgroup_sock" || program_type == "cgroup_sock_addr" ||
-                             program_type == "sock_ops" || program_type == "sk_reuseport" || program_type == "tracing";
-        if (!allowed) {
+        static const std::set<std::string_view> socket_cookie_types = {
+            "socket_filter", "sched_act",        "sched_cls", "sk_skb",       "cgroup_skb",
+            "cgroup_sock",   "cgroup_sock_addr", "sock_ops",  "sk_reuseport", "tracing",
+        };
+        if (!socket_cookie_types.contains(program_type.name)) {
             return false;
         }
     }
 
     // If the helper has a context_descriptor, it must match the hook's context_descriptor.
-    if (prototypes[n].context_descriptor &&
-        prototypes[n].context_descriptor != thread_local_program_info->type.context_descriptor) {
+    if (prototypes[n].context_descriptor && prototypes[n].context_descriptor != program_type.context_descriptor) {
         return false;
     }
 
     return true;
 }
 
-EbpfHelperPrototype get_helper_prototype_linux(const int32_t n) {
-    if (!is_helper_usable_linux(n)) {
+EbpfHelperPrototype get_helper_prototype_linux(const int32_t n, const EbpfProgramType& program_type) {
+    if (!is_helper_usable_linux(n, program_type)) {
         return EbpfHelperPrototype{};
     }
     return prototypes[n];

@@ -498,19 +498,22 @@ static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const Prog
     return builder;
 }
 
-static bool is_tail_call_helper(const Call& call, const ebpf_platform_t& platform) {
+static bool is_tail_call_helper(const Call& call, const ebpf_platform_t& platform,
+                                const EbpfProgramType& program_type) {
     if (call.kind != CallKind::helper) {
         return false;
     }
-    if (!platform.is_helper_usable(call.func)) {
+    if (!platform.is_helper_usable(call.func, program_type)) {
         return false;
     }
-    return platform.get_helper_prototype(call.func).return_type == EBPF_RETURN_TYPE_INTEGER_OR_NO_RETURN_IF_SUCCEED;
+    return platform.get_helper_prototype(call.func, program_type).return_type ==
+           EBPF_RETURN_TYPE_INTEGER_OR_NO_RETURN_IF_SUCCEED;
 }
 
-static bool is_tail_call_site(const Instruction& ins, const ebpf_platform_t& platform) {
+static bool is_tail_call_site(const Instruction& ins, const ebpf_platform_t& platform,
+                              const EbpfProgramType& program_type) {
     if (const auto* call = std::get_if<Call>(&ins)) {
-        return is_tail_call_helper(*call, platform);
+        return is_tail_call_helper(*call, platform, program_type);
     }
     if (std::holds_alternative<Callx>(ins)) {
         // At CFG-construction time, callx target ids are not available.
@@ -534,7 +537,8 @@ static void collect_wto_labels(const CycleOrLabel& component, std::set<Label>& l
 /// Count tail-call sites over the reachable maximal-SCC DAG so cycles do not inflate depth.
 /// Maximal SCCs are obtained from WTO nesting: all labels in the same outermost WTO cycle
 /// are mutually reachable and therefore belong to the same maximal SCC.
-static void validate_tail_call_chain_depth(const Program& prog, const Wto& wto, const ebpf_platform_t& platform) {
+static void validate_tail_call_chain_depth(const Program& prog, const Wto& wto, const ebpf_platform_t& platform,
+                                           const EbpfProgramType& program_type) {
     constexpr int tail_call_chain_limit = 33;
 
     // WTO only covers labels reachable from entry.
@@ -566,7 +570,7 @@ static void validate_tail_call_chain_depth(const Program& prog, const Wto& wto, 
 
     for (const auto& label : reachable) {
         const Label src_scc = maximal_scc_of.at(label);
-        if (is_tail_call_site(prog.instruction_at(label), platform)) {
+        if (is_tail_call_site(prog.instruction_at(label), platform, program_type)) {
             ++tail_sites_per_scc.at(src_scc);
             auto& representative = representative_tail_label.at(src_scc);
             if (!representative.has_value()) {
@@ -642,7 +646,7 @@ static void validate_tail_call_chain_depth(const Program& prog, const Wto& wto, 
 
 Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo& info,
                                const ebpf_verifier_options_t& options) {
-    thread_local_program_info.set(info);
+    ProgramInfo mutable_info = info;
     options.validate();
     thread_local_options = options;
     assert(info.platform != nullptr && "platform must be set before instruction feature validation");
@@ -654,12 +658,12 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
                                                 options.max_call_stack_frames, resolved_kfunc_calls);
 
     const Wto wto{builder.prog.cfg()};
-    validate_tail_call_chain_depth(builder.prog, wto, *info.platform);
+    validate_tail_call_chain_depth(builder.prog, wto, *info.platform, info.type);
 
     // Record valid callback targets for PTR_TO_FUNC: top-level concrete instruction labels
     // (no stack-frame prefix, not synthetic jump labels, and not Exit instructions).
-    thread_local_program_info->callback_target_labels.clear();
-    thread_local_program_info->callback_targets_with_exit.clear();
+    mutable_info.callback_target_labels.clear();
+    mutable_info.callback_targets_with_exit.clear();
     for (const Label& label : builder.prog.labels()) {
         if (label == Label::entry || label == Label::exit || label.isjump() || !label.stack_frame_prefix.empty()) {
             continue;
@@ -667,7 +671,7 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
         if (std::holds_alternative<Exit>(builder.prog.instruction_at(label))) {
             continue;
         }
-        thread_local_program_info->callback_target_labels.insert(label.from);
+        mutable_info.callback_target_labels.insert(label.from);
     }
 
     // Basic callback body check: callback target must be able to reach a top-level Exit.
@@ -694,10 +698,10 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
         }
         return false;
     };
-    for (const int32_t label_num : thread_local_program_info->callback_target_labels) {
+    for (const int32_t label_num : mutable_info.callback_target_labels) {
         const Label label{gsl::narrow<int>(label_num)};
         if (has_reachable_top_level_exit(label)) {
-            thread_local_program_info->callback_targets_with_exit.insert(label_num);
+            mutable_info.callback_targets_with_exit.insert(label_num);
         }
     }
 
@@ -714,6 +718,7 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
     for (const auto& label : builder.prog.labels()) {
         builder.set_assertions(label, get_assertions(builder.prog.instruction_at(label), info, options, label));
     }
+    builder.prog.m_info = std::move(mutable_info);
     return std::move(builder.prog);
 }
 

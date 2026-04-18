@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-#include "crab_utils/lazy_allocator.hpp"
 #include "spec/ebpf_base.h"
 #include "spec/vm_isa.hpp"
 
@@ -62,7 +61,6 @@ struct ProgramInfo {
     const struct ebpf_platform_t* platform{};
     std::vector<EbpfMapDescriptor> map_descriptors{};
     EbpfProgramType type{};
-    std::map<EquivalenceKey, int> cache{};
     std::map<size_t, btf_line_info_t> line_info{};
     // Valid top-level instruction labels that can be used as callback entry targets via PTR_TO_FUNC.
     std::set<int32_t> callback_target_labels{};
@@ -86,5 +84,4 @@ void print_map_descriptors(const std::vector<EbpfMapDescriptor>& descriptors, st
 
 std::ostream& operator<<(std::ostream& os, const btf_line_info_t& line_info);
 
-extern thread_local LazyAllocator<ProgramInfo> thread_local_program_info;
 } // namespace prevail

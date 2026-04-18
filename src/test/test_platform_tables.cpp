@@ -208,26 +208,22 @@ TEST_CASE("linux ksym relocation resolver maps known kfunc symbols", "[platform]
 }
 
 TEST_CASE("helper prototypes with unmodeled ABI classes are conservatively rejected", "[platform][tables]") {
-    ProgramInfo info{
-        .platform = &g_ebpf_platform_linux,
-        .type = g_ebpf_platform_linux.get_program_type("socket", ""),
-    };
-    thread_local_program_info = info;
+    const auto program_type = g_ebpf_platform_linux.get_program_type("socket", "");
 
     size_t usable_helpers = 0;
     size_t unmodeled_helpers = 0;
     for (int32_t id = 0; id <= 211; ++id) {
-        if (!g_ebpf_platform_linux.is_helper_usable(id)) {
+        if (!g_ebpf_platform_linux.is_helper_usable(id, program_type)) {
             continue;
         }
         ++usable_helpers;
-        const EbpfHelperPrototype proto = g_ebpf_platform_linux.get_helper_prototype(id);
+        const EbpfHelperPrototype proto = g_ebpf_platform_linux.get_helper_prototype(id, program_type);
         if (!has_unmodeled_abi_type(proto)) {
             continue;
         }
 
         ++unmodeled_helpers;
-        const Call call = make_call(id, g_ebpf_platform_linux);
+        const Call call = make_call(id, g_ebpf_platform_linux, program_type);
         CAPTURE(id, proto.name);
         REQUIRE_FALSE(call.is_supported);
         REQUIRE_FALSE(call.unsupported_reason.empty());
@@ -238,14 +234,10 @@ TEST_CASE("helper prototypes with unmodeled ABI classes are conservatively rejec
 }
 
 TEST_CASE("new helper ABI classes map to modeled call contracts", "[platform][tables]") {
-    ProgramInfo info{
-        .platform = &g_ebpf_platform_linux,
-        .type = g_ebpf_platform_linux.get_program_type("socket", ""),
-    };
-    thread_local_program_info = info;
+    const auto program_type = g_ebpf_platform_linux.get_program_type("socket", "");
 
-    const auto require_supported = [](const int32_t id) -> Call {
-        const Call call = make_call(id, g_ebpf_platform_linux);
+    const auto require_supported = [&](const int32_t id) -> Call {
+        const Call call = make_call(id, g_ebpf_platform_linux, program_type);
         CAPTURE(id, call.name, call.unsupported_reason);
         REQUIRE(call.is_supported);
         return call;
@@ -289,36 +281,22 @@ TEST_CASE("new helper ABI classes map to modeled call contracts", "[platform][ta
 }
 
 TEST_CASE("PTR_TO_CONST_STR helpers remain explicitly unsupported", "[platform][tables]") {
-    ProgramInfo info{
-        .platform = &g_ebpf_platform_linux,
-        .type = g_ebpf_platform_linux.get_program_type("socket", ""),
-    };
-    thread_local_program_info = info;
+    const auto program_type = g_ebpf_platform_linux.get_program_type("socket", "");
 
-    const Call strncmp = make_call(182, g_ebpf_platform_linux);
+    const Call strncmp = make_call(182, g_ebpf_platform_linux, program_type);
     CAPTURE(strncmp.name, strncmp.unsupported_reason);
     REQUIRE_FALSE(strncmp.is_supported);
     REQUIRE_FALSE(strncmp.unsupported_reason.empty());
 }
 
 TEST_CASE("socket cookie helper availability is not treated as fully context-agnostic", "[platform][tables]") {
-    thread_local_program_info = ProgramInfo{
-        .platform = &g_ebpf_platform_linux,
-        .type = g_ebpf_platform_linux.get_program_type("cgroup/connect4", ""),
-    };
-    REQUIRE(g_ebpf_platform_linux.is_helper_usable(46)); // get_socket_cookie
+    const auto cgroup_type = g_ebpf_platform_linux.get_program_type("cgroup/connect4", "");
+    REQUIRE(g_ebpf_platform_linux.is_helper_usable(46, cgroup_type)); // get_socket_cookie
 
-    thread_local_program_info = ProgramInfo{
-        .platform = &g_ebpf_platform_linux,
-        .type = g_ebpf_platform_linux.get_program_type("xdp", ""),
-    };
-    REQUIRE_FALSE(g_ebpf_platform_linux.is_helper_usable(46));
+    const auto xdp_type = g_ebpf_platform_linux.get_program_type("xdp", "");
+    REQUIRE_FALSE(g_ebpf_platform_linux.is_helper_usable(46, xdp_type));
 
-    thread_local_program_info = ProgramInfo{
-        .platform = &g_ebpf_platform_linux,
-        .type = g_ebpf_platform_linux.get_program_type("cgroup/connect4", ""),
-    };
-    REQUIRE_FALSE(g_ebpf_platform_linux.is_helper_usable(47)); // get_socket_uid remains skb-only
+    REQUIRE_FALSE(g_ebpf_platform_linux.is_helper_usable(47, cgroup_type)); // get_socket_uid remains skb-only
 }
 
 TEST_CASE("new Linux context descriptors keep expected layout constants", "[platform][tables]") {

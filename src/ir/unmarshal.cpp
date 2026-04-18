@@ -491,7 +491,7 @@ struct Unmarshaller {
 
     [[nodiscard]]
     auto makeCall(const int32_t imm) const -> Call {
-        const EbpfHelperPrototype proto = info.platform->get_helper_prototype(imm);
+        const EbpfHelperPrototype proto = info.platform->get_helper_prototype(imm, info.type);
         auto helper_prototype_name = proto.name ? proto.name : std::to_string(imm);
         Call res;
         res.func = imm;
@@ -703,11 +703,12 @@ struct Unmarshaller {
                             .is_supported = false,
                             .unsupported_reason = "helper function is unavailable on this platform"};
             }
-            if (info.platform->is_helper_usable(inst.imm)) {
+            if (info.platform->is_helper_usable(inst.imm, info.type)) {
                 return makeCall(inst.imm);
             } else {
                 std::string function_name = std::to_string(inst.imm);
-                auto function_name_from_helper_prototype = info.platform->get_helper_prototype(inst.imm).name;
+                auto function_name_from_helper_prototype =
+                    info.platform->get_helper_prototype(inst.imm, info.type).name;
                 if (function_name_from_helper_prototype) {
                     function_name = function_name_from_helper_prototype;
                 }
@@ -885,7 +886,6 @@ struct Unmarshaller {
 
 std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog, vector<vector<string>>& notes,
                                                     const prevail::ebpf_verifier_options_t& options) {
-    thread_local_program_info = raw_prog.info;
     try {
         return Unmarshaller{notes, raw_prog.info}.unmarshal(raw_prog.prog, options);
     } catch (InvalidInstruction& arg) {
@@ -901,9 +901,9 @@ std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog,
     return unmarshal(raw_prog, notes, options);
 }
 
-Call make_call(const int imm, const ebpf_platform_t& platform) {
+Call make_call(const int imm, const ebpf_platform_t& platform, const EbpfProgramType& program_type) {
     vector<vector<string>> notes;
-    const ProgramInfo info{.platform = &platform};
+    const ProgramInfo info{.platform = &platform, .type = program_type};
     return Unmarshaller{notes, info}.makeCall(imm);
 }
 } // namespace prevail
