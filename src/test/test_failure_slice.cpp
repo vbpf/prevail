@@ -27,7 +27,7 @@ static std::vector<FailureSlice> get_failure_slices(const std::string& filename,
     REQUIRE(inst_seq != nullptr);
 
     const Program prog = Program::from_sequence(*inst_seq, raw_prog.info, options);
-    auto result = analyze(prog);
+    auto result = analyze(prog, options);
     const AnalysisContext context{prog.info(), options, *prog.info().platform};
 
     return result.compute_failure_slices(prog, context);
@@ -189,7 +189,7 @@ TEST_CASE("print_failure_slices produces structured output", "[failure_slice][pr
     REQUIRE(inst_seq != nullptr);
 
     const Program prog = Program::from_sequence(*inst_seq, raw_prog.info, options);
-    auto result = analyze(prog);
+    auto result = analyze(prog, options);
     const AnalysisContext context{prog.info(), options, *prog.info().platform};
     auto slices = result.compute_failure_slices(prog, context);
 
@@ -225,7 +225,7 @@ TEST_CASE("passing program produces no failure slices", "[failure_slice][integra
     REQUIRE(inst_seq != nullptr);
 
     const Program prog = Program::from_sequence(*inst_seq, raw_prog.info, options);
-    auto result = analyze(prog);
+    auto result = analyze(prog, options);
 
     REQUIRE_FALSE(result.failed);
 
@@ -253,7 +253,9 @@ TEST_CASE("assume guard registers become relevant in slice", "[failure_slice][in
     ebpf_verifier_options_t options{};
     options.verbosity_opts.collect_instruction_deps = true;
     ElfObject elf{sample, options, &g_ebpf_platform_linux};
-    RawProgram raw_prog = elf.get_programs("xdp").back();
+    const auto& raw_progs = elf.get_programs("xdp");
+    REQUIRE(raw_progs.size() == 1);
+    RawProgram raw_prog = raw_progs.back();
     auto prog_or_error = unmarshal(raw_prog, options);
     auto inst_seq = std::get_if<InstructionSeq>(&prog_or_error);
     REQUIRE(inst_seq != nullptr);

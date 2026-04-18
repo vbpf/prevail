@@ -418,7 +418,7 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
     try {
         const Program prog = Program::from_sequence(test_case.instruction_seq, info, test_case.options);
         const AnalysisContext context{prog.info(), test_case.options, *prog.info().platform};
-        const AnalysisResult result = analyze(prog, test_case.assumed_pre_invariant);
+        const AnalysisResult result = analyze(prog, test_case.assumed_pre_invariant, context);
         const StringInvariant actual_last_invariant = result.invariant_at(Label::exit);
         std::set<string> actual_messages;
         if (auto error = result.find_first_error()) {
@@ -567,7 +567,7 @@ ConformanceTestResult run_conformance_test_case(const std::vector<uint8_t>& memo
 
     try {
         const Program prog = Program::from_sequence(inst_seq, info, options);
-        const AnalysisResult result = analyze(prog, pre_invariant);
+        const AnalysisResult result = analyze(prog, pre_invariant, options);
         return ConformanceTestResult{.success = !result.failed, .r0_value = result.exit_value};
     } catch (const std::exception& ex) {
         // Catch exceptions thrown in ebpf_domain.cpp.

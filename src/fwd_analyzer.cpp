@@ -161,14 +161,24 @@ class InterleavedFwdFixpointIterator final {
     static AnalysisResult run(const Program& prog, const AnalysisContext& context, EbpfDomain entry_inv);
 };
 
-AnalysisResult analyze(const Program& prog) {
+static AnalysisContext make_context(const Program& prog, const ebpf_verifier_options_t& options) {
     const auto& info = prog.info();
-    return analyze(prog, AnalysisContext{info, thread_local_options, *info.platform});
+    return AnalysisContext{info, options, *info.platform};
 }
 
+AnalysisResult analyze(const Program& prog, const ebpf_verifier_options_t& options) {
+    return analyze(prog, make_context(prog, options));
+}
+
+AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invariant,
+                       const ebpf_verifier_options_t& options) {
+    return analyze(prog, entry_invariant, make_context(prog, options));
+}
+
+AnalysisResult analyze(const Program& prog) { return analyze(prog, thread_local_options); }
+
 AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invariant) {
-    const auto& info = prog.info();
-    return analyze(prog, entry_invariant, AnalysisContext{info, thread_local_options, *info.platform});
+    return analyze(prog, entry_invariant, thread_local_options);
 }
 
 AnalysisResult analyze(const Program& prog, const AnalysisContext& context) {
