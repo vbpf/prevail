@@ -198,7 +198,7 @@ int main(int argc, char** argv) {
         }
         return load_error.has_value() ? 1 : 64;
     }
-    const RawProgram& raw_prog = raw_progs.back();
+    RawProgram& raw_prog = raw_progs.back();
 
     // Convert the raw program section to a set of instructions.
     std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, ebpf_verifier_options);
@@ -211,7 +211,7 @@ int main(int argc, char** argv) {
     if (!asmfile.empty()) {
         std::ofstream out{asmfile};
         print(inst_seq, out, {});
-        print_map_descriptors(thread_local_program_info->map_descriptors, out);
+        print_map_descriptors(raw_prog.info.map_descriptors, out);
     }
 
     // Convert the instruction sequence to a control-flow graph.

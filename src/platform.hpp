@@ -28,9 +28,9 @@ typedef EbpfProgramType (*ebpf_get_program_type_fn)(const std::string& section, 
 
 typedef EbpfMapType (*ebpf_get_map_type_fn)(uint32_t platform_specific_type);
 
-typedef EbpfHelperPrototype (*ebpf_get_helper_prototype_fn)(int32_t n);
+typedef EbpfHelperPrototype (*ebpf_get_helper_prototype_fn)(int32_t n, const EbpfProgramType& program_type);
 
-typedef bool (*ebpf_is_helper_usable_fn)(int32_t n);
+typedef bool (*ebpf_is_helper_usable_fn)(int32_t n, const EbpfProgramType& program_type);
 
 typedef std::optional<int32_t> (*ebpf_resolve_builtin_call_fn)(const std::string& name);
 typedef std::optional<KsymBtfId> (*ebpf_resolve_ksym_btf_id_fn)(const std::string& name);

@@ -3,7 +3,7 @@
 
 #include "test_verify.hpp"
 
-static void test_analyze_thread(const prevail::Program* prog, const prevail::ProgramInfo* info, bool* res) {
+static void test_analyze_thread(const prevail::Program* prog, prevail::ProgramInfo* info, bool* res) {
     try {
         prevail::thread_local_program_info.set(*info);
         *res = prevail::verify(*prog);

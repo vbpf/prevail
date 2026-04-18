@@ -153,7 +153,8 @@ static Deref deref(const std::string& /*is_signed*/, const std::string& width, c
     };
 }
 
-Instruction parse_instruction(const std::string& line, const std::map<std::string, Label>& label_name_to_label) {
+Instruction parse_instruction(const std::string& line, const std::map<std::string, Label>& label_name_to_label,
+                              const EbpfProgramType& program_type) {
     // treat ";" as a comment
     std::string text = line.substr(0, line.find(';'));
     const size_t end = text.find_last_not_of(' ');
@@ -166,7 +167,7 @@ Instruction parse_instruction(const std::string& line, const std::map<std::strin
     }
     if (regex_match(text, m, regex("call " FUNC))) {
         const int func = to_int(m[1]);
-        return make_call(func, g_ebpf_platform_linux);
+        return make_call(func, g_ebpf_platform_linux, program_type);
     }
     if (regex_match(text, m, regex("call " WRAPPED_LABEL))) {
         return CallLocal{.target = label_name_to_label.at(m[1])};
@@ -302,7 +303,7 @@ static InstructionSeq parse_program(std::istream& is) {
         if (line.empty()) {
             continue;
         }
-        Instruction ins = parse_instruction(line, {});
+        Instruction ins = parse_instruction(line, {}, {});
         if (std::holds_alternative<Undefined>(ins)) {
             continue;
         }

@@ -53,7 +53,7 @@ class Program {
         return m_assertions.at(label);
     }
 
-    static Program from_sequence(const InstructionSeq& inst_seq, const ProgramInfo& info,
+    static Program from_sequence(const InstructionSeq& inst_seq, ProgramInfo& info,
                                  const ebpf_verifier_options_t& options);
 };
 

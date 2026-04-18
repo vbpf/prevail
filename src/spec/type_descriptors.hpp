@@ -62,7 +62,6 @@ struct ProgramInfo {
     const struct ebpf_platform_t* platform{};
     std::vector<EbpfMapDescriptor> map_descriptors{};
     EbpfProgramType type{};
-    std::map<EquivalenceKey, int> cache{};
     std::map<size_t, btf_line_info_t> line_info{};
     // Valid top-level instruction labels that can be used as callback entry targets via PTR_TO_FUNC.
     std::set<int32_t> callback_target_labels{};

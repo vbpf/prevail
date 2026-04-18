@@ -23,7 +23,7 @@ class MalformedElf final : public UnmarshalError {
 };
 
 int create_map_crab(const EbpfMapType& map_type, uint32_t key_size, uint32_t value_size, uint32_t max_entries,
-                    ebpf_verifier_options_t options);
+                    ebpf_verifier_options_t options, std::map<EquivalenceKey, int>& cache);
 
 EbpfMapDescriptor* find_map_descriptor(int map_fd);
 

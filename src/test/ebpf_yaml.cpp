@@ -40,11 +40,13 @@ static EbpfMapType ebpf_get_map_type(const uint32_t platform_specific_type) {
     return g_ebpf_platform_linux.get_map_type(platform_specific_type);
 }
 
-static EbpfHelperPrototype ebpf_get_helper_prototype(const int32_t n) {
-    return g_ebpf_platform_linux.get_helper_prototype(n);
+static EbpfHelperPrototype ebpf_get_helper_prototype(const int32_t n, const EbpfProgramType& program_type) {
+    return g_ebpf_platform_linux.get_helper_prototype(n, program_type);
 }
 
-static bool ebpf_is_helper_usable(const int32_t n) { return g_ebpf_platform_linux.is_helper_usable(n); }
+static bool ebpf_is_helper_usable(const int32_t n, const EbpfProgramType& program_type) {
+    return g_ebpf_platform_linux.is_helper_usable(n, program_type);
+}
 
 static std::optional<int32_t> ebpf_resolve_builtin_call(const std::string& name) {
     if (!g_ebpf_platform_linux.resolve_builtin_call) {
@@ -292,7 +294,7 @@ static InstructionSeq raw_cfg_to_instruction_seq(const vector<std::tuple<string,
     for (const auto& [label_name, raw_block] : raw_blocks) {
         for (const string& line : raw_block) {
             try {
-                const Instruction& ins = parse_instruction(line, label_name_to_label);
+                const Instruction& ins = parse_instruction(line, label_name_to_label, {});
                 if (std::holds_alternative<Undefined>(ins)) {
                     std::cout << "text:" << line << "; ins: " << ins << "\n";
                 }

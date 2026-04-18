@@ -996,10 +996,10 @@ void EbpfTransformer::operator()(const Callx& callx) {
         if (sn->fits<int32_t>()) {
             // We can now process it as if the id was immediate.
             const int32_t imm = sn->cast_to<int32_t>();
-            if (!context.platform.is_helper_usable(imm)) {
+            if (!context.platform.is_helper_usable(imm, context.program_info.type)) {
                 return;
             }
-            const Call call = make_call(imm, context.platform);
+            const Call call = make_call(imm, context.platform, context.program_info.type);
             (*this)(call);
         }
     }

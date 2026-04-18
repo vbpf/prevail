@@ -5,9 +5,11 @@
 #include <string>
 
 #include "ir/syntax.hpp"
+#include "spec/type_descriptors.hpp"
 
 namespace prevail {
 
-Instruction parse_instruction(const std::string& line, const std::map<std::string, Label>& label_name_to_label);
+Instruction parse_instruction(const std::string& line, const std::map<std::string, Label>& label_name_to_label,
+                              const EbpfProgramType& program_type);
 
 }

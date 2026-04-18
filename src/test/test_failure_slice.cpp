@@ -21,7 +21,7 @@ static std::vector<FailureSlice> get_failure_slices(const std::string& filename,
     const auto& raw_progs = elf.get_programs(section);
     REQUIRE(raw_progs.size() == 1);
 
-    const RawProgram& raw_prog = raw_progs.back();
+    RawProgram raw_prog = raw_progs.back();
     auto prog_or_error = unmarshal(raw_prog, options);
     auto inst_seq = std::get_if<InstructionSeq>(&prog_or_error);
     REQUIRE(inst_seq != nullptr);
@@ -182,7 +182,7 @@ TEST_CASE("print_failure_slices produces structured output", "[failure_slice][pr
     const auto& raw_progs = elf.get_programs("test");
     REQUIRE(raw_progs.size() == 1);
 
-    const RawProgram& raw_prog = raw_progs.back();
+    RawProgram raw_prog = raw_progs.back();
     auto prog_or_error = unmarshal(raw_prog, options);
     auto inst_seq = std::get_if<InstructionSeq>(&prog_or_error);
     REQUIRE(inst_seq != nullptr);
@@ -217,7 +217,7 @@ TEST_CASE("passing program produces no failure slices", "[failure_slice][integra
     const auto& raw_progs = elf.get_programs(".text");
     REQUIRE(raw_progs.size() == 1);
 
-    const RawProgram& raw_prog = raw_progs.back();
+    RawProgram raw_prog = raw_progs.back();
     auto prog_or_error = unmarshal(raw_prog, options);
     auto inst_seq = std::get_if<InstructionSeq>(&prog_or_error);
     REQUIRE(inst_seq != nullptr);
@@ -250,12 +250,11 @@ TEST_CASE("assume guard registers become relevant in slice", "[failure_slice][in
     ebpf_verifier_options_t options{};
     options.verbosity_opts.collect_instruction_deps = true;
     ElfObject elf{sample, options, &g_ebpf_platform_linux};
-    const auto& raw_progs = elf.get_programs("xdp");
-    REQUIRE(raw_progs.size() == 1);
-    auto prog_or_error = unmarshal(raw_progs.back(), options);
+    RawProgram raw_prog = elf.get_programs("xdp").back();
+    auto prog_or_error = unmarshal(raw_prog, options);
     auto inst_seq = std::get_if<InstructionSeq>(&prog_or_error);
     REQUIRE(inst_seq != nullptr);
-    const Program prog = Program::from_sequence(*inst_seq, raw_progs.back().info, options);
+    const Program prog = Program::from_sequence(*inst_seq, raw_prog.info, options);
 
     bool found_assume_in_slice = false;
     for (const auto& [label, relevance] : slice.relevance) {

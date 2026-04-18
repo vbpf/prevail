@@ -113,7 +113,7 @@ struct BpfLoadMapDef {
 };
 
 static int create_map_linux(uint32_t map_type, uint32_t key_size, uint32_t value_size, uint32_t max_entries,
-                            ebpf_verifier_options_t options);
+                            ebpf_verifier_options_t options, std::map<EquivalenceKey, int>& cache);
 
 // Allow for comma as a separator between multiple prefixes, to make
 // the preprocessor treat a prefix list as one macro argument.
@@ -265,10 +265,11 @@ void parse_maps_section_linux(std::vector<EbpfMapDescriptor>& map_descriptors, c
     }
 
     // Add map definitions into the map_descriptors list.
+    std::map<EquivalenceKey, int> cache;
     for (const auto& s : mapdefs) {
         EbpfMapType type = get_map_type_linux(s.type);
         map_descriptors.emplace_back(EbpfMapDescriptor{
-            .original_fd = create_map_linux(s.type, s.key_size, s.value_size, s.max_entries, options),
+            .original_fd = create_map_linux(s.type, s.key_size, s.value_size, s.max_entries, options, cache),
             .type = s.type,
             .key_size = s.key_size,
             .value_size = s.value_size,
@@ -299,10 +300,11 @@ static int do_bpf(const bpf_cmd cmd, bpf_attr& attr) { return syscall(321, cmd, 
  *  This function requires admin privileges.
  */
 static int create_map_linux(const uint32_t map_type, const uint32_t key_size, const uint32_t value_size,
-                            const uint32_t max_entries, const ebpf_verifier_options_t options) {
+                            const uint32_t max_entries, const ebpf_verifier_options_t options,
+                            std::map<EquivalenceKey, int>& cache) {
     if (options.mock_map_fds) {
         const EbpfMapType type = get_map_type_linux(map_type);
-        return create_map_crab(type, key_size, value_size, max_entries, options);
+        return create_map_crab(type, key_size, value_size, max_entries, options, cache);
     }
 
 #if __linux__
