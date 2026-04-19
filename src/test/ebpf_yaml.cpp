@@ -403,7 +403,6 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
         };
     }
 
-    thread_local_options = {};
     ThreadLocalGuard clear_thread_local_state;
     test_case.options.verbosity_opts.print_failures = true;
     if (debug) {
@@ -414,7 +413,6 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
     EbpfProgramType program_type = make_program_type(test_case.name, &context_descriptor);
 
     ProgramInfo info{&g_platform_test, {test_map_descriptor}, program_type};
-    thread_local_options = test_case.options;
     try {
         const Program prog = Program::from_sequence(test_case.instruction_seq, info, test_case.options);
         const AnalysisContext context{prog.info(), test_case.options, *prog.info().platform};
@@ -474,11 +472,12 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
 }
 
 template <std::signed_integral TS>
-void add_stack_variable(std::set<std::string>& more, int& offset, const std::vector<std::byte>& memory_bytes) {
+void add_stack_variable(std::set<std::string>& more, int& offset, const std::vector<std::byte>& memory_bytes,
+                        const int total_stack_size) {
     using TU = std::make_unsigned_t<TS>;
     constexpr size_t size = sizeof(TS);
     static_assert(sizeof(TU) == size);
-    const auto src = memory_bytes.data() + offset + memory_bytes.size() - thread_local_options.total_stack_size();
+    const auto src = memory_bytes.data() + offset + memory_bytes.size() - total_stack_size;
     TS svalue;
     std::memcpy(&svalue, src, size);
     TU uvalue;
@@ -489,59 +488,57 @@ void add_stack_variable(std::set<std::string>& more, int& offset, const std::vec
     offset += size;
 }
 
-StringInvariant stack_contents_invariant(const std::vector<std::byte>& memory_bytes) {
-    std::set<std::string> more = {
-        "r1.type=stack",
-        "r1.stack_offset=" + std::to_string(thread_local_options.total_stack_size() - memory_bytes.size()),
-        "r1.stack_numeric_size=" + std::to_string(memory_bytes.size()),
-        "r10.type=stack",
-        "r10.stack_offset=" + std::to_string(thread_local_options.total_stack_size()),
-        "s[" + std::to_string(thread_local_options.total_stack_size() - memory_bytes.size()) + "..." +
-            std::to_string(thread_local_options.total_stack_size() - 1) + "].type=number"};
+StringInvariant stack_contents_invariant(const std::vector<std::byte>& memory_bytes, const int total_stack_size) {
+    std::set<std::string> more = {"r1.type=stack",
+                                  "r1.stack_offset=" + std::to_string(total_stack_size - memory_bytes.size()),
+                                  "r1.stack_numeric_size=" + std::to_string(memory_bytes.size()),
+                                  "r10.type=stack",
+                                  "r10.stack_offset=" + std::to_string(total_stack_size),
+                                  "s[" + std::to_string(total_stack_size - memory_bytes.size()) + "..." +
+                                      std::to_string(total_stack_size - 1) + "].type=number"};
 
-    int offset = thread_local_options.total_stack_size() - gsl::narrow<int>(memory_bytes.size());
+    int offset = total_stack_size - gsl::narrow<int>(memory_bytes.size());
     if (offset % 2 != 0) {
-        add_stack_variable<int8_t>(more, offset, memory_bytes);
+        add_stack_variable<int8_t>(more, offset, memory_bytes, total_stack_size);
     }
     if (offset % 4 != 0) {
-        add_stack_variable<int16_t>(more, offset, memory_bytes);
+        add_stack_variable<int16_t>(more, offset, memory_bytes, total_stack_size);
     }
     if (offset % 8 != 0) {
-        add_stack_variable<int32_t>(more, offset, memory_bytes);
+        add_stack_variable<int32_t>(more, offset, memory_bytes, total_stack_size);
     }
-    while (offset < thread_local_options.total_stack_size()) {
-        add_stack_variable<int64_t>(more, offset, memory_bytes);
+    while (offset < total_stack_size) {
+        add_stack_variable<int64_t>(more, offset, memory_bytes, total_stack_size);
     }
 
     return StringInvariant(std::move(more));
 }
 
 // Helper to convert uint8_t memory to stack invariant
-static StringInvariant stack_contents_invariant(const std::vector<uint8_t>& memory_bytes) {
+static StringInvariant stack_contents_invariant(const std::vector<uint8_t>& memory_bytes, const int total_stack_size) {
     std::vector<std::byte> bytes(memory_bytes.size());
     std::ranges::transform(memory_bytes, bytes.begin(), [](uint8_t b) { return static_cast<std::byte>(b); });
-    return stack_contents_invariant(bytes);
+    return stack_contents_invariant(bytes, total_stack_size);
 }
 
 ConformanceTestResult run_conformance_test_case(const std::vector<uint8_t>& memory_bytes,
                                                 std::span<const EbpfInst> instructions, bool debug) {
-    thread_local_options = {};
+    ebpf_verifier_options_t options{};
     ebpf_context_descriptor_t context_descriptor{64, -1, -1, -1};
     EbpfProgramType program_type = make_program_type("conformance_check", &context_descriptor);
 
     ProgramInfo info{&g_platform_test, {}, program_type};
 
-    // Copy instructions into a local vector for RawProgram.
     std::vector<EbpfInst> insts(instructions.begin(), instructions.end());
 
     StringInvariant pre_invariant = StringInvariant::top();
 
     if (!memory_bytes.empty()) {
-        if (memory_bytes.size() > thread_local_options.total_stack_size()) {
+        if (memory_bytes.size() > to_unsigned(options.total_stack_size())) {
             std::cerr << "memory size overflow\n";
             return {};
         }
-        pre_invariant = pre_invariant + stack_contents_invariant(memory_bytes);
+        pre_invariant = pre_invariant + stack_contents_invariant(memory_bytes, options.total_stack_size());
     }
     RawProgram raw_prog{.prog = insts};
     ebpf_platform_t platform = g_ebpf_platform_linux;
@@ -557,7 +554,6 @@ ConformanceTestResult run_conformance_test_case(const std::vector<uint8_t>& memo
 
     const InstructionSeq& inst_seq = std::get<InstructionSeq>(prog_or_error);
 
-    ebpf_verifier_options_t options{};
     if (debug) {
         print(inst_seq, std::cout, {});
         options.verbosity_opts.print_failures = true;

@@ -98,5 +98,4 @@ struct ebpf_verifier_stats_t {
     int max_loop_count{};
 };
 
-extern thread_local ebpf_verifier_options_t thread_local_options;
 } // namespace prevail

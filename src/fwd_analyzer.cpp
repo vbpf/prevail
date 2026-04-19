@@ -16,8 +16,6 @@
 
 namespace prevail {
 
-thread_local ebpf_verifier_options_t thread_local_options;
-
 static void clear_analysis_thread_local_state() { clear_thread_local_state(); }
 
 void ebpf_verifier_clear_thread_local_state() {
@@ -173,12 +171,6 @@ AnalysisResult analyze(const Program& prog, const ebpf_verifier_options_t& optio
 AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invariant,
                        const ebpf_verifier_options_t& options) {
     return analyze(prog, entry_invariant, make_context(prog, options));
-}
-
-AnalysisResult analyze(const Program& prog) { return analyze(prog, thread_local_options); }
-
-AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invariant) {
-    return analyze(prog, entry_invariant, thread_local_options);
 }
 
 AnalysisResult analyze(const Program& prog, const AnalysisContext& context) {

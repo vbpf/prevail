@@ -648,7 +648,6 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
                                const ebpf_verifier_options_t& options) {
     ProgramInfo mutable_info = info;
     options.validate();
-    thread_local_options = options;
     assert(info.platform != nullptr && "platform must be set before instruction feature validation");
     ResolvedKfuncCalls resolved_kfunc_calls;
     validate_instruction_feature_support(inst_seq, info, &resolved_kfunc_calls);
