@@ -636,7 +636,8 @@ code:
     r0 = 0
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Lower bound must be at least r10.stack_offset - subprogram_stack_size (valid_access(r10.offset-513, width=1) for write)"
@@ -836,7 +837,8 @@ code:
     r3 = *(u64 *)(r2 + 0)      ; read 8 bytes - should FAIL (only 4 guaranteed)
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "4: Stack content is not numeric (valid_access(r2.offset, width=8) for read)"

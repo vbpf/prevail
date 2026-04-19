@@ -89,7 +89,8 @@ code:
   <start>: |
     r2 s32= r1
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"

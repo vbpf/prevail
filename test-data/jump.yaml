@@ -116,7 +116,8 @@ code:
   <start>: |
     assume w1 == 13
 
-post: []
+post:
+  - "_|_"
 messages:
   - "0: Code becomes unreachable (assume r1 w== 13)"
 ---
@@ -330,7 +331,8 @@ code:
     r3 -= r1; trigger same_type(r2, r1)
 
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "8: Cannot subtract pointers to different regions (r1.type == number or r3.type == r1.type in {ctx, stack, packet})"
@@ -397,7 +399,8 @@ code:
     r3 = r1
     r3 += r2; the domain does not currently store inequalities so we can't yet tell that this is safe
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "8: Only numbers can be added to pointers (r2.type in {ctx, stack, packet, shared} -> r3.type == number)"
@@ -576,7 +579,8 @@ code:
   <start>: |
     assume r1 != r1
 
-post: []
+post:
+  - "_|_"
 messages:
   - "0: Code becomes unreachable (assume r1 != r1)"
 ---
@@ -614,7 +618,8 @@ code:
   <start>: |
     assume r1 < r2
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type in {number, ctx, stack, packet, shared})"
@@ -660,7 +665,8 @@ code:
   <exit>: |
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0:1: Code becomes unreachable (assume r1 == 0)"
@@ -681,7 +687,8 @@ code:
   <exit>: |
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "2: Invalid type (r0.type == number)"
@@ -701,7 +708,8 @@ code:
   <exit>: |
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "2: Invalid type (r0.type == number)"
@@ -775,7 +783,8 @@ code:
   <exit>: |
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0:1: Code becomes unreachable (assume r1 <= 0)"
@@ -796,7 +805,8 @@ code:
   <exit>: |
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0:1: Code becomes unreachable (assume r1 < 0)"
@@ -817,7 +827,8 @@ code:
   <exit>: |
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -837,7 +848,8 @@ code:
   <exit>: |
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -857,7 +869,8 @@ code:
   <exit>: |
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -877,7 +890,8 @@ code:
   <exit>: |
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -897,7 +911,8 @@ code:
   <exit>: |
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -917,7 +932,8 @@ code:
   <exit>: |
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -937,7 +953,8 @@ code:
   <exit>: |
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -957,7 +974,8 @@ code:
   <exit>: |
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -977,7 +995,8 @@ code:
   <exit>: |
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -997,7 +1016,8 @@ code:
   <exit>: |
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -1017,7 +1037,8 @@ code:
   <exit>: |
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -1037,7 +1058,8 @@ code:
   <exit>: |
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -1057,7 +1079,8 @@ code:
   <exit>: |
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -1077,7 +1100,8 @@ code:
   <exit>: |
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -1097,7 +1121,8 @@ code:
   <exit>: |
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -1117,7 +1142,8 @@ code:
   <exit>: |
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -1150,7 +1176,8 @@ code:
   <start>: |
     assume r1 != r2
 
-post: []
+post:
+  - "_|_"
 messages:
   - "0: Lower bound must be at least meta_offset (valid_access(r1.offset) for comparison/subtraction)"
 ---
@@ -1162,6 +1189,7 @@ code:
   <start>: |
     assume r1 < r2
 
-post: []
+post:
+  - "_|_"
 messages:
   - "0: Lower bound must be at least r10.stack_offset - subprogram_stack_size (valid_access(r1.offset) for comparison/subtraction)"
