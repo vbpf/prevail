@@ -5,7 +5,7 @@
 
 static void test_analyze_thread(const prevail::Program* prog, bool* res) {
     try {
-        *res = prevail::verify(*prog);
+        *res = prevail::verify(*prog, {});
     } catch (...) {
         *res = false;
     }

@@ -123,8 +123,8 @@ struct LineInfoPrinter {
 struct DetailedPrinter : LineInfoPrinter {
     const Program& prog;
 
-    DetailedPrinter(std::ostream& os, const Program& prog)
-        : LineInfoPrinter{os, prog.info().line_info, thread_local_options.verbosity_opts.print_line_info}, prog(prog) {}
+    DetailedPrinter(std::ostream& os, const Program& prog, const bool print_line_info = false)
+        : LineInfoPrinter{os, prog.info().line_info, print_line_info}, prog(prog) {}
 
     void print_labels(const std::string& direction, const std::set<Label>& labels) {
         auto [it, et] = std::pair{labels.begin(), labels.end()};
@@ -155,8 +155,8 @@ struct DetailedPrinter : LineInfoPrinter {
     }
 };
 
-void print_program(const Program& prog, std::ostream& os, const bool simplify) {
-    DetailedPrinter printer{os, prog};
+void print_program(const Program& prog, std::ostream& os, const bool simplify, const bool print_line_info) {
+    DetailedPrinter printer{os, prog, print_line_info};
     for (const BasicBlock& bb : BasicBlock::collect_basic_blocks(prog.cfg(), simplify)) {
         printer.print_jump("from", bb.first_label());
         os << bb.first_label() << ":\n";
@@ -169,8 +169,9 @@ void print_program(const Program& prog, std::ostream& os, const bool simplify) {
     os << "\n";
 }
 
-void print_invariants(std::ostream& os, const Program& prog, const bool simplify, const AnalysisResult& result) {
-    DetailedPrinter printer{os, prog};
+void print_invariants(std::ostream& os, const Program& prog, const bool simplify, const AnalysisResult& result,
+                      const bool print_line_info) {
+    DetailedPrinter printer{os, prog, print_line_info};
     for (const BasicBlock& bb : BasicBlock::collect_basic_blocks(prog.cfg(), simplify)) {
         if (result.invariants.at(bb.first_label()).pre.is_bottom()) {
             continue;
@@ -190,7 +191,7 @@ void print_invariants(std::ostream& os, const Program& prog, const bool simplify
                 if (label != bb.last_label()) {
                     os << "After " << current.pre << "\n";
                 }
-                print_error(os, *current.error, prog);
+                print_error(os, *current.error, prog, print_line_info);
                 os << "\n";
                 return;
             }
@@ -250,8 +251,8 @@ std::string to_string(const VerificationError& error) {
     return ss.str();
 }
 
-void print_error(std::ostream& os, const VerificationError& error, const Program& prog) {
-    LineInfoPrinter printer{os, prog.info().line_info, thread_local_options.verbosity_opts.print_line_info};
+void print_error(std::ostream& os, const VerificationError& error, const Program& prog, const bool print_line_info) {
+    LineInfoPrinter printer{os, prog.info().line_info, print_line_info};
     if (const auto& label = error.where) {
         printer.print_line_info(*label);
         os << *label << ": ";
@@ -723,8 +724,8 @@ std::ostream& operator<<(std::ostream& os, const btf_line_info_t& line_info) {
 
 void print_invariants_filtered(std::ostream& os, const Program& prog, const bool simplify, const AnalysisResult& result,
                                const std::set<Label>& filter, const bool compact,
-                               const std::map<Label, RelevantState>* relevance) {
-    DetailedPrinter printer{os, prog};
+                               const std::map<Label, RelevantState>* relevance, const bool print_line_info) {
+    DetailedPrinter printer{os, prog, print_line_info};
     const auto basic_blocks = BasicBlock::collect_basic_blocks(prog.cfg(), simplify);
 
     // Build a mapping from each label in a basic block to the block's first label.
@@ -929,7 +930,7 @@ void print_invariants_filtered(std::ostream& os, const Program& prog, const bool
             const auto& current = result.invariants.at(label);
             if (current.error) {
                 os << "\nVerification error:\n";
-                print_error(os, *current.error, prog);
+                print_error(os, *current.error, prog, print_line_info);
                 os << "\n";
             }
         }
@@ -952,7 +953,7 @@ void print_invariants_filtered(std::ostream& os, const Program& prog, const bool
 }
 
 void print_failure_slices(std::ostream& os, const Program& prog, const bool simplify, const AnalysisResult& result,
-                          const std::vector<FailureSlice>& slices, const bool compact) {
+                          const std::vector<FailureSlice>& slices, const bool compact, const bool print_line_info) {
     if (slices.empty()) {
         os << "No verification failures found.\n";
         return;
@@ -1078,7 +1079,8 @@ void print_failure_slices(std::ostream& os, const Program& prog, const bool simp
 
         // Print the filtered CFG with assertion filtering based on relevance
         os << "[CAUSAL TRACE]\n";
-        print_invariants_filtered(os, prog, simplify, result, slice.impacted_labels(), compact, &slice.relevance);
+        print_invariants_filtered(os, prog, simplify, result, slice.impacted_labels(), compact, &slice.relevance,
+                                  print_line_info);
 
         if (i + 1 < slices.size()) {
             os << "\n";

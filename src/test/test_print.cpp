@@ -35,7 +35,7 @@ void verify_printed_string(const std::string& file) {
     ElfObject elf{std::string(TEST_OBJECT_FILE_DIRECTORY) + file + ".o", {}, &g_ebpf_platform_linux};
     const auto& raw_progs = elf.get_programs();
     const RawProgram& raw_prog = raw_progs.back();
-    std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, thread_local_options);
+    std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog, {});
     auto program = std::get_if<InstructionSeq>(&prog_or_error);
     REQUIRE(program != nullptr);
     print(*program, generated_output, {});

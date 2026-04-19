@@ -333,7 +333,6 @@ void patch_first_relocation_type(const std::filesystem::path& path, const std::s
 
 #define FAIL_LOAD_ELF_BASE(test_name, dirname, filename, sectionname)                                                  \
     TEST_CASE(test_name, "[elf]") {                                                                                    \
-        thread_local_options = {};                                                                                     \
         REQUIRE_THROWS_AS(                                                                                             \
             ([&]() {                                                                                                   \
                 ElfObject{"ebpf-samples/" dirname "/" filename, {}, &g_ebpf_platform_linux}.get_programs(sectionname); \
@@ -351,7 +350,6 @@ void patch_first_relocation_type(const std::filesystem::path& path, const std::s
 
 #define LOAD_ELF_SECTION(dirname, filename, sectionname)                                                           \
     TEST_CASE("Try loading section: " dirname "/" filename " " sectionname, "[elf]") {                             \
-        thread_local_options = {};                                                                                 \
         const auto progs =                                                                                         \
             ElfObject{"ebpf-samples/" dirname "/" filename, {}, &g_ebpf_platform_linux}.get_programs(sectionname); \
         REQUIRE_FALSE(progs.empty());                                                                              \
@@ -389,7 +387,6 @@ LOAD_ELF_SECTION("cilium-ebpf", "loader-clang-20-el.elf", "socket/2")
 LOAD_ELF_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "socket/2")
 
 TEST_CASE("CO-RE relocations are parsed from .BTF.ext core_relo subsection", "[elf][core]") {
-    thread_local_options = {};
 
     constexpr auto fentry_path = "ebpf-samples/cilium-examples/tcprtt_bpf_bpfel.o";
     constexpr auto fentry_section = "fentry/tcp_close";
@@ -407,7 +404,6 @@ TEST_CASE("CO-RE relocations are parsed from .BTF.ext core_relo subsection", "[e
 }
 
 TEST_CASE("ELF loader rejects non-BPF e_machine", "[elf][hardening]") {
-    thread_local_options = {};
 
     TempElfFile elf{"ebpf-samples/build/twomaps.o", "bad-machine"};
     patch_machine(elf.path(), ELFIO::EM_X86_64);
@@ -417,7 +413,6 @@ TEST_CASE("ELF loader rejects non-BPF e_machine", "[elf][hardening]") {
 }
 
 TEST_CASE("ELF loader rejects relocation sections with out-of-bounds file offsets", "[elf][hardening]") {
-    thread_local_options = {};
 
     TempElfFile elf{"ebpf-samples/build/twomaps.o", "bad-reloc-offset"};
     const auto file_size = std::filesystem::file_size(elf.path());
@@ -428,7 +423,6 @@ TEST_CASE("ELF loader rejects relocation sections with out-of-bounds file offset
 }
 
 TEST_CASE("ELF loader rejects malformed legacy maps section record size", "[elf][hardening]") {
-    thread_local_options = {};
 
     TempElfFile elf{"ebpf-samples/bpf_cilium_test/bpf_lb-DLB_L3.o", "bad-maps-size"};
     // Keep the section in-bounds but make each inferred map record too small.
@@ -439,7 +433,6 @@ TEST_CASE("ELF loader rejects malformed legacy maps section record size", "[elf]
 }
 
 TEST_CASE("CO-RE access string offset out-of-bounds fails cleanly", "[elf][core][hardening]") {
-    thread_local_options = {};
 
     TempElfFile elf{"ebpf-samples/cilium-examples/tcprtt_bpf_bpfel.o", "bad-core-access"};
     patch_first_core_access_string_offset(elf.path(), 0xfffffff0U);
@@ -449,7 +442,6 @@ TEST_CASE("CO-RE access string offset out-of-bounds fails cleanly", "[elf][core]
 }
 
 TEST_CASE("ELF loader rejects relocation entries with invalid symbol index", "[elf][hardening]") {
-    thread_local_options = {};
 
     TempElfFile elf{"ebpf-samples/build/twomaps.o", "bad-reloc-symbol-index"};
     patch_first_relocation_symbol_index(elf.path(), ".rel.text", 0x00ffffffU);
@@ -459,7 +451,6 @@ TEST_CASE("ELF loader rejects relocation entries with invalid symbol index", "[e
 }
 
 TEST_CASE("ELF loader rejects unsupported relocation types", "[elf][hardening]") {
-    thread_local_options = {};
 
     TempElfFile elf{"ebpf-samples/build/twomaps.o", "bad-reloc-type"};
     patch_first_relocation_type(elf.path(), ".rel.text", 0xffU);
@@ -469,7 +460,6 @@ TEST_CASE("ELF loader rejects unsupported relocation types", "[elf][hardening]")
 }
 
 TEST_CASE("ELF loader rewrites .ksyms function calls to call_btf", "[elf]") {
-    thread_local_options = {};
 
     ElfObject elf{"ebpf-samples/cilium-ebpf/kfunc-kmod-el.elf", {}, &g_ebpf_platform_linux};
     const auto& progs = elf.get_programs("tc", "call_kfunc");
@@ -490,7 +480,6 @@ TEST_CASE("ELF loader rewrites .ksyms function calls to call_btf", "[elf]") {
 }
 
 TEST_CASE("ELF loader fails unresolved .ksyms function calls before builtin fallback", "[elf]") {
-    thread_local_options = {};
 
     ebpf_platform_t platform = g_ebpf_platform_linux;
     platform.resolve_ksym_btf_id = resolve_no_ksym_symbols;
@@ -500,7 +489,6 @@ TEST_CASE("ELF loader fails unresolved .ksyms function calls before builtin fall
 }
 
 TEST_CASE("ELF loader ignores non-function .ksyms entries", "[elf]") {
-    thread_local_options = {};
 
     ebpf_platform_t platform = g_ebpf_platform_linux;
     platform.resolve_ksym_btf_id = resolve_no_ksym_symbols;
@@ -578,7 +566,6 @@ TEST_CASE("rewrite_extern_constant_load bails out on values exceeding int32 rang
 // The load_elf function uses file_size(path) for section-bounds validation, which
 // fails for non-file paths like "memory". The fix falls back to stream size.
 TEST_CASE("read_elf succeeds with istream and non-file path", "[elf]") {
-    thread_local_options = {};
 
     // Read a valid ELF file into memory.
     const auto bytes = read_file_bytes("ebpf-samples/build/twomaps.o");

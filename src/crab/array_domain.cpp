@@ -47,7 +47,6 @@ struct Cell final {
 };
 
 static Interval cell_to_interval(const offset_t o, const unsigned size) {
-    assert(o <= thread_local_options.total_stack_size() && "offset out of bounds");
     const Number lb{gsl::narrow<int>(o)};
     return {lb, lb + size - 1};
 }
@@ -266,13 +265,15 @@ std::ostream& operator<<(std::ostream& o, offset_map_t& m) {
 }
 
 // Create a new cell that is a subset of an existing cell.
-void ArrayDomain::split_cell(NumAbsDomain& inv, const DataKind kind, const int cell_start_index,
-                             const unsigned int len) const {
+void ArrayDomain::split_cell(NumAbsDomain& inv, const DataKind kind, const int cell_start_index, const unsigned int len,
+                             const bool big_endian) const {
     assert(kind == DataKind::svalues || kind == DataKind::uvalues);
 
     // Get the values from the indicated stack range.
-    const std::optional<LinearExpression> svalue = load(inv, DataKind::svalues, Interval{cell_start_index}, len);
-    const std::optional<LinearExpression> uvalue = load(inv, DataKind::uvalues, Interval{cell_start_index}, len);
+    const std::optional<LinearExpression> svalue =
+        load(inv, DataKind::svalues, Interval{cell_start_index}, len, big_endian);
+    const std::optional<LinearExpression> uvalue =
+        load(inv, DataKind::uvalues, Interval{cell_start_index}, len, big_endian);
 
     // Create a new cell for that range.
     offset_map_t& offset_map = lookup_array_map(kind);
@@ -283,8 +284,8 @@ void ArrayDomain::split_cell(NumAbsDomain& inv, const DataKind kind, const int c
 
 // Prepare to havoc bytes in the middle of a cell by potentially splitting the cell if it is numeric,
 // into the part to the left of the havoced portion, and the part to the right of the havoced portion.
-void ArrayDomain::split_number_var(NumAbsDomain& inv, DataKind kind, const Interval& ii,
-                                   const Interval& elem_size) const {
+void ArrayDomain::split_number_var(NumAbsDomain& inv, DataKind kind, const Interval& ii, const Interval& elem_size,
+                                   const bool big_endian) const {
     assert(kind == DataKind::svalues || kind == DataKind::uvalues);
     offset_map_t& offset_map = lookup_array_map(kind);
     const std::optional<Number> n = ii.singleton();
@@ -315,12 +316,12 @@ void ArrayDomain::split_number_var(NumAbsDomain& inv, DataKind kind, const Inter
         }
         if (gsl::narrow_cast<Index>(cell_start_index) < o) {
             // Use the bytes to the left of the specified range.
-            split_cell(inv, kind, cell_start_index, gsl::narrow<unsigned int>(o - cell_start_index));
+            split_cell(inv, kind, cell_start_index, gsl::narrow<unsigned int>(o - cell_start_index), big_endian);
         }
         if (o + size < cell_end_index + 1UL) {
             // Use the bytes to the right of the specified range.
             split_cell(inv, kind, gsl::narrow<int>(o + size),
-                       gsl::narrow<unsigned int>(cell_end_index - (o + size - 1)));
+                       gsl::narrow<unsigned int>(cell_end_index - (o + size - 1)), big_endian);
         }
     }
 }
@@ -365,12 +366,12 @@ static std::optional<std::pair<offset_t, unsigned>> kill_and_find_var(const Havo
     }
     return res;
 }
-static std::tuple<int, int> as_numbytes_range(const Interval& index, const Interval& width) {
-    return (index | (index + width)).bound(0, thread_local_options.total_stack_size());
+static std::tuple<int, int> as_numbytes_range(const Interval& index, const Interval& width, const int stack_size) {
+    return (index | (index + width)).bound(0, stack_size);
 }
 
 bool ArrayDomain::all_num_lb_ub(const Interval& lb, const Interval& ub) const {
-    const auto [min_lb, max_ub] = (lb | ub).bound(0, thread_local_options.total_stack_size());
+    const auto [min_lb, max_ub] = (lb | ub).bound(0, total_stack_size());
     if (min_lb > max_ub) {
         return false;
     }
@@ -378,7 +379,7 @@ bool ArrayDomain::all_num_lb_ub(const Interval& lb, const Interval& ub) const {
 }
 
 bool ArrayDomain::all_num_width(const Interval& index, const Interval& width) const {
-    const auto [min_lb, max_ub] = as_numbytes_range(index, width);
+    const auto [min_lb, max_ub] = as_numbytes_range(index, width, total_stack_size());
     assert(min_lb <= max_ub);
     return this->num_bytes.all_num(min_lb, max_ub);
 }
@@ -396,7 +397,8 @@ int ArrayDomain::min_all_num_size(const NumAbsDomain& inv, const Variable offset
 }
 
 // Get one byte of a value.
-std::optional<uint8_t> get_value_byte(const NumAbsDomain& inv, const offset_t o, const int width) {
+std::optional<uint8_t> get_value_byte(const NumAbsDomain& inv, const offset_t o, const int width,
+                                      const bool big_endian) {
     const Variable v = variable_registry.cell_var(DataKind::svalues, (o / width) * width, width);
     const std::optional<Number> t = inv.eval_interval(v).singleton();
     if (!t) {
@@ -408,21 +410,21 @@ std::optional<uint8_t> get_value_byte(const NumAbsDomain& inv, const offset_t o,
     switch (width) {
     case sizeof(uint8_t): break;
     case sizeof(uint16_t):
-        if (thread_local_options.big_endian) {
+        if (big_endian) {
             n = boost::endian::native_to_big<uint16_t>(n);
         } else {
             n = boost::endian::native_to_little<uint16_t>(n);
         }
         break;
     case sizeof(uint32_t):
-        if (thread_local_options.big_endian) {
+        if (big_endian) {
             n = boost::endian::native_to_big<uint32_t>(n);
         } else {
             n = boost::endian::native_to_little<uint32_t>(n);
         }
         break;
     case sizeof(Index):
-        if (thread_local_options.big_endian) {
+        if (big_endian) {
             n = boost::endian::native_to_big<Index>(n);
         } else {
             n = boost::endian::native_to_little<Index>(n);
@@ -435,7 +437,7 @@ std::optional<uint8_t> get_value_byte(const NumAbsDomain& inv, const offset_t o,
 }
 
 std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, const DataKind kind, const Interval& i,
-                                                  const int width) const {
+                                                  const int width, const bool big_endian) const {
     if (const std::optional<Number> n = i.singleton()) {
         offset_map_t& offset_map = lookup_array_map(kind);
         const int64_t k = n->narrow<int64_t>();
@@ -451,13 +453,13 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, const
             bool found = true;
             for (unsigned int index = 0; index < size; index++) {
                 const offset_t byte_offset{o + index};
-                std::optional<uint8_t> b = get_value_byte(inv, byte_offset, 8);
+                std::optional<uint8_t> b = get_value_byte(inv, byte_offset, 8, big_endian);
                 if (!b) {
-                    b = get_value_byte(inv, byte_offset, 4);
+                    b = get_value_byte(inv, byte_offset, 4, big_endian);
                     if (!b) {
-                        b = get_value_byte(inv, byte_offset, 2);
+                        b = get_value_byte(inv, byte_offset, 2, big_endian);
                         if (!b) {
-                            b = get_value_byte(inv, byte_offset, 1);
+                            b = get_value_byte(inv, byte_offset, 1, big_endian);
                         }
                     }
                 }
@@ -476,7 +478,7 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, const
                 }
                 if (size == 2) {
                     uint16_t b = *reinterpret_cast<uint16_t*>(result_buffer);
-                    if (thread_local_options.big_endian) {
+                    if (big_endian) {
                         b = boost::endian::native_to_big<uint16_t>(b);
                     } else {
                         b = boost::endian::native_to_little<uint16_t>(b);
@@ -485,7 +487,7 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, const
                 }
                 if (size == 4) {
                     uint32_t b = *reinterpret_cast<uint32_t*>(result_buffer);
-                    if (thread_local_options.big_endian) {
+                    if (big_endian) {
                         b = boost::endian::native_to_big<uint32_t>(b);
                     } else {
                         b = boost::endian::native_to_little<uint32_t>(b);
@@ -494,7 +496,7 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, const
                 }
                 if (size == 8) {
                     Index b = *reinterpret_cast<Index*>(result_buffer);
-                    if (thread_local_options.big_endian) {
+                    if (big_endian) {
                         b = boost::endian::native_to_big<Index>(b);
                     } else {
                         b = boost::endian::native_to_little<Index>(b);
@@ -578,16 +580,17 @@ std::optional<LinearExpression> ArrayDomain::load_type(const Interval& i, int wi
 // partially cover that range can be split such that any non-covered portions become new cells.
 static std::optional<std::pair<offset_t, unsigned>> split_and_find_var(const ArrayDomain& array_domain,
                                                                        NumAbsDomain& inv, const DataKind kind,
-                                                                       const Interval& idx, const Interval& elem_size) {
+                                                                       const Interval& idx, const Interval& elem_size,
+                                                                       const bool big_endian) {
     if (kind == DataKind::svalues || kind == DataKind::uvalues) {
-        array_domain.split_number_var(inv, kind, idx, elem_size);
+        array_domain.split_number_var(inv, kind, idx, elem_size, big_endian);
     }
     return kill_and_find_var([&inv](Variable v) { inv.havoc(v); }, kind, idx, elem_size);
 }
 
 std::optional<Variable> ArrayDomain::store(NumAbsDomain& inv, const DataKind kind, const Interval& idx,
-                                           const Interval& elem_size) {
-    if (auto maybe_cell = split_and_find_var(*this, inv, kind, idx, elem_size)) {
+                                           const Interval& elem_size, const bool big_endian) {
+    if (auto maybe_cell = split_and_find_var(*this, inv, kind, idx, elem_size, big_endian)) {
         // perform strong update
         auto [offset, size] = *maybe_cell;
         const Cell c = lookup_array_map(kind).mk_cell(offset, size);
@@ -615,7 +618,7 @@ std::optional<Variable> ArrayDomain::store_type(TypeDomain& inv, const Interval&
         using namespace dsl_syntax;
         // Weak update: cannot perform a strong update because the index is
         // not a singleton. Havoc the type cells in the range.
-        const auto [lb, ub] = as_numbytes_range(idx, width);
+        const auto [lb, ub] = as_numbytes_range(idx, width, total_stack_size());
         if (!is_num) {
             // A non-numeric value may overwrite previously numeric bytes,
             // so conservatively mark the range as non-numeric.
@@ -628,8 +631,9 @@ std::optional<Variable> ArrayDomain::store_type(TypeDomain& inv, const Interval&
     return {};
 }
 
-void ArrayDomain::havoc(NumAbsDomain& inv, const DataKind kind, const Interval& idx, const Interval& elem_size) {
-    split_and_find_var(*this, inv, kind, idx, elem_size);
+void ArrayDomain::havoc(NumAbsDomain& inv, const DataKind kind, const Interval& idx, const Interval& elem_size,
+                        const bool big_endian) {
+    split_and_find_var(*this, inv, kind, idx, elem_size, big_endian);
 }
 
 void ArrayDomain::havoc_type(TypeDomain& inv, const Interval& idx, const Interval& elem_size) {
@@ -653,9 +657,9 @@ void ArrayDomain::store_numbers(const Interval& _idx, const Interval& _width) {
         return;
     }
 
-    if (*idx_n + *width > thread_local_options.total_stack_size()) {
+    if (*idx_n + *width > total_stack_size()) {
         CRAB_WARN("array expansion store range ignored because ", "the number of elements is larger than limit of ",
-                  thread_local_options.total_stack_size());
+                  total_stack_size());
         return;
     }
     num_bytes.reset(idx_n->narrow<int>(), width->narrow<int>());

@@ -41,6 +41,11 @@ class ArrayDomain final {
     // Top at the requested size.
     explicit ArrayDomain(const size_t stack_size) : num_bytes(BitsetDomain{stack_size}) {}
 
+    [[nodiscard]]
+    int total_stack_size() const {
+        return gsl::narrow<int>(num_bytes.size());
+    }
+
     // no move constructor to BitsetDomain, and therefore no copy-then-move for ArrayDomain
     explicit ArrayDomain(const BitsetDomain& num_bytes) : num_bytes(num_bytes) {}
     ArrayDomain(const ArrayDomain& arr) = default;
@@ -74,18 +79,21 @@ class ArrayDomain final {
     int min_all_num_size(const NumAbsDomain& inv, Variable offset) const;
 
     [[nodiscard]]
-    std::optional<LinearExpression> load(const NumAbsDomain& inv, DataKind kind, const Interval& i, int width) const;
+    std::optional<LinearExpression> load(const NumAbsDomain& inv, DataKind kind, const Interval& i, int width,
+                                         bool big_endian) const;
     std::optional<LinearExpression> load_type(const Interval& i, int width) const;
-    std::optional<Variable> store(NumAbsDomain& inv, DataKind kind, const Interval& idx, const Interval& elem_size);
+    std::optional<Variable> store(NumAbsDomain& inv, DataKind kind, const Interval& idx, const Interval& elem_size,
+                                  bool big_endian);
     std::optional<Variable> store_type(TypeDomain& inv, const Interval& idx, const Interval& width, bool is_num);
-    void havoc(NumAbsDomain& inv, DataKind kind, const Interval& idx, const Interval& elem_size);
+    void havoc(NumAbsDomain& inv, DataKind kind, const Interval& idx, const Interval& elem_size, bool big_endian);
     void havoc_type(TypeDomain& inv, const Interval& idx, const Interval& elem_size);
 
     // Perform array stores over an array segment
     void store_numbers(const Interval& _idx, const Interval& _width);
 
-    void split_number_var(NumAbsDomain& inv, DataKind kind, const Interval& ii, const Interval& elem_size) const;
-    void split_cell(NumAbsDomain& inv, DataKind kind, int cell_start_index, unsigned int len) const;
+    void split_number_var(NumAbsDomain& inv, DataKind kind, const Interval& ii, const Interval& elem_size,
+                          bool big_endian) const;
+    void split_cell(NumAbsDomain& inv, DataKind kind, int cell_start_index, unsigned int len, bool big_endian) const;
 
     void initialize_numbers(int lb, int width);
 };

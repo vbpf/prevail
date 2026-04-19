@@ -174,21 +174,18 @@ struct AnalysisResult {
                                           size_t max_steps = 200) const;
 };
 
-void print_error(std::ostream& os, const VerificationError& error, const Program& prog);
-void print_invariants(std::ostream& os, const Program& prog, bool simplify, const AnalysisResult& result);
+void print_error(std::ostream& os, const VerificationError& error, const Program& prog, bool print_line_info = false);
+void print_invariants(std::ostream& os, const Program& prog, bool simplify, const AnalysisResult& result,
+                      bool print_line_info = false);
 void print_unreachable(std::ostream& os, const Program& prog, const AnalysisResult& result);
 
-/// Print invariants filtered to only show labels in the given set.
-/// Used to print a failure slice in context.
-/// @param compact If true, skip invariant output and only show instructions.
-/// @param relevance If provided, only show assertions involving relevant registers.
 void print_invariants_filtered(std::ostream& os, const Program& prog, bool simplify, const AnalysisResult& result,
                                const std::set<Label>& filter, bool compact = false,
-                               const std::map<Label, RelevantState>* relevance = nullptr);
+                               const std::map<Label, RelevantState>* relevance = nullptr, bool print_line_info = false);
 
 /// Print all failure slices in a structured diagnostic format.
 /// @param compact If true, skip detailed invariants for smaller output.
 void print_failure_slices(std::ostream& os, const Program& prog, bool simplify, const AnalysisResult& result,
-                          const std::vector<FailureSlice>& slices, bool compact = false);
+                          const std::vector<FailureSlice>& slices, bool compact = false, bool print_line_info = false);
 
 } // namespace prevail
