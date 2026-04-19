@@ -20,11 +20,7 @@ namespace prevail {
 
 StringInvariant EbpfDomain::to_set() const {
     if (!stack) {
-        // BUG: bottom should serialize as bottom ("_|_"), but several YAML
-        // tests encode the wrong answer (top) in their `post: []` expectations.
-        // Returning top here matches those expectations. Fix by returning
-        // bottom and updating the YAML tests in the same change.
-        return StringInvariant::top();
+        return StringInvariant::bottom();
     }
     return state.to_set() + stack->to_set();
 }

@@ -76,7 +76,8 @@ code:
   <start>: |
     callx r8; bpf_map_lookup_elem
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Possible null access (within(r2:key_size(r1)))"
@@ -92,7 +93,8 @@ code:
     callx r8; bpf_map_lookup_elem
 
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Upper bound must be at most r2.shared_region_size (within(r2:key_size(r1)))"
@@ -108,7 +110,8 @@ code:
     callx r8; bpf_map_lookup_elem
 
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Lower bound must be at least 0 (within(r2:key_size(r1)))"
@@ -122,7 +125,8 @@ code:
     callx r8
 
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: invalid helper function id 1000 (r8.type is helper)"
@@ -136,7 +140,8 @@ code:
     callx r8
 
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: invalid helper function id 1000 (r8.type is helper)"
@@ -149,7 +154,8 @@ code:
   <start>: |
     callx r8; bpf_map_lookup_elem
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: callx helper function id is not a valid singleton (r8.type is helper)"
@@ -165,7 +171,8 @@ code:
     callx r8; bpf_map_lookup_elem
 
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Illegal map update with a non-numerical value [-oo-oo) (within(r2:key_size(r1)))"
@@ -229,7 +236,8 @@ code:
     callx r8; bpf_map_update_elem
 
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Upper bound must be at most r3.shared_region_size (within(r3:value_size(r1)))"
@@ -270,7 +278,8 @@ code:
     callx r8; bpf_map_update_elem
 
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Possible null access (within(r3:value_size(r1)))"
@@ -313,7 +322,8 @@ code:
     callx r8; bpf_map_update_elem
 
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Illegal map update with a non-numerical value [496-500) (within(r3:value_size(r1)))"
@@ -332,7 +342,8 @@ code:
     callx r8; bpf_map_update_elem
 
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r3.type in {stack, packet, shared})"
@@ -374,7 +385,8 @@ code:
     callx r8; bpf_ringbuf_output
 
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Stack content is not numeric (valid_access(r2.offset, width=r3) for read)"
@@ -392,7 +404,8 @@ code:
   <start>: |
     callx r8; bpf_ringbuf_output
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r2.type in {stack, packet, shared})"
@@ -432,7 +445,8 @@ code:
     callx r8; bpf_get_stack
 
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r2.type in {stack, packet, shared})"

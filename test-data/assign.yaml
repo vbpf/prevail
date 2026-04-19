@@ -181,7 +181,8 @@ code:
   <start>: |
     w2 = r10
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r10.type == number)"
@@ -212,7 +213,8 @@ code:
   <start>: |
     w2 = r1
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -309,7 +311,8 @@ code:
   <start>: |
     w1 = r2
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r2.type == number)"
@@ -340,7 +343,8 @@ code:
   <start>: |
     w2 = r1
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -369,7 +373,8 @@ code:
   <start>: |
     w2 = r1
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -398,7 +403,8 @@ code:
   <start>: |
     w2 = r1
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"

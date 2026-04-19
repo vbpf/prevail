@@ -16,7 +16,8 @@ code:
     w1 += 0
     r2 = *(u32 *)(r1 + 0)
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "1: Invalid type (r1.type in {ctx, stack, packet, shared})"
@@ -37,7 +38,8 @@ code:
     w1 -= 0
     r2 = *(u32 *)(r1 + 0)
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "1: Invalid type (r1.type in {ctx, stack, packet, shared})"
@@ -58,7 +60,8 @@ code:
     w1 *= 1
     r2 = *(u32 *)(r1 + 0)
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -79,7 +82,8 @@ code:
     w1 /= 1
     r2 = *(u32 *)(r1 + 0)
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -100,7 +104,8 @@ code:
     w1 %= 0
     r2 = *(u32 *)(r1 + 0)
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -120,7 +125,8 @@ code:
     w1 s/= 1
     r2 = *(u32 *)(r1 + 0)
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -141,7 +147,8 @@ code:
     w1 s%= 0
     r2 = *(u32 *)(r1 + 0)
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -162,7 +169,8 @@ code:
     w1 &= -1
     r2 = *(u32 *)(r1 + 0)
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -183,7 +191,8 @@ code:
     w1 |= 0
     r2 = *(u32 *)(r1 + 0)
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -204,7 +213,8 @@ code:
     w1 ^= 0
     r2 = *(u32 *)(r1 + 0)
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -225,7 +235,8 @@ code:
     w1 <<= 0
     r2 = *(u32 *)(r1 + 0)
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -246,7 +257,8 @@ code:
     w1 >>= 0
     r2 = *(u32 *)(r1 + 0)
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -267,7 +279,8 @@ code:
     w1 s>>= 0
     r2 = *(u32 *)(r1 + 0)
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -289,7 +302,8 @@ code:
     w1 = - w1
     r2 = *(u32 *)(r1 + 0)
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"
@@ -312,7 +326,8 @@ code:
     r0 = r1
     exit
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "1: Invalid type (r0.type == number)"
@@ -335,7 +350,8 @@ code:
   <start>: |
     w0 = w1
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r1.type == number)"

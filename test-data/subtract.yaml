@@ -67,7 +67,8 @@ code:
   <start>: |
     r3 -= r2
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Cannot subtract pointers to non-singleton regions (r2.type == number or r3.type == r2.type in {ctx, stack, packet})"
@@ -81,7 +82,8 @@ code:
   <start>: |
     r3 -= r2
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Cannot subtract pointers to different regions (r2.type == number or r3.type == r2.type in {ctx, stack, packet})"
@@ -138,7 +140,8 @@ code:
   <start>: |
     r1 -= r2
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Upper bound must be at most total_stack_size (r2.type == number or r1.type == r2.type in {ctx, stack, packet})"

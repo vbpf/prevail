@@ -12,7 +12,8 @@ code:
   <start>: |
     r0 += r3
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r3.type in {number, ctx, stack, packet, shared})"
@@ -29,7 +30,8 @@ code:
   <start>: |
     r0 -= r3
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Cannot subtract pointers to different regions (r3.type == number or r0.type == r3.type in {ctx, stack, packet})"
@@ -46,7 +48,8 @@ code:
   <start>: |
     r0 *= r3
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r3.type == number)"
@@ -63,7 +66,8 @@ code:
   <start>: |
     r0 /= r3
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Only numbers can be used as divisors (r3 != 0)"
@@ -80,7 +84,8 @@ code:
   <start>: |
     r0 s/= r3
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Only numbers can be used as divisors (r3 != 0)"
@@ -97,7 +102,8 @@ code:
   <start>: |
     r0 %= r3
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Only numbers can be used as divisors (r3 != 0)"
@@ -114,7 +120,8 @@ code:
   <start>: |
     r0 s%= r3
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Only numbers can be used as divisors (r3 != 0)"
@@ -131,7 +138,8 @@ code:
   <start>: |
     r0 &= r3
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r3.type == number)"
@@ -148,7 +156,8 @@ code:
   <start>: |
     r0 |= r3
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r3.type == number)"
@@ -165,7 +174,8 @@ code:
   <start>: |
     r0 ^= r3
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r3.type == number)"
@@ -182,7 +192,8 @@ code:
   <start>: |
     r0 <<= r3
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r3.type == number)"
@@ -199,7 +210,8 @@ code:
   <start>: |
     r0 >>= r3
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r3.type == number)"
@@ -216,7 +228,8 @@ code:
   <start>: |
     r0 s>>= r3
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r3.type == number)"
@@ -233,7 +246,8 @@ code:
   <start>: |
     r0 s8= r3
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r3.type == number)"
@@ -250,7 +264,8 @@ code:
   <start>: |
     r0 s16= r3
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r3.type == number)"
@@ -267,7 +282,8 @@ code:
   <start>: |
     r0 s32= r3
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r3.type == number)"
@@ -297,7 +313,8 @@ code:
   <start>: |
     *(u64 *)(r1 + 0) = r0
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Only numbers can be stored to externally-visible regions (r1.type != stack -> r0.type == number)"
@@ -313,7 +330,8 @@ code:
   <start>: |
     *(u32 *)(r1 + 0) = r0
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r0.type == number)"
@@ -329,7 +347,8 @@ code:
   <start>: |
     *(u16 *)(r1 + 0) = r0
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r0.type == number)"
@@ -345,7 +364,8 @@ code:
   <start>: |
     *(u8 *)(r1 + 0) = r0
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r0.type == number)"
@@ -361,7 +381,8 @@ code:
   <start>: |
     lock *(u64 *)(r1 + 0) += r5
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r5.type == number)"
@@ -377,7 +398,8 @@ code:
   <start>: |
     lock *(u64 *)(r1 + 0) &= r5
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r5.type == number)"
@@ -393,7 +415,8 @@ code:
   <start>: |
     lock *(u64 *)(r1 + 0) |= r5
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r5.type == number)"
@@ -409,7 +432,8 @@ code:
   <start>: |
     lock *(u64 *)(r1 + 0) |= r5
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r5.type == number)"
@@ -425,7 +449,8 @@ code:
   <start>: |
     lock *(u64 *)(r1 + 0) x= r5
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r5.type == number)"
@@ -441,7 +466,8 @@ code:
   <start>: |
     lock *(u64 *)(r1 + 0) x= r5
 
-post: []
+post:
+  - "_|_"
 
 messages:
   - "0: Invalid type (r5.type == number)"
