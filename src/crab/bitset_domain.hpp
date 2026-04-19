@@ -28,6 +28,11 @@ class BitsetDomain final {
     // BitsetDomain has no bottom of its own; bottom for a container that
     // needs one is represented externally (e.g. wrapping the stack in
     // std::optional inside EbpfDomain).
+    [[nodiscard]]
+    size_t size() const noexcept {
+        return non_numerical_bytes.size();
+    }
+
     void set_to_top() noexcept { non_numerical_bytes.set(); }
 
     [[nodiscard]]
