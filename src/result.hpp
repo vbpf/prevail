@@ -70,6 +70,19 @@ struct RelevantState {
 
     explicit RelevantState(const AnalysisContext& context) : total_stack_size(context.options.total_stack_size()) {}
 
+    /// Merge another relevance set into this one (union of registers and stack offsets).
+    /// `total_stack_size` is invariant within one analysis and not touched.
+    void merge(const RelevantState& other) {
+        registers.insert(other.registers.begin(), other.registers.end());
+        stack_offsets.insert(other.stack_offsets.begin(), other.stack_offsets.end());
+    }
+
+    /// Number of tracked registers + stack offsets; used for dedup against a prior snapshot.
+    [[nodiscard]]
+    size_t size() const {
+        return registers.size() + stack_offsets.size();
+    }
+
     /// Check if a constraint string (e.g., "r1.type=number") involves a relevant register.
     [[nodiscard]]
     bool is_relevant_constraint(const std::string& constraint) const;

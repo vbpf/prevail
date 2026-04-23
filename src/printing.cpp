@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <optional>
 #include <variant>
 #include <vector>
 
@@ -811,35 +812,31 @@ void print_invariants_filtered(std::ostream& os, const Program& prog, const Anal
                     in_slice_parents.push_back(parent);
                 }
             }
-            if (in_slice_parents.size() >= 2) {
-                // Build the union of relevant registers from this label and all in-slice parents.
-                // Seed from an existing relevance entry so join_relevance inherits its context.
-                // Prefer the first filtered label; fall back to the first in-slice parent.
-                const RelevantState* seed = nullptr;
-                if (relevance->contains(first_filtered_label)) {
-                    seed = &relevance->at(first_filtered_label);
-                } else {
-                    for (const auto& parent : in_slice_parents) {
-                        if (relevance->contains(parent)) {
-                            seed = &relevance->at(parent);
-                            break;
-                        }
-                    }
-                }
-                if (seed) {
-                    RelevantState join_relevance = *seed; // copy-construct; carries context
-                    for (const auto& parent : in_slice_parents) {
-                        if (relevance->contains(parent)) {
-                            const auto& pr = relevance->at(parent);
-                            join_relevance.registers.insert(pr.registers.begin(), pr.registers.end());
-                            join_relevance.stack_offsets.insert(pr.stack_offsets.begin(), pr.stack_offsets.end());
-                        }
-                    }
 
+            if (in_slice_parents.size() >= 2) {
+                // Union of relevance from first_filtered_label and all in-slice parents.
+                // The first entry we find seeds the optional (supplying the filter context
+                // it carries); subsequent entries merge into it.
+                std::optional<RelevantState> join_relevance;
+                auto try_merge = [&](const Label& lbl) {
+                    if (const auto it = relevance->find(lbl); it != relevance->end()) {
+                        if (join_relevance) {
+                            join_relevance->merge(it->second);
+                        } else {
+                            join_relevance.emplace(it->second);
+                        }
+                    }
+                };
+                try_merge(first_filtered_label);
+                for (const auto& parent : in_slice_parents) {
+                    try_merge(parent);
+                }
+
+                if (join_relevance) {
                     os << "  --- join point: per-predecessor state ---\n";
                     for (const auto& parent : in_slice_parents) {
                         if (const auto* post = get_parent_post_invariant(parent)) {
-                            os << invariant_filter(&join_relevance);
+                            os << invariant_filter(&*join_relevance);
                             os << "  from " << parent << ": " << *post << "\n";
                             os << invariant_filter(nullptr);
                         }

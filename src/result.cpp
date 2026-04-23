@@ -445,12 +445,11 @@ FailureSlice AnalysisResult::compute_slice_from_label(const Program& prog, const
         // Merge with existing relevance at this label (for deduplication).
         // try_emplace copy-constructs from empty_template on first visit;
         // subsequent visits merge into the existing entry.
-        auto [visited_it, _visited_inserted] = visited.try_emplace(current_label, empty_template);
+        auto [visited_it, _] = visited.try_emplace(current_label, empty_template);
         auto& existing = visited_it->second;
-        const size_t prev_size = existing.registers.size() + existing.stack_offsets.size();
-        existing.registers.insert(relevant_after.registers.begin(), relevant_after.registers.end());
-        existing.stack_offsets.insert(relevant_after.stack_offsets.begin(), relevant_after.stack_offsets.end());
-        const size_t new_size = existing.registers.size() + existing.stack_offsets.size();
+        const size_t prev_size = existing.size();
+        existing.merge(relevant_after);
+        const size_t new_size = existing.size();
 
         // If no new relevance was added, skip (already processed with same or broader relevance).
         // In conservative mode with empty relevance, use a separate visited set for dedup.
@@ -560,19 +559,13 @@ FailureSlice AnalysisResult::compute_slice_from_label(const Program& prog, const
                 // Merge (not assign) because a label may be revisited from
                 // a different successor with additional relevance.
                 auto [it, _] = slice_labels.try_emplace(current_label, empty_template);
-                auto& slice_existing = it->second;
-                slice_existing.registers.insert(relevant_before.registers.begin(), relevant_before.registers.end());
-                slice_existing.stack_offsets.insert(relevant_before.stack_offsets.begin(),
-                                                    relevant_before.stack_offsets.end());
+                it->second.merge(relevant_before);
             }
         } else {
             // No deps available: conservatively treat this label as contributing
             // and propagate all current relevance to predecessors.
             auto [it, _] = slice_labels.try_emplace(current_label, empty_template);
-            auto& slice_existing = it->second;
-            slice_existing.registers.insert(relevant_before.registers.begin(), relevant_before.registers.end());
-            slice_existing.stack_offsets.insert(relevant_before.stack_offsets.begin(),
-                                                relevant_before.stack_offsets.end());
+            it->second.merge(relevant_before);
         }
 
         // Add predecessors to worklist
