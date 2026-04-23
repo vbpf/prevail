@@ -832,9 +832,9 @@ void print_invariants_filtered(std::ostream& os, const Program& prog, const Anal
 
                 if (join_relevance) {
                     os << "  --- join point: per-predecessor state ---\n";
+                    invariant_filter guard(os, &*join_relevance);
                     for (const auto& parent : in_slice_parents) {
                         if (const auto* post = get_parent_post_invariant(parent)) {
-                            invariant_filter guard(os, &*join_relevance);
                             os << "  from " << parent << ": " << *post << "\n";
                         }
                     }
