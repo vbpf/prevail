@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <cassert>
+
 #include "config.hpp"
 #include "ir/program.hpp"
 #include "spec/type_descriptors.hpp"
@@ -34,6 +36,12 @@ struct AnalysisContext {
     const ProgramInfo& program_info;
     const ebpf_verifier_options_t& options;
     const ebpf_platform_t& platform;
+
+    AnalysisContext(const Program& p, const ProgramInfo& pi, const ebpf_verifier_options_t& o,
+                    const ebpf_platform_t& pl)
+        : program(p), program_info(pi), options(o), platform(pl) {
+        assert(&pi == &p.info() && "AnalysisContext::program_info must alias program.info()");
+    }
 };
 
 } // namespace prevail
