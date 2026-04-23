@@ -150,7 +150,7 @@ TEST_CASE("pass_compute_callback_metadata excludes Exit labels and synthetic jum
     seq.push_back(at(4, Exit{}));
 
     const Program prog = Program::from_sequence(seq, info, {});
-    const auto& targets = prog.info().callback_target_labels;
+    const auto& targets = prog.callback_target_labels();
     REQUIRE(targets.contains(0));
     REQUIRE(targets.contains(1));
     REQUIRE(targets.contains(3));
@@ -165,8 +165,8 @@ TEST_CASE("pass_compute_callback_metadata marks callbacks that reach an Exit", "
     seq.push_back(at(1, Exit{}));
 
     const Program prog = Program::from_sequence(seq, info, {});
-    REQUIRE(prog.info().callback_target_labels.contains(0));
-    REQUIRE(prog.info().callback_targets_with_exit.contains(0));
+    REQUIRE(prog.callback_target_labels().contains(0));
+    REQUIRE(prog.callback_targets_with_exit().contains(0));
 }
 
 TEST_CASE("pass_insert_termination_counters adds a counter at a WTO loop head", "[passes]") {

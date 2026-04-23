@@ -252,7 +252,7 @@ int main(int argc, char** argv) {
                 AnalysisResult::SliceParams slice_params;
                 slice_params.max_steps = failure_slice_depth;
                 slice_params.max_slices = 1;
-                const AnalysisContext context{prog.info(), ebpf_verifier_options, *prog.info().platform};
+                const AnalysisContext context{prog, prog.info(), ebpf_verifier_options, *prog.info().platform};
                 auto slices = result.compute_failure_slices(prog, slice_params, context);
                 print_failure_slices(std::cout, prog, result, slices, verbosity);
             } else if (failure_slice && !result.failed) {

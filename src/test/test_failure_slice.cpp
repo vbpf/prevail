@@ -28,7 +28,7 @@ static std::vector<FailureSlice> get_failure_slices(const std::string& filename,
 
     const Program prog = Program::from_sequence(*inst_seq, raw_prog.info, options);
     auto result = analyze(prog, options);
-    const AnalysisContext context{prog.info(), options, *prog.info().platform};
+    const AnalysisContext context{prog, prog.info(), options, *prog.info().platform};
 
     return result.compute_failure_slices(prog, context);
 }
@@ -190,7 +190,7 @@ TEST_CASE("print_failure_slices produces structured output", "[failure_slice][pr
 
     const Program prog = Program::from_sequence(*inst_seq, raw_prog.info, options);
     auto result = analyze(prog, options);
-    const AnalysisContext context{prog.info(), options, *prog.info().platform};
+    const AnalysisContext context{prog, prog.info(), options, *prog.info().platform};
     auto slices = result.compute_failure_slices(prog, context);
 
     std::stringstream output;
@@ -230,7 +230,7 @@ TEST_CASE("passing program produces no failure slices", "[failure_slice][integra
 
     REQUIRE_FALSE(result.failed);
 
-    const AnalysisContext context{prog.info(), options, *prog.info().platform};
+    const AnalysisContext context{prog, prog.info(), options, *prog.info().platform};
     auto slices = result.compute_failure_slices(prog, context);
     REQUIRE(slices.empty());
 }

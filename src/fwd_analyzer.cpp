@@ -161,7 +161,7 @@ class InterleavedFwdFixpointIterator final {
 
 static AnalysisContext make_context(const Program& prog, const ebpf_verifier_options_t& options) {
     const auto& info = prog.info();
-    return AnalysisContext{info, options, *info.platform};
+    return AnalysisContext{prog, info, options, *info.platform};
 }
 
 AnalysisResult analyze(const Program& prog, const ebpf_verifier_options_t& options) {

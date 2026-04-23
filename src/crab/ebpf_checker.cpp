@@ -213,10 +213,10 @@ void EbpfChecker::operator()(const ValidCallbackTarget& s) const {
     }
 
     const int32_t callback_label = callback_target->cast_to<int32_t>();
-    if (!context.program_info.callback_target_labels.contains(callback_label)) {
+    if (!context.program.callback_target_labels().contains(callback_label)) {
         throw_fail("callback function pointer does not reference a valid callback entry");
     }
-    if (!context.program_info.callback_targets_with_exit.contains(callback_label)) {
+    if (!context.program.callback_targets_with_exit().contains(callback_label)) {
         throw_fail("callback function does not have a reachable exit");
     }
 }
