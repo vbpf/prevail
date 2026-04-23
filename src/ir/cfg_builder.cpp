@@ -465,7 +465,6 @@ static LoweredPseudoLoads pass_lower_pseudo_loads(const InstructionSeq& insts, c
 static void pass_populate_nodes(CfgBuilder& builder, const InstructionSeq& insts, const ProgramInfo& info,
                                 const ResolvedKfuncCalls& resolved_kfunc_calls,
                                 const LoweredPseudoLoads& lowered_pseudo_loads) {
-    assert(info.platform != nullptr && "platform must be set before CFG construction");
     for (const auto& [label, inst, _] : insts) {
         assert(!check_instruction_feature_support(inst, *info.platform).has_value() &&
                "instruction support must be validated before CFG construction");
@@ -802,7 +801,8 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
                                const ebpf_verifier_options_t& options) {
     // --- Pass: ValidateOptions --------------------------------------------
     options.validate();
-    assert(info.platform != nullptr && "platform must be set before instruction feature validation");
+    // Preserves the platform-non-null invariant for every subsequent pass in this pipeline.
+    assert(info.platform != nullptr && "info.platform must be set before Program::from_sequence");
 
     // --- Pass: ValidateInstructionSupport ---------------------------------
     pass_validate_instruction_support(inst_seq, *info.platform);
