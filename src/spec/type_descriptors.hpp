@@ -58,8 +58,14 @@ struct btf_line_info_t {
     uint32_t column_number{};
 };
 
+// Per-program environment: a reference to the immutable platform (PlatformSpec) plus the
+// loader-derived facts that describe one program. Stable after ELF load; analysis-prep facts
+// derived from the CFG (e.g. callback metadata) live on `Program`, not here.
 struct ProgramInfo {
+    // --- Platform reference (non-owning; immutable across programs) ---
     const struct ebpf_platform_t* platform{};
+
+    // --- Loader outputs (populated during ELF parse; stable thereafter) ---
     std::vector<EbpfMapDescriptor> map_descriptors{};
     EbpfProgramType type{};
     std::map<size_t, btf_line_info_t> line_info{};
