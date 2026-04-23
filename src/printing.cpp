@@ -787,13 +787,11 @@ void print_invariants_filtered(std::ostream& os, const Program& prog, const Anal
 
         // Print pre-invariant for first filtered label in block (unless compact)
         if (!compact) {
-            // Set invariant filter if we have relevance info for this label
             const auto* label_relevance =
                 relevance ? (relevance->contains(first_filtered_label) ? &relevance->at(first_filtered_label) : nullptr)
                           : nullptr;
-            os << invariant_filter(label_relevance);
+            invariant_filter guard(os, label_relevance);
             os << "\nPre-invariant : " << result.invariants.at(first_filtered_label).pre << "\n";
-            os << invariant_filter(nullptr); // Clear filter
         }
 
         // Print the jump and block header anchored to the basic block entry label
@@ -836,9 +834,8 @@ void print_invariants_filtered(std::ostream& os, const Program& prog, const Anal
                     os << "  --- join point: per-predecessor state ---\n";
                     for (const auto& parent : in_slice_parents) {
                         if (const auto* post = get_parent_post_invariant(parent)) {
-                            os << invariant_filter(&*join_relevance);
+                            invariant_filter guard(os, &*join_relevance);
                             os << "  from " << parent << ": " << *post << "\n";
-                            os << invariant_filter(nullptr);
                         }
                     }
                     os << "  --- end join point ---\n";
@@ -870,10 +867,9 @@ void print_invariants_filtered(std::ostream& os, const Program& prog, const Anal
                             relevance ? (relevance->contains(prev_filtered_label) ? &relevance->at(prev_filtered_label)
                                                                                   : nullptr)
                                       : nullptr;
-                        os << invariant_filter(prev_label_relevance);
+                        invariant_filter guard(os, prev_label_relevance);
                         printer.print_jump("goto", prev_filtered_label);
                         os << "\nPost-invariant : " << prev_current.post << "\n";
-                        os << invariant_filter(nullptr);
                     }
                 }
                 // Check if there are skipped labels between prev and current
@@ -895,9 +891,8 @@ void print_invariants_filtered(std::ostream& os, const Program& prog, const Anal
                 if (!compact) {
                     const auto* label_rel =
                         relevance ? (relevance->contains(label) ? &relevance->at(label) : nullptr) : nullptr;
-                    os << invariant_filter(label_rel);
+                    invariant_filter guard(os, label_rel);
                     os << "\nPre-invariant : " << result.invariants.at(label).pre << "\n";
-                    os << invariant_filter(nullptr);
                     printer.print_jump("from", label);
                 }
             }
@@ -946,13 +941,11 @@ void print_invariants_filtered(std::ostream& os, const Program& prog, const Anal
         if (!compact) {
             const auto& current = result.invariants.at(last_label);
             if (!current.post.is_bottom()) {
-                // Set invariant filter for post-invariant
                 const auto* label_relevance =
                     relevance ? (relevance->contains(last_label) ? &relevance->at(last_label) : nullptr) : nullptr;
-                os << invariant_filter(label_relevance);
+                invariant_filter guard(os, label_relevance);
                 printer.print_jump("goto", last_label);
                 os << "\nPost-invariant : " << current.post << "\n";
-                os << invariant_filter(nullptr); // Clear filter
             }
         }
     }

@@ -19,7 +19,7 @@ namespace prevail {
 template <typename>
 inline constexpr bool always_false_v = false;
 
-// Stream-local storage index for invariant filter
+// Stream-local storage index for the invariant filter (per-stream pword slot).
 static int invariant_filter_index() {
     static const int index = std::ios_base::xalloc();
     return index;
@@ -29,9 +29,13 @@ const RelevantState* get_invariant_filter(std::ostream& os) {
     return static_cast<const RelevantState*>(os.pword(invariant_filter_index()));
 }
 
-std::ostream& operator<<(std::ostream& os, const invariant_filter& filter) {
-    os.pword(invariant_filter_index()) = const_cast<void*>(static_cast<const void*>(filter.state));
-    return os;
+invariant_filter::invariant_filter(std::ostream& os, const RelevantState* state)
+    : os_(os), previous_(get_invariant_filter(os)) {
+    os.pword(invariant_filter_index()) = const_cast<void*>(static_cast<const void*>(state));
+}
+
+invariant_filter::~invariant_filter() {
+    os_.pword(invariant_filter_index()) = const_cast<void*>(static_cast<const void*>(previous_));
 }
 
 bool RelevantState::is_relevant_constraint(const std::string& constraint) const {

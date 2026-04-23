@@ -88,19 +88,30 @@ struct RelevantState {
     bool is_relevant_constraint(const std::string& constraint) const;
 };
 
-/// Stream manipulator to filter invariant output to only relevant registers.
-/// Usage: os << invariant_filter(&relevant_state) << domain;
-/// To clear: os << invariant_filter(nullptr) << domain;
-struct invariant_filter {
-    const RelevantState* state;
-    explicit invariant_filter(const RelevantState* s) : state(s) {}
+/// Scoped guard that activates a `RelevantState` filter on an output stream.
+/// While the guard is alive, `operator<<(std::ostream&, const StringInvariant&)`
+/// consults the pointed-to state and skips items it considers irrelevant. The
+/// destructor restores whatever filter (if any) was active before — so guards
+/// nest cleanly and recover on exception.
+///
+/// Usage:
+///     {
+///         invariant_filter guard(os, &relevance);
+///         os << "\nPre-invariant : " << domain << "\n";
+///     }   // cleared automatically
+class invariant_filter {
+    std::ostream& os_;
+    const RelevantState* previous_;
+
+  public:
+    invariant_filter(std::ostream& os, const RelevantState* state);
+    ~invariant_filter();
+    invariant_filter(const invariant_filter&) = delete;
+    invariant_filter& operator=(const invariant_filter&) = delete;
 };
 
-/// Get the current invariant filter from a stream (nullptr if none).
+/// Get the current invariant filter from a stream (nullptr if none active).
 const RelevantState* get_invariant_filter(std::ostream& os);
-
-/// Set the invariant filter on a stream.
-std::ostream& operator<<(std::ostream& os, const invariant_filter& filter);
 
 /// A minimal diagnostic slice of a verification failure.
 /// Contains labels that contributed to the failure, with per-label
