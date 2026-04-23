@@ -61,31 +61,57 @@ struct InvariantMapPair {
     std::optional<InstructionDeps> deps; // Populated when collect_instruction_deps is set
 };
 
-/// State that is relevant at a specific program point.
-/// Used to filter what parts of the invariant to display.
+/// State that is relevant at a specific program point, used to filter
+/// what parts of the invariant to display.
 struct RelevantState {
+    int total_stack_size{};
     std::set<Reg> registers;
     std::set<int64_t> stack_offsets; // Relative stack offsets (e.g., Mem.access.offset values like -8)
-    int total_stack_size = 0;        // Used to translate relative stack offsets to absolute "s[...]" names.
+
+    explicit RelevantState(const AnalysisContext& context) : total_stack_size(context.options.total_stack_size()) {}
+
+    /// Merge another relevance set into this one (union of registers and stack offsets).
+    /// `total_stack_size` is invariant within one analysis and not touched.
+    void merge(const RelevantState& other) {
+        registers.insert(other.registers.begin(), other.registers.end());
+        stack_offsets.insert(other.stack_offsets.begin(), other.stack_offsets.end());
+    }
+
+    /// Number of tracked registers + stack offsets; used for dedup against a prior snapshot.
+    [[nodiscard]]
+    size_t size() const {
+        return registers.size() + stack_offsets.size();
+    }
 
     /// Check if a constraint string (e.g., "r1.type=number") involves a relevant register.
     [[nodiscard]]
     bool is_relevant_constraint(const std::string& constraint) const;
 };
 
-/// Stream manipulator to filter invariant output to only relevant registers.
-/// Usage: os << invariant_filter(&relevant_state) << domain;
-/// To clear: os << invariant_filter(nullptr) << domain;
-struct invariant_filter {
-    const RelevantState* state;
-    explicit invariant_filter(const RelevantState* s) : state(s) {}
+/// Scoped guard that activates a `RelevantState` filter on an output stream.
+/// While the guard is alive, `operator<<(std::ostream&, const StringInvariant&)`
+/// consults the pointed-to state and skips items it considers irrelevant. The
+/// destructor restores whatever filter (if any) was active before — so guards
+/// nest cleanly and recover on exception.
+///
+/// Usage:
+///     {
+///         invariant_filter guard(os, &relevance);
+///         os << "\nPre-invariant : " << domain << "\n";
+///     }   // cleared automatically
+class invariant_filter {
+    std::ostream& os_;
+    const RelevantState* previous_;
+
+  public:
+    invariant_filter(std::ostream& os, const RelevantState* state);
+    ~invariant_filter();
+    invariant_filter(const invariant_filter&) = delete;
+    invariant_filter& operator=(const invariant_filter&) = delete;
 };
 
-/// Get the current invariant filter from a stream (nullptr if none).
+/// Get the current invariant filter from a stream (nullptr if none active).
 const RelevantState* get_invariant_filter(std::ostream& os);
-
-/// Set the invariant filter on a stream.
-std::ostream& operator<<(std::ostream& os, const invariant_filter& filter);
 
 /// A minimal diagnostic slice of a verification failure.
 /// Contains labels that contributed to the failure, with per-label
@@ -174,18 +200,19 @@ struct AnalysisResult {
                                           size_t max_steps = 200) const;
 };
 
-void print_error(std::ostream& os, const VerificationError& error, const Program& prog, bool print_line_info = false);
-void print_invariants(std::ostream& os, const Program& prog, bool simplify, const AnalysisResult& result,
-                      bool print_line_info = false);
+void print_error(std::ostream& os, const VerificationError& error, const Program& prog,
+                 const verbosity_options_t& verbosity);
+void print_invariants(std::ostream& os, const Program& prog, const AnalysisResult& result,
+                      const verbosity_options_t& verbosity);
 void print_unreachable(std::ostream& os, const Program& prog, const AnalysisResult& result);
 
-void print_invariants_filtered(std::ostream& os, const Program& prog, bool simplify, const AnalysisResult& result,
-                               const std::set<Label>& filter, bool compact = false,
-                               const std::map<Label, RelevantState>* relevance = nullptr, bool print_line_info = false);
+void print_invariants_filtered(std::ostream& os, const Program& prog, const AnalysisResult& result,
+                               const std::set<Label>& filter, const verbosity_options_t& verbosity,
+                               const std::map<Label, RelevantState>* relevance = nullptr);
 
 /// Print all failure slices in a structured diagnostic format.
-/// @param compact If true, skip detailed invariants for smaller output.
-void print_failure_slices(std::ostream& os, const Program& prog, bool simplify, const AnalysisResult& result,
-                          const std::vector<FailureSlice>& slices, bool compact = false, bool print_line_info = false);
+/// Use `verbosity.compact_slice = true` to skip detailed invariants.
+void print_failure_slices(std::ostream& os, const Program& prog, const AnalysisResult& result,
+                          const std::vector<FailureSlice>& slices, const verbosity_options_t& verbosity);
 
 } // namespace prevail

@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <optional>
 #include <variant>
 #include <vector>
 
@@ -155,9 +156,9 @@ struct DetailedPrinter : LineInfoPrinter {
     }
 };
 
-void print_program(const Program& prog, std::ostream& os, const bool simplify, const bool print_line_info) {
-    DetailedPrinter printer{os, prog, print_line_info};
-    for (const BasicBlock& bb : BasicBlock::collect_basic_blocks(prog.cfg(), simplify)) {
+void print_program(const Program& prog, std::ostream& os, const verbosity_options_t& verbosity) {
+    DetailedPrinter printer{os, prog, verbosity.print_line_info};
+    for (const BasicBlock& bb : BasicBlock::collect_basic_blocks(prog.cfg(), verbosity.simplify)) {
         printer.print_jump("from", bb.first_label());
         os << bb.first_label() << ":\n";
         for (const Label& label : bb) {
@@ -169,10 +170,10 @@ void print_program(const Program& prog, std::ostream& os, const bool simplify, c
     os << "\n";
 }
 
-void print_invariants(std::ostream& os, const Program& prog, const bool simplify, const AnalysisResult& result,
-                      const bool print_line_info) {
-    DetailedPrinter printer{os, prog, print_line_info};
-    for (const BasicBlock& bb : BasicBlock::collect_basic_blocks(prog.cfg(), simplify)) {
+void print_invariants(std::ostream& os, const Program& prog, const AnalysisResult& result,
+                      const verbosity_options_t& verbosity) {
+    DetailedPrinter printer{os, prog, verbosity.print_line_info};
+    for (const BasicBlock& bb : BasicBlock::collect_basic_blocks(prog.cfg(), verbosity.simplify)) {
         if (result.invariants.at(bb.first_label()).pre.is_bottom()) {
             continue;
         }
@@ -191,7 +192,7 @@ void print_invariants(std::ostream& os, const Program& prog, const bool simplify
                 if (label != bb.last_label()) {
                     os << "After " << current.pre << "\n";
                 }
-                print_error(os, *current.error, prog, print_line_info);
+                print_error(os, *current.error, prog, verbosity);
                 os << "\n";
                 return;
             }
@@ -251,8 +252,9 @@ std::string to_string(const VerificationError& error) {
     return ss.str();
 }
 
-void print_error(std::ostream& os, const VerificationError& error, const Program& prog, const bool print_line_info) {
-    LineInfoPrinter printer{os, prog.info().line_info, print_line_info};
+void print_error(std::ostream& os, const VerificationError& error, const Program& prog,
+                 const verbosity_options_t& verbosity) {
+    LineInfoPrinter printer{os, prog.info().line_info, verbosity.print_line_info};
     if (const auto& label = error.where) {
         printer.print_line_info(*label);
         os << *label << ": ";
@@ -722,11 +724,12 @@ std::ostream& operator<<(std::ostream& os, const btf_line_info_t& line_info) {
     return os;
 }
 
-void print_invariants_filtered(std::ostream& os, const Program& prog, const bool simplify, const AnalysisResult& result,
-                               const std::set<Label>& filter, const bool compact,
-                               const std::map<Label, RelevantState>* relevance, const bool print_line_info) {
-    DetailedPrinter printer{os, prog, print_line_info};
-    const auto basic_blocks = BasicBlock::collect_basic_blocks(prog.cfg(), simplify);
+void print_invariants_filtered(std::ostream& os, const Program& prog, const AnalysisResult& result,
+                               const std::set<Label>& filter, const verbosity_options_t& verbosity,
+                               const std::map<Label, RelevantState>* relevance) {
+    DetailedPrinter printer{os, prog, verbosity.print_line_info};
+    const bool compact = verbosity.compact_slice;
+    const auto basic_blocks = BasicBlock::collect_basic_blocks(prog.cfg(), verbosity.simplify);
 
     // Build a mapping from each label in a basic block to the block's first label.
     // Needed to look up post-invariants for mid-block predecessor labels at join points.
@@ -784,13 +787,11 @@ void print_invariants_filtered(std::ostream& os, const Program& prog, const bool
 
         // Print pre-invariant for first filtered label in block (unless compact)
         if (!compact) {
-            // Set invariant filter if we have relevance info for this label
             const auto* label_relevance =
                 relevance ? (relevance->contains(first_filtered_label) ? &relevance->at(first_filtered_label) : nullptr)
                           : nullptr;
-            os << invariant_filter(label_relevance);
+            invariant_filter guard(os, label_relevance);
             os << "\nPre-invariant : " << result.invariants.at(first_filtered_label).pre << "\n";
-            os << invariant_filter(nullptr); // Clear filter
         }
 
         // Print the jump and block header anchored to the basic block entry label
@@ -809,33 +810,36 @@ void print_invariants_filtered(std::ostream& os, const Program& prog, const bool
                     in_slice_parents.push_back(parent);
                 }
             }
+
             if (in_slice_parents.size() >= 2) {
-                // Build the union of relevant registers from this label and all in-slice parents
-                RelevantState join_relevance;
-                if (relevance->contains(first_filtered_label)) {
-                    const auto& fl = relevance->at(first_filtered_label);
-                    join_relevance.registers.insert(fl.registers.begin(), fl.registers.end());
-                    join_relevance.stack_offsets.insert(fl.stack_offsets.begin(), fl.stack_offsets.end());
-                    join_relevance.total_stack_size = fl.total_stack_size;
-                }
-                for (const auto& parent : in_slice_parents) {
-                    if (relevance->contains(parent)) {
-                        const auto& pr = relevance->at(parent);
-                        join_relevance.registers.insert(pr.registers.begin(), pr.registers.end());
-                        join_relevance.stack_offsets.insert(pr.stack_offsets.begin(), pr.stack_offsets.end());
+                // Union of relevance from first_filtered_label and all in-slice parents.
+                // The first entry we find seeds the optional (supplying the filter context
+                // it carries); subsequent entries merge into it.
+                std::optional<RelevantState> join_relevance;
+                auto try_merge = [&](const Label& lbl) {
+                    if (const auto it = relevance->find(lbl); it != relevance->end()) {
+                        if (join_relevance) {
+                            join_relevance->merge(it->second);
+                        } else {
+                            join_relevance.emplace(it->second);
+                        }
                     }
+                };
+                try_merge(first_filtered_label);
+                for (const auto& parent : in_slice_parents) {
+                    try_merge(parent);
                 }
 
-                os << "  --- join point: per-predecessor state ---\n";
-                for (const auto& parent : in_slice_parents) {
-                    const auto* post = get_parent_post_invariant(parent);
-                    if (post) {
-                        os << invariant_filter(&join_relevance);
-                        os << "  from " << parent << ": " << *post << "\n";
-                        os << invariant_filter(nullptr);
+                if (join_relevance) {
+                    os << "  --- join point: per-predecessor state ---\n";
+                    invariant_filter guard(os, &*join_relevance);
+                    for (const auto& parent : in_slice_parents) {
+                        if (const auto* post = get_parent_post_invariant(parent)) {
+                            os << "  from " << parent << ": " << *post << "\n";
+                        }
                     }
+                    os << "  --- end join point ---\n";
                 }
-                os << "  --- end join point ---\n";
             }
         }
 
@@ -863,10 +867,9 @@ void print_invariants_filtered(std::ostream& os, const Program& prog, const bool
                             relevance ? (relevance->contains(prev_filtered_label) ? &relevance->at(prev_filtered_label)
                                                                                   : nullptr)
                                       : nullptr;
-                        os << invariant_filter(prev_label_relevance);
+                        invariant_filter guard(os, prev_label_relevance);
                         printer.print_jump("goto", prev_filtered_label);
                         os << "\nPost-invariant : " << prev_current.post << "\n";
-                        os << invariant_filter(nullptr);
                     }
                 }
                 // Check if there are skipped labels between prev and current
@@ -888,9 +891,8 @@ void print_invariants_filtered(std::ostream& os, const Program& prog, const bool
                 if (!compact) {
                     const auto* label_rel =
                         relevance ? (relevance->contains(label) ? &relevance->at(label) : nullptr) : nullptr;
-                    os << invariant_filter(label_rel);
+                    invariant_filter guard(os, label_rel);
                     os << "\nPre-invariant : " << result.invariants.at(label).pre << "\n";
-                    os << invariant_filter(nullptr);
                     printer.print_jump("from", label);
                 }
             }
@@ -930,7 +932,7 @@ void print_invariants_filtered(std::ostream& os, const Program& prog, const bool
             const auto& current = result.invariants.at(label);
             if (current.error) {
                 os << "\nVerification error:\n";
-                print_error(os, *current.error, prog, print_line_info);
+                print_error(os, *current.error, prog, verbosity);
                 os << "\n";
             }
         }
@@ -939,21 +941,19 @@ void print_invariants_filtered(std::ostream& os, const Program& prog, const bool
         if (!compact) {
             const auto& current = result.invariants.at(last_label);
             if (!current.post.is_bottom()) {
-                // Set invariant filter for post-invariant
                 const auto* label_relevance =
                     relevance ? (relevance->contains(last_label) ? &relevance->at(last_label) : nullptr) : nullptr;
-                os << invariant_filter(label_relevance);
+                invariant_filter guard(os, label_relevance);
                 printer.print_jump("goto", last_label);
                 os << "\nPost-invariant : " << current.post << "\n";
-                os << invariant_filter(nullptr); // Clear filter
             }
         }
     }
     os << "\n";
 }
 
-void print_failure_slices(std::ostream& os, const Program& prog, const bool simplify, const AnalysisResult& result,
-                          const std::vector<FailureSlice>& slices, const bool compact, const bool print_line_info) {
+void print_failure_slices(std::ostream& os, const Program& prog, const AnalysisResult& result,
+                          const std::vector<FailureSlice>& slices, const verbosity_options_t& verbosity) {
     if (slices.empty()) {
         os << "No verification failures found.\n";
         return;
@@ -1021,7 +1021,7 @@ void print_failure_slices(std::ostream& os, const Program& prog, const bool simp
             // Labels consumed by a {..|..} group are skipped in linear output,
             // unless they are themselves join points (nested joins).
             std::set<Label> convergence_members;
-            for (const auto& [join_lbl, preds] : join_predecessors) {
+            for (const auto& preds : join_predecessors | std::views::values) {
                 for (const auto& p : preds) {
                     if (!join_predecessors.contains(p)) {
                         convergence_members.insert(p);
@@ -1079,8 +1079,7 @@ void print_failure_slices(std::ostream& os, const Program& prog, const bool simp
 
         // Print the filtered CFG with assertion filtering based on relevance
         os << "[CAUSAL TRACE]\n";
-        print_invariants_filtered(os, prog, simplify, result, slice.impacted_labels(), compact, &slice.relevance,
-                                  print_line_info);
+        print_invariants_filtered(os, prog, result, slice.impacted_labels(), verbosity, &slice.relevance);
 
         if (i + 1 < slices.size()) {
             os << "\n";
