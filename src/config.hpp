@@ -34,6 +34,11 @@ struct verbosity_options_t {
     /// the registers and stack offsets it reads/writes, enabling efficient
     /// backward slicing for failure diagnostics.
     bool collect_instruction_deps = false;
+
+    /// When printing failure slices, omit per-label pre/post invariants and
+    /// per-predecessor join-point detail — emit only the control-flow summary
+    /// and the instruction trace.
+    bool compact_slice = false;
 };
 
 struct ebpf_verifier_options_t {

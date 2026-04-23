@@ -194,7 +194,8 @@ TEST_CASE("print_failure_slices produces structured output", "[failure_slice][pr
     auto slices = result.compute_failure_slices(prog, context);
 
     std::stringstream output;
-    print_failure_slices(output, prog, false, result, slices);
+    verbosity_options_t verbosity{.simplify = false};
+    print_failure_slices(output, prog, result, slices, verbosity);
 
     std::string output_str = output.str();
 

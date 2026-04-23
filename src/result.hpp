@@ -176,18 +176,19 @@ struct AnalysisResult {
                                           size_t max_steps = 200) const;
 };
 
-void print_error(std::ostream& os, const VerificationError& error, const Program& prog, bool print_line_info = false);
-void print_invariants(std::ostream& os, const Program& prog, bool simplify, const AnalysisResult& result,
-                      bool print_line_info = false);
+void print_error(std::ostream& os, const VerificationError& error, const Program& prog,
+                 const verbosity_options_t& verbosity);
+void print_invariants(std::ostream& os, const Program& prog, const AnalysisResult& result,
+                      const verbosity_options_t& verbosity);
 void print_unreachable(std::ostream& os, const Program& prog, const AnalysisResult& result);
 
-void print_invariants_filtered(std::ostream& os, const Program& prog, bool simplify, const AnalysisResult& result,
-                               const std::set<Label>& filter, bool compact = false,
-                               const std::map<Label, RelevantState>* relevance = nullptr, bool print_line_info = false);
+void print_invariants_filtered(std::ostream& os, const Program& prog, const AnalysisResult& result,
+                               const std::set<Label>& filter, const verbosity_options_t& verbosity,
+                               const std::map<Label, RelevantState>* relevance = nullptr);
 
 /// Print all failure slices in a structured diagnostic format.
-/// @param compact If true, skip detailed invariants for smaller output.
-void print_failure_slices(std::ostream& os, const Program& prog, bool simplify, const AnalysisResult& result,
-                          const std::vector<FailureSlice>& slices, bool compact = false, bool print_line_info = false);
+/// Use `verbosity.compact_slice = true` to skip detailed invariants.
+void print_failure_slices(std::ostream& os, const Program& prog, const AnalysisResult& result,
+                          const std::vector<FailureSlice>& slices, const verbosity_options_t& verbosity);
 
 } // namespace prevail
