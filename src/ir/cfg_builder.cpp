@@ -255,27 +255,42 @@ static std::optional<RejectionReason> check_instruction_feature_support(const In
     return {};
 }
 
-// Validate instruction-level feature support before CFG construction.
-// This is the user-facing rejection point for unsupported or unavailable features.
-static void validate_instruction_feature_support(const InstructionSeq& insts, const ProgramInfo& info,
-                                                 ResolvedKfuncCalls* resolved_kfunc_calls) {
-    const auto& platform = *info.platform;
+// Pass: ValidateInstructionSupport
+// Reads    : instruction sequence, platform conformance groups.
+// Writes   : nothing.
+// Throws   : InvalidControlFlow on any instruction the platform cannot run.
+// Invariant: must run before CFG construction; pass_populate_nodes assumes
+//            every instruction has been vetted here.
+static void pass_validate_instruction_support(const InstructionSeq& insts, const ebpf_platform_t& platform) {
     for (const auto& [label, inst, _] : insts) {
         if (const auto reason = check_instruction_feature_support(inst, platform)) {
-            if (reason->kind == RejectKind::NotImplemented) {
-                throw InvalidControlFlow{"not implemented: " + reason->detail + " (at " + to_string(label) + ")"};
-            }
-            throw InvalidControlFlow{"rejected: " + reason->detail + " (at " + to_string(label) + ")"};
-        }
-        if (const auto* call_btf = std::get_if<CallBtf>(&inst)) {
-            std::string why_not;
-            const auto call = resolve_kfunc_call(*call_btf, info, &why_not);
-            if (!call) {
-                throw InvalidControlFlow{"not implemented: " + why_not + " (at " + to_string(label) + ")"};
-            }
-            resolved_kfunc_calls->insert_or_assign(label, *call);
+            const std::string prefix =
+                (reason->kind == RejectKind::NotImplemented) ? "not implemented: " : "rejected: ";
+            throw InvalidControlFlow{prefix + reason->detail + " (at " + to_string(label) + ")"};
         }
     }
+}
+
+// Pass: ResolveKfuncCalls
+// Reads    : instruction sequence, platform kfunc resolver.
+// Writes   : returns a Label -> Call map for every CallBtf in the sequence.
+// Throws   : InvalidControlFlow if any CallBtf cannot be resolved for this platform.
+// Invariant: pass_populate_nodes consults this map to replace CallBtf with the resolved Call.
+static ResolvedKfuncCalls pass_resolve_kfunc_calls(const InstructionSeq& insts, const ProgramInfo& info) {
+    ResolvedKfuncCalls resolved;
+    for (const auto& [label, inst, _] : insts) {
+        const auto* call_btf = std::get_if<CallBtf>(&inst);
+        if (!call_btf) {
+            continue;
+        }
+        std::string why_not;
+        const auto call = resolve_kfunc_call(*call_btf, info, &why_not);
+        if (!call) {
+            throw InvalidControlFlow{"not implemented: " + why_not + " (at " + to_string(label) + ")"};
+        }
+        resolved.insert_or_assign(label, *call);
+    }
+    return resolved;
 }
 
 /// Update a control-flow graph to inline function macros.
@@ -378,10 +393,13 @@ static uint64_t merge_imm32_to_u64(const Imm64Parts parts) {
            (static_cast<uint64_t>(static_cast<uint32_t>(parts.hi)) << 32);
 }
 
-/// Resolve a LoadPseudo to a concrete instruction before abstract interpretation.
-/// VARIABLE_ADDR and CODE_ADDR are lowered to immediate scalar loads.
-static Instruction resolve_pseudo_load(const LoadPseudo& pseudo, const ProgramInfo& info) {
-    if (pseudo.addr.kind == PseudoAddress::Kind::VARIABLE_ADDR || pseudo.addr.kind == PseudoAddress::Kind::CODE_ADDR) {
+/// Lower a single LoadPseudo to a concrete instruction.
+/// VARIABLE_ADDR is lowered to an immediate scalar MOV; MAP_BY_IDX / MAP_VALUE_BY_IDX are
+/// rewritten against the current map descriptor table. CODE_ADDR is kept as LoadPseudo by
+/// pass_lower_pseudo_loads so the abstract transformer can type it as T_FUNC; this helper
+/// is never called for CODE_ADDR.
+static Instruction lower_pseudo_load(const LoadPseudo& pseudo, const ProgramInfo& info) {
+    if (pseudo.addr.kind == PseudoAddress::Kind::VARIABLE_ADDR) {
         return Bin{
             .op = Bin::Op::MOV,
             .dst = pseudo.dst,
@@ -406,14 +424,43 @@ static Instruction resolve_pseudo_load(const LoadPseudo& pseudo, const ProgramIn
     }
 }
 
-/// Convert an instruction sequence to a control-flow graph (CFG).
-static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const ProgramInfo& info,
-                                         const bool must_have_exit, const int max_call_stack_frames,
-                                         const ResolvedKfuncCalls& resolved_kfunc_calls) {
-    CfgBuilder builder;
-    assert(info.platform != nullptr && "platform must be set before CFG construction");
+using LoweredPseudoLoads = std::map<Label, Instruction>;
 
-    // First, add all instructions to the CFG without connecting
+// Pass: LowerPseudoLoads
+// Reads    : instruction sequence, program info (map_descriptors).
+// Writes   : returns a Label -> Instruction map with the concrete replacement for every
+//            LoadPseudo that is lowered. CODE_ADDR LoadPseudo instructions are intentionally
+//            excluded so they remain observable to the abstract transformer (which types
+//            them as T_FUNC); every other kind is replaced.
+// Throws   : InvalidControlFlow if a MAP_BY_IDX / MAP_VALUE_BY_IDX references an out-of-range
+//            map descriptor.
+// Invariant: pass_populate_nodes consults this map to substitute LoadPseudo with its lowered
+//            form while inserting CFG nodes.
+static LoweredPseudoLoads pass_lower_pseudo_loads(const InstructionSeq& insts, const ProgramInfo& info) {
+    LoweredPseudoLoads lowered;
+    for (const auto& [label, inst, _] : insts) {
+        const auto* pseudo = std::get_if<LoadPseudo>(&inst);
+        if (!pseudo || pseudo->addr.kind == PseudoAddress::Kind::CODE_ADDR) {
+            continue;
+        }
+        lowered.insert_or_assign(label, lower_pseudo_load(*pseudo, info));
+    }
+    return lowered;
+}
+
+// Pass: BuildInitialCfg -- populate_nodes step.
+// Reads    : instruction sequence, program info, resolved kfunc map, lowered pseudo-load map.
+// Writes   : inserts one CFG node per live instruction into builder (labels + instructions).
+//            CallBtf is replaced with the resolved Call; non-CODE_ADDR LoadPseudo is replaced
+//            with its lowered form; every other instruction is inserted verbatim.
+// Throws   : InvalidControlFlow if either substitution map is inconsistent with the sequence
+//            (internal error; indicates a missing prior pass).
+// Invariant: pass_validate_instruction_support, pass_resolve_kfunc_calls and
+//            pass_lower_pseudo_loads have been applied on the same instruction sequence.
+static void pass_populate_nodes(CfgBuilder& builder, const InstructionSeq& insts, const ProgramInfo& info,
+                                const ResolvedKfuncCalls& resolved_kfunc_calls,
+                                const LoweredPseudoLoads& lowered_pseudo_loads) {
+    assert(info.platform != nullptr && "platform must be set before CFG construction");
     for (const auto& [label, inst, _] : insts) {
         assert(!check_instruction_feature_support(inst, *info.platform).has_value() &&
                "instruction support must be validated before CFG construction");
@@ -427,26 +474,34 @@ static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const Prog
                                          ")"};
             }
             builder.insert(label, it->second);
-        } else if (const auto* pseudo = std::get_if<LoadPseudo>(&inst)) {
-            if (pseudo->addr.kind == PseudoAddress::Kind::CODE_ADDR) {
-                // Keep CODE_ADDR as LoadPseudo so abstract transformation can type it as T_FUNC.
-                builder.insert(label, inst);
-            } else {
-                builder.insert(label, resolve_pseudo_load(*pseudo, info));
-            }
-        } else {
-            builder.insert(label, inst);
+            continue;
         }
+        if (const auto it = lowered_pseudo_loads.find(label); it != lowered_pseudo_loads.end()) {
+            builder.insert(label, it->second);
+            continue;
+        }
+        builder.insert(label, inst);
     }
+}
 
+// Pass: BuildInitialCfg -- connect_edges step (also performs InsertAssumeEdges).
+// Reads    : instruction sequence, must_have_exit flag.
+// Writes   : CFG edges from entry, and for every populated node to its successors.
+//            Conditional Jmp instructions are materialised as two synthetic Assume
+//            jump-labels (insert_jump) carrying the positive and negated conditions.
+// Throws   : InvalidControlFlow on empty sequence, fallthrough past the final instruction,
+//            or a jump whose target label is not in the CFG.
+// Invariant: pass_populate_nodes has been applied (all nodes exist before edges are added).
+static void pass_connect_edges(CfgBuilder& builder, const InstructionSeq& insts, const bool must_have_exit) {
     if (insts.empty()) {
         throw InvalidControlFlow{"empty instruction sequence"};
-    } else {
-        const auto& [label, inst, _0] = insts[0];
-        builder.add_child(builder.prog.cfg().entry_label(), label);
     }
+    // Ordering check: pass_populate_nodes must run first so that every non-Undefined label
+    // referenced below (the entry's target, jump targets, fallthrough labels) already exists.
+    assert(std::holds_alternative<Undefined>(std::get<1>(insts[0])) ||
+           builder.prog.cfg().contains(std::get<0>(insts[0])));
+    builder.add_child(builder.prog.cfg().entry_label(), std::get<0>(insts[0]));
 
-    // Do a first pass ignoring all function macro calls.
     for (size_t i = 0; i < insts.size(); i++) {
         const auto& [label, inst, _0] = insts[i];
 
@@ -485,17 +540,25 @@ static CfgBuilder instruction_seq_to_cfg(const InstructionSeq& insts, const Prog
             builder.add_child(label, builder.prog.cfg().exit_label());
         }
     }
+}
 
-    // Now replace macros. We have to do this as a second pass so that
-    // we only add new nodes that are actually reachable, based on the
-    // results of the first pass.
+// Pass: InlineLocalCalls
+// Reads    : instruction sequence, max_call_stack_frames bound.
+// Writes   : for every CallLocal in the sequence, clones the callee region into the CFG
+//            under a unique stack-frame prefix. Recurses into nested calls.
+// Throws   : InvalidControlFlow on illegal recursion or exceeding the call-stack frame bound.
+// Invariant: pass_connect_edges has been applied -- inlining walks existing parents/children.
+//            Restricted to callees that are reachable after edge connection, which is why
+//            this runs as a separate second pass rather than during population.
+static void pass_inline_local_calls(CfgBuilder& builder, const InstructionSeq& insts, const int max_call_stack_frames) {
+    // Ordering check: pass_connect_edges must have run. When insts is non-empty, its first
+    // label has been wired as a child of Label::entry, so entry has at least one successor.
+    assert(insts.empty() || !builder.prog.cfg().children_of(Label::entry).empty());
     for (const auto& [label, inst, _] : insts) {
         if (const auto pins = std::get_if<CallLocal>(&inst)) {
             add_cfg_nodes(builder, label, pins->target, max_call_stack_frames);
         }
     }
-
-    return builder;
 }
 
 static bool is_tail_call_helper(const Call& call, const ebpf_platform_t& platform,
@@ -533,12 +596,15 @@ static void collect_wto_labels(const CycleOrLabel& component, std::set<Label>& l
     }
 }
 
-/// Enforce a global upper bound on tail-call chain length.
-/// Count tail-call sites over the reachable maximal-SCC DAG so cycles do not inflate depth.
-/// Maximal SCCs are obtained from WTO nesting: all labels in the same outermost WTO cycle
-/// are mutually reachable and therefore belong to the same maximal SCC.
-static void validate_tail_call_chain_depth(const Program& prog, const Wto& wto, const ebpf_platform_t& platform,
-                                           const EbpfProgramType& program_type) {
+// Pass: ValidateTailCallDepth
+// Reads    : Program (CFG + instructions), Wto, platform, program type.
+// Writes   : nothing.
+// Throws   : InvalidControlFlow if the reachable tail-call chain exceeds the fixed limit.
+// Notes    : Counts tail-call sites along the longest path through the reachable maximal-SCC DAG
+//            so cycles do not inflate depth. Maximal SCCs are derived from WTO nesting: labels in
+//            the same outermost WTO cycle are mutually reachable and form one maximal SCC.
+static void pass_validate_tail_call_depth(const Program& prog, const Wto& wto, const ebpf_platform_t& platform,
+                                          const EbpfProgramType& program_type) {
     constexpr int tail_call_chain_limit = 33;
 
     // WTO only covers labels reachable from entry.
@@ -644,36 +710,26 @@ static void validate_tail_call_chain_depth(const Program& prog, const Wto& wto, 
     }
 }
 
-Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo& info,
-                               const ebpf_verifier_options_t& options) {
-    ProgramInfo mutable_info = info;
-    options.validate();
-    assert(info.platform != nullptr && "platform must be set before instruction feature validation");
-    ResolvedKfuncCalls resolved_kfunc_calls;
-    validate_instruction_feature_support(inst_seq, info, &resolved_kfunc_calls);
-
-    // Convert the instruction sequence to a deterministic control-flow graph.
-    CfgBuilder builder = instruction_seq_to_cfg(inst_seq, info, options.cfg_opts.must_have_exit,
-                                                options.max_call_stack_frames, resolved_kfunc_calls);
-
-    const Wto wto{builder.prog.cfg()};
-    validate_tail_call_chain_depth(builder.prog, wto, *info.platform, info.type);
-
-    // Record valid callback targets for PTR_TO_FUNC: top-level concrete instruction labels
-    // (no stack-frame prefix, not synthetic jump labels, and not Exit instructions).
-    mutable_info.callback_target_labels.clear();
-    mutable_info.callback_targets_with_exit.clear();
-    for (const Label& label : builder.prog.labels()) {
+// Pass: ComputeCallbackMetadata
+// Reads    : Program (CFG + instructions).
+// Writes   : info.callback_target_labels (top-level concrete-instruction labels eligible as
+//            PTR_TO_FUNC targets) and info.callback_targets_with_exit (subset whose body can
+//            reach a top-level Exit).
+// Notes    : Excludes Label::entry/Label::exit, synthetic jump labels, labels under an inlined
+//            stack-frame prefix, and Exit instructions themselves.
+static void pass_compute_callback_metadata(const Program& prog, ProgramInfo& info) {
+    info.callback_target_labels.clear();
+    info.callback_targets_with_exit.clear();
+    for (const Label& label : prog.labels()) {
         if (label == Label::entry || label == Label::exit || label.isjump() || !label.stack_frame_prefix.empty()) {
             continue;
         }
-        if (std::holds_alternative<Exit>(builder.prog.instruction_at(label))) {
+        if (std::holds_alternative<Exit>(prog.instruction_at(label))) {
             continue;
         }
-        mutable_info.callback_target_labels.insert(label.from);
+        info.callback_target_labels.insert(label.from);
     }
 
-    // Basic callback body check: callback target must be able to reach a top-level Exit.
     const auto has_reachable_top_level_exit = [&](const Label& start) {
         std::set<Label> seen;
         std::vector<Label> worklist{start};
@@ -687,36 +743,91 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
             if (label == Label::exit) {
                 return true;
             }
-            if (label != Label::entry && builder.prog.cfg().contains(label) &&
-                std::holds_alternative<Exit>(builder.prog.instruction_at(label)) && label.stack_frame_prefix.empty()) {
+            if (label != Label::entry && prog.cfg().contains(label) &&
+                std::holds_alternative<Exit>(prog.instruction_at(label)) && label.stack_frame_prefix.empty()) {
                 return true;
             }
-            for (const Label& child : builder.prog.cfg().children_of(label)) {
+            for (const Label& child : prog.cfg().children_of(label)) {
                 worklist.push_back(child);
             }
         }
         return false;
     };
-    for (const int32_t label_num : mutable_info.callback_target_labels) {
+    for (const int32_t label_num : info.callback_target_labels) {
         const Label label{gsl::narrow<int>(label_num)};
         if (has_reachable_top_level_exit(label)) {
-            mutable_info.callback_targets_with_exit.insert(label_num);
+            info.callback_targets_with_exit.insert(label_num);
         }
     }
+}
 
-    // Detect loops using Weak Topological Ordering (WTO) and insert counters at loop entry points. WTO provides a
-    // hierarchical decomposition of the CFG that identifies all strongly connected components (cycles) and their entry
-    // points. These entry points serve as natural locations for loop counters that help verify program termination.
-    if (options.cfg_opts.check_for_termination) {
-        wto.for_each_loop_head([&](const Label& label) -> void {
-            builder.insert_after(label, Label::make_increment_counter(label), IncrementLoopCounter{label});
-        });
-    }
+// Pass: InsertTerminationCounters
+// Reads    : WTO of the current CFG.
+// Writes   : For each WTO loop head, inserts an IncrementLoopCounter at a synthetic
+//            increment-counter label placed between the head and its successors (CFG edges and
+//            instructions are both mutated via CfgBuilder::insert_after).
+// Notes    : WTO identifies every strongly connected component and its entry point(s), which
+//            are the natural locations for counters that help verify program termination.
+static void pass_insert_termination_counters(CfgBuilder& builder, const Wto& wto) {
+    wto.for_each_loop_head([&](const Label& label) -> void {
+        builder.insert_after(label, Label::make_increment_counter(label), IncrementLoopCounter{label});
+    });
+}
 
-    // Annotate the CFG by explicitly adding in assertions before every memory instruction.
+// Pass: ExtractAssertions
+// Reads    : Program instructions, ProgramInfo, options.
+// Writes   : Populates builder.prog.m_assertions with the per-label precondition vector
+//            (memory bounds, type guards, etc.) produced by get_assertions.
+// Notes    : Runs for every label in the CFG, including synthetic ones (Assume / counters).
+static void pass_extract_assertions(CfgBuilder& builder, const ProgramInfo& info,
+                                    const ebpf_verifier_options_t& options) {
     for (const auto& label : builder.prog.labels()) {
         builder.set_assertions(label, get_assertions(builder.prog.instruction_at(label), info, options, label));
     }
+}
+
+// from_sequence orchestrates the preparation pipeline. Each pass has a documented
+// pre/postcondition; this function's job is just to sequence them and hand the
+// result off as a finalised Program.
+Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo& info,
+                               const ebpf_verifier_options_t& options) {
+    // --- Pass: ValidateOptions --------------------------------------------
+    options.validate();
+    assert(info.platform != nullptr && "platform must be set before instruction feature validation");
+
+    // --- Pass: ValidateInstructionSupport ---------------------------------
+    pass_validate_instruction_support(inst_seq, *info.platform);
+
+    // --- Pass: ResolveKfuncCalls ------------------------------------------
+    const ResolvedKfuncCalls resolved_kfunc_calls = pass_resolve_kfunc_calls(inst_seq, info);
+
+    // --- Pass: LowerPseudoLoads -------------------------------------------
+    const LoweredPseudoLoads lowered_pseudo_loads = pass_lower_pseudo_loads(inst_seq, info);
+
+    // --- Pass: BuildInitialCfg (nodes, then edges with InsertAssumeEdges) -
+    CfgBuilder builder;
+    pass_populate_nodes(builder, inst_seq, info, resolved_kfunc_calls, lowered_pseudo_loads);
+    pass_connect_edges(builder, inst_seq, options.cfg_opts.must_have_exit);
+
+    // --- Pass: InlineLocalCalls -------------------------------------------
+    pass_inline_local_calls(builder, inst_seq, options.max_call_stack_frames);
+
+    // --- Pass: ValidateTailCallDepth --------------------------------------
+    const Wto wto{builder.prog.cfg()};
+    pass_validate_tail_call_depth(builder.prog, wto, *info.platform, info.type);
+
+    // --- Pass: ComputeCallbackMetadata ------------------------------------
+    ProgramInfo mutable_info = info;
+    pass_compute_callback_metadata(builder.prog, mutable_info);
+
+    // --- Pass: InsertTerminationCounters ----------------------------------
+    if (options.cfg_opts.check_for_termination) {
+        pass_insert_termination_counters(builder, wto);
+    }
+
+    // --- Pass: ExtractAssertions ------------------------------------------
+    pass_extract_assertions(builder, info, options);
+
     builder.prog.m_info = std::move(mutable_info);
     return std::move(builder.prog);
 }
