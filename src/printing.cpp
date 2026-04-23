@@ -810,32 +810,40 @@ void print_invariants_filtered(std::ostream& os, const Program& prog, const bool
                 }
             }
             if (in_slice_parents.size() >= 2) {
-                // Build the union of relevant registers from this label and all in-slice parents
-                RelevantState join_relevance;
+                // Build the union of relevant registers from this label and all in-slice parents.
+                // Seed from an existing relevance entry so join_relevance inherits its context.
+                // Prefer the first filtered label; fall back to the first in-slice parent.
+                const RelevantState* seed = nullptr;
                 if (relevance->contains(first_filtered_label)) {
-                    const auto& fl = relevance->at(first_filtered_label);
-                    join_relevance.registers.insert(fl.registers.begin(), fl.registers.end());
-                    join_relevance.stack_offsets.insert(fl.stack_offsets.begin(), fl.stack_offsets.end());
-                    join_relevance.total_stack_size = fl.total_stack_size;
-                }
-                for (const auto& parent : in_slice_parents) {
-                    if (relevance->contains(parent)) {
-                        const auto& pr = relevance->at(parent);
-                        join_relevance.registers.insert(pr.registers.begin(), pr.registers.end());
-                        join_relevance.stack_offsets.insert(pr.stack_offsets.begin(), pr.stack_offsets.end());
+                    seed = &relevance->at(first_filtered_label);
+                } else {
+                    for (const auto& parent : in_slice_parents) {
+                        if (relevance->contains(parent)) {
+                            seed = &relevance->at(parent);
+                            break;
+                        }
                     }
                 }
+                if (seed) {
+                    RelevantState join_relevance = *seed; // copy-construct; carries context
+                    for (const auto& parent : in_slice_parents) {
+                        if (relevance->contains(parent)) {
+                            const auto& pr = relevance->at(parent);
+                            join_relevance.registers.insert(pr.registers.begin(), pr.registers.end());
+                            join_relevance.stack_offsets.insert(pr.stack_offsets.begin(), pr.stack_offsets.end());
+                        }
+                    }
 
-                os << "  --- join point: per-predecessor state ---\n";
-                for (const auto& parent : in_slice_parents) {
-                    const auto* post = get_parent_post_invariant(parent);
-                    if (post) {
-                        os << invariant_filter(&join_relevance);
-                        os << "  from " << parent << ": " << *post << "\n";
-                        os << invariant_filter(nullptr);
+                    os << "  --- join point: per-predecessor state ---\n";
+                    for (const auto& parent : in_slice_parents) {
+                        if (const auto* post = get_parent_post_invariant(parent)) {
+                            os << invariant_filter(&join_relevance);
+                            os << "  from " << parent << ": " << *post << "\n";
+                            os << invariant_filter(nullptr);
+                        }
                     }
+                    os << "  --- end join point ---\n";
                 }
-                os << "  --- end join point ---\n";
             }
         }
 
@@ -1021,7 +1029,7 @@ void print_failure_slices(std::ostream& os, const Program& prog, const bool simp
             // Labels consumed by a {..|..} group are skipped in linear output,
             // unless they are themselves join points (nested joins).
             std::set<Label> convergence_members;
-            for (const auto& [join_lbl, preds] : join_predecessors) {
+            for (const auto& preds : join_predecessors | std::views::values) {
                 for (const auto& p : preds) {
                     if (!join_predecessors.contains(p)) {
                         convergence_members.insert(p);

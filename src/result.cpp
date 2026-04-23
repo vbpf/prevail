@@ -408,6 +408,14 @@ FailureSlice AnalysisResult::compute_slice_from_label(const Program& prog, const
     std::set<Label> conservative_visited; // Dedup for empty-relevance labels in conservative mode
     std::map<Label, RelevantState> slice_labels;
 
+    // Template for inserting new empty entries into `visited` / `slice_labels`.
+    // Copy-constructed from the seed so it carries the seed's filter data, then
+    // cleared. Used with try_emplace: the template is copied on insert, ignored
+    // when the key is already present.
+    RelevantState empty_template = seed_relevance;
+    empty_template.registers.clear();
+    empty_template.stack_offsets.clear();
+
     // Worklist: (label, relevant_state_after_this_label)
     std::vector<std::pair<Label, RelevantState>> worklist;
     worklist.emplace_back(label, seed_relevance);
@@ -434,8 +442,11 @@ FailureSlice AnalysisResult::compute_slice_from_label(const Program& prog, const
             continue;
         }
 
-        // Merge with existing relevance at this label (for deduplication)
-        auto& existing = visited[current_label];
+        // Merge with existing relevance at this label (for deduplication).
+        // try_emplace copy-constructs from empty_template on first visit;
+        // subsequent visits merge into the existing entry.
+        auto [visited_it, _visited_inserted] = visited.try_emplace(current_label, empty_template);
+        auto& existing = visited_it->second;
         const size_t prev_size = existing.registers.size() + existing.stack_offsets.size();
         existing.registers.insert(relevant_after.registers.begin(), relevant_after.registers.end());
         existing.stack_offsets.insert(relevant_after.stack_offsets.begin(), relevant_after.stack_offsets.end());
@@ -453,14 +464,13 @@ FailureSlice AnalysisResult::compute_slice_from_label(const Program& prog, const
             }
         }
 
-        // Compute what's relevant BEFORE this instruction using deps
-        RelevantState relevant_before;
+        // Compute what's relevant BEFORE this instruction using deps.
+        // Starts as a copy of relevant_after; the two branches below either
+        // modify it or leave it unchanged.
+        RelevantState relevant_before = relevant_after;
         const auto inv_it = invariants.find(current_label);
         if (inv_it != invariants.end() && inv_it->second.deps) {
             const auto& deps = *inv_it->second.deps;
-
-            // Start with what's relevant after
-            relevant_before = relevant_after;
 
             // Remove registers that are written by this instruction
             // (they weren't relevant before their definition)
@@ -549,18 +559,20 @@ FailureSlice AnalysisResult::compute_slice_from_label(const Program& prog, const
                 // Only include contributing labels in the output slice.
                 // Merge (not assign) because a label may be revisited from
                 // a different successor with additional relevance.
-                auto& existing = slice_labels[current_label];
-                existing.registers.insert(relevant_before.registers.begin(), relevant_before.registers.end());
-                existing.stack_offsets.insert(relevant_before.stack_offsets.begin(),
-                                              relevant_before.stack_offsets.end());
+                auto [it, _] = slice_labels.try_emplace(current_label, empty_template);
+                auto& slice_existing = it->second;
+                slice_existing.registers.insert(relevant_before.registers.begin(), relevant_before.registers.end());
+                slice_existing.stack_offsets.insert(relevant_before.stack_offsets.begin(),
+                                                    relevant_before.stack_offsets.end());
             }
         } else {
             // No deps available: conservatively treat this label as contributing
             // and propagate all current relevance to predecessors.
-            relevant_before = relevant_after;
-            auto& existing = slice_labels[current_label];
-            existing.registers.insert(relevant_before.registers.begin(), relevant_before.registers.end());
-            existing.stack_offsets.insert(relevant_before.stack_offsets.begin(), relevant_before.stack_offsets.end());
+            auto [it, _] = slice_labels.try_emplace(current_label, empty_template);
+            auto& slice_existing = it->second;
+            slice_existing.registers.insert(relevant_before.registers.begin(), relevant_before.registers.end());
+            slice_existing.stack_offsets.insert(relevant_before.stack_offsets.begin(),
+                                                relevant_before.stack_offsets.end());
         }
 
         // Add predecessors to worklist
@@ -597,7 +609,7 @@ FailureSlice AnalysisResult::compute_slice_from_label(const Program& prog, const
         // Include the join-point label itself so the printing code can display
         // per-predecessor state at this join.
         if (!slice_labels.contains(v_label)) {
-            join_expansion[v_label] = v_relevance;
+            join_expansion.emplace(v_label, v_relevance);
         }
         // Include all predecessors so the join display is complete.
         // Use visited relevance if available, otherwise use the join-point's relevance.
@@ -606,7 +618,7 @@ FailureSlice AnalysisResult::compute_slice_from_label(const Program& prog, const
                 continue;
             }
             const auto& rel = visited.contains(parent) ? visited.at(parent) : v_relevance;
-            join_expansion[parent] = rel;
+            join_expansion.emplace(parent, rel);
         }
     }
     slice_labels.insert(join_expansion.begin(), join_expansion.end());
@@ -636,7 +648,7 @@ std::vector<FailureSlice> AnalysisResult::compute_failure_slices(const Program& 
         // Forward analysis stops at the first failing assertion, which may not be
         // assertions[0]. Replay the checks against the pre-state to identify
         // the actual failing assertion and seed relevance from it.
-        RelevantState initial_relevance{.total_stack_size = context.options.total_stack_size()};
+        RelevantState initial_relevance(context);
         const auto& assertions = prog.assertions_at(label);
         bool found_failing = false;
         for (const auto& assertion : assertions) {

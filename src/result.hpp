@@ -61,12 +61,14 @@ struct InvariantMapPair {
     std::optional<InstructionDeps> deps; // Populated when collect_instruction_deps is set
 };
 
-/// State that is relevant at a specific program point.
-/// Used to filter what parts of the invariant to display.
+/// State that is relevant at a specific program point, used to filter
+/// what parts of the invariant to display.
 struct RelevantState {
+    int total_stack_size{};
     std::set<Reg> registers;
     std::set<int64_t> stack_offsets; // Relative stack offsets (e.g., Mem.access.offset values like -8)
-    int total_stack_size = 0;        // Used to translate relative stack offsets to absolute "s[...]" names.
+
+    explicit RelevantState(const AnalysisContext& context) : total_stack_size(context.options.total_stack_size()) {}
 
     /// Check if a constraint string (e.g., "r1.type=number") involves a relevant register.
     [[nodiscard]]
