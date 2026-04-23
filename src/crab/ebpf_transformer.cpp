@@ -1010,7 +1010,7 @@ void EbpfTransformer::operator()(const Callx& callx) {
 }
 
 void EbpfTransformer::do_load_mapfd(const Reg& dst_reg, const int mapfd, const bool maybe_null) {
-    const auto& desc = context.platform.get_map_descriptor(mapfd, context.program_info);
+    const auto& desc = context.platform.get_map_descriptor(mapfd, context.program_info.map_descriptors);
     const EbpfMapType& type = context.platform.get_map_type(desc.type);
     const RegPack& dst = reg_pack(dst_reg);
     if (type.value_type == EbpfMapValueType::PROGRAM) {
@@ -1031,7 +1031,7 @@ void EbpfTransformer::operator()(const LoadMapFd& ins) {
 }
 
 void EbpfTransformer::do_load_map_address(const Reg& dst_reg, const int mapfd, const int32_t offset) {
-    const auto& desc = context.platform.get_map_descriptor(mapfd, context.program_info);
+    const auto& desc = context.platform.get_map_descriptor(mapfd, context.program_info.map_descriptors);
     const EbpfMapType& type = context.platform.get_map_type(desc.type);
 
     if (type.value_type == EbpfMapValueType::PROGRAM) {

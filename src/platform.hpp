@@ -46,7 +46,8 @@ typedef void (*ebpf_parse_maps_section_fn)(std::vector<EbpfMapDescriptor>& map_d
                                            ebpf_verifier_options_t options);
 typedef void (*ebpf_resolve_inner_map_references_fn)(std::vector<EbpfMapDescriptor>& map_descriptors);
 
-typedef const EbpfMapDescriptor& (*ebpf_get_map_descriptor_fn)(int map_fd, const ProgramInfo& info);
+typedef const EbpfMapDescriptor& (*ebpf_get_map_descriptor_fn)(int map_fd,
+                                                               const std::vector<EbpfMapDescriptor>& descriptors);
 
 struct ebpf_platform_t {
     ebpf_get_program_type_fn get_program_type;

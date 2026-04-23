@@ -342,10 +342,11 @@ static int create_map_linux(const uint32_t map_type, const uint32_t key_size, co
 #endif
 }
 
-const EbpfMapDescriptor& get_map_descriptor_linux(const int map_fd, const ProgramInfo& info) {
-    const EbpfMapDescriptor* map = find_map_descriptor(map_fd, info);
-    if (map != nullptr) {
-        return *map;
+const EbpfMapDescriptor& get_map_descriptor_linux(const int map_fd, const std::vector<EbpfMapDescriptor>& descriptors) {
+    for (const EbpfMapDescriptor& map : descriptors) {
+        if (map.original_fd == map_fd) {
+            return map;
+        }
     }
 
     throw UnmarshalError("map_fd " + std::to_string(map_fd) + " not found");
