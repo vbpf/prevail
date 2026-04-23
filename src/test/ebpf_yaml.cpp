@@ -69,12 +69,12 @@ static std::optional<Call> ebpf_get_builtin_call(const int32_t id) {
     return g_ebpf_platform_linux.get_builtin_call(id);
 }
 
-static std::optional<Call> ebpf_resolve_kfunc_call(const int32_t btf_id, const ProgramInfo* info,
+static std::optional<Call> ebpf_resolve_kfunc_call(const int32_t btf_id, const EbpfProgramType& program_type,
                                                    std::string* why_not) {
     if (!g_ebpf_platform_linux.resolve_kfunc_call) {
         return std::nullopt;
     }
-    return g_ebpf_platform_linux.resolve_kfunc_call(btf_id, info, why_not);
+    return g_ebpf_platform_linux.resolve_kfunc_call(btf_id, program_type, why_not);
 }
 
 static void ebpf_parse_maps_section(vector<EbpfMapDescriptor>&, const char*, size_t, int, const ebpf_platform_t*,

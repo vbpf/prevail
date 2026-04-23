@@ -159,7 +159,7 @@ static std::optional<Call> resolve_kfunc_call(const CallBtf& call_btf, const Pro
         }
         return std::nullopt;
     }
-    return info.platform->resolve_kfunc_call(call_btf.btf_id, &info, why_not);
+    return info.platform->resolve_kfunc_call(call_btf.btf_id, info.type, why_not);
 }
 
 using ResolvedKfuncCalls = std::map<Label, Call>;
