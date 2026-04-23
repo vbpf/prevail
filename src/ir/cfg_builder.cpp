@@ -23,6 +23,11 @@ using std::to_string;
 using std::vector;
 
 namespace prevail {
+struct CallbackMetadata {
+    std::set<int32_t> target_labels;
+    std::set<int32_t> targets_with_exit;
+};
+
 struct CfgBuilder final {
     Program prog;
 
@@ -85,9 +90,9 @@ struct CfgBuilder final {
         prog.m_assertions.insert_or_assign(label, assertions);
     }
 
-    void set_callback_metadata(std::set<int32_t> target_labels, std::set<int32_t> targets_with_exit) {
-        prog.m_callback_target_labels = std::move(target_labels);
-        prog.m_callback_targets_with_exit = std::move(targets_with_exit);
+    void set_callback_metadata(CallbackMetadata md) {
+        prog.m_callback_target_labels = std::move(md.target_labels);
+        prog.m_callback_targets_with_exit = std::move(md.targets_with_exit);
     }
 };
 
@@ -725,7 +730,7 @@ static void pass_validate_tail_call_depth(const Program& prog, const Wto& wto, c
 //            not a loader input.
 static void pass_compute_callback_metadata(CfgBuilder& builder) {
     const Program& prog = builder.prog;
-    std::set<int32_t> target_labels;
+    CallbackMetadata md;
     for (const Label& label : prog.labels()) {
         if (label == Label::entry || label == Label::exit || label.isjump() || !label.stack_frame_prefix.empty()) {
             continue;
@@ -733,7 +738,7 @@ static void pass_compute_callback_metadata(CfgBuilder& builder) {
         if (std::holds_alternative<Exit>(prog.instruction_at(label))) {
             continue;
         }
-        target_labels.insert(label.from);
+        md.target_labels.insert(label.from);
     }
 
     const auto has_reachable_top_level_exit = [&](const Label& start) {
@@ -759,14 +764,13 @@ static void pass_compute_callback_metadata(CfgBuilder& builder) {
         }
         return false;
     };
-    std::set<int32_t> targets_with_exit;
-    for (const int32_t label_num : target_labels) {
+    for (const int32_t label_num : md.target_labels) {
         const Label label{gsl::narrow<int>(label_num)};
         if (has_reachable_top_level_exit(label)) {
-            targets_with_exit.insert(label_num);
+            md.targets_with_exit.insert(label_num);
         }
     }
-    builder.set_callback_metadata(std::move(target_labels), std::move(targets_with_exit));
+    builder.set_callback_metadata(std::move(md));
 }
 
 // Pass: InsertTerminationCounters

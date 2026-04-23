@@ -87,6 +87,9 @@ static EbpfMapDescriptor test_map_descriptor = {.original_fd = 0,
                                                 .max_entries = 4,
                                                 .inner_map_fd = 0};
 
+// Intentionally ignores both arguments: yaml tests share a single fake descriptor and never
+// exercise map_fd lookup, so unlike the Linux implementation this stub does not throw on an
+// unknown map_fd.
 static const EbpfMapDescriptor& ebpf_get_map_descriptor(int, const std::vector<EbpfMapDescriptor>&) {
     return test_map_descriptor;
 }

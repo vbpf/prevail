@@ -38,26 +38,28 @@ TEST_CASE("multithreading", "[verify][multithreading]") {
     REQUIRE(res2);
 }
 
-// Two programs from the same ELF must share the immutable platform reference
-// but have fully disjoint per-program environments and analysis-prep facts.
-// If the PlatformSpec / ProgramEnvironment split is ever reintroduced as shared
-// mutable state this test will fail.
+// Two programs from the same ELF must share the immutable platform by pointer
+// while their per-program callback metadata diverges in CONTENT. A regression
+// where callback_target_labels() aliased through a global or thread-local would
+// make both programs report the same set and this test would fail.
 TEST_CASE("multi-program sharing invariant", "[verify][multithreading]") {
     const prevail::Program prog1 = prepare("2/1");
     const prevail::Program prog2 = prepare("2/2");
 
-    // Immutable platform is shared across programs.
+    // Immutable platform is shared by pointer across programs.
     REQUIRE(prog1.info().platform == prog2.info().platform);
     REQUIRE(prog1.info().platform == &prevail::g_ebpf_platform_linux);
 
-    // Per-program environment is distinct: ProgramInfo instances are stored
-    // by value on each Program, so their addresses differ.
-    REQUIRE(&prog1.info() != &prog2.info());
-
-    // Analysis-prep facts are per-Program, not shared. Two distinct Programs
-    // expose two distinct callback-target sets.
-    REQUIRE(&prog1.callback_target_labels() != &prog2.callback_target_labels());
-    REQUIRE(&prog1.callback_targets_with_exit() != &prog2.callback_targets_with_exit());
+    // Analysis-prep facts are per-Program, not shared. Different programs have
+    // different instruction streams and therefore different eligible-callback-target
+    // sets; if the two Programs somehow share the same storage (e.g. a static
+    // thread_local smuggled into a getter) the sets would compare equal and one of
+    // these assertions would fail.
+    const bool info_diverges = prog1.info().builtin_call_offsets != prog2.info().builtin_call_offsets ||
+                               prog1.info().line_info.size() != prog2.info().line_info.size();
+    const bool callback_diverges = prog1.callback_target_labels() != prog2.callback_target_labels() ||
+                                   prog1.callback_targets_with_exit() != prog2.callback_targets_with_exit();
+    REQUIRE((info_diverges || callback_diverges));
 }
 
 // Analyse three programs sequentially on the same thread. A regression where

@@ -58,7 +58,7 @@ struct btf_line_info_t {
     uint32_t column_number{};
 };
 
-// Per-program environment: a reference to the immutable platform (PlatformSpec) plus the
+// Per-program environment: a reference to the immutable platform (ebpf_platform_t) plus the
 // loader-derived facts that describe one program. Stable after ELF load; analysis-prep facts
 // derived from the CFG (e.g. callback metadata) live on `Program`, not here.
 struct ProgramInfo {
