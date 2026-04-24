@@ -3,6 +3,7 @@
 #pragma once
 
 #include <map>
+#include <set>
 #include <vector>
 
 #include "cfg/cfg.hpp"
@@ -24,9 +25,19 @@ class Program {
 
     ProgramInfo m_info;
 
+    // Derived from the CFG by Program::from_sequence. Lives on Program rather than in
+    // ProgramInfo because ProgramInfo holds loader output; these sets are analysis-prep.
+    std::set<int32_t> m_callback_target_labels;
+    std::set<int32_t> m_callback_targets_with_exit;
+
   public:
     const Cfg& cfg() const { return m_cfg; }
     const ProgramInfo& info() const { return m_info; }
+
+    // Top-level instruction labels eligible as PTR_TO_FUNC callback targets.
+    const std::set<int32_t>& callback_target_labels() const { return m_callback_target_labels; }
+    // Subset whose body can reach a top-level Exit in the CFG.
+    const std::set<int32_t>& callback_targets_with_exit() const { return m_callback_targets_with_exit; }
 
     //! return a view of the labels, including entry and exit
     [[nodiscard]]

@@ -31,7 +31,7 @@ constexpr std::array<KfuncPrototypeEntry, 12> kfunc_prototypes{{
             .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
                               EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
             .reallocate_packet = false,
-            .context_descriptor = nullptr,
+            .ctx_descriptor = nullptr,
             .unsupported = false,
         },
         KfuncFlags::none,
@@ -46,7 +46,7 @@ constexpr std::array<KfuncPrototypeEntry, 12> kfunc_prototypes{{
             .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
                               EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
             .reallocate_packet = false,
-            .context_descriptor = nullptr,
+            .ctx_descriptor = nullptr,
             .unsupported = false,
         },
         KfuncFlags::none,
@@ -61,7 +61,7 @@ constexpr std::array<KfuncPrototypeEntry, 12> kfunc_prototypes{{
             .argument_type = {EBPF_ARGUMENT_TYPE_PTR_TO_CTX, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
                               EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
             .reallocate_packet = false,
-            .context_descriptor = nullptr,
+            .ctx_descriptor = nullptr,
             .unsupported = false,
         },
         KfuncFlags::none,
@@ -76,7 +76,7 @@ constexpr std::array<KfuncPrototypeEntry, 12> kfunc_prototypes{{
             .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
                               EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
             .reallocate_packet = false,
-            .context_descriptor = nullptr,
+            .ctx_descriptor = nullptr,
             .unsupported = false,
         },
         KfuncFlags::acquire,
@@ -91,7 +91,7 @@ constexpr std::array<KfuncPrototypeEntry, 12> kfunc_prototypes{{
             .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
                               EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
             .reallocate_packet = false,
-            .context_descriptor = nullptr,
+            .ctx_descriptor = nullptr,
             .unsupported = false,
         },
         KfuncFlags::none,
@@ -106,7 +106,7 @@ constexpr std::array<KfuncPrototypeEntry, 12> kfunc_prototypes{{
             .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
                               EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
             .reallocate_packet = false,
-            .context_descriptor = nullptr,
+            .ctx_descriptor = nullptr,
             .unsupported = false,
         },
         KfuncFlags::none,
@@ -121,7 +121,7 @@ constexpr std::array<KfuncPrototypeEntry, 12> kfunc_prototypes{{
             .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
                               EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
             .reallocate_packet = false,
-            .context_descriptor = nullptr,
+            .ctx_descriptor = nullptr,
             .unsupported = false,
         },
         KfuncFlags::none,
@@ -136,7 +136,7 @@ constexpr std::array<KfuncPrototypeEntry, 12> kfunc_prototypes{{
             .argument_type = {EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL, EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO,
                               EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
             .reallocate_packet = false,
-            .context_descriptor = nullptr,
+            .ctx_descriptor = nullptr,
             .unsupported = false,
         },
         KfuncFlags::none,
@@ -151,7 +151,7 @@ constexpr std::array<KfuncPrototypeEntry, 12> kfunc_prototypes{{
             .argument_type = {EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM, EBPF_ARGUMENT_TYPE_CONST_SIZE,
                               EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
             .reallocate_packet = false,
-            .context_descriptor = nullptr,
+            .ctx_descriptor = nullptr,
             .unsupported = false,
         },
         KfuncFlags::none,
@@ -166,7 +166,7 @@ constexpr std::array<KfuncPrototypeEntry, 12> kfunc_prototypes{{
             .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
                               EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
             .reallocate_packet = false,
-            .context_descriptor = nullptr,
+            .ctx_descriptor = nullptr,
             .unsupported = false,
         },
         KfuncFlags::release,
@@ -183,7 +183,7 @@ constexpr std::array<KfuncPrototypeEntry, 12> kfunc_prototypes{{
             .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
                               EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
             .reallocate_packet = false,
-            .context_descriptor = nullptr,
+            .ctx_descriptor = nullptr,
             .unsupported = false,
         },
         KfuncFlags::acquire,
@@ -198,7 +198,7 @@ constexpr std::array<KfuncPrototypeEntry, 12> kfunc_prototypes{{
             .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
                               EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
             .reallocate_packet = false,
-            .context_descriptor = nullptr,
+            .ctx_descriptor = nullptr,
             .unsupported = false,
         },
         KfuncFlags::none, // release semantics not yet enforced by verifier
@@ -263,7 +263,7 @@ void set_unsupported(std::string* why_not, const std::string& reason) {
 
 } // namespace
 
-std::optional<Call> make_kfunc_call(const int32_t btf_id, const ProgramInfo* info, std::string* why_not) {
+std::optional<Call> make_kfunc_call(const int32_t btf_id, const EbpfProgramType& program_type, std::string* why_not) {
     const auto entry = lookup_kfunc_prototype(btf_id);
     if (!entry) {
         set_unsupported(why_not, "kfunc prototype lookup failed for BTF id " + std::to_string(btf_id));
@@ -292,12 +292,12 @@ std::optional<Call> make_kfunc_call(const int32_t btf_id, const ProgramInfo* inf
                                      proto.name);
         return std::nullopt;
     }
-    if (info && !entry->required_program_type.empty() && info->type.name != entry->required_program_type) {
+    if (!entry->required_program_type.empty() && program_type.name != entry->required_program_type) {
         set_unsupported(why_not,
-                        std::string("kfunc is unavailable for program type ") + info->type.name + ": " + proto.name);
+                        std::string("kfunc is unavailable for program type ") + program_type.name + ": " + proto.name);
         return std::nullopt;
     }
-    if (info && entry->requires_privileged && !info->type.is_privileged) {
+    if (entry->requires_privileged && !program_type.is_privileged) {
         set_unsupported(why_not, std::string("kfunc requires privileged program type: ") + proto.name);
         return std::nullopt;
     }

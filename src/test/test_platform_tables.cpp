@@ -17,7 +17,7 @@ namespace {
 struct ProgramTypeExpectation {
     const char* section;
     const char* expected_name;
-    const ebpf_context_descriptor_t* expected_context;
+    const ebpf_ctx_descriptor_t* expected_context;
 };
 
 struct MapTypeExpectation {
@@ -125,7 +125,7 @@ TEST_CASE("linux program-type table maps modern section prefixes", "[platform][t
         const EbpfProgramType type = g_ebpf_platform_linux.get_program_type(section, "");
         CAPTURE(section);
         REQUIRE(type.name == expected_name);
-        REQUIRE(type.context_descriptor == expected_context);
+        REQUIRE(type.ctx_descriptor == expected_context);
     }
 }
 

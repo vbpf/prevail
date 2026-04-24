@@ -34,48 +34,48 @@ constexpr int netfilter_regions = 2 * 8;
 // Syscall: context is user-supplied buffer, kernel allows up to U16_MAX.
 constexpr int syscall_regions = 65535;
 
-constexpr ebpf_context_descriptor_t sk_buff = {sk_skb_regions, 76, 80, 140}; // data/data_end/data_meta
-constexpr ebpf_context_descriptor_t xdp_md = {xdp_regions, 0, 4, 8};         // data/data_end/data_meta
-constexpr ebpf_context_descriptor_t sk_msg_md = {80, 0, 8, -1};              // sizeof(sk_msg_md), data/data_end
-constexpr ebpf_context_descriptor_t unspec_descr = {0, -1, -1, -1};
-constexpr ebpf_context_descriptor_t tracing_descr = {tracing_regions, -1, -1, -1};
-constexpr ebpf_context_descriptor_t lirc_mode2_descr = {lirc_mode2_regions, -1, -1, -1};
-constexpr ebpf_context_descriptor_t netfilter_descr = {netfilter_regions, -1, -1, -1};
-constexpr ebpf_context_descriptor_t syscall_descr = {syscall_regions, -1, -1, -1};
-constexpr ebpf_context_descriptor_t cgroup_dev_descr = {cgroup_dev_regions, -1, -1, -1};
-constexpr ebpf_context_descriptor_t kprobe_descr = {kprobe_regions, -1, -1, -1};
-constexpr ebpf_context_descriptor_t tracepoint_descr = {tracepoint_regions, -1, -1, -1};
-constexpr ebpf_context_descriptor_t perf_event_descr = {perf_event_regions, -1, -1, -1};
-constexpr ebpf_context_descriptor_t cgroup_sock_descr = {cgroup_sock_regions, -1, -1, -1};
-constexpr ebpf_context_descriptor_t sock_ops_descr = {sock_ops_regions, -1, -1, -1};
-constexpr ebpf_context_descriptor_t sock_addr_descr = {sock_addr_regions, -1, -1, -1};
-constexpr ebpf_context_descriptor_t sockopt_descr = {sockopt_regions, -1, -1, -1};
-constexpr ebpf_context_descriptor_t sk_lookup_descr = {sk_lookup_regions, -1, -1, -1};
-constexpr ebpf_context_descriptor_t sk_reuseport_descr = {sk_reuseport_regions, 0, 1 * 8, -1};
-constexpr ebpf_context_descriptor_t cgroup_sysctl_descr = {cgroup_sysctl_regions, -1, -1, -1};
+constexpr ebpf_ctx_descriptor_t sk_buff = {sk_skb_regions, 76, 80, 140}; // data/data_end/data_meta
+constexpr ebpf_ctx_descriptor_t xdp_md = {xdp_regions, 0, 4, 8};         // data/data_end/data_meta
+constexpr ebpf_ctx_descriptor_t sk_msg_md = {80, 0, 8, -1};              // sizeof(sk_msg_md), data/data_end
+constexpr ebpf_ctx_descriptor_t unspec_descr = {0, -1, -1, -1};
+constexpr ebpf_ctx_descriptor_t tracing_descr = {tracing_regions, -1, -1, -1};
+constexpr ebpf_ctx_descriptor_t lirc_mode2_descr = {lirc_mode2_regions, -1, -1, -1};
+constexpr ebpf_ctx_descriptor_t netfilter_descr = {netfilter_regions, -1, -1, -1};
+constexpr ebpf_ctx_descriptor_t syscall_descr = {syscall_regions, -1, -1, -1};
+constexpr ebpf_ctx_descriptor_t cgroup_dev_descr = {cgroup_dev_regions, -1, -1, -1};
+constexpr ebpf_ctx_descriptor_t kprobe_descr = {kprobe_regions, -1, -1, -1};
+constexpr ebpf_ctx_descriptor_t tracepoint_descr = {tracepoint_regions, -1, -1, -1};
+constexpr ebpf_ctx_descriptor_t perf_event_descr = {perf_event_regions, -1, -1, -1};
+constexpr ebpf_ctx_descriptor_t cgroup_sock_descr = {cgroup_sock_regions, -1, -1, -1};
+constexpr ebpf_ctx_descriptor_t sock_ops_descr = {sock_ops_regions, -1, -1, -1};
+constexpr ebpf_ctx_descriptor_t sock_addr_descr = {sock_addr_regions, -1, -1, -1};
+constexpr ebpf_ctx_descriptor_t sockopt_descr = {sockopt_regions, -1, -1, -1};
+constexpr ebpf_ctx_descriptor_t sk_lookup_descr = {sk_lookup_regions, -1, -1, -1};
+constexpr ebpf_ctx_descriptor_t sk_reuseport_descr = {sk_reuseport_regions, 0, 1 * 8, -1};
+constexpr ebpf_ctx_descriptor_t cgroup_sysctl_descr = {cgroup_sysctl_regions, -1, -1, -1};
 // flow_dissector uses __sk_buff layout but without data_meta.
-constexpr ebpf_context_descriptor_t flow_dissector_descr = {sk_skb_regions, 76, 80, -1};
+constexpr ebpf_ctx_descriptor_t flow_dissector_descr = {sk_skb_regions, 76, 80, -1};
 
-extern const ebpf_context_descriptor_t g_sk_buff;
-extern const ebpf_context_descriptor_t g_xdp_md;
-extern const ebpf_context_descriptor_t g_sk_msg_md;
-extern const ebpf_context_descriptor_t g_unspec_descr;
-extern const ebpf_context_descriptor_t g_tracing_descr;
-extern const ebpf_context_descriptor_t g_lirc_mode2_descr;
-extern const ebpf_context_descriptor_t g_netfilter_descr;
-extern const ebpf_context_descriptor_t g_syscall_descr;
-extern const ebpf_context_descriptor_t g_cgroup_dev_descr;
-extern const ebpf_context_descriptor_t g_kprobe_descr;
-extern const ebpf_context_descriptor_t g_tracepoint_descr;
-extern const ebpf_context_descriptor_t g_perf_event_descr;
-extern const ebpf_context_descriptor_t g_cgroup_sock_descr;
-extern const ebpf_context_descriptor_t g_sock_ops_descr;
-extern const ebpf_context_descriptor_t g_sock_addr_descr;
-extern const ebpf_context_descriptor_t g_sockopt_descr;
-extern const ebpf_context_descriptor_t g_sk_lookup_descr;
-extern const ebpf_context_descriptor_t g_sk_reuseport_descr;
-extern const ebpf_context_descriptor_t g_cgroup_sysctl_descr;
-extern const ebpf_context_descriptor_t g_flow_dissector_descr;
+extern const ebpf_ctx_descriptor_t g_sk_buff;
+extern const ebpf_ctx_descriptor_t g_xdp_md;
+extern const ebpf_ctx_descriptor_t g_sk_msg_md;
+extern const ebpf_ctx_descriptor_t g_unspec_descr;
+extern const ebpf_ctx_descriptor_t g_tracing_descr;
+extern const ebpf_ctx_descriptor_t g_lirc_mode2_descr;
+extern const ebpf_ctx_descriptor_t g_netfilter_descr;
+extern const ebpf_ctx_descriptor_t g_syscall_descr;
+extern const ebpf_ctx_descriptor_t g_cgroup_dev_descr;
+extern const ebpf_ctx_descriptor_t g_kprobe_descr;
+extern const ebpf_ctx_descriptor_t g_tracepoint_descr;
+extern const ebpf_ctx_descriptor_t g_perf_event_descr;
+extern const ebpf_ctx_descriptor_t g_cgroup_sock_descr;
+extern const ebpf_ctx_descriptor_t g_sock_ops_descr;
+extern const ebpf_ctx_descriptor_t g_sock_addr_descr;
+extern const ebpf_ctx_descriptor_t g_sockopt_descr;
+extern const ebpf_ctx_descriptor_t g_sk_lookup_descr;
+extern const ebpf_ctx_descriptor_t g_sk_reuseport_descr;
+extern const ebpf_ctx_descriptor_t g_cgroup_sysctl_descr;
+extern const ebpf_ctx_descriptor_t g_flow_dissector_descr;
 
 // The following all use the __sk_buff context struct (with data/data_end/data_meta).
 #define g_socket_filter_descr g_sk_buff

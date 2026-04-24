@@ -65,9 +65,9 @@ typedef enum _ebpf_argument_type {
 
 // The following struct describes how to access the layout in
 // memory of the data (e.g., the actual packet).
-typedef struct _ebpf_context_descriptor {
+typedef struct _ebpf_ctx_descriptor {
     int size; // Size of ctx struct.
     int data; // Offset into ctx struct of pointer to data.
     int end;  // Offset into ctx struct of pointer to end of data.
     int meta; // Offset into ctx struct of pointer to metadata.
-} ebpf_context_descriptor_t;
+} ebpf_ctx_descriptor_t;

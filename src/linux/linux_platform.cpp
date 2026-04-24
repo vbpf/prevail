@@ -342,18 +342,19 @@ static int create_map_linux(const uint32_t map_type, const uint32_t key_size, co
 #endif
 }
 
-const EbpfMapDescriptor& get_map_descriptor_linux(const int map_fd, const ProgramInfo& info) {
-    const EbpfMapDescriptor* map = find_map_descriptor(map_fd, info);
-    if (map != nullptr) {
-        return *map;
+const EbpfMapDescriptor& get_map_descriptor_linux(const int map_fd, const std::vector<EbpfMapDescriptor>& descriptors) {
+    for (const EbpfMapDescriptor& map : descriptors) {
+        if (map.original_fd == map_fd) {
+            return map;
+        }
     }
 
     throw UnmarshalError("map_fd " + std::to_string(map_fd) + " not found");
 }
 
-static std::optional<Call> resolve_kfunc_call_linux(const int32_t btf_id, const ProgramInfo* info,
+static std::optional<Call> resolve_kfunc_call_linux(const int32_t btf_id, const EbpfProgramType& program_type,
                                                     std::string* why_not) {
-    return make_kfunc_call(btf_id, info, why_not);
+    return make_kfunc_call(btf_id, program_type, why_not);
 }
 
 namespace {

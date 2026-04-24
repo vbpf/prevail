@@ -625,8 +625,9 @@ FailureSlice AnalysisResult::compute_slice_from_label(const Program& prog, const
     return slice;
 }
 
-std::vector<FailureSlice> AnalysisResult::compute_failure_slices(const Program& prog, const SliceParams params,
+std::vector<FailureSlice> AnalysisResult::compute_failure_slices(const SliceParams params,
                                                                  const AnalysisContext& context) const {
+    const Program& prog = context.program;
     const auto max_slices = params.max_slices;
     std::vector<FailureSlice> slices;
 

@@ -179,12 +179,11 @@ struct AnalysisResult {
     /// Compute failure slices for verification errors.
     /// Returns one slice per failure, each containing the set of impacted labels.
     [[nodiscard]]
-    std::vector<FailureSlice> compute_failure_slices(const Program& prog, SliceParams params,
-                                                     const AnalysisContext& context) const;
+    std::vector<FailureSlice> compute_failure_slices(SliceParams params, const AnalysisContext& context) const;
 
     [[nodiscard]]
-    std::vector<FailureSlice> compute_failure_slices(const Program& prog, const AnalysisContext& context) const {
-        return compute_failure_slices(prog, SliceParams{}, context);
+    std::vector<FailureSlice> compute_failure_slices(const AnalysisContext& context) const {
+        return compute_failure_slices(SliceParams{}, context);
     }
 
     /// Compute a backward slice from an arbitrary label with a given seed relevance.

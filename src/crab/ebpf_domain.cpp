@@ -267,7 +267,7 @@ std::optional<uint32_t> EbpfDomain::get_map_type(const Reg& map_fd_reg, const An
 
     std::optional<uint32_t> type;
     for (int32_t map_fd = start_fd; map_fd <= end_fd; map_fd++) {
-        const auto& map = context.platform.get_map_descriptor(map_fd, context.program_info);
+        const auto& map = context.map_descriptor(map_fd);
         if (!type.has_value()) {
             type = map.type;
         } else if (map.type != *type) {
@@ -285,7 +285,7 @@ std::optional<int> EbpfDomain::get_map_inner_map_fd(const Reg& map_fd_reg, const
 
     std::optional<int> inner_map_fd;
     for (int map_fd = start_fd; map_fd <= end_fd; map_fd++) {
-        const auto& map = context.platform.get_map_descriptor(map_fd, context.program_info);
+        const auto& map = context.map_descriptor(map_fd);
         if (!inner_map_fd.has_value()) {
             inner_map_fd = map.inner_map_fd;
         } else if (map.inner_map_fd != *inner_map_fd) {
@@ -303,7 +303,7 @@ Interval EbpfDomain::get_map_key_size(const Reg& map_fd_reg, const AnalysisConte
 
     Interval result = Interval::bottom();
     for (int map_fd = start_fd; map_fd <= end_fd; map_fd++) {
-        const auto& map = context.platform.get_map_descriptor(map_fd, context.program_info);
+        const auto& map = context.map_descriptor(map_fd);
         result = result | Interval{map.key_size};
     }
     return result;
@@ -317,7 +317,7 @@ Interval EbpfDomain::get_map_value_size(const Reg& map_fd_reg, const AnalysisCon
 
     Interval result = Interval::bottom();
     for (int map_fd = start_fd; map_fd <= end_fd; map_fd++) {
-        const auto& map = context.platform.get_map_descriptor(map_fd, context.program_info);
+        const auto& map = context.map_descriptor(map_fd);
         result = result | Interval(map.value_size);
     }
     return result;
@@ -331,7 +331,7 @@ Interval EbpfDomain::get_map_max_entries(const Reg& map_fd_reg, const AnalysisCo
 
     Interval result = Interval::bottom();
     for (int map_fd = start_fd; map_fd <= end_fd; map_fd++) {
-        const auto& map = context.platform.get_map_descriptor(map_fd, context.program_info);
+        const auto& map = context.map_descriptor(map_fd);
         result = result | Interval(map.max_entries);
     }
     return result;
@@ -373,7 +373,7 @@ void EbpfDomain::initialize_packet(const AnalysisContext& context) {
 
     inv.add_value_constraint(0 <= variable_registry.packet_size());
     inv.add_value_constraint(variable_registry.packet_size() < context.options.max_packet_size);
-    if (context.program_info.type.context_descriptor->meta >= 0) {
+    if (context.program_info().type.ctx_descriptor->meta >= 0) {
         inv.add_value_constraint(variable_registry.meta_offset() <= 0);
         inv.add_value_constraint(variable_registry.meta_offset() >= -4098);
     } else {

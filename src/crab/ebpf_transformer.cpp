@@ -489,7 +489,7 @@ static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, 
         return;
     }
 
-    const ebpf_context_descriptor_t* desc = context.program_info.type.context_descriptor;
+    const ebpf_ctx_descriptor_t* desc = context.program_info().type.ctx_descriptor;
 
     const RegPack target = variable_registry.reg_pack(target_reg.v);
 
@@ -939,7 +939,7 @@ void EbpfTransformer::operator()(const Call& call) {
             assign_shared_map_value(std::nullopt);
             return;
         }
-        if (context.platform.get_map_type(*map_type).value_type == EbpfMapValueType::MAP) {
+        if (context.platform().get_map_type(*map_type).value_type == EbpfMapValueType::MAP) {
             // Map-of-maps: r0 is an inner map fd if known, otherwise an opaque shared pointer.
             if (const auto inner_map_fd = dom.get_map_inner_map_fd(*maybe_fd_reg, context)) {
                 do_load_mapfd(r0_reg, *inner_map_fd, true);
@@ -1000,18 +1000,18 @@ void EbpfTransformer::operator()(const Callx& callx) {
         if (sn->fits<int32_t>()) {
             // We can now process it as if the id was immediate.
             const int32_t imm = sn->cast_to<int32_t>();
-            if (!context.platform.is_helper_usable(imm, context.program_info.type)) {
+            if (!context.is_helper_usable(imm)) {
                 return;
             }
-            const Call call = make_call(imm, context.platform, context.program_info.type);
+            const Call call = make_call(imm, context.platform(), context.program_info().type);
             (*this)(call);
         }
     }
 }
 
 void EbpfTransformer::do_load_mapfd(const Reg& dst_reg, const int mapfd, const bool maybe_null) {
-    const auto& desc = context.platform.get_map_descriptor(mapfd, context.program_info);
-    const EbpfMapType& type = context.platform.get_map_type(desc.type);
+    const auto& desc = context.map_descriptor(mapfd);
+    const EbpfMapType& type = context.platform().get_map_type(desc.type);
     const RegPack& dst = reg_pack(dst_reg);
     if (type.value_type == EbpfMapValueType::PROGRAM) {
         dom.state.assign_type(dst_reg, T_MAP_PROGRAMS);
@@ -1031,8 +1031,8 @@ void EbpfTransformer::operator()(const LoadMapFd& ins) {
 }
 
 void EbpfTransformer::do_load_map_address(const Reg& dst_reg, const int mapfd, const int32_t offset) {
-    const auto& desc = context.platform.get_map_descriptor(mapfd, context.program_info);
-    const EbpfMapType& type = context.platform.get_map_type(desc.type);
+    const auto& desc = context.map_descriptor(mapfd);
+    const EbpfMapType& type = context.platform().get_map_type(desc.type);
 
     if (type.value_type == EbpfMapValueType::PROGRAM) {
         throw std::invalid_argument("Cannot load address of program map type - only data maps are supported");

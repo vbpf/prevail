@@ -19,7 +19,7 @@ struct EbpfHelperPrototype {
     bool reallocate_packet{};
 
     // If R1 holds a context, then this holds a pointer to the context descriptor.
-    const ebpf_context_descriptor_t* context_descriptor{};
+    const ebpf_ctx_descriptor_t* ctx_descriptor{};
 
     bool unsupported = false;
 };

@@ -24,10 +24,10 @@ void ebpf_verifier_clear_thread_local_state() {
 }
 
 class InterleavedFwdFixpointIterator final {
+    const AnalysisContext& context;
     const Program& _prog;
     const Cfg& _cfg;
     const Wto _wto;
-    const AnalysisContext& context;
     AnalysisResult& result;
     /// Counter Variables for *this* program's loop heads. Computed once
     /// from `_wto`. Used wherever we previously asked the registry "what
@@ -103,8 +103,9 @@ class InterleavedFwdFixpointIterator final {
         return res;
     }
 
-    explicit InterleavedFwdFixpointIterator(const Program& prog, const AnalysisContext& context, AnalysisResult& result)
-        : _prog(prog), _cfg(prog.cfg()), _wto(prog.cfg()), context(context), result(result) {
+    explicit InterleavedFwdFixpointIterator(const AnalysisContext& context, AnalysisResult& result)
+        : context(context), _prog(context.program), _cfg(context.program.cfg()), _wto(context.program.cfg()),
+          result(result) {
         for (const auto& label : _cfg.labels()) {
             result.invariants.emplace(label, InvariantMapPair{EbpfDomain::bottom(), {}, EbpfDomain::bottom()});
         }
@@ -156,34 +157,28 @@ class InterleavedFwdFixpointIterator final {
 
     void operator()(const std::shared_ptr<WtoCycle>& cycle);
 
-    static AnalysisResult run(const Program& prog, const AnalysisContext& context, EbpfDomain entry_inv);
+    static AnalysisResult run(const AnalysisContext& context, EbpfDomain entry_inv);
 };
 
-static AnalysisContext make_context(const Program& prog, const ebpf_verifier_options_t& options) {
-    const auto& info = prog.info();
-    return AnalysisContext{info, options, *info.platform};
-}
-
 AnalysisResult analyze(const Program& prog, const ebpf_verifier_options_t& options) {
-    return analyze(prog, make_context(prog, options));
+    return analyze(AnalysisContext{prog, options});
 }
 
 AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invariant,
                        const ebpf_verifier_options_t& options) {
-    return analyze(prog, entry_invariant, make_context(prog, options));
+    return analyze(entry_invariant, AnalysisContext{prog, options});
 }
 
-AnalysisResult analyze(const Program& prog, const AnalysisContext& context) {
+AnalysisResult analyze(const AnalysisContext& context) {
     clear_analysis_thread_local_state();
-    return InterleavedFwdFixpointIterator::run(prog, context,
+    return InterleavedFwdFixpointIterator::run(context,
                                                EbpfDomain::setup_entry(context.options.setup_constraints, context));
 }
 
-AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invariant, const AnalysisContext& context) {
+AnalysisResult analyze(const StringInvariant& entry_invariant, const AnalysisContext& context) {
     clear_analysis_thread_local_state();
     return InterleavedFwdFixpointIterator::run(
-        prog, context,
-        EbpfDomain::from_constraints(entry_invariant.value(), context.options.setup_constraints, context));
+        context, EbpfDomain::from_constraints(entry_invariant.value(), context.options.setup_constraints, context));
 }
 
 static EbpfDomain extrapolate(const EbpfDomain& before, const EbpfDomain& after, const unsigned int iteration,
@@ -291,11 +286,11 @@ void InterleavedFwdFixpointIterator::operator()(const std::shared_ptr<WtoCycle>&
         }
     }
 }
-AnalysisResult InterleavedFwdFixpointIterator::run(const Program& prog, const AnalysisContext& context,
-                                                   EbpfDomain entry_inv) {
+AnalysisResult InterleavedFwdFixpointIterator::run(const AnalysisContext& context, EbpfDomain entry_inv) {
     // Go over the CFG in weak topological order (accounting for loops).
+    const Program& prog = context.program;
     AnalysisResult result;
-    InterleavedFwdFixpointIterator analyzer(prog, context, result);
+    InterleavedFwdFixpointIterator analyzer(context, result);
     if (context.options.cfg_opts.check_for_termination) {
         // Initialize loop counters for potential loop headers.
         // This enables enforcement of upper bounds on loop iterations

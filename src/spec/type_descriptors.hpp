@@ -35,7 +35,7 @@ struct EbpfMapDescriptor {
 
 struct EbpfProgramType {
     std::string name{}; // For ease of display, not used by the verifier.
-    const ebpf_context_descriptor_t* context_descriptor{};
+    const ebpf_ctx_descriptor_t* ctx_descriptor{};
     uint64_t platform_specific_data{}; // E.g., integer program type.
     std::vector<std::string> section_prefixes{};
     bool is_privileged{};
@@ -58,16 +58,18 @@ struct btf_line_info_t {
     uint32_t column_number{};
 };
 
+// Per-program environment: a pointer to the immutable platform plus loader-derived facts
+// for one program. Stable after ELF load. CFG-derived facts (e.g. callback metadata) live
+// on `Program`, not here.
 struct ProgramInfo {
+    // --- Platform reference (non-owning; immutable across programs) ---
     const struct ebpf_platform_t* platform{};
+
+    // --- Loader outputs (populated during ELF parse; stable thereafter) ---
     std::vector<EbpfMapDescriptor> map_descriptors{};
     EbpfProgramType type{};
     std::map<size_t, btf_line_info_t> line_info{};
-    // Valid top-level instruction labels that can be used as callback entry targets via PTR_TO_FUNC.
-    std::set<int32_t> callback_target_labels{};
-    // Subset of callback_target_labels for which a top-level Exit is reachable in the CFG.
-    std::set<int32_t> callback_targets_with_exit{};
-    // Raw per-program instruction indices rewritten from builtin relocations.
+    // Instruction indices rewritten from builtin-call relocations.
     std::set<size_t> builtin_call_offsets{};
 };
 

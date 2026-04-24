@@ -23,6 +23,11 @@ using std::to_string;
 using std::vector;
 
 namespace prevail {
+struct CallbackMetadata {
+    std::set<int32_t> target_labels;
+    std::set<int32_t> targets_with_exit;
+};
+
 struct CfgBuilder final {
     Program prog;
 
@@ -83,6 +88,11 @@ struct CfgBuilder final {
             CRAB_ERROR("Label ", to_string(label), " not found in the CFG: ");
         }
         prog.m_assertions.insert_or_assign(label, assertions);
+    }
+
+    void set_callback_metadata(CallbackMetadata md) {
+        prog.m_callback_target_labels = std::move(md.target_labels);
+        prog.m_callback_targets_with_exit = std::move(md.targets_with_exit);
     }
 };
 
@@ -159,7 +169,7 @@ static std::optional<Call> resolve_kfunc_call(const CallBtf& call_btf, const Pro
         }
         return std::nullopt;
     }
-    return info.platform->resolve_kfunc_call(call_btf.btf_id, &info, why_not);
+    return info.platform->resolve_kfunc_call(call_btf.btf_id, info.type, why_not);
 }
 
 using ResolvedKfuncCalls = std::map<Label, Call>;
@@ -460,7 +470,6 @@ static LoweredPseudoLoads pass_lower_pseudo_loads(const InstructionSeq& insts, c
 static void pass_populate_nodes(CfgBuilder& builder, const InstructionSeq& insts, const ProgramInfo& info,
                                 const ResolvedKfuncCalls& resolved_kfunc_calls,
                                 const LoweredPseudoLoads& lowered_pseudo_loads) {
-    assert(info.platform != nullptr && "platform must be set before CFG construction");
     for (const auto& [label, inst, _] : insts) {
         assert(!check_instruction_feature_support(inst, *info.platform).has_value() &&
                "instruction support must be validated before CFG construction");
@@ -712,14 +721,14 @@ static void pass_validate_tail_call_depth(const Program& prog, const Wto& wto, c
 
 // Pass: ComputeCallbackMetadata
 // Reads    : Program (CFG + instructions).
-// Writes   : info.callback_target_labels (top-level concrete-instruction labels eligible as
-//            PTR_TO_FUNC targets) and info.callback_targets_with_exit (subset whose body can
-//            reach a top-level Exit).
+// Writes   : builder.prog's callback metadata, via CfgBuilder::set_callback_metadata: the set
+//            of top-level concrete-instruction labels eligible as PTR_TO_FUNC targets, and the
+//            subset whose body can reach a top-level Exit.
 // Notes    : Excludes Label::entry/Label::exit, synthetic jump labels, labels under an inlined
 //            stack-frame prefix, and Exit instructions themselves.
-static void pass_compute_callback_metadata(const Program& prog, ProgramInfo& info) {
-    info.callback_target_labels.clear();
-    info.callback_targets_with_exit.clear();
+static void pass_compute_callback_metadata(CfgBuilder& builder) {
+    const Program& prog = builder.prog;
+    CallbackMetadata md;
     for (const Label& label : prog.labels()) {
         if (label == Label::entry || label == Label::exit || label.isjump() || !label.stack_frame_prefix.empty()) {
             continue;
@@ -727,7 +736,7 @@ static void pass_compute_callback_metadata(const Program& prog, ProgramInfo& inf
         if (std::holds_alternative<Exit>(prog.instruction_at(label))) {
             continue;
         }
-        info.callback_target_labels.insert(label.from);
+        md.target_labels.insert(label.from);
     }
 
     const auto has_reachable_top_level_exit = [&](const Label& start) {
@@ -753,12 +762,13 @@ static void pass_compute_callback_metadata(const Program& prog, ProgramInfo& inf
         }
         return false;
     };
-    for (const int32_t label_num : info.callback_target_labels) {
+    for (const int32_t label_num : md.target_labels) {
         const Label label{gsl::narrow<int>(label_num)};
         if (has_reachable_top_level_exit(label)) {
-            info.callback_targets_with_exit.insert(label_num);
+            md.targets_with_exit.insert(label_num);
         }
     }
+    builder.set_callback_metadata(std::move(md));
 }
 
 // Pass: InsertTerminationCounters
@@ -793,7 +803,8 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
                                const ebpf_verifier_options_t& options) {
     // --- Pass: ValidateOptions --------------------------------------------
     options.validate();
-    assert(info.platform != nullptr && "platform must be set before instruction feature validation");
+    // Preserves the platform-non-null invariant for every subsequent pass in this pipeline.
+    assert(info.platform != nullptr && "info.platform must be set before Program::from_sequence");
 
     // --- Pass: ValidateInstructionSupport ---------------------------------
     pass_validate_instruction_support(inst_seq, *info.platform);
@@ -806,6 +817,9 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
 
     // --- Pass: BuildInitialCfg (nodes, then edges with InsertAssumeEdges) -
     CfgBuilder builder;
+    // Populate m_info up front so any pass that reads builder.prog.info() sees the real
+    // ProgramInfo rather than a default-constructed (null-platform) one.
+    builder.prog.m_info = info;
     pass_populate_nodes(builder, inst_seq, info, resolved_kfunc_calls, lowered_pseudo_loads);
     pass_connect_edges(builder, inst_seq, options.cfg_opts.must_have_exit);
 
@@ -817,8 +831,7 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
     pass_validate_tail_call_depth(builder.prog, wto, *info.platform, info.type);
 
     // --- Pass: ComputeCallbackMetadata ------------------------------------
-    ProgramInfo mutable_info = info;
-    pass_compute_callback_metadata(builder.prog, mutable_info);
+    pass_compute_callback_metadata(builder);
 
     // --- Pass: InsertTerminationCounters ----------------------------------
     if (options.cfg_opts.check_for_termination) {
@@ -828,7 +841,6 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
     // --- Pass: ExtractAssertions ------------------------------------------
     pass_extract_assertions(builder, info, options);
 
-    builder.prog.m_info = std::move(mutable_info);
     return std::move(builder.prog);
 }
 

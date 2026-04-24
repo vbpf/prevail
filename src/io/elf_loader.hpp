@@ -22,8 +22,6 @@ class MalformedElf final : public UnmarshalError {
     explicit MalformedElf(const std::string& what) : UnmarshalError(what) {}
 };
 
-const EbpfMapDescriptor* find_map_descriptor(int map_fd, const ProgramInfo& info);
-
 struct ElfProgramInfo {
     std::string section_name;
     std::string function_name;

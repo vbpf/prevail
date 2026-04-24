@@ -69,12 +69,12 @@ static std::optional<Call> ebpf_get_builtin_call(const int32_t id) {
     return g_ebpf_platform_linux.get_builtin_call(id);
 }
 
-static std::optional<Call> ebpf_resolve_kfunc_call(const int32_t btf_id, const ProgramInfo* info,
+static std::optional<Call> ebpf_resolve_kfunc_call(const int32_t btf_id, const EbpfProgramType& program_type,
                                                    std::string* why_not) {
     if (!g_ebpf_platform_linux.resolve_kfunc_call) {
         return std::nullopt;
     }
-    return g_ebpf_platform_linux.resolve_kfunc_call(btf_id, info, why_not);
+    return g_ebpf_platform_linux.resolve_kfunc_call(btf_id, program_type, why_not);
 }
 
 static void ebpf_parse_maps_section(vector<EbpfMapDescriptor>&, const char*, size_t, int, const ebpf_platform_t*,
@@ -87,7 +87,11 @@ static EbpfMapDescriptor test_map_descriptor = {.original_fd = 0,
                                                 .max_entries = 4,
                                                 .inner_map_fd = 0};
 
-static const EbpfMapDescriptor& ebpf_get_map_descriptor(int, const ProgramInfo&) { return test_map_descriptor; }
+// Returns the shared fake descriptor regardless of map_fd: yaml tests do not exercise
+// map lookup, so (unlike the Linux implementation) this stub never throws.
+static const EbpfMapDescriptor& ebpf_get_map_descriptor(int, const std::vector<EbpfMapDescriptor>&) {
+    return test_map_descriptor;
+}
 
 ebpf_platform_t g_platform_test = {.get_program_type = ebpf_get_program_type,
                                    .get_helper_prototype = ebpf_get_helper_prototype,
@@ -104,9 +108,9 @@ ebpf_platform_t g_platform_test = {.get_program_type = ebpf_get_program_type,
                                                                    bpf_conformance_groups_t::packet |
                                                                    bpf_conformance_groups_t::callx};
 
-static EbpfProgramType make_program_type(const string& name, const ebpf_context_descriptor_t* context_descriptor) {
+static EbpfProgramType make_program_type(const string& name, const ebpf_ctx_descriptor_t* ctx_descriptor) {
     return EbpfProgramType{.name = name,
-                           .context_descriptor = context_descriptor,
+                           .ctx_descriptor = ctx_descriptor,
                            .platform_specific_data = 0,
                            .section_prefixes = {},
                            .is_privileged = false};
@@ -409,20 +413,20 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
         test_case.options.verbosity_opts.print_invariants = true;
     }
 
-    ebpf_context_descriptor_t context_descriptor{64, 0, 4, -1};
-    EbpfProgramType program_type = make_program_type(test_case.name, &context_descriptor);
+    ebpf_ctx_descriptor_t ctx_descriptor{64, 0, 4, -1};
+    EbpfProgramType program_type = make_program_type(test_case.name, &ctx_descriptor);
 
     ProgramInfo info{&g_platform_test, {test_map_descriptor}, program_type};
     try {
-        const Program prog = Program::from_sequence(test_case.instruction_seq, info, test_case.options);
-        const AnalysisContext context{prog.info(), test_case.options, *prog.info().platform};
-        const AnalysisResult result = analyze(prog, test_case.assumed_pre_invariant, context);
+        Program prog = Program::from_sequence(test_case.instruction_seq, info, test_case.options);
+        const AnalysisContext context{std::move(prog), test_case.options};
+        const AnalysisResult result = analyze(test_case.assumed_pre_invariant, context);
         const StringInvariant actual_last_invariant = result.invariant_at(Label::exit);
         std::set<string> actual_messages;
         if (auto error = result.find_first_error()) {
             actual_messages.insert(to_string(*error));
         }
-        for (const auto& [label, msgs] : result.find_unreachable(prog)) {
+        for (const auto& [label, msgs] : result.find_unreachable(context.program)) {
             for (const auto& msg : msgs) {
                 actual_messages.insert(msg);
             }
@@ -524,8 +528,8 @@ static StringInvariant stack_contents_invariant(const std::vector<uint8_t>& memo
 ConformanceTestResult run_conformance_test_case(const std::vector<uint8_t>& memory_bytes,
                                                 std::span<const EbpfInst> instructions, bool debug) {
     ebpf_verifier_options_t options{};
-    ebpf_context_descriptor_t context_descriptor{64, -1, -1, -1};
-    EbpfProgramType program_type = make_program_type("conformance_check", &context_descriptor);
+    ebpf_ctx_descriptor_t ctx_descriptor{64, -1, -1, -1};
+    EbpfProgramType program_type = make_program_type("conformance_check", &ctx_descriptor);
 
     ProgramInfo info{&g_platform_test, {}, program_type};
 

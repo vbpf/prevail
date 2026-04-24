@@ -251,17 +251,4 @@ const std::vector<RawProgram>& ElfObject::get_programs(const std::string& desire
     return it->second;
 }
 
-// ---------------------------------------------------------------------------
-// Free functions
-// ---------------------------------------------------------------------------
-
-const EbpfMapDescriptor* find_map_descriptor(const int map_fd, const ProgramInfo& info) {
-    for (const EbpfMapDescriptor& map : info.map_descriptors) {
-        if (map.original_fd == map_fd) {
-            return &map;
-        }
-    }
-    return nullptr;
-}
-
 } // namespace prevail

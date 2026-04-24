@@ -26,11 +26,11 @@ static std::vector<FailureSlice> get_failure_slices(const std::string& filename,
     auto inst_seq = std::get_if<InstructionSeq>(&prog_or_error);
     REQUIRE(inst_seq != nullptr);
 
-    const Program prog = Program::from_sequence(*inst_seq, raw_prog.info, options);
-    auto result = analyze(prog, options);
-    const AnalysisContext context{prog.info(), options, *prog.info().platform};
+    Program prog = Program::from_sequence(*inst_seq, raw_prog.info, options);
+    const AnalysisContext context{std::move(prog), options};
+    auto result = analyze(context);
 
-    return result.compute_failure_slices(prog, context);
+    return result.compute_failure_slices(context);
 }
 
 // Test that extract_instruction_deps correctly identifies register reads/writes
@@ -188,14 +188,14 @@ TEST_CASE("print_failure_slices produces structured output", "[failure_slice][pr
     auto inst_seq = std::get_if<InstructionSeq>(&prog_or_error);
     REQUIRE(inst_seq != nullptr);
 
-    const Program prog = Program::from_sequence(*inst_seq, raw_prog.info, options);
-    auto result = analyze(prog, options);
-    const AnalysisContext context{prog.info(), options, *prog.info().platform};
-    auto slices = result.compute_failure_slices(prog, context);
+    Program prog = Program::from_sequence(*inst_seq, raw_prog.info, options);
+    const AnalysisContext context{std::move(prog), options};
+    auto result = analyze(context);
+    auto slices = result.compute_failure_slices(context);
 
     std::stringstream output;
     verbosity_options_t verbosity{.simplify = false};
-    print_failure_slices(output, prog, result, slices, verbosity);
+    print_failure_slices(output, context.program, result, slices, verbosity);
 
     std::string output_str = output.str();
 
@@ -225,13 +225,13 @@ TEST_CASE("passing program produces no failure slices", "[failure_slice][integra
     auto inst_seq = std::get_if<InstructionSeq>(&prog_or_error);
     REQUIRE(inst_seq != nullptr);
 
-    const Program prog = Program::from_sequence(*inst_seq, raw_prog.info, options);
-    auto result = analyze(prog, options);
+    Program prog = Program::from_sequence(*inst_seq, raw_prog.info, options);
+    const AnalysisContext context{std::move(prog), options};
+    auto result = analyze(context);
 
     REQUIRE_FALSE(result.failed);
 
-    const AnalysisContext context{prog.info(), options, *prog.info().platform};
-    auto slices = result.compute_failure_slices(prog, context);
+    auto slices = result.compute_failure_slices(context);
     REQUIRE(slices.empty());
 }
 
