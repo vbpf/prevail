@@ -588,39 +588,28 @@ void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
     }
     dom.state = dom.state.join_over_types(b.access.basereg, [&](TypeToNumDomain& state, TypeEncoding type) {
         switch (type) {
-        case T_UNINIT: return;
-        case T_MAP: return;
-        case T_MAP_PROGRAMS: return;
-        case T_NUM: return;
-        case T_FUNC: return;
-        case T_CTX: {
-            const LinearExpression addr = mem_reg.ctx_offset + offset;
-            do_load_ctx(state, context, target_reg, addr, width);
-            break;
-        }
-        case T_STACK: {
-            const LinearExpression addr = mem_reg.stack_offset + offset;
-            do_load_stack(state, target_reg, addr, width, b.access.basereg);
-            break;
-        }
-        case T_PACKET: {
-            LinearExpression addr = mem_reg.packet_offset + offset;
-            do_load_packet_or_shared(state, target_reg, width, b.is_signed);
-            break;
-        }
-        case T_SHARED: {
-            LinearExpression addr = mem_reg.shared_offset + offset;
-            do_load_packet_or_shared(state, target_reg, width, b.is_signed);
-            break;
-        }
+        case T_CTX: do_load_ctx(state, context, target_reg, mem_reg.ctx_offset + offset, width); break;
+        case T_STACK: do_load_stack(state, target_reg, mem_reg.stack_offset + offset, width, b.access.basereg); break;
+        case T_PACKET:
+        case T_SHARED:
+        case T_ALLOC_MEM:
         case T_SOCKET:
         case T_BTF_ID:
-        case T_ALLOC_MEM: {
-            // TODO: implement proper load semantics for these pointer types.
-            // For now, treat like packet/shared (havoc the result).
+            // Loadable but contents are not tracked: havoc the destination.
+            // T_SOCKET/T_BTF_ID dereferences are rejected by the checker
+            // (see ebpf_checker.cpp ValidAccess), so reaching this branch
+            // for those types means the checker was bypassed; havoc is the
+            // sound fallback. T_ALLOC_MEM remains a TODO for proper load
+            // semantics (offset-tracked content).
             do_load_packet_or_shared(state, target_reg, width, b.is_signed);
             break;
-        }
+        case T_UNINIT:
+        case T_MAP:
+        case T_MAP_PROGRAMS:
+        case T_NUM:
+        case T_FUNC:
+            // Not a dereferenceable pointer for the transformer; nothing to load.
+            break;
         }
     });
 }
