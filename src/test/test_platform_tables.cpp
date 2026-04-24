@@ -95,7 +95,7 @@ bool has_unmodeled_abi_type(const EbpfHelperPrototype& proto) {
 }
 
 bool has_single_arg(const Call& call, const ArgSingle::Kind kind, const Reg reg, const bool or_null = false) {
-    return std::any_of(call.singles.begin(), call.singles.end(), [&](const ArgSingle& arg) {
+    return std::any_of(call.contract.singles.begin(), call.contract.singles.end(), [&](const ArgSingle& arg) {
         return arg.kind == kind && arg.reg == reg && arg.or_null == or_null;
     });
 }
@@ -247,24 +247,24 @@ TEST_CASE("new helper ABI classes map to modeled call contracts", "[platform][ta
     REQUIRE(has_single_arg(strtoul, ArgSingle::Kind::PTR_TO_WRITABLE_LONG, Reg{4}));
 
     const Call ringbuf_reserve = require_supported(131);
-    REQUIRE(ringbuf_reserve.return_ptr_type.has_value());
-    REQUIRE(*ringbuf_reserve.return_ptr_type == T_ALLOC_MEM);
-    REQUIRE(ringbuf_reserve.return_nullable);
+    REQUIRE(ringbuf_reserve.contract.return_ptr_type.has_value());
+    REQUIRE(*ringbuf_reserve.contract.return_ptr_type == T_ALLOC_MEM);
+    REQUIRE(ringbuf_reserve.contract.return_nullable);
     REQUIRE(has_single_arg(ringbuf_reserve, ArgSingle::Kind::CONST_SIZE_OR_ZERO, Reg{2}));
 
     const Call ringbuf_submit = require_supported(132);
     REQUIRE(has_single_arg(ringbuf_submit, ArgSingle::Kind::PTR_TO_ALLOC_MEM, Reg{1}));
 
     const Call per_cpu_ptr = require_supported(153);
-    REQUIRE(per_cpu_ptr.return_ptr_type.has_value());
-    REQUIRE(*per_cpu_ptr.return_ptr_type == T_BTF_ID);
-    REQUIRE(per_cpu_ptr.return_nullable);
+    REQUIRE(per_cpu_ptr.contract.return_ptr_type.has_value());
+    REQUIRE(*per_cpu_ptr.contract.return_ptr_type == T_BTF_ID);
+    REQUIRE(per_cpu_ptr.contract.return_nullable);
     REQUIRE(has_single_arg(per_cpu_ptr, ArgSingle::Kind::PTR_TO_BTF_ID, Reg{1}));
 
     const Call this_cpu_ptr = require_supported(154);
-    REQUIRE(this_cpu_ptr.return_ptr_type.has_value());
-    REQUIRE(*this_cpu_ptr.return_ptr_type == T_BTF_ID);
-    REQUIRE_FALSE(this_cpu_ptr.return_nullable);
+    REQUIRE(this_cpu_ptr.contract.return_ptr_type.has_value());
+    REQUIRE(*this_cpu_ptr.contract.return_ptr_type == T_BTF_ID);
+    REQUIRE_FALSE(this_cpu_ptr.contract.return_nullable);
     REQUIRE(has_single_arg(this_cpu_ptr, ArgSingle::Kind::PTR_TO_BTF_ID, Reg{1}));
 
     const Call check_mtu = require_supported(163);
@@ -274,9 +274,9 @@ TEST_CASE("new helper ABI classes map to modeled call contracts", "[platform][ta
     REQUIRE(has_single_arg(timer_init, ArgSingle::Kind::PTR_TO_TIMER, Reg{1}));
 
     const Call sk_fullsock = require_supported(95);
-    REQUIRE(sk_fullsock.return_ptr_type.has_value());
-    REQUIRE(*sk_fullsock.return_ptr_type == T_SOCKET);
-    REQUIRE(sk_fullsock.return_nullable);
+    REQUIRE(sk_fullsock.contract.return_ptr_type.has_value());
+    REQUIRE(*sk_fullsock.contract.return_ptr_type == T_SOCKET);
+    REQUIRE(sk_fullsock.contract.return_nullable);
     REQUIRE(has_single_arg(sk_fullsock, ArgSingle::Kind::PTR_TO_SOCKET, Reg{1}));
 }
 

@@ -928,10 +928,10 @@ TEST_CASE("unmarshal builtin calls only when relocation-gated", "[disasm][marsha
     REQUIRE(gated.is_supported);
     REQUIRE(gated.name == "memset");
     REQUIRE(gated.func == *memset_id);
-    REQUIRE(gated.singles.size() == 1);
-    REQUIRE(gated.pairs.size() == 1);
-    REQUIRE(gated.singles[0] == ArgSingle{ArgSingle::Kind::ANYTHING, false, Reg{2}});
-    REQUIRE(gated.pairs[0] == ArgPair{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false});
+    REQUIRE(gated.contract.singles.size() == 1);
+    REQUIRE(gated.contract.pairs.size() == 1);
+    REQUIRE(gated.contract.singles[0] == ArgSingle{ArgSingle::Kind::ANYTHING, false, Reg{2}});
+    REQUIRE(gated.contract.pairs[0] == ArgPair{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false});
 
     const auto assertions = get_assertions(gated, info, ebpf_verifier_options_t{}, Label{0});
     REQUIRE(has_assertion(assertions, TypeConstraint{Reg{1}, TypeGroup::mem}));
@@ -1020,7 +1020,7 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
         const auto* call = std::get_if<Call>(&prog.instruction_at(Label{0}));
         REQUIRE(call != nullptr);
-        REQUIRE(call->is_map_lookup);
+        REQUIRE(call->contract.is_map_lookup);
         REQUIRE(verify(prog, {}));
     }
 
@@ -1315,7 +1315,7 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         const auto* call = std::get_if<Call>(&prog.instruction_at(Label{5}));
         REQUIRE(call != nullptr);
         REQUIRE(call->is_supported);
-        REQUIRE(std::ranges::any_of(call->singles, [](const ArgSingle& arg) {
+        REQUIRE(std::ranges::any_of(call->contract.singles, [](const ArgSingle& arg) {
             return arg.kind == ArgSingle::Kind::PTR_TO_FUNC && arg.reg == Reg{2};
         }));
     }

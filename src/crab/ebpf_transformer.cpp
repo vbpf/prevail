@@ -832,7 +832,7 @@ void EbpfTransformer::operator()(const Call& call) {
         return;
     }
     std::optional<Reg> maybe_fd_reg{};
-    for (ArgSingle param : call.singles) {
+    for (ArgSingle param : call.contract.singles) {
         switch (param.kind) {
         case ArgSingle::Kind::MAP_FD: maybe_fd_reg = param.reg; break;
         case ArgSingle::Kind::ANYTHING:
@@ -877,7 +877,7 @@ void EbpfTransformer::operator()(const Call& call) {
         }
         }
     }
-    for (ArgPair param : call.pairs) {
+    for (ArgPair param : call.contract.pairs) {
         switch (param.kind) {
         case ArgPair::Kind::PTR_TO_READABLE_MEM:
             // Do nothing. No side effect allowed.
@@ -951,15 +951,15 @@ void EbpfTransformer::operator()(const Call& call) {
         // Regular map: r0 is a shared pointer with known value size.
         assign_shared_map_value(dom.get_map_value_size(*maybe_fd_reg, context));
     };
-    if (call.is_map_lookup) {
+    if (call.contract.is_map_lookup) {
         resolve_map_lookup();
-    } else if (call.return_ptr_type.has_value()) {
-        assign_valid_ptr(r0_reg, call.return_nullable);
-        dom.state.assign_type(r0_reg, *call.return_ptr_type);
-        if (*call.return_ptr_type == T_ALLOC_MEM && call.alloc_size_reg.has_value()) {
+    } else if (call.contract.return_ptr_type.has_value()) {
+        assign_valid_ptr(r0_reg, call.contract.return_nullable);
+        dom.state.assign_type(r0_reg, *call.contract.return_ptr_type);
+        if (*call.contract.return_ptr_type == T_ALLOC_MEM && call.contract.alloc_size_reg.has_value()) {
             // Propagate allocation bounds: offset starts at 0, size is the allocation size argument.
             dom.state.values.assign(r0_pack.alloc_mem_offset, 0);
-            const auto size_value = dom.state.values.eval_interval(reg_pack(*call.alloc_size_reg).uvalue);
+            const auto size_value = dom.state.values.eval_interval(reg_pack(*call.contract.alloc_size_reg).uvalue);
             dom.state.values.set(r0_pack.alloc_mem_size, size_value);
         } else {
             dom.state.havoc_offsets(r0_reg);
@@ -970,7 +970,7 @@ void EbpfTransformer::operator()(const Call& call) {
         // dom.state.values.add_constraint(r0_pack.value < 0); for INTEGER_OR_NO_RETURN_IF_SUCCEED.
     }
     scratch_caller_saved_registers();
-    if (call.reallocate_packet) {
+    if (call.contract.reallocate_packet) {
         forget_packet_pointers();
     }
 }

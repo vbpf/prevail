@@ -442,40 +442,40 @@ static std::optional<Call> get_builtin_call_linux(const int32_t id) {
         return Call{
             .func = id,
             .name = "memset",
-            .singles = {{ArgSingle::Kind::ANYTHING, false, Reg{2}}},
-            .pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false}},
+            .contract = {.singles = {{ArgSingle::Kind::ANYTHING, false, Reg{2}}},
+                         .pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false}}},
         };
     case LINUX_BUILTIN_CALL_MEMCPY:
         return Call{
             .func = id,
             .name = "memcpy",
-            .pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false},
-                      {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}},
+            .contract = {.pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false},
+                                   {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}}},
         };
     case LINUX_BUILTIN_CALL_MEMMOVE:
         return Call{
             .func = id,
             .name = "memmove",
-            .pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false},
-                      {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}},
+            .contract = {.pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false},
+                                   {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}}},
         };
     case LINUX_BUILTIN_CALL_MEMCMP:
         return Call{
             .func = id,
             .name = "memcmp",
-            .pairs = {{ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{1}, Reg{3}, false},
-                      {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}},
+            .contract = {.pairs = {{ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{1}, Reg{3}, false},
+                                   {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}}},
         };
     case LINUX_BUILTIN_CALL_EXTERN_UNSPEC:
         return Call{
             .func = id,
             .name = "extern_unspecified",
-            .reallocate_packet = true,
-            .singles = {{ArgSingle::Kind::ANYTHING, false, Reg{1}},
-                        {ArgSingle::Kind::ANYTHING, false, Reg{2}},
-                        {ArgSingle::Kind::ANYTHING, false, Reg{3}},
-                        {ArgSingle::Kind::ANYTHING, false, Reg{4}},
-                        {ArgSingle::Kind::ANYTHING, false, Reg{5}}},
+            .contract = {.singles = {{ArgSingle::Kind::ANYTHING, false, Reg{1}},
+                                     {ArgSingle::Kind::ANYTHING, false, Reg{2}},
+                                     {ArgSingle::Kind::ANYTHING, false, Reg{3}},
+                                     {ArgSingle::Kind::ANYTHING, false, Reg{4}},
+                                     {ArgSingle::Kind::ANYTHING, false, Reg{5}}},
+                         .reallocate_packet = true},
         };
     default: return std::nullopt;
     }

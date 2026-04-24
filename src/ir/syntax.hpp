@@ -192,6 +192,19 @@ enum class CallKind {
     kfunc,
 };
 
+/// What a helper/kfunc requires of its arguments and how it shapes its return.
+/// Independent of the call site (no frame data) and of the helper's identity
+/// (no name/id). Consumed by assertion extraction and the abstract transformer.
+struct CallContract {
+    std::vector<ArgSingle> singles;
+    std::vector<ArgPair> pairs;
+    std::optional<TypeEncoding> return_ptr_type{}; ///< Non-integer return pointer type, if any.
+    bool return_nullable{};                        ///< Whether the return pointer may be null.
+    bool is_map_lookup{};
+    bool reallocate_packet{};
+    std::optional<Reg> alloc_size_reg{}; ///< Register holding allocation size (for T_ALLOC_MEM returns).
+};
+
 struct Call {
     int32_t func{};
     CallKind kind{CallKind::helper};
@@ -199,17 +212,11 @@ struct Call {
     // Metadata such as is_supported/unsupported_reason is diagnostic-only.
     constexpr bool operator==(const Call& other) const { return func == other.func && kind == other.kind; }
 
-    // TODO: move name and signature information somewhere else
+    // TODO: move name and is_supported/unsupported_reason into a CallTarget.
     std::string name;
     bool is_supported{true};
     std::string unsupported_reason;
-    bool is_map_lookup{};
-    bool reallocate_packet{};
-    std::optional<TypeEncoding> return_ptr_type{}; ///< Non-integer return pointer type, if any.
-    bool return_nullable{};                        ///< Whether the return pointer may be null.
-    std::optional<Reg> alloc_size_reg{};           ///< Register holding allocation size (for T_ALLOC_MEM returns).
-    std::vector<ArgSingle> singles;
-    std::vector<ArgPair> pairs;
+    CallContract contract;
     std::string stack_frame_prefix; ///< Variable prefix at point of call.
 };
 

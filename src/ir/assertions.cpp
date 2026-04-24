@@ -75,7 +75,7 @@ class AssertExtractor {
     vector<Assertion> operator()(const Call& call) const {
         vector<Assertion> res;
         std::optional<Reg> map_fd_reg;
-        for (ArgSingle arg : call.singles) {
+        for (ArgSingle arg : call.contract.singles) {
             switch (arg.kind) {
             case ArgSingle::Kind::ANYTHING:
                 // avoid pointer leakage:
@@ -131,7 +131,7 @@ class AssertExtractor {
                 break;
             }
         }
-        for (ArgPair arg : call.pairs) {
+        for (ArgPair arg : call.contract.pairs) {
             const auto group = arg.or_null ? TypeGroup::mem_or_num : TypeGroup::mem;
             const auto access_type =
                 arg.kind == ArgPair::Kind::PTR_TO_READABLE_MEM ? AccessType::read : AccessType::write;

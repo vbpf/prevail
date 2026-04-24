@@ -488,8 +488,9 @@ struct CommandPrinterVisitor {
         os_ << "r0 = " << call.name << ":" << call.func << "(";
         for (uint8_t r = 1; r <= 5; r++) {
             // Look for a singleton.
-            auto single = std::ranges::find_if(call.singles, [r](const ArgSingle arg) { return arg.reg.v == r; });
-            if (single != call.singles.end()) {
+            auto single =
+                std::ranges::find_if(call.contract.singles, [r](const ArgSingle arg) { return arg.reg.v == r; });
+            if (single != call.contract.singles.end()) {
                 if (r > 1) {
                     os_ << ", ";
                 }
@@ -498,8 +499,8 @@ struct CommandPrinterVisitor {
             }
 
             // Look for the start of a pair.
-            auto pair = std::ranges::find_if(call.pairs, [r](const ArgPair arg) { return arg.mem.v == r; });
-            if (pair != call.pairs.end()) {
+            auto pair = std::ranges::find_if(call.contract.pairs, [r](const ArgPair arg) { return arg.mem.v == r; });
+            if (pair != call.contract.pairs.end()) {
                 if (r > 1) {
                     os_ << ", ";
                 }

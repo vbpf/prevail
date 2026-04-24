@@ -506,10 +506,10 @@ struct Unmarshaller {
             return mark_unsupported(std::string("helper prototype is unavailable on this platform: ") +
                                     helper_prototype_name);
         }
-        res.return_ptr_type = return_info->pointer_type;
-        res.return_nullable = return_info->pointer_nullable;
-        res.reallocate_packet = proto.reallocate_packet;
-        res.is_map_lookup = proto.return_type == EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL;
+        res.contract.return_ptr_type = return_info->pointer_type;
+        res.contract.return_nullable = return_info->pointer_nullable;
+        res.contract.reallocate_packet = proto.reallocate_packet;
+        res.contract.is_map_lookup = proto.return_type == EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL;
         const std::array<ebpf_argument_type_t, 7> args = {
             {EBPF_ARGUMENT_TYPE_DONTCARE, proto.argument_type[0], proto.argument_type[1], proto.argument_type[2],
              proto.argument_type[3], proto.argument_type[4], EBPF_ARGUMENT_TYPE_DONTCARE}};
@@ -529,38 +529,43 @@ struct Unmarshaller {
             case EBPF_ARGUMENT_TYPE_PTR_TO_STACK:
             case EBPF_ARGUMENT_TYPE_PTR_TO_CTX:
             case EBPF_ARGUMENT_TYPE_PTR_TO_FUNC:
-                res.singles.push_back({toArgSingleKind(args[i]), false, Reg{gsl::narrow<uint8_t>(i)}});
+                res.contract.singles.push_back({toArgSingleKind(args[i]), false, Reg{gsl::narrow<uint8_t>(i)}});
                 break;
             case EBPF_ARGUMENT_TYPE_PTR_TO_STACK_OR_NULL:
             case EBPF_ARGUMENT_TYPE_PTR_TO_CTX_OR_NULL:
-                res.singles.push_back({toArgSingleKind(args[i]), true, Reg{gsl::narrow<uint8_t>(i)}});
+                res.contract.singles.push_back({toArgSingleKind(args[i]), true, Reg{gsl::narrow<uint8_t>(i)}});
                 break;
             case EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID_SOCK_COMMON:
             case EBPF_ARGUMENT_TYPE_PTR_TO_SOCK_COMMON:
-                res.singles.push_back({ArgSingle::Kind::PTR_TO_SOCKET, false, Reg{gsl::narrow<uint8_t>(i)}});
+                res.contract.singles.push_back({ArgSingle::Kind::PTR_TO_SOCKET, false, Reg{gsl::narrow<uint8_t>(i)}});
                 break;
             case EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID:
             case EBPF_ARGUMENT_TYPE_PTR_TO_PERCPU_BTF_ID:
-                res.singles.push_back({ArgSingle::Kind::PTR_TO_BTF_ID, false, Reg{gsl::narrow<uint8_t>(i)}});
+                res.contract.singles.push_back({ArgSingle::Kind::PTR_TO_BTF_ID, false, Reg{gsl::narrow<uint8_t>(i)}});
                 break;
             case EBPF_ARGUMENT_TYPE_PTR_TO_ALLOC_MEM:
-                res.singles.push_back({ArgSingle::Kind::PTR_TO_ALLOC_MEM, false, Reg{gsl::narrow<uint8_t>(i)}});
+                res.contract.singles.push_back(
+                    {ArgSingle::Kind::PTR_TO_ALLOC_MEM, false, Reg{gsl::narrow<uint8_t>(i)}});
                 break;
             case EBPF_ARGUMENT_TYPE_PTR_TO_SPIN_LOCK:
-                res.singles.push_back({ArgSingle::Kind::PTR_TO_SPIN_LOCK, false, Reg{gsl::narrow<uint8_t>(i)}});
+                res.contract.singles.push_back(
+                    {ArgSingle::Kind::PTR_TO_SPIN_LOCK, false, Reg{gsl::narrow<uint8_t>(i)}});
                 break;
             case EBPF_ARGUMENT_TYPE_PTR_TO_TIMER:
-                res.singles.push_back({ArgSingle::Kind::PTR_TO_TIMER, false, Reg{gsl::narrow<uint8_t>(i)}});
+                res.contract.singles.push_back({ArgSingle::Kind::PTR_TO_TIMER, false, Reg{gsl::narrow<uint8_t>(i)}});
                 break;
             case EBPF_ARGUMENT_TYPE_CONST_ALLOC_SIZE_OR_ZERO:
-                res.singles.push_back({ArgSingle::Kind::CONST_SIZE_OR_ZERO, false, Reg{gsl::narrow<uint8_t>(i)}});
-                res.alloc_size_reg = Reg{gsl::narrow<uint8_t>(i)};
+                res.contract.singles.push_back(
+                    {ArgSingle::Kind::CONST_SIZE_OR_ZERO, false, Reg{gsl::narrow<uint8_t>(i)}});
+                res.contract.alloc_size_reg = Reg{gsl::narrow<uint8_t>(i)};
                 break;
             case EBPF_ARGUMENT_TYPE_PTR_TO_LONG:
-                res.singles.push_back({ArgSingle::Kind::PTR_TO_WRITABLE_LONG, false, Reg{gsl::narrow<uint8_t>(i)}});
+                res.contract.singles.push_back(
+                    {ArgSingle::Kind::PTR_TO_WRITABLE_LONG, false, Reg{gsl::narrow<uint8_t>(i)}});
                 break;
             case EBPF_ARGUMENT_TYPE_PTR_TO_INT:
-                res.singles.push_back({ArgSingle::Kind::PTR_TO_WRITABLE_INT, false, Reg{gsl::narrow<uint8_t>(i)}});
+                res.contract.singles.push_back(
+                    {ArgSingle::Kind::PTR_TO_WRITABLE_INT, false, Reg{gsl::narrow<uint8_t>(i)}});
                 break;
             case EBPF_ARGUMENT_TYPE_PTR_TO_CONST_STR:
                 return mark_unsupported(std::string("helper argument type is unavailable on this platform: ") +
@@ -602,8 +607,8 @@ struct Unmarshaller {
                 const bool or_null = args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL ||
                                      args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM_OR_NULL ||
                                      args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL;
-                res.pairs.push_back({toArgPairKind(args[i]), or_null, Reg{gsl::narrow<uint8_t>(i)},
-                                     Reg{gsl::narrow<uint8_t>(i + 1)}, can_be_zero});
+                res.contract.pairs.push_back({toArgPairKind(args[i]), or_null, Reg{gsl::narrow<uint8_t>(i)},
+                                              Reg{gsl::narrow<uint8_t>(i + 1)}, can_be_zero});
                 i++;
                 break;
             }
