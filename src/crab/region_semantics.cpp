@@ -10,7 +10,7 @@
 
 namespace prevail {
 
-std::optional<Variable> region_offset_variable(const Reg& reg, const TypeEncoding type) {
+std::optional<Variable> primary_kind_variable_for_type(const Reg& reg, const TypeEncoding type) {
     RegPack r = reg_pack(reg);
     switch (type) {
     case T_CTX: return r.ctx_offset;

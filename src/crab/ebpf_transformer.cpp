@@ -15,6 +15,7 @@
 #include "config.hpp"
 #include "crab/array_domain.hpp"
 #include "crab/ebpf_domain.hpp"
+#include "crab/region_semantics.hpp"
 #include "crab/var_registry.hpp"
 #include "crab_utils/num_safety.hpp"
 #include "ir/unmarshal.hpp"
@@ -252,8 +253,8 @@ void EbpfTransformer::operator()(const Assume& s) {
                 } else {
                     // Either pointers to a singleton region,
                     // or an equality comparison on map descriptors/pointers to non-singleton locations
-                    if (const auto dst_offset = get_type_offset_variable(cond.left, type)) {
-                        if (const auto src_offset = get_type_offset_variable(src_reg, type)) {
+                    if (const auto dst_offset = primary_kind_variable_for_type(cond.left, type)) {
+                        if (const auto src_offset = primary_kind_variable_for_type(src_reg, type)) {
                             state.values.add_constraint(
                                 assume_cst_offsets_reg(cond.op, dst_offset.value(), src_offset.value()));
                         }
@@ -850,7 +851,7 @@ void EbpfTransformer::operator()(const Call& call) {
                 // Branch over possible pointer *types* for this register. This is separate from
                 // uncertainty over regions/offsets within one type (e.g., many shared regions).
                 if (type == T_STACK) {
-                    const auto offset = get_type_offset_variable(param.reg, type);
+                    const auto offset = primary_kind_variable_for_type(param.reg, type);
                     if (!offset.has_value()) {
                         return;
                     }
@@ -874,7 +875,7 @@ void EbpfTransformer::operator()(const Call& call) {
 
         case ArgPair::Kind::PTR_TO_WRITABLE_MEM: {
             bool store_numbers = true;
-            auto variable = dom.state.get_type_offset_variable(param.mem);
+            auto variable = dom.state.primary_kind_variable_for_type(param.mem);
             if (!variable.has_value()) {
                 // checked by the checker
                 break;
@@ -1078,7 +1079,7 @@ void EbpfTransformer::recompute_stack_numeric_size(TypeToNumDomain& state, const
 void EbpfTransformer::add(const Reg& dst_reg, const int imm, const int finite_width) {
     const auto dst = reg_pack(dst_reg);
     dom.state.values->add_overflow(dst.svalue, dst.uvalue, imm, finite_width);
-    if (const auto offset = dom.state.get_type_offset_variable(dst_reg)) {
+    if (const auto offset = dom.state.primary_kind_variable_for_type(dst_reg)) {
         dom.state.values->add(*offset, imm);
         if (imm > 0) {
             // Since the start offset is increasing but
@@ -1263,9 +1264,9 @@ void EbpfTransformer::operator()(const Bin& bin) {
                                 if (dst_type == T_NUM && src_type != T_NUM) {
                                     // num += ptr
                                     state.assign_type(bin.dst, src_type);
-                                    if (const auto dst_offset = get_type_offset_variable(bin.dst, src_type)) {
+                                    if (const auto dst_offset = primary_kind_variable_for_type(bin.dst, src_type)) {
                                         state.values->apply(ArithBinOp::ADD, dst_offset.value(), dst.svalue,
-                                                            get_type_offset_variable(src_reg, src_type).value());
+                                                            primary_kind_variable_for_type(src_reg, src_type).value());
                                     }
                                     if (src_type == T_SHARED) {
                                         state.values.assign(dst.shared_region_size, src.shared_region_size);
@@ -1273,7 +1274,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
                                 } else if (dst_type != T_NUM && src_type == T_NUM) {
                                     // ptr += num
                                     state.assign_type(bin.dst, dst_type);
-                                    if (const auto dst_offset = get_type_offset_variable(bin.dst, dst_type)) {
+                                    if (const auto dst_offset = primary_kind_variable_for_type(bin.dst, dst_type)) {
                                         state.values->apply(ArithBinOp::ADD, dst_offset.value(), dst_offset.value(),
                                                             src.svalue);
                                         if (dst_type == T_STACK) {
@@ -1324,9 +1325,9 @@ void EbpfTransformer::operator()(const Bin& bin) {
                     default:
                         // ptr -= ptr
                         // Assertions should make sure we only perform this on non-shared pointers.
-                        if (const auto dst_offset = get_type_offset_variable(bin.dst, type)) {
+                        if (const auto dst_offset = primary_kind_variable_for_type(bin.dst, type)) {
                             state.values->apply_signed(ArithBinOp::SUB, dst.svalue, dst.uvalue, dst_offset.value(),
-                                                       get_type_offset_variable(src_reg, type).value(), finite_width);
+                                                       primary_kind_variable_for_type(src_reg, type).value(), finite_width);
                             state.values.havoc(dst_offset.value());
                         }
                         state.havoc_offsets(bin.dst);
@@ -1339,7 +1340,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
                 // Either they're different, or at least one is not a singleton.
                 if (dom.state.is_in_group(std::get<Reg>(bin.v), TS_NUM)) {
                     dom.state.values->sub_overflow(dst.svalue, dst.uvalue, src.svalue, finite_width);
-                    if (auto dst_offset = dom.state.get_type_offset_variable(bin.dst)) {
+                    if (auto dst_offset = dom.state.primary_kind_variable_for_type(bin.dst)) {
                         dom.state.values->sub(dst_offset.value(), src.svalue);
                         if (dom.state.may_have_type(bin.dst, T_STACK)) {
                             // Reduce the numeric size.

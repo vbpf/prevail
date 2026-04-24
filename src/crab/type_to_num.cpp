@@ -12,16 +12,12 @@
 
 namespace prevail {
 
-std::optional<Variable> get_type_offset_variable(const Reg& reg, const TypeEncoding type) {
-    return region_offset_variable(reg, type);
-}
-
-std::optional<Variable> TypeToNumDomain::get_type_offset_variable(const Reg& reg) const {
+std::optional<Variable> TypeToNumDomain::primary_kind_variable_for_type(const Reg& reg) const {
     const auto type = types.get_type(reg);
     if (!type) {
         return {};
     }
-    return region_offset_variable(reg, *type);
+    return prevail::primary_kind_variable_for_type(reg, *type);
 }
 
 bool TypeToNumDomain::operator<=(const TypeToNumDomain& other) const {

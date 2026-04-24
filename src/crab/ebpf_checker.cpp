@@ -292,8 +292,8 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
         if (is_region_access_type(type)) {
             // Bounds-checked region access. The region's offset variable, the
             // bounds rule, and per-region nuance live here together.
-            const auto offset_var = region_offset_variable(s.reg, type);
-            assert(offset_var.has_value() && "is_region_access_type implies an offset variable");
+            const auto offset_var = primary_kind_variable_for_type(s.reg, type);
+            assert(offset_var.has_value() && "is_region_access_type implies a primary kind variable");
             auto [lb, ub] = lb_ub_access_pair(s, *offset_var);
             const std::optional<Variable> packet_size =
                 (type == T_PACKET && !is_comparison_check) ? std::optional{variable_registry.packet_size()}

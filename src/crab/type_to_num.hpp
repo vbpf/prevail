@@ -28,8 +28,6 @@ inline const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
     {T_FUNC, {}},
 };
 
-std::optional<Variable> get_type_offset_variable(const Reg& reg, TypeEncoding type);
-
 /** TypeToNumDomain is a Reduced Product of TypeDomain x NumAbsDomain.
  *
  * Type information guides the precision of the numeric domain. For example, if a register is known to be of type
@@ -117,8 +115,10 @@ struct TypeToNumDomain {
     TypeToNumDomain operator&(const TypeToNumDomain& other) const;
     TypeToNumDomain operator&(TypeToNumDomain&& other) const;
 
+    /// `primary_kind_variable_for_type(reg, t)` where `t` is `reg`'s currently-known type.
+    /// Returns nullopt when `reg` has no singleton type or its type has no kind variable.
     [[nodiscard]]
-    std::optional<Variable> get_type_offset_variable(const Reg& reg) const;
+    std::optional<Variable> primary_kind_variable_for_type(const Reg& reg) const;
 
     /**
      * @brief Identifies type-specific ("kind") variables that are meaningless for the given domain.
