@@ -163,7 +163,8 @@ static bool un_requires_base64(const Un& un) {
     }
 }
 
-static std::optional<Call> resolve_kfunc_call(const CallBtf& call_btf, const ProgramInfo& info, std::string* why_not) {
+static std::optional<ResolvedCall> resolve_kfunc_call(const CallBtf& call_btf, const ProgramInfo& info,
+                                                      std::string* why_not) {
     if (!info.platform || !info.platform->resolve_kfunc_call) {
         if (why_not) {
             *why_not = "kfunc resolution is unavailable on this platform";
@@ -173,6 +174,8 @@ static std::optional<Call> resolve_kfunc_call(const CallBtf& call_btf, const Pro
     return info.platform->resolve_kfunc_call(call_btf.btf_id, info.type, why_not);
 }
 
+// CallBtf in the instruction stream is replaced by a key-only Call{func,
+// kind=kfunc}; the ResolvedCall is reproduced on demand via resolve(call, info).
 using ResolvedKfuncCalls = std::map<Label, Call>;
 
 static std::optional<RejectionReason> check_instruction_feature_support(const Instruction& ins,
@@ -297,11 +300,11 @@ static ResolvedKfuncCalls pass_resolve_kfunc_calls(const InstructionSeq& insts, 
             continue;
         }
         std::string why_not;
-        const auto call = resolve_kfunc_call(*call_btf, info, &why_not);
-        if (!call) {
+        const auto r = resolve_kfunc_call(*call_btf, info, &why_not);
+        if (!r) {
             throw InvalidControlFlow{"not implemented: " + why_not + " (at " + to_string(label) + ")"};
         }
-        resolved.insert_or_assign(label, *call);
+        resolved.insert_or_assign(label, r->call);
     }
     return resolved;
 }
@@ -573,13 +576,13 @@ static void pass_inline_local_calls(CfgBuilder& builder, const InstructionSeq& i
 
 static bool is_tail_call_helper(const Call& call, const ebpf_platform_t& platform,
                                 const EbpfProgramType& program_type) {
-    if (call.target.kind != CallKind::helper) {
+    if (call.kind != CallKind::helper) {
         return false;
     }
-    if (!platform.is_helper_usable(call.target.func, program_type)) {
+    if (!platform.is_helper_usable(call.func, program_type)) {
         return false;
     }
-    return platform.get_helper_prototype(call.target.func, program_type).return_type ==
+    return platform.get_helper_prototype(call.func, program_type).return_type ==
            EBPF_RETURN_TYPE_INTEGER_OR_NO_RETURN_IF_SUCCEED;
 }
 

@@ -62,15 +62,15 @@ static std::optional<KsymBtfId> ebpf_resolve_ksym_btf_id(const std::string& name
     return g_ebpf_platform_linux.resolve_ksym_btf_id(name);
 }
 
-static std::optional<Call> ebpf_get_builtin_call(const int32_t id) {
+static std::optional<ResolvedCall> ebpf_get_builtin_call(const int32_t id) {
     if (!g_ebpf_platform_linux.get_builtin_call) {
         return std::nullopt;
     }
     return g_ebpf_platform_linux.get_builtin_call(id);
 }
 
-static std::optional<Call> ebpf_resolve_kfunc_call(const int32_t btf_id, const EbpfProgramType& program_type,
-                                                   std::string* why_not) {
+static std::optional<ResolvedCall> ebpf_resolve_kfunc_call(const int32_t btf_id, const EbpfProgramType& program_type,
+                                                           std::string* why_not) {
     if (!g_ebpf_platform_linux.resolve_kfunc_call) {
         return std::nullopt;
     }

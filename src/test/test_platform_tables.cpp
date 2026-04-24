@@ -5,7 +5,7 @@
 
 #include <catch2/catch_all.hpp>
 
-#include "ir/unmarshal.hpp"
+#include "ir/call_resolver.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
 #include "platform.hpp"
 #include "spec/function_prototypes.hpp"
@@ -94,8 +94,8 @@ bool has_unmodeled_abi_type(const EbpfHelperPrototype& proto) {
     return false;
 }
 
-bool has_single_arg(const Call& call, const ArgSingle::Kind kind, const Reg reg, const bool or_null = false) {
-    return std::any_of(call.contract.singles.begin(), call.contract.singles.end(), [&](const ArgSingle& arg) {
+bool has_single_arg(const ResolvedCall& rc, const ArgSingle::Kind kind, const Reg reg, const bool or_null = false) {
+    return std::any_of(rc.contract.singles.begin(), rc.contract.singles.end(), [&](const ArgSingle& arg) {
         return arg.kind == kind && arg.reg == reg && arg.or_null == or_null;
     });
 }
@@ -182,15 +182,15 @@ TEST_CASE("linux builtin relocation resolver maps known libc builtins", "[platfo
     REQUIRE(memcpy_call.has_value());
     REQUIRE(memmove_call.has_value());
     REQUIRE(memcmp_call.has_value());
-    REQUIRE(memset_call->target.name == "memset");
-    REQUIRE(memcpy_call->target.name == "memcpy");
-    REQUIRE(memmove_call->target.name == "memmove");
-    REQUIRE(memcmp_call->target.name == "memcmp");
+    REQUIRE(memset_call->name == "memset");
+    REQUIRE(memcpy_call->name == "memcpy");
+    REQUIRE(memmove_call->name == "memmove");
+    REQUIRE(memcmp_call->name == "memcmp");
     const auto unknown_id = resolve("__does_not_exist");
     REQUIRE(unknown_id.has_value());
     const auto unknown_call = get_builtin_call(*unknown_id);
     REQUIRE(unknown_call.has_value());
-    REQUIRE(unknown_call->target.name == "extern_unspecified");
+    REQUIRE(unknown_call->name == "extern_unspecified");
     REQUIRE_FALSE(get_builtin_call(-999999).has_value());
 }
 
@@ -209,6 +209,7 @@ TEST_CASE("linux ksym relocation resolver maps known kfunc symbols", "[platform]
 
 TEST_CASE("helper prototypes with unmodeled ABI classes are conservatively rejected", "[platform][tables]") {
     const auto program_type = g_ebpf_platform_linux.get_program_type("socket", "");
+    const ProgramInfo info{.platform = &g_ebpf_platform_linux, .type = program_type};
 
     size_t usable_helpers = 0;
     size_t unmodeled_helpers = 0;
@@ -223,10 +224,10 @@ TEST_CASE("helper prototypes with unmodeled ABI classes are conservatively rejec
         }
 
         ++unmodeled_helpers;
-        const Call call = make_call(id, g_ebpf_platform_linux, program_type);
+        const ResolvedCall rc = resolve(Call{.func = id, .kind = CallKind::helper}, info);
         CAPTURE(id, proto.name);
-        REQUIRE_FALSE(call.target.is_supported);
-        REQUIRE_FALSE(call.target.unsupported_reason.empty());
+        REQUIRE_FALSE(rc.is_supported);
+        REQUIRE_FALSE(rc.unsupported_reason.empty());
     }
 
     REQUIRE(usable_helpers > 0);
@@ -235,45 +236,46 @@ TEST_CASE("helper prototypes with unmodeled ABI classes are conservatively rejec
 
 TEST_CASE("new helper ABI classes map to modeled call contracts", "[platform][tables]") {
     const auto program_type = g_ebpf_platform_linux.get_program_type("socket", "");
+    const ProgramInfo info{.platform = &g_ebpf_platform_linux, .type = program_type};
 
-    const auto require_supported = [&](const int32_t id) -> Call {
-        const Call call = make_call(id, g_ebpf_platform_linux, program_type);
-        CAPTURE(id, call.target.name, call.target.unsupported_reason);
-        REQUIRE(call.target.is_supported);
-        return call;
+    const auto require_supported = [&](const int32_t id) -> ResolvedCall {
+        const ResolvedCall rc = resolve(Call{.func = id, .kind = CallKind::helper}, info);
+        CAPTURE(id, rc.name, rc.unsupported_reason);
+        REQUIRE(rc.is_supported);
+        return rc;
     };
 
-    const Call strtoul = require_supported(106);
+    const ResolvedCall strtoul = require_supported(106);
     REQUIRE(has_single_arg(strtoul, ArgSingle::Kind::PTR_TO_WRITABLE_LONG, Reg{4}));
 
-    const Call ringbuf_reserve = require_supported(131);
+    const ResolvedCall ringbuf_reserve = require_supported(131);
     REQUIRE(ringbuf_reserve.contract.return_ptr_type.has_value());
     REQUIRE(*ringbuf_reserve.contract.return_ptr_type == T_ALLOC_MEM);
     REQUIRE(ringbuf_reserve.contract.return_nullable);
     REQUIRE(has_single_arg(ringbuf_reserve, ArgSingle::Kind::CONST_SIZE_OR_ZERO, Reg{2}));
 
-    const Call ringbuf_submit = require_supported(132);
+    const ResolvedCall ringbuf_submit = require_supported(132);
     REQUIRE(has_single_arg(ringbuf_submit, ArgSingle::Kind::PTR_TO_ALLOC_MEM, Reg{1}));
 
-    const Call per_cpu_ptr = require_supported(153);
+    const ResolvedCall per_cpu_ptr = require_supported(153);
     REQUIRE(per_cpu_ptr.contract.return_ptr_type.has_value());
     REQUIRE(*per_cpu_ptr.contract.return_ptr_type == T_BTF_ID);
     REQUIRE(per_cpu_ptr.contract.return_nullable);
     REQUIRE(has_single_arg(per_cpu_ptr, ArgSingle::Kind::PTR_TO_BTF_ID, Reg{1}));
 
-    const Call this_cpu_ptr = require_supported(154);
+    const ResolvedCall this_cpu_ptr = require_supported(154);
     REQUIRE(this_cpu_ptr.contract.return_ptr_type.has_value());
     REQUIRE(*this_cpu_ptr.contract.return_ptr_type == T_BTF_ID);
     REQUIRE_FALSE(this_cpu_ptr.contract.return_nullable);
     REQUIRE(has_single_arg(this_cpu_ptr, ArgSingle::Kind::PTR_TO_BTF_ID, Reg{1}));
 
-    const Call check_mtu = require_supported(163);
+    const ResolvedCall check_mtu = require_supported(163);
     REQUIRE(has_single_arg(check_mtu, ArgSingle::Kind::PTR_TO_WRITABLE_INT, Reg{3}));
 
-    const Call timer_init = require_supported(169);
+    const ResolvedCall timer_init = require_supported(169);
     REQUIRE(has_single_arg(timer_init, ArgSingle::Kind::PTR_TO_TIMER, Reg{1}));
 
-    const Call sk_fullsock = require_supported(95);
+    const ResolvedCall sk_fullsock = require_supported(95);
     REQUIRE(sk_fullsock.contract.return_ptr_type.has_value());
     REQUIRE(*sk_fullsock.contract.return_ptr_type == T_SOCKET);
     REQUIRE(sk_fullsock.contract.return_nullable);
@@ -282,11 +284,12 @@ TEST_CASE("new helper ABI classes map to modeled call contracts", "[platform][ta
 
 TEST_CASE("PTR_TO_CONST_STR helpers remain explicitly unsupported", "[platform][tables]") {
     const auto program_type = g_ebpf_platform_linux.get_program_type("socket", "");
+    const ProgramInfo info{.platform = &g_ebpf_platform_linux, .type = program_type};
 
-    const Call strncmp = make_call(182, g_ebpf_platform_linux, program_type);
-    CAPTURE(strncmp.target.name, strncmp.target.unsupported_reason);
-    REQUIRE_FALSE(strncmp.target.is_supported);
-    REQUIRE_FALSE(strncmp.target.unsupported_reason.empty());
+    const ResolvedCall strncmp = resolve(Call{.func = 182, .kind = CallKind::helper}, info);
+    CAPTURE(strncmp.name, strncmp.unsupported_reason);
+    REQUIRE_FALSE(strncmp.is_supported);
+    REQUIRE_FALSE(strncmp.unsupported_reason.empty());
 }
 
 TEST_CASE("socket cookie helper availability is not treated as fully context-agnostic", "[platform][tables]") {

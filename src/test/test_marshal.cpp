@@ -6,6 +6,7 @@
 #include <catch2/catch_all.hpp>
 
 #include "ebpf_verifier.hpp"
+#include "ir/call_resolver.hpp"
 #include "ir/marshal.hpp"
 #include "ir/program.hpp"
 #include "ir/unmarshal.hpp"
@@ -458,7 +459,7 @@ TEST_CASE("disasm_marshal", "[disasm][marshal]") {
 
     SECTION("Call") {
         for (int func : {1, 17}) {
-            compare_marshal_unmarshal(Call{.target = {.func = func}});
+            compare_marshal_unmarshal(Call{.func = func});
         }
 
         // Test callx without support: decode still succeeds.
@@ -920,18 +921,23 @@ TEST_CASE("unmarshal builtin calls only when relocation-gated", "[disasm][marsha
     ProgramInfo info{.platform = &g_ebpf_platform_linux, .type = type};
 
     const Call ungated = unmarshal_single_call(call_memset, info);
-    REQUIRE_FALSE(ungated.target.is_supported);
-    REQUIRE(ungated.target.unsupported_reason == "helper function is unavailable on this platform");
+    REQUIRE(ungated.kind == CallKind::helper);
+    const ResolvedCall ungated_resolved = resolve(ungated, info);
+    REQUIRE_FALSE(ungated_resolved.is_supported);
+    REQUIRE(ungated_resolved.unsupported_reason == "helper function is unavailable on this platform");
 
     info.builtin_call_offsets.insert(0);
     const Call gated = unmarshal_single_call(call_memset, info);
-    REQUIRE(gated.target.is_supported);
-    REQUIRE(gated.target.name == "memset");
-    REQUIRE(gated.target.func == *memset_id);
-    REQUIRE(gated.contract.singles.size() == 1);
-    REQUIRE(gated.contract.pairs.size() == 1);
-    REQUIRE(gated.contract.singles[0] == ArgSingle{ArgSingle::Kind::ANYTHING, false, Reg{2}});
-    REQUIRE(gated.contract.pairs[0] == ArgPair{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false});
+    REQUIRE(gated.kind == CallKind::builtin);
+    REQUIRE(gated.func == *memset_id);
+    const ResolvedCall gated_resolved = resolve(gated, info);
+    REQUIRE(gated_resolved.is_supported);
+    REQUIRE(gated_resolved.name == "memset");
+    REQUIRE(gated_resolved.contract.singles.size() == 1);
+    REQUIRE(gated_resolved.contract.pairs.size() == 1);
+    REQUIRE(gated_resolved.contract.singles[0] == ArgSingle{ArgSingle::Kind::ANYTHING, false, Reg{2}});
+    REQUIRE(gated_resolved.contract.pairs[0] ==
+            ArgPair{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false});
 
     const auto assertions = get_assertions(gated, info, ebpf_verifier_options_t{}, Label{0});
     REQUIRE(has_assertion(assertions, TypeConstraint{Reg{1}, TypeGroup::mem}));
@@ -1020,7 +1026,7 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
         const auto* call = std::get_if<Call>(&prog.instruction_at(Label{0}));
         REQUIRE(call != nullptr);
-        REQUIRE(call->contract.is_map_lookup);
+        REQUIRE(resolve(*call, info).contract.is_map_lookup);
         REQUIRE(verify(prog, {}));
     }
 
@@ -1032,7 +1038,7 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
         const auto* call = std::get_if<Call>(&prog.instruction_at(Label{0}));
         REQUIRE(call != nullptr);
-        REQUIRE(call->target.name == "kfunc_test_acquire_flag");
+        REQUIRE(resolve(*call, info).name == "kfunc_test_acquire_flag");
     }
 
     SECTION("kfunc with release flag is rejected") {
@@ -1314,8 +1320,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
         const auto* call = std::get_if<Call>(&prog.instruction_at(Label{5}));
         REQUIRE(call != nullptr);
-        REQUIRE(call->target.is_supported);
-        REQUIRE(std::ranges::any_of(call->contract.singles, [](const ArgSingle& arg) {
+        const ResolvedCall resolved = resolve(*call, info);
+        REQUIRE(resolved.is_supported);
+        REQUIRE(std::ranges::any_of(resolved.contract.singles, [](const ArgSingle& arg) {
             return arg.kind == ArgSingle::Kind::PTR_TO_FUNC && arg.reg == Reg{2};
         }));
     }

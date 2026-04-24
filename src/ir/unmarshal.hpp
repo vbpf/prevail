@@ -25,5 +25,4 @@ std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog,
 std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog,
                                                     const prevail::ebpf_verifier_options_t& options);
 
-Call make_call(int imm, const ebpf_platform_t& platform, const EbpfProgramType& program_type);
 } // namespace prevail

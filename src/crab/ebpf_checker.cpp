@@ -16,7 +16,6 @@
 #include "crab/var_registry.hpp"
 #include "ir/program.hpp"
 #include "ir/syntax.hpp"
-#include "ir/unmarshal.hpp"
 #include "platform.hpp"
 
 namespace prevail {
@@ -163,7 +162,7 @@ void EbpfChecker::operator()(const FuncConstraint& s) const {
             if (!context.is_helper_usable(imm)) {
                 throw_fail("invalid helper function id " + std::to_string(imm));
             }
-            const Call call = make_call(imm, context.platform(), context.program_info().type);
+            const Call call{.func = imm, .kind = CallKind::helper};
             for (const Assertion& sub_assertion : get_assertions(call, context.program_info(), context.options, {})) {
                 // TODO: create explicit sub assertions elsewhere
                 EbpfChecker{dom, sub_assertion, context}.visit();

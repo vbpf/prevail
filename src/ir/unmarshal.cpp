@@ -457,165 +457,6 @@ struct Unmarshaller {
         }
     }
 
-    static ArgSingle::Kind toArgSingleKind(const ebpf_argument_type_t t) {
-        switch (t) {
-        case EBPF_ARGUMENT_TYPE_ANYTHING: return ArgSingle::Kind::ANYTHING;
-        case EBPF_ARGUMENT_TYPE_PTR_TO_STACK: return ArgSingle::Kind::PTR_TO_STACK;
-        case EBPF_ARGUMENT_TYPE_PTR_TO_STACK_OR_NULL: return ArgSingle::Kind::PTR_TO_STACK;
-        case EBPF_ARGUMENT_TYPE_PTR_TO_MAP: return ArgSingle::Kind::MAP_FD;
-        case EBPF_ARGUMENT_TYPE_CONST_PTR_TO_MAP: return ArgSingle::Kind::MAP_FD;
-        case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_OF_PROGRAMS: return ArgSingle::Kind::MAP_FD_PROGRAMS;
-        case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_KEY: return ArgSingle::Kind::PTR_TO_MAP_KEY;
-        case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE: return ArgSingle::Kind::PTR_TO_MAP_VALUE;
-        case EBPF_ARGUMENT_TYPE_PTR_TO_UNINIT_MAP_VALUE: return ArgSingle::Kind::PTR_TO_MAP_VALUE;
-        case EBPF_ARGUMENT_TYPE_PTR_TO_CTX: return ArgSingle::Kind::PTR_TO_CTX;
-        case EBPF_ARGUMENT_TYPE_PTR_TO_CTX_OR_NULL: return ArgSingle::Kind::PTR_TO_CTX;
-        case EBPF_ARGUMENT_TYPE_PTR_TO_FUNC: return ArgSingle::Kind::PTR_TO_FUNC;
-        default: break;
-        }
-        return {};
-    }
-
-    static ArgPair::Kind toArgPairKind(const ebpf_argument_type_t t) {
-        switch (t) {
-        case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL:
-        case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM: return ArgPair::Kind::PTR_TO_READABLE_MEM;
-        case EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM_OR_NULL:
-        case EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM: return ArgPair::Kind::PTR_TO_READABLE_MEM;
-        case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL:
-        case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM: return ArgPair::Kind::PTR_TO_WRITABLE_MEM;
-        default: break;
-        }
-        return {};
-    }
-
-    [[nodiscard]]
-    auto makeCall(const int32_t imm) const -> Call {
-        const EbpfHelperPrototype proto = info.platform->get_helper_prototype(imm, info.type);
-        auto helper_prototype_name = proto.name ? proto.name : std::to_string(imm);
-        Call res;
-        res.target.func = imm;
-        res.target.name = helper_prototype_name;
-        auto mark_unsupported = [&](const std::string& why) -> Call {
-            res.target.is_supported = false;
-            res.target.unsupported_reason = why;
-            return res;
-        };
-        const auto return_info = classify_call_return_type(proto.return_type);
-        if (!return_info.has_value()) {
-            return mark_unsupported(std::string("helper prototype is unavailable on this platform: ") +
-                                    helper_prototype_name);
-        }
-        res.contract.return_ptr_type = return_info->pointer_type;
-        res.contract.return_nullable = return_info->pointer_nullable;
-        res.contract.reallocate_packet = proto.reallocate_packet;
-        res.contract.is_map_lookup = proto.return_type == EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL;
-        const std::array<ebpf_argument_type_t, 7> args = {
-            {EBPF_ARGUMENT_TYPE_DONTCARE, proto.argument_type[0], proto.argument_type[1], proto.argument_type[2],
-             proto.argument_type[3], proto.argument_type[4], EBPF_ARGUMENT_TYPE_DONTCARE}};
-        for (size_t i = 1; i < args.size() - 1; i++) {
-            switch (args[i]) {
-            case EBPF_ARGUMENT_TYPE_UNSUPPORTED:
-                return mark_unsupported(std::string("helper argument type is unavailable on this platform: ") +
-                                        helper_prototype_name);
-            case EBPF_ARGUMENT_TYPE_DONTCARE: return res;
-            case EBPF_ARGUMENT_TYPE_ANYTHING:
-            case EBPF_ARGUMENT_TYPE_PTR_TO_MAP:
-            case EBPF_ARGUMENT_TYPE_CONST_PTR_TO_MAP:
-            case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_OF_PROGRAMS:
-            case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_KEY:
-            case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE:
-            case EBPF_ARGUMENT_TYPE_PTR_TO_UNINIT_MAP_VALUE:
-            case EBPF_ARGUMENT_TYPE_PTR_TO_STACK:
-            case EBPF_ARGUMENT_TYPE_PTR_TO_CTX:
-            case EBPF_ARGUMENT_TYPE_PTR_TO_FUNC:
-                res.contract.singles.push_back({toArgSingleKind(args[i]), false, Reg{gsl::narrow<uint8_t>(i)}});
-                break;
-            case EBPF_ARGUMENT_TYPE_PTR_TO_STACK_OR_NULL:
-            case EBPF_ARGUMENT_TYPE_PTR_TO_CTX_OR_NULL:
-                res.contract.singles.push_back({toArgSingleKind(args[i]), true, Reg{gsl::narrow<uint8_t>(i)}});
-                break;
-            case EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID_SOCK_COMMON:
-            case EBPF_ARGUMENT_TYPE_PTR_TO_SOCK_COMMON:
-                res.contract.singles.push_back({ArgSingle::Kind::PTR_TO_SOCKET, false, Reg{gsl::narrow<uint8_t>(i)}});
-                break;
-            case EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID:
-            case EBPF_ARGUMENT_TYPE_PTR_TO_PERCPU_BTF_ID:
-                res.contract.singles.push_back({ArgSingle::Kind::PTR_TO_BTF_ID, false, Reg{gsl::narrow<uint8_t>(i)}});
-                break;
-            case EBPF_ARGUMENT_TYPE_PTR_TO_ALLOC_MEM:
-                res.contract.singles.push_back(
-                    {ArgSingle::Kind::PTR_TO_ALLOC_MEM, false, Reg{gsl::narrow<uint8_t>(i)}});
-                break;
-            case EBPF_ARGUMENT_TYPE_PTR_TO_SPIN_LOCK:
-                res.contract.singles.push_back(
-                    {ArgSingle::Kind::PTR_TO_SPIN_LOCK, false, Reg{gsl::narrow<uint8_t>(i)}});
-                break;
-            case EBPF_ARGUMENT_TYPE_PTR_TO_TIMER:
-                res.contract.singles.push_back({ArgSingle::Kind::PTR_TO_TIMER, false, Reg{gsl::narrow<uint8_t>(i)}});
-                break;
-            case EBPF_ARGUMENT_TYPE_CONST_ALLOC_SIZE_OR_ZERO:
-                res.contract.singles.push_back(
-                    {ArgSingle::Kind::CONST_SIZE_OR_ZERO, false, Reg{gsl::narrow<uint8_t>(i)}});
-                res.contract.alloc_size_reg = Reg{gsl::narrow<uint8_t>(i)};
-                break;
-            case EBPF_ARGUMENT_TYPE_PTR_TO_LONG:
-                res.contract.singles.push_back(
-                    {ArgSingle::Kind::PTR_TO_WRITABLE_LONG, false, Reg{gsl::narrow<uint8_t>(i)}});
-                break;
-            case EBPF_ARGUMENT_TYPE_PTR_TO_INT:
-                res.contract.singles.push_back(
-                    {ArgSingle::Kind::PTR_TO_WRITABLE_INT, false, Reg{gsl::narrow<uint8_t>(i)}});
-                break;
-            case EBPF_ARGUMENT_TYPE_PTR_TO_CONST_STR:
-                return mark_unsupported(std::string("helper argument type is unavailable on this platform: ") +
-                                        helper_prototype_name);
-            case EBPF_ARGUMENT_TYPE_CONST_SIZE: {
-                // Sanity check: This argument should never be seen in isolation.
-                return mark_unsupported(
-                    std::string("mismatched EBPF_ARGUMENT_TYPE_PTR_TO* and EBPF_ARGUMENT_TYPE_CONST_SIZE: ") +
-                    helper_prototype_name);
-            }
-            case EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO: {
-                // Sanity check: This argument should never be seen in isolation.
-                return mark_unsupported(
-                    std::string("mismatched EBPF_ARGUMENT_TYPE_PTR_TO* and EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO: ") +
-                    helper_prototype_name);
-            }
-            case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL:
-            case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM:
-            case EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM_OR_NULL:
-            case EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM:
-            case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL:
-            case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM:
-                // Sanity check: This argument must be followed by EBPF_ARGUMENT_TYPE_CONST_SIZE or
-                // EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO.
-                if (args.size() - i < 2) {
-                    return mark_unsupported(
-                        std::string(
-                            "missing EBPF_ARGUMENT_TYPE_CONST_SIZE or EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO: ") +
-                        helper_prototype_name);
-                }
-                if (args[i + 1] != EBPF_ARGUMENT_TYPE_CONST_SIZE &&
-                    args[i + 1] != EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO) {
-                    return mark_unsupported(
-                        std::string("Pointer argument not followed by EBPF_ARGUMENT_TYPE_CONST_SIZE or "
-                                    "EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO: ") +
-                        helper_prototype_name);
-                }
-                const bool can_be_zero = (args[i + 1] == EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO);
-                const bool or_null = args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL ||
-                                     args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM_OR_NULL ||
-                                     args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL;
-                res.contract.pairs.push_back({toArgPairKind(args[i]), or_null, Reg{gsl::narrow<uint8_t>(i)},
-                                              Reg{gsl::narrow<uint8_t>(i + 1)}, can_be_zero});
-                i++;
-                break;
-            }
-        }
-        return res;
-    }
-
     /// Given a program counter and an offset, get the label of the target instruction.
     static Label getJumpTarget(const int32_t offset, const vector<EbpfInst>& insts, const Pc pc) {
         const Pc new_pc = pc + 1 + offset;
@@ -697,32 +538,14 @@ struct Unmarshaller {
             if (inst.offset != 0) {
                 throw InvalidInstruction(pc, make_opcode_message("nonzero offset for", inst.opcode));
             }
+            // Builtin vs helper is a per-PC distinction (the ELF loader flags
+            // relocation targets in info.builtin_call_offsets). Resolution
+            // happens later via call_resolver::resolve(); unmarshal produces
+            // only the key-shaped Call.
             if (info.builtin_call_offsets.contains(pc)) {
-                if (info.platform->get_builtin_call) {
-                    if (const auto builtin_call = info.platform->get_builtin_call(inst.imm)) {
-                        return *builtin_call;
-                    }
-                }
-                return Call{.target = {.func = inst.imm,
-                                       .kind = CallKind::builtin,
-                                       .name = std::to_string(inst.imm),
-                                       .is_supported = false,
-                                       .unsupported_reason = "helper function is unavailable on this platform"}};
+                return Call{.func = inst.imm, .kind = CallKind::builtin};
             }
-            if (info.platform->is_helper_usable(inst.imm, info.type)) {
-                return makeCall(inst.imm);
-            } else {
-                std::string function_name = std::to_string(inst.imm);
-                auto function_name_from_helper_prototype =
-                    info.platform->get_helper_prototype(inst.imm, info.type).name;
-                if (function_name_from_helper_prototype) {
-                    function_name = function_name_from_helper_prototype;
-                }
-                return Call{.target = {.func = inst.imm,
-                                       .name = std::move(function_name),
-                                       .is_supported = false,
-                                       .unsupported_reason = "helper function is unavailable on this platform"}};
-            }
+            return Call{.func = inst.imm, .kind = CallKind::helper};
         case INST_EXIT:
             if ((inst.opcode & INST_CLS_MASK) != INST_CLS_JMP || (inst.opcode & INST_SRC_REG)) {
                 throw InvalidInstruction(pc, inst.opcode);
@@ -907,9 +730,4 @@ std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog,
     return unmarshal(raw_prog, notes, options);
 }
 
-Call make_call(const int imm, const ebpf_platform_t& platform, const EbpfProgramType& program_type) {
-    vector<vector<string>> notes;
-    const ProgramInfo info{.platform = &platform, .type = program_type};
-    return Unmarshaller{notes, info}.makeCall(imm);
-}
 } // namespace prevail

@@ -195,35 +195,21 @@ enum class CallKind {
              ///< ELF loader flagged the call as a relocation target.
 };
 
-/// Identity of a helper/kfunc plus the diagnostics that travel with that identity.
-///
-/// The pair (func, kind) is the key: it uniquely identifies the target given a
-/// platform + program type. The remaining fields (name, is_supported,
-/// unsupported_reason) are a *snapshot* of what the platform lookup returned
-/// at unmarshal time; equality is by key only.
-///
-/// That means `CallTarget{.func=1}` and a fully-populated target for the same
-/// (func, kind) compare equal. See `CallContract` for the matching pattern
-/// on the semantic side. `Callx` and `CallBtf` are the key-only sibling
-/// instructions that resolve the contract on demand instead of caching it.
-struct CallTarget {
+/// Static call to a helper / kfunc / compiler intrinsic. Pure key: the pair
+/// (func, kind) identifies the target given a ProgramInfo, and `resolve(call,
+/// info)` produces the full ResolvedCall with name, support status, and
+/// contract. Sibling key-only call instructions are `Callx` (register-indirect)
+/// and `CallBtf` (pre-resolution kfunc).
+struct Call {
     int32_t func{};
     CallKind kind{CallKind::helper};
-    std::string name;
-    bool is_supported{true};
-    std::string unsupported_reason;
 
-    constexpr bool operator==(const CallTarget& other) const { return func == other.func && kind == other.kind; }
+    constexpr bool operator==(const Call&) const = default;
 };
 
-/// What a helper/kfunc requires of its arguments and how it shapes its return.
-/// Independent of the call site (no frame data) and of the helper's identity
-/// (no name/id). Consumed by assertion extraction and the abstract transformer.
-///
-/// Like `CallTarget`'s diagnostic fields, a CallContract attached to a Call
-/// is a snapshot of the (func, kind) -> contract lookup against a specific
-/// platform + program type. Equality of the parent Call is by CallTarget
-/// key only, so contract divergence does not affect instruction identity.
+/// What a helper / kfunc / builtin requires of its arguments and how it
+/// shapes its return. Lives inside `ResolvedCall`; consumed by assertion
+/// extraction and the abstract transformer.
 struct CallContract {
     std::vector<ArgSingle> singles;
     std::vector<ArgPair> pairs;
@@ -234,20 +220,12 @@ struct CallContract {
     std::optional<Reg> alloc_size_reg{}; ///< Register holding allocation size (for T_ALLOC_MEM returns).
 };
 
-struct Call {
-    CallTarget target;
-    CallContract contract;
-
-    constexpr bool operator==(const Call& other) const { return target == other.target; }
-};
-
 /// Resolved form of a Call: the key (via `call`) plus everything derivable
 /// from resolving that key against a ProgramInfo (platform + program type).
 ///
 /// Produced by `resolve(Call, ProgramInfo)`; consumed by assertion extraction,
 /// the abstract transformer, the reject gate in cfg_builder, and the rich
-/// printer. Once `Call` is migrated to a pure key, `ResolvedCall` is the only
-/// place the `name`/`is_supported`/`unsupported_reason`/`contract` fields live.
+/// printer.
 struct ResolvedCall {
     Call call;
     std::string name;
@@ -500,8 +478,12 @@ inline std::ostream& operator<<(std::ostream& os, Value const& a) {
 std::ostream& operator<<(std::ostream& os, const Assertion& a);
 std::string to_string(const Assertion& constraint);
 
+struct ProgramInfo;
+/// Prints an InstructionSeq. When `info` is non-null, Call instructions are
+/// resolved for a rich helper-name + arg-list render; otherwise they print
+/// cheaply as "r0 = call:<func>".
 void print(const InstructionSeq& insts, std::ostream& out, const std::optional<const Label>& label_to_print,
-           bool print_line_info = false);
+           bool print_line_info = false, const ProgramInfo* info = nullptr);
 
 int size(const Instruction& inst);
 

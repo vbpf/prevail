@@ -352,8 +352,9 @@ const EbpfMapDescriptor& get_map_descriptor_linux(const int map_fd, const std::v
     throw UnmarshalError("map_fd " + std::to_string(map_fd) + " not found");
 }
 
-static std::optional<Call> resolve_kfunc_call_linux(const int32_t btf_id, const EbpfProgramType& program_type,
-                                                    std::string* why_not) {
+static std::optional<ResolvedCall> resolve_kfunc_call_linux(const int32_t btf_id,
+                                                            const EbpfProgramType& program_type,
+                                                            std::string* why_not) {
     return make_kfunc_call(btf_id, program_type, why_not);
 }
 
@@ -436,35 +437,41 @@ std::optional<KsymBtfId> resolve_ksym_btf_id_linux(const std::string& name) {
     return std::nullopt;
 }
 
-static std::optional<Call> get_builtin_call_linux(const int32_t id) {
+static std::optional<ResolvedCall> get_builtin_call_linux(const int32_t id) {
+    const Call key{.func = id, .kind = CallKind::builtin};
     switch (id) {
     case LINUX_BUILTIN_CALL_MEMSET:
-        return Call{
-            .target = {.func = id, .kind = CallKind::builtin, .name = "memset"},
+        return ResolvedCall{
+            .call = key,
+            .name = "memset",
             .contract = {.singles = {{ArgSingle::Kind::ANYTHING, false, Reg{2}}},
                          .pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false}}},
         };
     case LINUX_BUILTIN_CALL_MEMCPY:
-        return Call{
-            .target = {.func = id, .kind = CallKind::builtin, .name = "memcpy"},
+        return ResolvedCall{
+            .call = key,
+            .name = "memcpy",
             .contract = {.pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false},
                                    {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}}},
         };
     case LINUX_BUILTIN_CALL_MEMMOVE:
-        return Call{
-            .target = {.func = id, .kind = CallKind::builtin, .name = "memmove"},
+        return ResolvedCall{
+            .call = key,
+            .name = "memmove",
             .contract = {.pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false},
                                    {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}}},
         };
     case LINUX_BUILTIN_CALL_MEMCMP:
-        return Call{
-            .target = {.func = id, .kind = CallKind::builtin, .name = "memcmp"},
+        return ResolvedCall{
+            .call = key,
+            .name = "memcmp",
             .contract = {.pairs = {{ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{1}, Reg{3}, false},
                                    {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}}},
         };
     case LINUX_BUILTIN_CALL_EXTERN_UNSPEC:
-        return Call{
-            .target = {.func = id, .kind = CallKind::builtin, .name = "extern_unspecified"},
+        return ResolvedCall{
+            .call = key,
+            .name = "extern_unspecified",
             .contract = {.singles = {{ArgSingle::Kind::ANYTHING, false, Reg{1}},
                                      {ArgSingle::Kind::ANYTHING, false, Reg{2}},
                                      {ArgSingle::Kind::ANYTHING, false, Reg{3}},

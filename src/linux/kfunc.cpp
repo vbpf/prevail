@@ -263,7 +263,8 @@ void set_unsupported(std::string* why_not, const std::string& reason) {
 
 } // namespace
 
-std::optional<Call> make_kfunc_call(const int32_t btf_id, const EbpfProgramType& program_type, std::string* why_not) {
+std::optional<ResolvedCall> make_kfunc_call(const int32_t btf_id, const EbpfProgramType& program_type,
+                                            std::string* why_not) {
     const auto entry = lookup_kfunc_prototype(btf_id);
     if (!entry) {
         set_unsupported(why_not, "kfunc prototype lookup failed for BTF id " + std::to_string(btf_id));
@@ -271,10 +272,9 @@ std::optional<Call> make_kfunc_call(const int32_t btf_id, const EbpfProgramType&
     }
     const auto& proto = entry->proto;
 
-    Call res;
-    res.target.func = btf_id;
-    res.target.kind = CallKind::kfunc;
-    res.target.name = proto.name;
+    ResolvedCall res;
+    res.call = Call{.func = btf_id, .kind = CallKind::kfunc};
+    res.name = proto.name;
     res.contract.reallocate_packet = proto.reallocate_packet;
     res.contract.is_map_lookup = proto.return_type == EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL;
 

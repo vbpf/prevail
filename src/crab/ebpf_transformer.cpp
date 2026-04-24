@@ -17,9 +17,8 @@
 #include "crab/ebpf_domain.hpp"
 #include "crab/region_semantics.hpp"
 #include "crab/var_registry.hpp"
-#include "ir/call_resolver.hpp"
 #include "crab_utils/num_safety.hpp"
-#include "ir/unmarshal.hpp"
+#include "ir/call_resolver.hpp"
 #include "platform.hpp"
 #include "string_constraints.hpp"
 
@@ -995,7 +994,7 @@ void EbpfTransformer::operator()(const Callx& callx) {
             if (!context.is_helper_usable(imm)) {
                 return;
             }
-            const Call call = make_call(imm, context.platform(), context.program_info().type);
+            const Call call{.func = imm, .kind = CallKind::helper};
             (*this)(call);
         }
     }
@@ -1329,7 +1328,8 @@ void EbpfTransformer::operator()(const Bin& bin) {
                         // Assertions should make sure we only perform this on non-shared pointers.
                         if (const auto dst_offset = primary_kind_variable_for_type(bin.dst, type)) {
                             state.values->apply_signed(ArithBinOp::SUB, dst.svalue, dst.uvalue, dst_offset.value(),
-                                                       primary_kind_variable_for_type(src_reg, type).value(), finite_width);
+                                                       primary_kind_variable_for_type(src_reg, type).value(),
+                                                       finite_width);
                             state.values.havoc(dst_offset.value());
                         }
                         state.havoc_offsets(bin.dst);

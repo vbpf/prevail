@@ -14,6 +14,7 @@
 #include "crab/interval.hpp"
 #include "crab/type_encoding.hpp"
 #include "crab/var_registry.hpp"
+#include "ir/call_resolver.hpp"
 #include "ir/syntax.hpp"
 #include "platform.hpp"
 #include "verifier.hpp"
@@ -23,6 +24,12 @@ using std::string;
 using std::vector;
 
 namespace prevail {
+
+// Forward declarations of operator<< overloads defined later in this file,
+// needed by DetailedPrinter::print_call which references them before their
+// point of definition.
+std::ostream& operator<<(std::ostream& os, ArgSingle arg);
+std::ostream& operator<<(std::ostream& os, ArgPair arg);
 
 std::ostream& operator<<(std::ostream& o, const Interval& interval) {
     if (interval.is_bottom()) {
@@ -148,11 +155,48 @@ struct DetailedPrinter : LineInfoPrinter {
         print_labels(direction, direction == "from" ? prog.cfg().parents_of(label) : prog.cfg().children_of(label));
     }
 
+    // Rich Call print: resolve the (func, kind) key against the Program's
+    // platform + type to recover the helper name and argument list. Mirrors
+    // the output shape from before Call was made key-only.
+    static void print_call(std::ostream& os, const Program& prog, const Call& call) {
+        const ResolvedCall r = resolve(call, prog.info());
+        os << "r0 = " << r.name << ":" << r.call.func << "(";
+        for (uint8_t reg = 1; reg <= 5; reg++) {
+            auto single =
+                std::ranges::find_if(r.contract.singles, [reg](const ArgSingle& a) { return a.reg.v == reg; });
+            if (single != r.contract.singles.end()) {
+                if (reg > 1) {
+                    os << ", ";
+                }
+                os << *single;
+                continue;
+            }
+            auto pair = std::ranges::find_if(r.contract.pairs, [reg](const ArgPair& a) { return a.mem.v == reg; });
+            if (pair != r.contract.pairs.end()) {
+                if (reg > 1) {
+                    os << ", ";
+                }
+                os << *pair;
+                reg++;
+                continue;
+            }
+            break;
+        }
+        os << ")";
+    }
+
     void print_instruction(const Program& prog, const Label& label) {
         for (const auto& pre : prog.assertions_at(label)) {
             os << "  " << "assert " << pre << ";\n";
         }
-        os << "  " << prog.instruction_at(label) << ";\n";
+        const auto& ins = prog.instruction_at(label);
+        os << "  ";
+        if (const auto* call = std::get_if<Call>(&ins)) {
+            print_call(os, prog, *call);
+        } else {
+            os << ins;
+        }
+        os << ";\n";
     }
 };
 
@@ -437,6 +481,11 @@ struct AssertionPrinterVisitor {
 // ReSharper disable CppMemberFunctionMayBeConst
 struct CommandPrinterVisitor {
     std::ostream& os_;
+    // Optional ProgramInfo: when present, Call instructions are resolved and
+    // printed with helper name + argument list (e.g., "r0 = bpf_map_lookup_elem:
+    // 1(map_fd r1, map_key r2)"). When absent, Call prints as the cheap
+    // "r0 = call:<func>" form.
+    const ProgramInfo* program_info_ = nullptr;
 
     void operator()(Undefined const& a) { os_ << "Undefined{" << a.opcode << "}"; }
 
@@ -485,34 +534,43 @@ struct CommandPrinterVisitor {
     }
 
     void operator()(Call const& call) {
-        os_ << "r0 = " << call.target.name << ":" << call.target.func << "(";
-        for (uint8_t r = 1; r <= 5; r++) {
-            // Look for a singleton.
-            auto single =
-                std::ranges::find_if(call.contract.singles, [r](const ArgSingle arg) { return arg.reg.v == r; });
-            if (single != call.contract.singles.end()) {
-                if (r > 1) {
-                    os_ << ", ";
+        if (program_info_ != nullptr) {
+            // Rich print: resolve and emit helper name + arg list.
+            const ResolvedCall r = resolve(call, *program_info_);
+            os_ << "r0 = " << r.name << ":" << r.call.func << "(";
+            for (uint8_t reg = 1; reg <= 5; reg++) {
+                auto single =
+                    std::ranges::find_if(r.contract.singles, [reg](const ArgSingle& a) { return a.reg.v == reg; });
+                if (single != r.contract.singles.end()) {
+                    if (reg > 1) {
+                        os_ << ", ";
+                    }
+                    os_ << *single;
+                    continue;
                 }
-                os_ << *single;
-                continue;
-            }
-
-            // Look for the start of a pair.
-            auto pair = std::ranges::find_if(call.contract.pairs, [r](const ArgPair arg) { return arg.mem.v == r; });
-            if (pair != call.contract.pairs.end()) {
-                if (r > 1) {
-                    os_ << ", ";
+                auto pair = std::ranges::find_if(r.contract.pairs, [reg](const ArgPair& a) { return a.mem.v == reg; });
+                if (pair != r.contract.pairs.end()) {
+                    if (reg > 1) {
+                        os_ << ", ";
+                    }
+                    os_ << *pair;
+                    reg++;
+                    continue;
                 }
-                os_ << *pair;
-                r++;
-                continue;
+                break;
             }
-
-            // Not found.
-            break;
+            os_ << ")";
+            return;
         }
-        os_ << ")";
+        // Cheap print: context-free, key only. Used when no ProgramInfo is
+        // available (e.g., Instruction operator<< out of an analysis context).
+        const char* kind_label = "call";
+        switch (call.kind) {
+        case CallKind::helper: kind_label = "call"; break;
+        case CallKind::kfunc: kind_label = "call_kfunc"; break;
+        case CallKind::builtin: kind_label = "call_builtin"; break;
+        }
+        os_ << "r0 = " << kind_label << ":" << call.func;
     }
 
     void operator()(CallLocal const& call) { os_ << "call <" << to_string(call.target) << ">"; }
@@ -665,11 +723,11 @@ auto get_labels(const InstructionSeq& insts) {
 }
 
 void print(const InstructionSeq& insts, std::ostream& out, const std::optional<const Label>& label_to_print,
-           const bool print_line_info) {
+           const bool print_line_info, const ProgramInfo* info) {
     const auto pc_of_label = get_labels(insts);
     Pc pc = 0;
     std::string previous_source;
-    CommandPrinterVisitor visitor{out};
+    CommandPrinterVisitor visitor{.os_ = out, .program_info_ = info};
     for (const LabeledInstruction& labeled_inst : insts) {
         const auto& [label, ins, line_info] = labeled_inst;
         if (!label_to_print.has_value() || label == label_to_print) {
