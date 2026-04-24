@@ -22,6 +22,18 @@ static void test_analyze_thread(const prevail::Program* prog, bool* res) {
     }
 }
 
+static void test_analyze_context_thread(const prevail::AnalysisContext* context, bool* res) {
+    try {
+        *res = !prevail::analyze(*context).failed;
+    } catch (...) {
+        *res = false;
+    }
+}
+
+static prevail::AnalysisContext prepare_context(const std::string& section) {
+    return prevail::AnalysisContext{prepare(section), {}};
+}
+
 // Two programs analysed concurrently must both verify; per-program analysis
 // state must not leak through shared mutable storage.
 TEST_CASE("multithreading", "[verify][multithreading]") {
@@ -86,6 +98,44 @@ TEST_CASE("multi-program parallel analysis", "[verify][multithreading]") {
     std::thread a(test_analyze_thread, &prog1, &res1);
     std::thread b(test_analyze_thread, &prog2, &res2);
     std::thread c(test_analyze_thread, &prog3, &res3);
+    a.join();
+    b.join();
+    c.join();
+
+    REQUIRE(res1);
+    REQUIRE(res2);
+    REQUIRE(res3);
+}
+
+// Drive the owning analyze(AnalysisContext&) path directly, bypassing the
+// verify() convenience that builds a fresh context internally. Exercises
+// AnalysisContext{std::move(prog), opts} construction and re-analysis of the
+// same context.
+TEST_CASE("multi-program sequential via AnalysisContext", "[verify][multithreading]") {
+    const prevail::AnalysisContext ctx1 = prepare_context("2/1");
+    const prevail::AnalysisContext ctx2 = prepare_context("2/2");
+    const prevail::AnalysisContext ctx3 = prepare_context("2/3");
+
+    REQUIRE_FALSE(prevail::analyze(ctx1).failed);
+    REQUIRE_FALSE(prevail::analyze(ctx2).failed);
+    REQUIRE_FALSE(prevail::analyze(ctx3).failed);
+    REQUIRE_FALSE(prevail::analyze(ctx1).failed);
+}
+
+// Same as above but concurrent: three threads each calling analyze() on a
+// distinct AnalysisContext. A regression that introduced mutable shared state
+// on the owning path would surface here and not in the verify()-based tests.
+TEST_CASE("multi-program parallel via AnalysisContext", "[verify][multithreading]") {
+    const prevail::AnalysisContext ctx1 = prepare_context("2/1");
+    const prevail::AnalysisContext ctx2 = prepare_context("2/2");
+    const prevail::AnalysisContext ctx3 = prepare_context("2/3");
+
+    bool res1 = false;
+    bool res2 = false;
+    bool res3 = false;
+    std::thread a(test_analyze_context_thread, &ctx1, &res1);
+    std::thread b(test_analyze_context_thread, &ctx2, &res2);
+    std::thread c(test_analyze_context_thread, &ctx3, &res3);
     a.join();
     b.join();
     c.join();
