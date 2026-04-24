@@ -352,8 +352,7 @@ const EbpfMapDescriptor& get_map_descriptor_linux(const int map_fd, const std::v
     throw UnmarshalError("map_fd " + std::to_string(map_fd) + " not found");
 }
 
-static std::optional<ResolvedCall> resolve_kfunc_call_linux(const int32_t btf_id,
-                                                            const EbpfProgramType& program_type,
+static std::optional<ResolvedCall> resolve_kfunc_call_linux(const int32_t btf_id, const EbpfProgramType& program_type,
                                                             std::string* why_not) {
     return make_kfunc_call(btf_id, program_type, why_not);
 }

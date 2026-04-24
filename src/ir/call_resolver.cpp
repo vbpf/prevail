@@ -53,6 +53,9 @@ ResolvedCall make_unsupported(const Call& call, std::string name, std::string re
 }
 
 ResolvedCall resolve_helper(const Call& call, const ProgramInfo& info) {
+    if (!info.platform) {
+        return make_unsupported(call, std::to_string(call.func), "platform is unavailable");
+    }
     // Matches the unmarshal-time branching: a helper whose id is known to the
     // platform but unusable for *this* program type must surface as "helper
     // function is unavailable on this platform", not the generic "prototype"
@@ -151,12 +154,8 @@ ResolvedCall resolve_helper(const Call& call, const ProgramInfo& info) {
         case EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM:
         case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL:
         case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM: {
-            if (args.size() - i < 2) {
-                return make_unsupported(
-                    call, helper_prototype_name,
-                    "missing EBPF_ARGUMENT_TYPE_CONST_SIZE or EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO: " +
-                        helper_prototype_name);
-            }
+            // `args[i + 1]` is always in bounds: `args` has 7 entries with a
+            // DONTCARE sentinel at index 6, and the loop runs while i < 6.
             if (args[i + 1] != EBPF_ARGUMENT_TYPE_CONST_SIZE && args[i + 1] != EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO) {
                 return make_unsupported(call, helper_prototype_name,
                                         "Pointer argument not followed by EBPF_ARGUMENT_TYPE_CONST_SIZE or "
@@ -183,7 +182,11 @@ ResolvedCall resolve_kfunc(const Call& call, const ProgramInfo& info) {
     }
     std::string why_not;
     if (const auto c = info.platform->resolve_kfunc_call(call.func, info.type, &why_not)) {
-        return *c;
+        // Stamp the key from our argument so the invariant is enforced here
+        // rather than relying on every platform implementation to set it.
+        ResolvedCall r = *c;
+        r.call = call;
+        return r;
     }
     return make_unsupported(call, std::to_string(call.func), std::move(why_not));
 }
@@ -191,10 +194,12 @@ ResolvedCall resolve_kfunc(const Call& call, const ProgramInfo& info) {
 ResolvedCall resolve_builtin(const Call& call, const ProgramInfo& info) {
     if (info.platform && info.platform->get_builtin_call) {
         if (const auto c = info.platform->get_builtin_call(call.func)) {
-            return *c;
+            ResolvedCall r = *c;
+            r.call = call;
+            return r;
         }
     }
-    return make_unsupported(call, std::to_string(call.func), "helper function is unavailable on this platform");
+    return make_unsupported(call, std::to_string(call.func), "builtin function is unavailable on this platform");
 }
 
 } // namespace

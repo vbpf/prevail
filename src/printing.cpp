@@ -25,11 +25,11 @@ using std::vector;
 
 namespace prevail {
 
-// Forward declarations of operator<< overloads defined later in this file,
-// needed by DetailedPrinter::print_call which references them before their
-// point of definition.
-std::ostream& operator<<(std::ostream& os, ArgSingle arg);
-std::ostream& operator<<(std::ostream& os, ArgPair arg);
+// Rich-printing helper: render a single instruction, resolving Calls against
+// the program's platform so helper names and arg lists appear in the output.
+// Defined below near CommandPrinterVisitor; forward-declared here so early
+// top-level printers (print_dot, DetailedPrinter::print_instruction) can use it.
+static void print_instruction_rich(std::ostream& os, const Program& prog, const Instruction& ins);
 
 std::ostream& operator<<(std::ostream& o, const Interval& interval) {
     if (interval.is_bottom()) {
@@ -155,47 +155,12 @@ struct DetailedPrinter : LineInfoPrinter {
         print_labels(direction, direction == "from" ? prog.cfg().parents_of(label) : prog.cfg().children_of(label));
     }
 
-    // Rich Call print: resolve the (func, kind) key against the Program's
-    // platform + type to recover the helper name and argument list. Mirrors
-    // the output shape from before Call was made key-only.
-    static void print_call(std::ostream& os, const Program& prog, const Call& call) {
-        const ResolvedCall r = resolve(call, prog.info());
-        os << "r0 = " << r.name << ":" << r.call.func << "(";
-        for (uint8_t reg = 1; reg <= 5; reg++) {
-            auto single =
-                std::ranges::find_if(r.contract.singles, [reg](const ArgSingle& a) { return a.reg.v == reg; });
-            if (single != r.contract.singles.end()) {
-                if (reg > 1) {
-                    os << ", ";
-                }
-                os << *single;
-                continue;
-            }
-            auto pair = std::ranges::find_if(r.contract.pairs, [reg](const ArgPair& a) { return a.mem.v == reg; });
-            if (pair != r.contract.pairs.end()) {
-                if (reg > 1) {
-                    os << ", ";
-                }
-                os << *pair;
-                reg++;
-                continue;
-            }
-            break;
-        }
-        os << ")";
-    }
-
     void print_instruction(const Program& prog, const Label& label) {
         for (const auto& pre : prog.assertions_at(label)) {
             os << "  " << "assert " << pre << ";\n";
         }
-        const auto& ins = prog.instruction_at(label);
         os << "  ";
-        if (const auto* call = std::get_if<Call>(&ins)) {
-            print_call(os, prog, *call);
-        } else {
-            os << ins;
-        }
+        print_instruction_rich(os, prog, prog.instruction_at(label));
         os << ";\n";
     }
 };
@@ -259,7 +224,8 @@ void print_dot(const Program& prog, std::ostream& out) {
         for (const auto& pre : prog.assertions_at(label)) {
             out << "assert " << pre << "\\l";
         }
-        out << prog.instruction_at(label) << "\\l";
+        print_instruction_rich(out, prog, prog.instruction_at(label));
+        out << "\\l";
 
         out << "\"];\n";
         for (const Label& next : prog.cfg().children_of(label)) {
@@ -693,6 +659,11 @@ struct CommandPrinterVisitor {
 std::ostream& operator<<(std::ostream& os, Instruction const& ins) {
     std::visit(CommandPrinterVisitor{os}, ins);
     return os;
+}
+
+static void print_instruction_rich(std::ostream& os, const Program& prog, const Instruction& ins) {
+    CommandPrinterVisitor visitor{.os_ = os, .program_info_ = &prog.info()};
+    std::visit(visitor, ins);
 }
 
 string to_string(Instruction const& ins) {

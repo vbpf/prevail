@@ -609,7 +609,13 @@ void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
         case T_MAP_PROGRAMS:
         case T_NUM:
         case T_FUNC:
-            // Not a dereferenceable pointer for the transformer; nothing to load.
+            // ebpf_checker.cpp ValidAccess rejects dereferences of each of
+            // these types, so the transformer can soundly treat them as a
+            // no-op here: a well-formed program has already cleared the
+            // checker, and an ill-formed program won't reach this branch
+            // with a real load (the checker would have thrown). Keeping the
+            // no-op explicit documents the invariant and avoids UB if the
+            // checker is ever weakened.
             break;
         }
     });
@@ -822,6 +828,11 @@ void EbpfTransformer::operator()(const Call& call) {
         return;
     }
     const ResolvedCall resolved = resolve(call, context.program_info());
+    // Precondition: cfg_builder::check_instruction_feature_support rejects
+    // unsupported Calls before CFG construction. If that ever drifts, an
+    // unsupported call here would silently fall through the empty-contract
+    // path and yield T_NUM on r0 with no diagnostic.
+    assert(resolved.is_supported && "unsupported Call reached transformer; cfg_builder should have rejected it");
     std::optional<Reg> maybe_fd_reg{};
     for (ArgSingle param : resolved.contract.singles) {
         switch (param.kind) {
@@ -1265,6 +1276,9 @@ void EbpfTransformer::operator()(const Bin& bin) {
                                 if (dst_type == T_NUM && src_type != T_NUM) {
                                     // num += ptr
                                     state.assign_type(bin.dst, src_type);
+                                    // Note: primary_kind_variable_for_type's presence is purely
+                                    // type-indexed, so if dst_offset has a value then the src call
+                                    // for the same type also has one -- safe to unwrap.
                                     if (const auto dst_offset = primary_kind_variable_for_type(bin.dst, src_type)) {
                                         state.values->apply(ArithBinOp::ADD, dst_offset.value(), dst.svalue,
                                                             primary_kind_variable_for_type(src_reg, src_type).value());

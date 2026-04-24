@@ -1,6 +1,6 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
-#include <cassert>
+#include <stdexcept>
 #include <string>
 
 #include "arith/dsl_syntax.hpp"
@@ -67,10 +67,10 @@ RegionBounds region_bounds(const TypeEncoding type, const RegPack& reg, const An
                 .ub_message = std::string("Upper bound must be at most ") + variable_registry.name(reg.alloc_mem_size)};
     default:
         // The caller is expected to gate by region type (e.g., the checker's
-        // ValidAccess switch). Reaching this point is a programming error.
-        assert(false && "region_bounds called on non-region type");
-        return RegionBounds{
-            .lb_floor = LinearExpression{0}, .lb_message = {}, .ub_ceiling = LinearExpression{0}, .ub_message = {}};
+        // ValidAccess switch). Reaching this point is a programming error -
+        // throw unconditionally so the contract is enforced in release builds
+        // too (assert would be stripped under NDEBUG).
+        throw std::logic_error("region_bounds called on non-region type");
     }
 }
 

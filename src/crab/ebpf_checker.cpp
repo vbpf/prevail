@@ -292,18 +292,21 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             // Bounds-checked region access. The region's offset variable, the
             // bounds rule, and per-region nuance live here together.
             const auto offset_var = primary_kind_variable_for_type(s.reg, type);
-            assert(offset_var.has_value() && "is_region_access_type implies a primary kind variable");
+            if (!offset_var.has_value()) {
+                // is_region_access_type and primary_kind_variable_for_type should agree;
+                // if they ever drift, fail closed in release builds rather than UB-dereference.
+                throw_fail("internal error: region access type has no primary kind variable");
+            }
             auto [lb, ub] = lb_ub_access_pair(s, *offset_var);
-            const std::optional<Variable> packet_size =
-                (type == T_PACKET && !is_comparison_check) ? std::optional{variable_registry.packet_size()}
-                                                           : std::nullopt;
+            const std::optional<Variable> packet_size = (type == T_PACKET && !is_comparison_check)
+                                                            ? std::optional{variable_registry.packet_size()}
+                                                            : std::nullopt;
             require_region_bounds(type, reg, lb, ub, packet_size);
             switch (type) {
             case T_STACK:
                 // Stack reads must hit known-numeric bytes.
                 if (s.access_type == AccessType::read &&
-                    !dom.stack->all_num_lb_ub(dom.state.values.eval_interval(lb),
-                                              dom.state.values.eval_interval(ub))) {
+                    !dom.stack->all_num_lb_ub(dom.state.values.eval_interval(lb), dom.state.values.eval_interval(ub))) {
                     if (s.offset < 0) {
                         throw_fail("Stack content is not numeric");
                     } else {
