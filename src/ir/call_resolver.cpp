@@ -9,6 +9,21 @@ namespace prevail {
 
 namespace {
 ResolvedCall resolve_helper(const Call& call, const ProgramInfo& info) {
+    // Match the branching that Unmarshaller::makeJmp used to do: a helper that
+    // exists in the platform table but isn't available for *this* program type
+    // must report "helper function is unavailable on this platform", not the
+    // make_call-internal "prototype is unavailable" diagnostic.
+    if (!info.platform->is_helper_usable(call.target.func, info.type)) {
+        std::string name = std::to_string(call.target.func);
+        if (const auto name_from_proto = info.platform->get_helper_prototype(call.target.func, info.type).name) {
+            name = name_from_proto;
+        }
+        return ResolvedCall{.call = call,
+                            .name = std::move(name),
+                            .is_supported = false,
+                            .unsupported_reason = "helper function is unavailable on this platform",
+                            .contract = {}};
+    }
     const Call resolved = make_call(call.target.func, *info.platform, info.type);
     return ResolvedCall{.call = call,
                         .name = resolved.target.name,

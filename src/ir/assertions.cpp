@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "config.hpp"
+#include "ir/call_resolver.hpp"
 #include "ir/syntax.hpp"
 #include "platform.hpp"
 
@@ -73,9 +74,10 @@ class AssertExtractor {
     }
 
     vector<Assertion> operator()(const Call& call) const {
+        const ResolvedCall resolved = resolve(call, info);
         vector<Assertion> res;
         std::optional<Reg> map_fd_reg;
-        for (ArgSingle arg : call.contract.singles) {
+        for (ArgSingle arg : resolved.contract.singles) {
             switch (arg.kind) {
             case ArgSingle::Kind::ANYTHING:
                 // avoid pointer leakage:
@@ -131,7 +133,7 @@ class AssertExtractor {
                 break;
             }
         }
-        for (ArgPair arg : call.contract.pairs) {
+        for (ArgPair arg : resolved.contract.pairs) {
             const auto group = arg.or_null ? TypeGroup::mem_or_num : TypeGroup::mem;
             const auto access_type =
                 arg.kind == ArgPair::Kind::PTR_TO_READABLE_MEM ? AccessType::read : AccessType::write;

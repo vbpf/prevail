@@ -1413,6 +1413,21 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
                 Catch::Matchers::ContainsSubstring("(at 0)"));
     }
 
+    SECTION("helper id not usable for this program type") {
+        // bpf_get_socket_cookie (helper 46) is permitted in cgroup/connect4 but not in xdp.
+        // The resolver must consult is_helper_usable(func, program_type); otherwise a
+        // default prototype from get_helper_prototype would let the call slip through.
+        const ProgramInfo xdp_info{.platform = &g_ebpf_platform_linux,
+                                   .type = g_ebpf_platform_linux.get_program_type("xdp", "")};
+        RawProgram raw_prog{"", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .imm = 46}, exit}, xdp_info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        REQUIRE_THROWS_WITH(
+            Program::from_sequence(std::get<InstructionSeq>(prog_or_error), xdp_info, {}),
+            Catch::Matchers::ContainsSubstring("rejected: helper function is unavailable on this platform") &&
+                Catch::Matchers::ContainsSubstring("(at 0)"));
+    }
+
     SECTION("be64 requires base64 conformance group") {
         ebpf_platform_t p = g_ebpf_platform_linux;
         p.supported_conformance_groups &= ~bpf_conformance_groups_t::base64;
