@@ -241,6 +241,21 @@ struct Call {
     constexpr bool operator==(const Call& other) const { return target == other.target; }
 };
 
+/// Resolved form of a Call: the key (via `call`) plus everything derivable
+/// from resolving that key against a ProgramInfo (platform + program type).
+///
+/// Produced by `resolve(Call, ProgramInfo)`; consumed by assertion extraction,
+/// the abstract transformer, the reject gate in cfg_builder, and the rich
+/// printer. Once `Call` is migrated to a pure key, `ResolvedCall` is the only
+/// place the `name`/`is_supported`/`unsupported_reason`/`contract` fields live.
+struct ResolvedCall {
+    Call call;
+    std::string name;
+    bool is_supported{true};
+    std::string unsupported_reason;
+    CallContract contract;
+};
+
 /// Result of classifying an ABI call return type.
 struct CallReturnTypeInfo {
     std::optional<TypeEncoding> pointer_type{}; ///< Empty for scalar/map-lookup-style returns.
