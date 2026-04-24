@@ -7,6 +7,7 @@
 
 #include "config.hpp"
 #include "ir/program.hpp"
+#include "platform.hpp"
 #include "spec/type_descriptors.hpp"
 
 namespace prevail {
@@ -35,6 +36,16 @@ struct AnalysisContext {
     const ebpf_platform_t& platform() const {
         assert(program.info().platform != nullptr && "AnalysisContext::platform() on program without platform");
         return *program.info().platform;
+    }
+
+    // Look up `map_fd` in this program's descriptor table.
+    const EbpfMapDescriptor& map_descriptor(int map_fd) const {
+        return platform().get_map_descriptor(map_fd, program_info().map_descriptors);
+    }
+
+    // Whether `helper_id` is callable from this program's type.
+    bool is_helper_usable(int32_t helper_id) const {
+        return platform().is_helper_usable(helper_id, program_info().type);
     }
 };
 

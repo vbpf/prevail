@@ -1000,7 +1000,7 @@ void EbpfTransformer::operator()(const Callx& callx) {
         if (sn->fits<int32_t>()) {
             // We can now process it as if the id was immediate.
             const int32_t imm = sn->cast_to<int32_t>();
-            if (!context.platform().is_helper_usable(imm, context.program_info().type)) {
+            if (!context.is_helper_usable(imm)) {
                 return;
             }
             const Call call = make_call(imm, context.platform(), context.program_info().type);
@@ -1010,7 +1010,7 @@ void EbpfTransformer::operator()(const Callx& callx) {
 }
 
 void EbpfTransformer::do_load_mapfd(const Reg& dst_reg, const int mapfd, const bool maybe_null) {
-    const auto& desc = context.platform().get_map_descriptor(mapfd, context.program_info().map_descriptors);
+    const auto& desc = context.map_descriptor(mapfd);
     const EbpfMapType& type = context.platform().get_map_type(desc.type);
     const RegPack& dst = reg_pack(dst_reg);
     if (type.value_type == EbpfMapValueType::PROGRAM) {
@@ -1031,7 +1031,7 @@ void EbpfTransformer::operator()(const LoadMapFd& ins) {
 }
 
 void EbpfTransformer::do_load_map_address(const Reg& dst_reg, const int mapfd, const int32_t offset) {
-    const auto& desc = context.platform().get_map_descriptor(mapfd, context.program_info().map_descriptors);
+    const auto& desc = context.map_descriptor(mapfd);
     const EbpfMapType& type = context.platform().get_map_type(desc.type);
 
     if (type.value_type == EbpfMapValueType::PROGRAM) {

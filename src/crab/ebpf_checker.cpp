@@ -185,7 +185,7 @@ void EbpfChecker::operator()(const FuncConstraint& s) const {
         if (sn->fits<int32_t>()) {
             // We can now process it as if the id was immediate.
             const int32_t imm = sn->cast_to<int32_t>();
-            if (!context.platform().is_helper_usable(imm, context.program_info().type)) {
+            if (!context.is_helper_usable(imm)) {
                 throw_fail("invalid helper function id " + std::to_string(imm));
             }
             const Call call = make_call(imm, context.platform(), context.program_info().type);
