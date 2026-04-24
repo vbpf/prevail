@@ -184,8 +184,8 @@ static std::optional<RejectionReason> check_instruction_feature_support(const In
     };
 
     if (const auto p = std::get_if<Call>(&ins)) {
-        if (!p->is_supported) {
-            return reject_capability(p->unsupported_reason);
+        if (!p->target.is_supported) {
+            return reject_capability(p->target.unsupported_reason);
         }
     }
     if (std::holds_alternative<Callx>(ins) && !supports(platform, bpf_conformance_groups_t::callx)) {
@@ -572,13 +572,13 @@ static void pass_inline_local_calls(CfgBuilder& builder, const InstructionSeq& i
 
 static bool is_tail_call_helper(const Call& call, const ebpf_platform_t& platform,
                                 const EbpfProgramType& program_type) {
-    if (call.kind != CallKind::helper) {
+    if (call.target.kind != CallKind::helper) {
         return false;
     }
-    if (!platform.is_helper_usable(call.func, program_type)) {
+    if (!platform.is_helper_usable(call.target.func, program_type)) {
         return false;
     }
-    return platform.get_helper_prototype(call.func, program_type).return_type ==
+    return platform.get_helper_prototype(call.target.func, program_type).return_type ==
            EBPF_RETURN_TYPE_INTEGER_OR_NO_RETURN_IF_SUCCEED;
 }
 

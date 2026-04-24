@@ -182,15 +182,15 @@ TEST_CASE("linux builtin relocation resolver maps known libc builtins", "[platfo
     REQUIRE(memcpy_call.has_value());
     REQUIRE(memmove_call.has_value());
     REQUIRE(memcmp_call.has_value());
-    REQUIRE(memset_call->name == "memset");
-    REQUIRE(memcpy_call->name == "memcpy");
-    REQUIRE(memmove_call->name == "memmove");
-    REQUIRE(memcmp_call->name == "memcmp");
+    REQUIRE(memset_call->target.name == "memset");
+    REQUIRE(memcpy_call->target.name == "memcpy");
+    REQUIRE(memmove_call->target.name == "memmove");
+    REQUIRE(memcmp_call->target.name == "memcmp");
     const auto unknown_id = resolve("__does_not_exist");
     REQUIRE(unknown_id.has_value());
     const auto unknown_call = get_builtin_call(*unknown_id);
     REQUIRE(unknown_call.has_value());
-    REQUIRE(unknown_call->name == "extern_unspecified");
+    REQUIRE(unknown_call->target.name == "extern_unspecified");
     REQUIRE_FALSE(get_builtin_call(-999999).has_value());
 }
 
@@ -225,8 +225,8 @@ TEST_CASE("helper prototypes with unmodeled ABI classes are conservatively rejec
         ++unmodeled_helpers;
         const Call call = make_call(id, g_ebpf_platform_linux, program_type);
         CAPTURE(id, proto.name);
-        REQUIRE_FALSE(call.is_supported);
-        REQUIRE_FALSE(call.unsupported_reason.empty());
+        REQUIRE_FALSE(call.target.is_supported);
+        REQUIRE_FALSE(call.target.unsupported_reason.empty());
     }
 
     REQUIRE(usable_helpers > 0);
@@ -238,8 +238,8 @@ TEST_CASE("new helper ABI classes map to modeled call contracts", "[platform][ta
 
     const auto require_supported = [&](const int32_t id) -> Call {
         const Call call = make_call(id, g_ebpf_platform_linux, program_type);
-        CAPTURE(id, call.name, call.unsupported_reason);
-        REQUIRE(call.is_supported);
+        CAPTURE(id, call.target.name, call.target.unsupported_reason);
+        REQUIRE(call.target.is_supported);
         return call;
     };
 
@@ -284,9 +284,9 @@ TEST_CASE("PTR_TO_CONST_STR helpers remain explicitly unsupported", "[platform][
     const auto program_type = g_ebpf_platform_linux.get_program_type("socket", "");
 
     const Call strncmp = make_call(182, g_ebpf_platform_linux, program_type);
-    CAPTURE(strncmp.name, strncmp.unsupported_reason);
-    REQUIRE_FALSE(strncmp.is_supported);
-    REQUIRE_FALSE(strncmp.unsupported_reason.empty());
+    CAPTURE(strncmp.target.name, strncmp.target.unsupported_reason);
+    REQUIRE_FALSE(strncmp.target.is_supported);
+    REQUIRE_FALSE(strncmp.target.unsupported_reason.empty());
 }
 
 TEST_CASE("socket cookie helper availability is not treated as fully context-agnostic", "[platform][tables]") {

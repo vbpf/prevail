@@ -272,9 +272,9 @@ std::optional<Call> make_kfunc_call(const int32_t btf_id, const EbpfProgramType&
     const auto& proto = entry->proto;
 
     Call res;
-    res.func = btf_id;
-    res.kind = CallKind::kfunc;
-    res.name = proto.name;
+    res.target.func = btf_id;
+    res.target.kind = CallKind::kfunc;
+    res.target.name = proto.name;
     res.contract.reallocate_packet = proto.reallocate_packet;
     res.contract.is_map_lookup = proto.return_type == EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL;
 

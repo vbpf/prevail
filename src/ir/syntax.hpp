@@ -192,6 +192,19 @@ enum class CallKind {
     kfunc,
 };
 
+/// Identity of a helper/kfunc plus the diagnostics that travel with that identity
+/// on a given platform/program type. Equality matches only functional identity
+/// (call source + id); name/is_supported/unsupported_reason are diagnostic-only.
+struct CallTarget {
+    int32_t func{};
+    CallKind kind{CallKind::helper};
+    std::string name;
+    bool is_supported{true};
+    std::string unsupported_reason;
+
+    constexpr bool operator==(const CallTarget& other) const { return func == other.func && kind == other.kind; }
+};
+
 /// What a helper/kfunc requires of its arguments and how it shapes its return.
 /// Independent of the call site (no frame data) and of the helper's identity
 /// (no name/id). Consumed by assertion extraction and the abstract transformer.
@@ -206,18 +219,11 @@ struct CallContract {
 };
 
 struct Call {
-    int32_t func{};
-    CallKind kind{CallKind::helper};
-    // Equality intentionally matches only functional identity (call source + id).
-    // Metadata such as is_supported/unsupported_reason is diagnostic-only.
-    constexpr bool operator==(const Call& other) const { return func == other.func && kind == other.kind; }
-
-    // TODO: move name and is_supported/unsupported_reason into a CallTarget.
-    std::string name;
-    bool is_supported{true};
-    std::string unsupported_reason;
+    CallTarget target;
     CallContract contract;
     std::string stack_frame_prefix; ///< Variable prefix at point of call.
+
+    constexpr bool operator==(const Call& other) const { return target == other.target; }
 };
 
 /// Result of classifying an ABI call return type.

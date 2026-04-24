@@ -191,7 +191,7 @@ struct MarshalVisitor {
                          .dst = 0,
                          .src = INST_CALL_STATIC_HELPER,
                          .offset = 0,
-                         .imm = b.func}};
+                         .imm = b.target.func}};
     }
 
     vector<EbpfInst> operator()(CallLocal const& b) const {

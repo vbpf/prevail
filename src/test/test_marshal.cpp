@@ -458,7 +458,7 @@ TEST_CASE("disasm_marshal", "[disasm][marshal]") {
 
     SECTION("Call") {
         for (int func : {1, 17}) {
-            compare_marshal_unmarshal(Call{func});
+            compare_marshal_unmarshal(Call{.target = {.func = func}});
         }
 
         // Test callx without support: decode still succeeds.
@@ -920,14 +920,14 @@ TEST_CASE("unmarshal builtin calls only when relocation-gated", "[disasm][marsha
     ProgramInfo info{.platform = &g_ebpf_platform_linux, .type = type};
 
     const Call ungated = unmarshal_single_call(call_memset, info);
-    REQUIRE_FALSE(ungated.is_supported);
-    REQUIRE(ungated.unsupported_reason == "helper function is unavailable on this platform");
+    REQUIRE_FALSE(ungated.target.is_supported);
+    REQUIRE(ungated.target.unsupported_reason == "helper function is unavailable on this platform");
 
     info.builtin_call_offsets.insert(0);
     const Call gated = unmarshal_single_call(call_memset, info);
-    REQUIRE(gated.is_supported);
-    REQUIRE(gated.name == "memset");
-    REQUIRE(gated.func == *memset_id);
+    REQUIRE(gated.target.is_supported);
+    REQUIRE(gated.target.name == "memset");
+    REQUIRE(gated.target.func == *memset_id);
     REQUIRE(gated.contract.singles.size() == 1);
     REQUIRE(gated.contract.pairs.size() == 1);
     REQUIRE(gated.contract.singles[0] == ArgSingle{ArgSingle::Kind::ANYTHING, false, Reg{2}});
@@ -1032,7 +1032,7 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
         const auto* call = std::get_if<Call>(&prog.instruction_at(Label{0}));
         REQUIRE(call != nullptr);
-        REQUIRE(call->name == "kfunc_test_acquire_flag");
+        REQUIRE(call->target.name == "kfunc_test_acquire_flag");
     }
 
     SECTION("kfunc with release flag is rejected") {
@@ -1314,7 +1314,7 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
         const auto* call = std::get_if<Call>(&prog.instruction_at(Label{5}));
         REQUIRE(call != nullptr);
-        REQUIRE(call->is_supported);
+        REQUIRE(call->target.is_supported);
         REQUIRE(std::ranges::any_of(call->contract.singles, [](const ArgSingle& arg) {
             return arg.kind == ArgSingle::Kind::PTR_TO_FUNC && arg.reg == Reg{2};
         }));

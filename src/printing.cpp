@@ -485,7 +485,7 @@ struct CommandPrinterVisitor {
     }
 
     void operator()(Call const& call) {
-        os_ << "r0 = " << call.name << ":" << call.func << "(";
+        os_ << "r0 = " << call.target.name << ":" << call.target.func << "(";
         for (uint8_t r = 1; r <= 5; r++) {
             // Look for a singleton.
             auto single =

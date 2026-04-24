@@ -494,11 +494,11 @@ struct Unmarshaller {
         const EbpfHelperPrototype proto = info.platform->get_helper_prototype(imm, info.type);
         auto helper_prototype_name = proto.name ? proto.name : std::to_string(imm);
         Call res;
-        res.func = imm;
-        res.name = helper_prototype_name;
+        res.target.func = imm;
+        res.target.name = helper_prototype_name;
         auto mark_unsupported = [&](const std::string& why) -> Call {
-            res.is_supported = false;
-            res.unsupported_reason = why;
+            res.target.is_supported = false;
+            res.target.unsupported_reason = why;
             return res;
         };
         const auto return_info = classify_call_return_type(proto.return_type);
@@ -703,10 +703,10 @@ struct Unmarshaller {
                         return *builtin_call;
                     }
                 }
-                return Call{.func = inst.imm,
-                            .name = std::to_string(inst.imm),
-                            .is_supported = false,
-                            .unsupported_reason = "helper function is unavailable on this platform"};
+                return Call{.target = {.func = inst.imm,
+                                       .name = std::to_string(inst.imm),
+                                       .is_supported = false,
+                                       .unsupported_reason = "helper function is unavailable on this platform"}};
             }
             if (info.platform->is_helper_usable(inst.imm, info.type)) {
                 return makeCall(inst.imm);
@@ -717,10 +717,10 @@ struct Unmarshaller {
                 if (function_name_from_helper_prototype) {
                     function_name = function_name_from_helper_prototype;
                 }
-                return Call{.func = inst.imm,
-                            .name = std::move(function_name),
-                            .is_supported = false,
-                            .unsupported_reason = "helper function is unavailable on this platform"};
+                return Call{.target = {.func = inst.imm,
+                                       .name = std::move(function_name),
+                                       .is_supported = false,
+                                       .unsupported_reason = "helper function is unavailable on this platform"}};
             }
         case INST_EXIT:
             if ((inst.opcode & INST_CLS_MASK) != INST_CLS_JMP || (inst.opcode & INST_SRC_REG)) {
