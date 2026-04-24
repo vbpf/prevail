@@ -192,9 +192,17 @@ enum class CallKind {
     kfunc,
 };
 
-/// Identity of a helper/kfunc plus the diagnostics that travel with that identity
-/// on a given platform/program type. Equality matches only functional identity
-/// (call source + id); name/is_supported/unsupported_reason are diagnostic-only.
+/// Identity of a helper/kfunc plus the diagnostics that travel with that identity.
+///
+/// The pair (func, kind) is the key: it uniquely identifies the target given a
+/// platform + program type. The remaining fields (name, is_supported,
+/// unsupported_reason) are a *snapshot* of what the platform lookup returned
+/// at unmarshal time; equality is by key only.
+///
+/// That means `CallTarget{.func=1}` and a fully-populated target for the same
+/// (func, kind) compare equal. See `CallContract` for the matching pattern
+/// on the semantic side. `Callx` and `CallBtf` are the key-only sibling
+/// instructions that resolve the contract on demand instead of caching it.
 struct CallTarget {
     int32_t func{};
     CallKind kind{CallKind::helper};
@@ -208,6 +216,11 @@ struct CallTarget {
 /// What a helper/kfunc requires of its arguments and how it shapes its return.
 /// Independent of the call site (no frame data) and of the helper's identity
 /// (no name/id). Consumed by assertion extraction and the abstract transformer.
+///
+/// Like `CallTarget`'s diagnostic fields, a CallContract attached to a Call
+/// is a snapshot of the (func, kind) -> contract lookup against a specific
+/// platform + program type. Equality of the parent Call is by CallTarget
+/// key only, so contract divergence does not affect instruction identity.
 struct CallContract {
     std::vector<ArgSingle> singles;
     std::vector<ArgPair> pairs;
@@ -221,7 +234,6 @@ struct CallContract {
 struct Call {
     CallTarget target;
     CallContract contract;
-    std::string stack_frame_prefix; ///< Variable prefix at point of call.
 
     constexpr bool operator==(const Call& other) const { return target == other.target; }
 };

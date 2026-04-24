@@ -342,8 +342,6 @@ static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const 
         auto inst = builder.prog.instruction_at(macro_label);
         if (const auto pexit = std::get_if<Exit>(&inst)) {
             pexit->stack_frame_prefix = label.stack_frame_prefix;
-        } else if (const auto pcall = std::get_if<Call>(&inst)) {
-            pcall->stack_frame_prefix = label.stack_frame_prefix;
         }
         builder.insert(label, inst);
 
