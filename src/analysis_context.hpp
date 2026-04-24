@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include <cassert>
+#include <utility>
 
 #include "config.hpp"
 #include "ir/program.hpp"
@@ -10,38 +10,35 @@
 
 namespace prevail {
 
-/// Per-analysis inputs threaded explicitly through the verifier.
+/// Owning bundle of per-analysis inputs threaded through the verifier.
 ///
-/// Non-owning: holds references to a `Program`, its `ProgramInfo`, options, and
-/// platform that must outlive every call that receives this context. An
-/// `AnalysisContext` is scoped to a single analysis; do not cache one beyond
-/// the call that built it.
+/// `AnalysisContext` holds the `Program` and `ebpf_verifier_options_t` by
+/// value. The immutable platform (`ebpf_platform_t`) and loader-produced
+/// `ProgramInfo` are reached via accessors off `program.info()`; they are
+/// not separate members because they are already reachable from `program`
+/// and keeping them as parallel references invited the kind of
+/// silently-mismatched-pair bug that PR #1091 flagged.
 ///
-/// The distinction between `program` and `program_info` reflects the split
-/// between analysis-prep facts and loader facts:
-///   - `program_info` (== `program.info()`) holds loader outputs: platform
-///     reference, program type, map descriptors, line info, builtin call
-///     offsets. Stable after ELF load.
-///   - `program` additionally exposes analysis-prep outputs derived from the
-///     CFG -- currently `callback_target_labels()` and
-///     `callback_targets_with_exit()`. These are populated by
-///     `Program::from_sequence` and have no meaning on a bare `ProgramInfo`.
+/// Ownership wins this gives us:
+///   - analyze() and compute_failure_slices() do not need a separate
+///     `Program` parameter -- the program lives in the context;
+///   - the dangling-reference trap in the previous make_context() (which
+///     returned an AnalysisContext full of references) is gone;
+///   - callers move a Program in once and then talk through the context
+///     for every subsequent analysis step.
 ///
 /// `VariableRegistry` is intentionally NOT here. The registry is a global
 /// name-interning service (like `malloc`), not per-analysis state: the same
-/// name always maps to the same id, so analyses can freely share one instance.
-/// Domain code reaches for the global `variable_registry` directly.
+/// name always maps to the same id, so analyses can freely share one
+/// instance. Domain code reaches for the global `variable_registry` directly.
 struct AnalysisContext {
-    const Program& program;
-    const ProgramInfo& program_info;
-    const ebpf_verifier_options_t& options;
-    const ebpf_platform_t& platform;
+    Program program;
+    ebpf_verifier_options_t options;
 
-    AnalysisContext(const Program& p, const ProgramInfo& pi, const ebpf_verifier_options_t& o,
-                    const ebpf_platform_t& pl)
-        : program(p), program_info(pi), options(o), platform(pl) {
-        assert(&pi == &p.info() && "AnalysisContext::program_info must alias program.info()");
-    }
+    AnalysisContext(Program p, ebpf_verifier_options_t o) : program(std::move(p)), options(std::move(o)) {}
+
+    const ProgramInfo& program_info() const { return program.info(); }
+    const ebpf_platform_t& platform() const { return *program.info().platform; }
 };
 
 } // namespace prevail

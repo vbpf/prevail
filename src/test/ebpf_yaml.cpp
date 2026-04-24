@@ -419,15 +419,15 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
 
     ProgramInfo info{&g_platform_test, {test_map_descriptor}, program_type};
     try {
-        const Program prog = Program::from_sequence(test_case.instruction_seq, info, test_case.options);
-        const AnalysisContext context{prog, prog.info(), test_case.options, *prog.info().platform};
-        const AnalysisResult result = analyze(prog, test_case.assumed_pre_invariant, context);
+        Program prog = Program::from_sequence(test_case.instruction_seq, info, test_case.options);
+        const AnalysisContext context{std::move(prog), test_case.options};
+        const AnalysisResult result = analyze(test_case.assumed_pre_invariant, context);
         const StringInvariant actual_last_invariant = result.invariant_at(Label::exit);
         std::set<string> actual_messages;
         if (auto error = result.find_first_error()) {
             actual_messages.insert(to_string(*error));
         }
-        for (const auto& [label, msgs] : result.find_unreachable(prog)) {
+        for (const auto& [label, msgs] : result.find_unreachable(context.program)) {
             for (const auto& msg : msgs) {
                 actual_messages.insert(msg);
             }

@@ -226,7 +226,7 @@ int main(int argc, char** argv) {
             }
         }
         const auto verbosity = ebpf_verifier_options.verbosity_opts;
-        const Program prog = Program::from_sequence(inst_seq, raw_prog.info, ebpf_verifier_options);
+        Program prog = Program::from_sequence(inst_seq, raw_prog.info, ebpf_verifier_options);
 
         if (!dotfile.empty()) {
             print_dot(prog, dotfile);
@@ -237,14 +237,15 @@ int main(int argc, char** argv) {
             return 0;
         }
 
-        auto result = analyze(prog, ebpf_verifier_options);
+        const AnalysisContext context{std::move(prog), ebpf_verifier_options};
+        auto result = analyze(context);
         if (!quiet) {
             if (verbosity.print_invariants) {
-                print_invariants(std::cout, prog, result, verbosity);
+                print_invariants(std::cout, context.program, result, verbosity);
             }
             if (verbosity.print_failures) {
                 if (auto verification_error = result.find_first_error()) {
-                    print_error(std::cout, *verification_error, prog, verbosity);
+                    print_error(std::cout, *verification_error, context.program, verbosity);
                 }
             }
             if (failure_slice && result.failed) {
@@ -252,9 +253,8 @@ int main(int argc, char** argv) {
                 AnalysisResult::SliceParams slice_params;
                 slice_params.max_steps = failure_slice_depth;
                 slice_params.max_slices = 1;
-                const AnalysisContext context{prog, prog.info(), ebpf_verifier_options, *prog.info().platform};
-                auto slices = result.compute_failure_slices(prog, slice_params, context);
-                print_failure_slices(std::cout, prog, result, slices, verbosity);
+                auto slices = result.compute_failure_slices(slice_params, context);
+                print_failure_slices(std::cout, context.program, result, slices, verbosity);
             } else if (failure_slice && !result.failed) {
                 std::cout << "Program passed verification; no failure slices to display.\n";
             }
@@ -275,7 +275,7 @@ int main(int argc, char** argv) {
                 // Print the first error if not already printed by -v or -f.
                 if (!verbosity.print_invariants && !verbosity.print_failures && !failure_slice) {
                     if (auto verification_error = result.find_first_error()) {
-                        print_error(std::cout, *verification_error, prog, verbosity);
+                        print_error(std::cout, *verification_error, context.program, verbosity);
                     }
                     std::cout << "Hint: run with --failure-slice for a causal trace, or -v for full invariants.\n";
                 }

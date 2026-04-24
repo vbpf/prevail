@@ -10,11 +10,17 @@
 
 namespace prevail {
 
+// Primary entry points: the AnalysisContext owns the Program and options.
+AnalysisResult analyze(const AnalysisContext& context);
+AnalysisResult analyze(const StringInvariant& entry_invariant, const AnalysisContext& context);
+
+// Convenience overloads for callers that do not need the context after analysis.
+// These copy the Program into a fresh AnalysisContext. Heavy if used in a tight
+// loop; for repeated analysis, construct an AnalysisContext once and reuse it.
 AnalysisResult analyze(const Program& prog, const ebpf_verifier_options_t& options);
 AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invariant,
                        const ebpf_verifier_options_t& options);
-AnalysisResult analyze(const Program& prog, const AnalysisContext& context);
-AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invariant, const AnalysisContext& context);
+
 void ebpf_verifier_clear_thread_local_state();
 inline bool verify(const Program& prog, const ebpf_verifier_options_t& options) {
     try {

@@ -90,9 +90,9 @@ void EbpfChecker::check_access_stack(const LinearExpression& lb, const LinearExp
 void EbpfChecker::check_access_context(const LinearExpression& lb, const LinearExpression& ub) const {
     using namespace dsl_syntax;
     require_value(dom.state, lb >= 0, "Lower bound must be at least 0");
-    require_value(dom.state, ub <= context.program_info.type.context_descriptor->size,
+    require_value(dom.state, ub <= context.program_info().type.context_descriptor->size,
                   std::string("Upper bound must be at most ") +
-                      std::to_string(context.program_info.type.context_descriptor->size));
+                      std::to_string(context.program_info().type.context_descriptor->size));
 }
 
 void EbpfChecker::check_access_packet(const LinearExpression& lb, const LinearExpression& ub,
@@ -185,11 +185,11 @@ void EbpfChecker::operator()(const FuncConstraint& s) const {
         if (sn->fits<int32_t>()) {
             // We can now process it as if the id was immediate.
             const int32_t imm = sn->cast_to<int32_t>();
-            if (!context.platform.is_helper_usable(imm, context.program_info.type)) {
+            if (!context.platform().is_helper_usable(imm, context.program_info().type)) {
                 throw_fail("invalid helper function id " + std::to_string(imm));
             }
-            const Call call = make_call(imm, context.platform, context.program_info.type);
-            for (const Assertion& sub_assertion : get_assertions(call, context.program_info, context.options, {})) {
+            const Call call = make_call(imm, context.platform(), context.program_info().type);
+            for (const Assertion& sub_assertion : get_assertions(call, context.program_info(), context.options, {})) {
                 // TODO: create explicit sub assertions elsewhere
                 EbpfChecker{dom, sub_assertion, context}.visit();
             }
@@ -254,7 +254,7 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
                 require_value(dom.state, LinearConstraint::false_const(),
                               "Illegal map update with a non-numerical value [" + lb_s + "-" + ub_s + ")");
             } else if (context.options.strict && fd_type.has_value()) {
-                EbpfMapType map_type = context.platform.get_map_type(*fd_type);
+                EbpfMapType map_type = context.platform().get_map_type(*fd_type);
                 if (map_type.is_array) {
                     // Get offset value.
                     Variable key_ptr = access_reg.stack_offset;
