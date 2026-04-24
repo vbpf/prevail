@@ -12,6 +12,7 @@
 #include "config.hpp"
 #include "crab/array_domain.hpp"
 #include "crab/ebpf_domain.hpp"
+#include "crab/region_semantics.hpp"
 #include "crab/var_registry.hpp"
 #include "ir/program.hpp"
 #include "ir/syntax.hpp"
@@ -52,12 +53,12 @@ class EbpfChecker final {
         throw VerificationError(msg + " (" + to_string(assertion) + ")");
     }
 
-    // memory check / load / store
-    void check_access_stack(const LinearExpression& lb, const LinearExpression& ub) const;
-    void check_access_context(const LinearExpression& lb, const LinearExpression& ub) const;
-    void check_access_packet(const LinearExpression& lb, const LinearExpression& ub,
-                             std::optional<Variable> packet_size) const;
-    void check_access_shared(const LinearExpression& lb, const LinearExpression& ub, Variable shared_region_size) const;
+    // Single driver for in-region access bounds: requires `access_lb >= floor`
+    // and `access_ub <= ceiling` for the region. `packet_size` overrides the
+    // T_PACKET upper bound; see region_bounds().
+    void require_region_bounds(TypeEncoding type, const RegPack& reg, const LinearExpression& access_lb,
+                               const LinearExpression& access_ub,
+                               std::optional<Variable> packet_size = std::nullopt) const;
 
   private:
     const Assertion assertion;
@@ -80,39 +81,13 @@ std::optional<VerificationError> ebpf_domain_check(const EbpfDomain& dom, const 
     return {};
 }
 
-void EbpfChecker::check_access_stack(const LinearExpression& lb, const LinearExpression& ub) const {
+void EbpfChecker::require_region_bounds(const TypeEncoding type, const RegPack& reg, const LinearExpression& access_lb,
+                                        const LinearExpression& access_ub,
+                                        const std::optional<Variable> packet_size) const {
     using namespace dsl_syntax;
-    require_value(dom.state, reg_pack(R10_STACK_POINTER).stack_offset - context.options.subprogram_stack_size <= lb,
-                  "Lower bound must be at least r10.stack_offset - subprogram_stack_size");
-    require_value(dom.state, ub <= context.options.total_stack_size(), "Upper bound must be at most total_stack_size");
-}
-
-void EbpfChecker::check_access_context(const LinearExpression& lb, const LinearExpression& ub) const {
-    using namespace dsl_syntax;
-    require_value(dom.state, lb >= 0, "Lower bound must be at least 0");
-    require_value(dom.state, ub <= context.program_info().type.ctx_descriptor->size,
-                  std::string("Upper bound must be at most ") +
-                      std::to_string(context.program_info().type.ctx_descriptor->size));
-}
-
-void EbpfChecker::check_access_packet(const LinearExpression& lb, const LinearExpression& ub,
-                                      const std::optional<Variable> packet_size) const {
-    using namespace dsl_syntax;
-    require_value(dom.state, lb >= variable_registry.meta_offset(), "Lower bound must be at least meta_offset");
-    if (packet_size) {
-        require_value(dom.state, ub <= *packet_size, "Upper bound must be at most packet_size");
-    } else {
-        require_value(dom.state, ub <= context.options.max_packet_size,
-                      std::string{"Upper bound must be at most "} + std::to_string(context.options.max_packet_size));
-    }
-}
-
-void EbpfChecker::check_access_shared(const LinearExpression& lb, const LinearExpression& ub,
-                                      const Variable shared_region_size) const {
-    using namespace dsl_syntax;
-    require_value(dom.state, lb >= 0, "Lower bound must be at least 0");
-    require_value(dom.state, ub <= shared_region_size,
-                  std::string("Upper bound must be at most ") + variable_registry.name(shared_region_size));
+    const auto bounds = region_bounds(type, reg, context, packet_size);
+    require_value(dom.state, access_lb >= bounds.lb_floor, bounds.lb_message);
+    require_value(dom.state, access_ub <= bounds.ub_ceiling, bounds.ub_message);
 }
 
 void EbpfChecker::operator()(const Comparable& s) const {
@@ -278,12 +253,12 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
         } else if (access_reg_type == T_PACKET) {
             Variable lb = access_reg.packet_offset;
             LinearExpression ub = lb + width;
-            check_access_packet(lb, ub, {});
+            require_region_bounds(T_PACKET, access_reg, lb, ub);
             // Packet memory is both readable and writable.
         } else if (access_reg_type == T_SHARED) {
             Variable lb = access_reg.shared_offset;
             LinearExpression ub = lb + width;
-            check_access_shared(lb, ub, access_reg.shared_region_size);
+            require_region_bounds(T_SHARED, access_reg, lb, ub);
             require_value(dom.state, access_reg.svalue > 0, "Possible null access");
             // Shared memory is zero-initialized when created so is safe to read and write.
         } else {
@@ -313,14 +288,14 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             auto [lb, ub] = lb_ub_access_pair(s, reg.packet_offset);
             const std::optional<Variable> packet_size =
                 is_comparison_check ? std::optional<Variable>{} : variable_registry.packet_size();
-            check_access_packet(lb, ub, packet_size);
+            require_region_bounds(T_PACKET, reg, lb, ub, packet_size);
             // if within bounds, it can never be null
             // Context memory is both readable and writable.
             break;
         }
         case T_STACK: {
             auto [lb, ub] = lb_ub_access_pair(s, reg.stack_offset);
-            check_access_stack(lb, ub);
+            require_region_bounds(T_STACK, reg, lb, ub);
             // if within bounds, it can never be null
             if (s.access_type == AccessType::read &&
                 !dom.stack->all_num_lb_ub(dom.state.values.eval_interval(lb), dom.state.values.eval_interval(ub))) {
@@ -340,14 +315,14 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
         }
         case T_CTX: {
             auto [lb, ub] = lb_ub_access_pair(s, reg.ctx_offset);
-            check_access_context(lb, ub);
+            require_region_bounds(T_CTX, reg, lb, ub);
             // if within bounds, it can never be null
             // The context is both readable and writable.
             break;
         }
         case T_SHARED: {
             auto [lb, ub] = lb_ub_access_pair(s, reg.shared_offset);
-            check_access_shared(lb, ub, reg.shared_region_size);
+            require_region_bounds(T_SHARED, reg, lb, ub);
             if (!is_comparison_check && !s.or_null) {
                 require_value(dom.state, reg.svalue > 0, "Possible null access");
             }
@@ -388,7 +363,7 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
         case T_ALLOC_MEM: {
             // Treat like shared: offset-bounded access with null check.
             auto [lb, ub] = lb_ub_access_pair(s, reg.alloc_mem_offset);
-            check_access_shared(lb, ub, reg.alloc_mem_size);
+            require_region_bounds(T_ALLOC_MEM, reg, lb, ub);
             if (!is_comparison_check && !s.or_null) {
                 require_value(dom.state, reg.svalue > 0, "Possible null access");
             }
