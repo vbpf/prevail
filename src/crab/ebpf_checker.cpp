@@ -90,9 +90,9 @@ void EbpfChecker::check_access_stack(const LinearExpression& lb, const LinearExp
 void EbpfChecker::check_access_context(const LinearExpression& lb, const LinearExpression& ub) const {
     using namespace dsl_syntax;
     require_value(dom.state, lb >= 0, "Lower bound must be at least 0");
-    require_value(dom.state, ub <= context.program_info().type.context_descriptor->size,
+    require_value(dom.state, ub <= context.program_info().type.ctx_descriptor->size,
                   std::string("Upper bound must be at most ") +
-                      std::to_string(context.program_info().type.context_descriptor->size));
+                      std::to_string(context.program_info().type.ctx_descriptor->size));
 }
 
 void EbpfChecker::check_access_packet(const LinearExpression& lb, const LinearExpression& ub,

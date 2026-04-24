@@ -373,7 +373,7 @@ void EbpfDomain::initialize_packet(const AnalysisContext& context) {
 
     inv.add_value_constraint(0 <= variable_registry.packet_size());
     inv.add_value_constraint(variable_registry.packet_size() < context.options.max_packet_size);
-    if (context.program_info().type.context_descriptor->meta >= 0) {
+    if (context.program_info().type.ctx_descriptor->meta >= 0) {
         inv.add_value_constraint(variable_registry.meta_offset() <= 0);
         inv.add_value_constraint(variable_registry.meta_offset() >= -4098);
     } else {

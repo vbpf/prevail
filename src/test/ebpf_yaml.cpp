@@ -108,9 +108,9 @@ ebpf_platform_t g_platform_test = {.get_program_type = ebpf_get_program_type,
                                                                    bpf_conformance_groups_t::packet |
                                                                    bpf_conformance_groups_t::callx};
 
-static EbpfProgramType make_program_type(const string& name, const ebpf_context_descriptor_t* context_descriptor) {
+static EbpfProgramType make_program_type(const string& name, const ebpf_ctx_descriptor_t* ctx_descriptor) {
     return EbpfProgramType{.name = name,
-                           .context_descriptor = context_descriptor,
+                           .ctx_descriptor = ctx_descriptor,
                            .platform_specific_data = 0,
                            .section_prefixes = {},
                            .is_privileged = false};
@@ -413,8 +413,8 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
         test_case.options.verbosity_opts.print_invariants = true;
     }
 
-    ebpf_context_descriptor_t context_descriptor{64, 0, 4, -1};
-    EbpfProgramType program_type = make_program_type(test_case.name, &context_descriptor);
+    ebpf_ctx_descriptor_t ctx_descriptor{64, 0, 4, -1};
+    EbpfProgramType program_type = make_program_type(test_case.name, &ctx_descriptor);
 
     ProgramInfo info{&g_platform_test, {test_map_descriptor}, program_type};
     try {
@@ -528,8 +528,8 @@ static StringInvariant stack_contents_invariant(const std::vector<uint8_t>& memo
 ConformanceTestResult run_conformance_test_case(const std::vector<uint8_t>& memory_bytes,
                                                 std::span<const EbpfInst> instructions, bool debug) {
     ebpf_verifier_options_t options{};
-    ebpf_context_descriptor_t context_descriptor{64, -1, -1, -1};
-    EbpfProgramType program_type = make_program_type("conformance_check", &context_descriptor);
+    ebpf_ctx_descriptor_t ctx_descriptor{64, -1, -1, -1};
+    EbpfProgramType program_type = make_program_type("conformance_check", &ctx_descriptor);
 
     ProgramInfo info{&g_platform_test, {}, program_type};
 

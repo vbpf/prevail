@@ -489,7 +489,7 @@ static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, 
         return;
     }
 
-    const ebpf_context_descriptor_t* desc = context.program_info().type.context_descriptor;
+    const ebpf_ctx_descriptor_t* desc = context.program_info().type.ctx_descriptor;
 
     const RegPack target = variable_registry.reg_pack(target_reg.v);
 

@@ -35,7 +35,7 @@ struct EbpfMapDescriptor {
 
 struct EbpfProgramType {
     std::string name{}; // For ease of display, not used by the verifier.
-    const ebpf_context_descriptor_t* context_descriptor{};
+    const ebpf_ctx_descriptor_t* ctx_descriptor{};
     uint64_t platform_specific_data{}; // E.g., integer program type.
     std::vector<std::string> section_prefixes{};
     bool is_privileged{};

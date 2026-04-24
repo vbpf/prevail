@@ -14,26 +14,26 @@ namespace prevail {
 // Allow NULL map value pointers (optional map value argument compatibility).
 #define EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE_OR_NULL EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE
 
-const ebpf_context_descriptor_t g_sk_buff = sk_buff;
-const ebpf_context_descriptor_t g_xdp_md = xdp_md;
-const ebpf_context_descriptor_t g_sk_msg_md = sk_msg_md;
-const ebpf_context_descriptor_t g_unspec_descr = unspec_descr;
-const ebpf_context_descriptor_t g_tracing_descr = tracing_descr;
-const ebpf_context_descriptor_t g_lirc_mode2_descr = lirc_mode2_descr;
-const ebpf_context_descriptor_t g_netfilter_descr = netfilter_descr;
-const ebpf_context_descriptor_t g_syscall_descr = syscall_descr;
-const ebpf_context_descriptor_t g_cgroup_dev_descr = cgroup_dev_descr;
-const ebpf_context_descriptor_t g_kprobe_descr = kprobe_descr;
-const ebpf_context_descriptor_t g_tracepoint_descr = tracepoint_descr;
-const ebpf_context_descriptor_t g_perf_event_descr = perf_event_descr;
-const ebpf_context_descriptor_t g_cgroup_sock_descr = cgroup_sock_descr;
-const ebpf_context_descriptor_t g_sock_ops_descr = sock_ops_descr;
-const ebpf_context_descriptor_t g_sock_addr_descr = sock_addr_descr;
-const ebpf_context_descriptor_t g_sockopt_descr = sockopt_descr;
-const ebpf_context_descriptor_t g_sk_lookup_descr = sk_lookup_descr;
-const ebpf_context_descriptor_t g_sk_reuseport_descr = sk_reuseport_descr;
-const ebpf_context_descriptor_t g_cgroup_sysctl_descr = cgroup_sysctl_descr;
-const ebpf_context_descriptor_t g_flow_dissector_descr = flow_dissector_descr;
+const ebpf_ctx_descriptor_t g_sk_buff = sk_buff;
+const ebpf_ctx_descriptor_t g_xdp_md = xdp_md;
+const ebpf_ctx_descriptor_t g_sk_msg_md = sk_msg_md;
+const ebpf_ctx_descriptor_t g_unspec_descr = unspec_descr;
+const ebpf_ctx_descriptor_t g_tracing_descr = tracing_descr;
+const ebpf_ctx_descriptor_t g_lirc_mode2_descr = lirc_mode2_descr;
+const ebpf_ctx_descriptor_t g_netfilter_descr = netfilter_descr;
+const ebpf_ctx_descriptor_t g_syscall_descr = syscall_descr;
+const ebpf_ctx_descriptor_t g_cgroup_dev_descr = cgroup_dev_descr;
+const ebpf_ctx_descriptor_t g_kprobe_descr = kprobe_descr;
+const ebpf_ctx_descriptor_t g_tracepoint_descr = tracepoint_descr;
+const ebpf_ctx_descriptor_t g_perf_event_descr = perf_event_descr;
+const ebpf_ctx_descriptor_t g_cgroup_sock_descr = cgroup_sock_descr;
+const ebpf_ctx_descriptor_t g_sock_ops_descr = sock_ops_descr;
+const ebpf_ctx_descriptor_t g_sock_addr_descr = sock_addr_descr;
+const ebpf_ctx_descriptor_t g_sockopt_descr = sockopt_descr;
+const ebpf_ctx_descriptor_t g_sk_lookup_descr = sk_lookup_descr;
+const ebpf_ctx_descriptor_t g_sk_reuseport_descr = sk_reuseport_descr;
+const ebpf_ctx_descriptor_t g_cgroup_sysctl_descr = cgroup_sysctl_descr;
+const ebpf_ctx_descriptor_t g_flow_dissector_descr = flow_dissector_descr;
 
 // eBPF helpers are documented at the following links:
 // https://github.com/iovisor/bpf-docs/blob/master/bpf_helpers.rst
@@ -167,7 +167,7 @@ static constexpr EbpfHelperPrototype bpf_perf_prog_read_value_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
         },
-    .context_descriptor = &g_perf_event_descr,
+    .ctx_descriptor = &g_perf_event_descr,
 };
 
 static constexpr EbpfHelperPrototype bpf_map_lookup_elem_proto = {
@@ -265,7 +265,7 @@ static constexpr EbpfHelperPrototype bpf_sock_map_update_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_DONTCARE,
         },
-    .context_descriptor = &g_sock_ops_descr,
+    .ctx_descriptor = &g_sock_ops_descr,
 };
 
 static constexpr EbpfHelperPrototype bpf_sock_hash_update_proto = {
@@ -279,7 +279,7 @@ static constexpr EbpfHelperPrototype bpf_sock_hash_update_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_DONTCARE,
         },
-    .context_descriptor = &g_sock_ops_descr,
+    .ctx_descriptor = &g_sock_ops_descr,
 };
 
 static constexpr EbpfHelperPrototype bpf_get_stackid_proto = {
@@ -317,7 +317,7 @@ static constexpr EbpfHelperPrototype bpf_skb_store_bytes_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
     .reallocate_packet = true,
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_skb_load_bytes_proto = {
@@ -330,7 +330,7 @@ static constexpr EbpfHelperPrototype bpf_skb_load_bytes_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_skb_load_bytes_relative_proto = {
@@ -344,7 +344,7 @@ static constexpr EbpfHelperPrototype bpf_skb_load_bytes_relative_proto = {
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_skb_pull_data_proto = {
@@ -356,7 +356,7 @@ static constexpr EbpfHelperPrototype bpf_skb_pull_data_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
     .reallocate_packet = true,
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_l3_csum_replace_proto = {
@@ -370,7 +370,7 @@ static constexpr EbpfHelperPrototype bpf_l3_csum_replace_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_l4_csum_replace_proto = {
@@ -384,7 +384,7 @@ static constexpr EbpfHelperPrototype bpf_l4_csum_replace_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_csum_diff_proto = {
@@ -408,7 +408,7 @@ static constexpr EbpfHelperPrototype bpf_csum_update_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_clone_redirect_proto = {
@@ -420,7 +420,7 @@ static constexpr EbpfHelperPrototype bpf_clone_redirect_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_redirect_proto = {
@@ -443,7 +443,7 @@ static constexpr EbpfHelperPrototype bpf_sk_redirect_hash_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_MAP_KEY,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_sk_redirect_map_proto = {
@@ -456,7 +456,7 @@ static constexpr EbpfHelperPrototype bpf_sk_redirect_map_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_msg_redirect_hash_proto = {
@@ -469,7 +469,7 @@ static constexpr EbpfHelperPrototype bpf_msg_redirect_hash_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_MAP_KEY,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
-    .context_descriptor = &g_sk_msg_md,
+    .ctx_descriptor = &g_sk_msg_md,
 };
 
 static constexpr EbpfHelperPrototype bpf_msg_redirect_map_proto = {
@@ -482,7 +482,7 @@ static constexpr EbpfHelperPrototype bpf_msg_redirect_map_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
-    .context_descriptor = &g_sk_msg_md,
+    .ctx_descriptor = &g_sk_msg_md,
 };
 
 static constexpr EbpfHelperPrototype bpf_msg_apply_bytes_proto = {
@@ -493,7 +493,7 @@ static constexpr EbpfHelperPrototype bpf_msg_apply_bytes_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
-    .context_descriptor = &g_sk_msg_md,
+    .ctx_descriptor = &g_sk_msg_md,
 };
 
 static constexpr EbpfHelperPrototype bpf_msg_cork_bytes_proto = {
@@ -504,7 +504,7 @@ static constexpr EbpfHelperPrototype bpf_msg_cork_bytes_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
-    .context_descriptor = &g_sk_msg_md,
+    .ctx_descriptor = &g_sk_msg_md,
 };
 
 static constexpr EbpfHelperPrototype bpf_msg_pull_data_proto = {
@@ -517,7 +517,7 @@ static constexpr EbpfHelperPrototype bpf_msg_pull_data_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
-    .context_descriptor = &g_sk_msg_md,
+    .ctx_descriptor = &g_sk_msg_md,
 };
 static constexpr EbpfHelperPrototype bpf_get_cgroup_classid_proto = {
     .name = "get_cgroup_classid",
@@ -526,7 +526,7 @@ static constexpr EbpfHelperPrototype bpf_get_cgroup_classid_proto = {
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_get_route_realm_proto = {
@@ -536,7 +536,7 @@ static constexpr EbpfHelperPrototype bpf_get_route_realm_proto = {
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_get_hash_recalc_proto = {
@@ -546,7 +546,7 @@ static constexpr EbpfHelperPrototype bpf_get_hash_recalc_proto = {
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_set_hash_invalid_proto = {
@@ -556,7 +556,7 @@ static constexpr EbpfHelperPrototype bpf_set_hash_invalid_proto = {
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_set_hash_proto = {
@@ -567,7 +567,7 @@ static constexpr EbpfHelperPrototype bpf_set_hash_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_skb_vlan_push_proto = {
@@ -580,7 +580,7 @@ static constexpr EbpfHelperPrototype bpf_skb_vlan_push_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
     .reallocate_packet = true,
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_skb_vlan_pop_proto = {
@@ -591,7 +591,7 @@ static constexpr EbpfHelperPrototype bpf_skb_vlan_pop_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
         },
     .reallocate_packet = true,
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_skb_change_proto_proto = {
@@ -604,7 +604,7 @@ static constexpr EbpfHelperPrototype bpf_skb_change_proto_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
     .reallocate_packet = true,
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_skb_change_type_proto = {
@@ -615,7 +615,7 @@ static constexpr EbpfHelperPrototype bpf_skb_change_type_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_skb_adjust_room_proto = {
@@ -629,7 +629,7 @@ static constexpr EbpfHelperPrototype bpf_skb_adjust_room_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
     .reallocate_packet = true,
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_skb_change_tail_proto = {
@@ -642,7 +642,7 @@ static constexpr EbpfHelperPrototype bpf_skb_change_tail_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
     .reallocate_packet = true,
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_skb_change_head_proto = {
@@ -655,7 +655,7 @@ static constexpr EbpfHelperPrototype bpf_skb_change_head_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
     .reallocate_packet = true,
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_xdp_adjust_head_proto = {
@@ -667,7 +667,7 @@ static constexpr EbpfHelperPrototype bpf_xdp_adjust_head_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
     .reallocate_packet = true,
-    .context_descriptor = &g_xdp_descr,
+    .ctx_descriptor = &g_xdp_descr,
 };
 
 static constexpr EbpfHelperPrototype bpf_xdp_adjust_tail_proto = {
@@ -679,7 +679,7 @@ static constexpr EbpfHelperPrototype bpf_xdp_adjust_tail_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
     .reallocate_packet = true,
-    .context_descriptor = &g_xdp_descr,
+    .ctx_descriptor = &g_xdp_descr,
 };
 
 static constexpr EbpfHelperPrototype bpf_xdp_adjust_meta_proto = {
@@ -691,7 +691,7 @@ static constexpr EbpfHelperPrototype bpf_xdp_adjust_meta_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
     .reallocate_packet = true,
-    .context_descriptor = &g_xdp_descr,
+    .ctx_descriptor = &g_xdp_descr,
 };
 
 static constexpr EbpfHelperPrototype bpf_skb_get_tunnel_key_proto = {
@@ -704,7 +704,7 @@ static constexpr EbpfHelperPrototype bpf_skb_get_tunnel_key_proto = {
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_skb_get_tunnel_opt_proto = {
@@ -716,7 +716,7 @@ static constexpr EbpfHelperPrototype bpf_skb_get_tunnel_opt_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_skb_set_tunnel_key_proto = {
@@ -729,7 +729,7 @@ static constexpr EbpfHelperPrototype bpf_skb_set_tunnel_key_proto = {
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 /*
@@ -749,7 +749,7 @@ static constexpr EbpfHelperPrototype bpf_skb_set_tunnel_opt_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_skb_under_cgroup_proto = {
@@ -761,7 +761,7 @@ static constexpr EbpfHelperPrototype bpf_skb_under_cgroup_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_MAP,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_skb_cgroup_id_proto = {
@@ -771,7 +771,7 @@ static constexpr EbpfHelperPrototype bpf_skb_cgroup_id_proto = {
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_get_socket_cookie_proto = {
@@ -781,7 +781,7 @@ static constexpr EbpfHelperPrototype bpf_get_socket_cookie_proto = {
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
         },
-    .context_descriptor = nullptr,
+    .ctx_descriptor = nullptr,
 };
 
 static constexpr EbpfHelperPrototype bpf_get_socket_uid_proto = {
@@ -791,7 +791,7 @@ static constexpr EbpfHelperPrototype bpf_get_socket_uid_proto = {
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_setsockopt_proto = {
@@ -828,7 +828,7 @@ static constexpr EbpfHelperPrototype bpf_sock_ops_cb_flags_set_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
-    .context_descriptor = &g_sock_ops_descr,
+    .ctx_descriptor = &g_sock_ops_descr,
 };
 
 static constexpr EbpfHelperPrototype bpf_bind_proto = {
@@ -853,7 +853,7 @@ static constexpr EbpfHelperPrototype bpf_skb_get_xfrm_state_proto = {
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_fib_lookup_proto = {
@@ -878,7 +878,7 @@ static constexpr EbpfHelperPrototype bpf_lwt_push_encap_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_lwt_seg6_store_bytes_proto = {
@@ -891,7 +891,7 @@ static constexpr EbpfHelperPrototype bpf_lwt_seg6_store_bytes_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_lwt_seg6_action_proto = {
@@ -904,7 +904,7 @@ static constexpr EbpfHelperPrototype bpf_lwt_seg6_action_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_lwt_seg6_adjust_srh_proto = {
@@ -917,7 +917,7 @@ static constexpr EbpfHelperPrototype bpf_lwt_seg6_adjust_srh_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
     .reallocate_packet = true,
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 static constexpr EbpfHelperPrototype bpf_rc_repeat_proto = {
@@ -1052,7 +1052,7 @@ static constexpr EbpfHelperPrototype bpf_msg_push_data_proto = {
         EBPF_ARGUMENT_TYPE_ANYTHING,
     },
     .reallocate_packet = true,
-    .context_descriptor = &g_sk_msg_md,
+    .ctx_descriptor = &g_sk_msg_md,
 };
 
 static constexpr EbpfHelperPrototype bpf_msg_pop_data_proto = {
@@ -1065,7 +1065,7 @@ static constexpr EbpfHelperPrototype bpf_msg_pop_data_proto = {
         EBPF_ARGUMENT_TYPE_ANYTHING,
     },
     .reallocate_packet = true,
-    .context_descriptor = &g_sk_msg_md,
+    .ctx_descriptor = &g_sk_msg_md,
 };
 
 static constexpr EbpfHelperPrototype bpf_rc_pointer_rel_proto = {
@@ -2164,7 +2164,7 @@ static constexpr EbpfHelperPrototype bpf_skb_ancestor_cgroup_id_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
             EBPF_ARGUMENT_TYPE_ANYTHING, // ancestor_level
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 // Helper 122 - get_netns_cookie
@@ -2188,7 +2188,7 @@ static constexpr EbpfHelperPrototype bpf_load_hdr_opt_proto = {
             EBPF_ARGUMENT_TYPE_CONST_SIZE,          // len
             EBPF_ARGUMENT_TYPE_ANYTHING,            // flags
         },
-    .context_descriptor = &g_sock_ops_descr,
+    .ctx_descriptor = &g_sock_ops_descr,
 };
 
 // Helper 143 - store_hdr_opt (sock_ops_store_hdr_opt)
@@ -2202,7 +2202,7 @@ static constexpr EbpfHelperPrototype bpf_store_hdr_opt_proto = {
             EBPF_ARGUMENT_TYPE_CONST_SIZE,          // len
             EBPF_ARGUMENT_TYPE_ANYTHING,            // flags
         },
-    .context_descriptor = &g_sock_ops_descr,
+    .ctx_descriptor = &g_sock_ops_descr,
 };
 
 // Helper 144 - reserve_hdr_opt (sock_ops_reserve_hdr_opt)
@@ -2215,7 +2215,7 @@ static constexpr EbpfHelperPrototype bpf_reserve_hdr_opt_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING, // len
             EBPF_ARGUMENT_TYPE_ANYTHING, // flags
         },
-    .context_descriptor = &g_sock_ops_descr,
+    .ctx_descriptor = &g_sock_ops_descr,
 };
 
 // Helper 188 - xdp_get_buff_len
@@ -2226,7 +2226,7 @@ static constexpr EbpfHelperPrototype bpf_xdp_get_buff_len_proto = {
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
         },
-    .context_descriptor = &g_xdp_md,
+    .ctx_descriptor = &g_xdp_md,
 };
 
 // Helper 189 - xdp_load_bytes
@@ -2240,7 +2240,7 @@ static constexpr EbpfHelperPrototype bpf_xdp_load_bytes_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM, // buf
             EBPF_ARGUMENT_TYPE_CONST_SIZE,          // len
         },
-    .context_descriptor = &g_xdp_md,
+    .ctx_descriptor = &g_xdp_md,
 };
 
 // Helper 190 - xdp_store_bytes
@@ -2254,7 +2254,7 @@ static constexpr EbpfHelperPrototype bpf_xdp_store_bytes_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // buf
             EBPF_ARGUMENT_TYPE_CONST_SIZE,          // len
         },
-    .context_descriptor = &g_xdp_md,
+    .ctx_descriptor = &g_xdp_md,
 };
 
 // Helper 192 - skb_set_tstamp
@@ -2267,7 +2267,7 @@ static constexpr EbpfHelperPrototype bpf_skb_set_tstamp_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING, // tstamp (u64)
             EBPF_ARGUMENT_TYPE_ANYTHING, // tstamp_type (u32)
         },
-    .context_descriptor = &g_sk_buff,
+    .ctx_descriptor = &g_sk_buff,
 };
 
 // Helper 193 - ima_file_hash
@@ -2651,8 +2651,8 @@ bool is_helper_usable_linux(const int32_t n, const EbpfProgramType& program_type
         }
     }
 
-    // If the helper has a context_descriptor, it must match the hook's context_descriptor.
-    if (prototypes[n].context_descriptor && prototypes[n].context_descriptor != program_type.context_descriptor) {
+    // If the helper has a ctx_descriptor, it must match the hook's ctx_descriptor.
+    if (prototypes[n].ctx_descriptor && prototypes[n].ctx_descriptor != program_type.ctx_descriptor) {
         return false;
     }
 
