@@ -817,6 +817,9 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
 
     // --- Pass: BuildInitialCfg (nodes, then edges with InsertAssumeEdges) -
     CfgBuilder builder;
+    // Populate m_info up front so any pass that reads builder.prog.info() sees the real
+    // ProgramInfo rather than a default-constructed (null-platform) one.
+    builder.prog.m_info = info;
     pass_populate_nodes(builder, inst_seq, info, resolved_kfunc_calls, lowered_pseudo_loads);
     pass_connect_edges(builder, inst_seq, options.cfg_opts.must_have_exit);
 
@@ -838,7 +841,6 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
     // --- Pass: ExtractAssertions ------------------------------------------
     pass_extract_assertions(builder, info, options);
 
-    builder.prog.m_info = info;
     return std::move(builder.prog);
 }
 

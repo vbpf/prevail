@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <cassert>
 #include <utility>
 
 #include "config.hpp"
@@ -31,7 +32,10 @@ struct AnalysisContext {
     AnalysisContext(Program p, ebpf_verifier_options_t o) : program(std::move(p)), options(std::move(o)) {}
 
     const ProgramInfo& program_info() const { return program.info(); }
-    const ebpf_platform_t& platform() const { return *program.info().platform; }
+    const ebpf_platform_t& platform() const {
+        assert(program.info().platform != nullptr && "AnalysisContext::platform() on program without platform");
+        return *program.info().platform;
+    }
 };
 
 } // namespace prevail
