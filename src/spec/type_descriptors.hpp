@@ -58,9 +58,9 @@ struct btf_line_info_t {
     uint32_t column_number{};
 };
 
-// Per-program environment: a reference to the immutable platform (ebpf_platform_t) plus the
-// loader-derived facts that describe one program. Stable after ELF load; analysis-prep facts
-// derived from the CFG (e.g. callback metadata) live on `Program`, not here.
+// Per-program environment: a pointer to the immutable platform plus loader-derived facts
+// for one program. Stable after ELF load. CFG-derived facts (e.g. callback metadata) live
+// on `Program`, not here.
 struct ProgramInfo {
     // --- Platform reference (non-owning; immutable across programs) ---
     const struct ebpf_platform_t* platform{};
@@ -69,7 +69,7 @@ struct ProgramInfo {
     std::vector<EbpfMapDescriptor> map_descriptors{};
     EbpfProgramType type{};
     std::map<size_t, btf_line_info_t> line_info{};
-    // Raw per-program instruction indices rewritten from builtin relocations.
+    // Instruction indices rewritten from builtin-call relocations.
     std::set<size_t> builtin_call_offsets{};
 };
 

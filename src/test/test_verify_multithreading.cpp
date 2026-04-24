@@ -22,7 +22,8 @@ static void test_analyze_thread(const prevail::Program* prog, bool* res) {
     }
 }
 
-// Test multithreading
+// Two programs analysed concurrently must both verify; per-program analysis
+// state must not leak through shared mutable storage.
 TEST_CASE("multithreading", "[verify][multithreading]") {
     const prevail::Program prog1 = prepare("2/1");
     const prevail::Program prog2 = prepare("2/2");
@@ -38,23 +39,19 @@ TEST_CASE("multithreading", "[verify][multithreading]") {
     REQUIRE(res2);
 }
 
-// Two programs from the same ELF must share the immutable platform by pointer
-// while their per-program callback metadata diverges in CONTENT. A regression
-// where callback_target_labels() aliased through a global or thread-local would
-// make both programs report the same set and this test would fail.
+// Immutable platform is shared across programs by pointer; per-program
+// loader and analysis-prep data are not. If a getter started aliasing
+// through a static/thread_local, the two programs would expose identical
+// content and this test would fail.
 TEST_CASE("multi-program sharing invariant", "[verify][multithreading]") {
     const prevail::Program prog1 = prepare("2/1");
     const prevail::Program prog2 = prepare("2/2");
 
-    // Immutable platform is shared by pointer across programs.
     REQUIRE(prog1.info().platform == prog2.info().platform);
     REQUIRE(prog1.info().platform == &prevail::g_ebpf_platform_linux);
 
-    // Analysis-prep facts are per-Program, not shared. Different programs have
-    // different instruction streams and therefore different eligible-callback-target
-    // sets; if the two Programs somehow share the same storage (e.g. a static
-    // thread_local smuggled into a getter) the sets would compare equal and one of
-    // these assertions would fail.
+    // Different instruction streams produce different loader and callback-target
+    // sets. At least one of these pairs must differ in content.
     const bool info_diverges = prog1.info().builtin_call_offsets != prog2.info().builtin_call_offsets ||
                                prog1.info().line_info.size() != prog2.info().line_info.size();
     const bool callback_diverges = prog1.callback_target_labels() != prog2.callback_target_labels() ||
@@ -62,10 +59,10 @@ TEST_CASE("multi-program sharing invariant", "[verify][multithreading]") {
     REQUIRE((info_diverges || callback_diverges));
 }
 
-// Analyse three programs sequentially on the same thread. A regression where
-// per-program state leaked into shared (global or thread-local) storage would
-// surface here as verification success depending on previously-analysed
-// programs.
+// Sequential analyses must be independent: re-verifying an earlier program
+// after later ones still succeeds. A regression leaking per-program state
+// through global or thread-local storage would make results depend on
+// analysis order.
 TEST_CASE("multi-program sequential analysis", "[verify][multithreading]") {
     const prevail::Program prog1 = prepare("2/1");
     const prevail::Program prog2 = prepare("2/2");
@@ -74,14 +71,10 @@ TEST_CASE("multi-program sequential analysis", "[verify][multithreading]") {
     REQUIRE(prevail::verify(prog1, {}));
     REQUIRE(prevail::verify(prog2, {}));
     REQUIRE(prevail::verify(prog3, {}));
-
-    // Re-verifying an earlier program after later ones must still succeed.
     REQUIRE(prevail::verify(prog1, {}));
 }
 
-// Analyse three programs in three threads. Extends the existing two-thread
-// test to catch regressions that would only surface under wider concurrent
-// access to the shared immutable platform.
+// Three concurrent analyses over a shared immutable platform must all succeed.
 TEST_CASE("multi-program parallel analysis", "[verify][multithreading]") {
     const prevail::Program prog1 = prepare("2/1");
     const prevail::Program prog2 = prepare("2/2");

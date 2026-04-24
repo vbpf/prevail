@@ -721,13 +721,11 @@ static void pass_validate_tail_call_depth(const Program& prog, const Wto& wto, c
 
 // Pass: ComputeCallbackMetadata
 // Reads    : Program (CFG + instructions).
-// Writes   : builder.prog's callback metadata (via CfgBuilder::set_callback_metadata): the set
+// Writes   : builder.prog's callback metadata, via CfgBuilder::set_callback_metadata: the set
 //            of top-level concrete-instruction labels eligible as PTR_TO_FUNC targets, and the
 //            subset whose body can reach a top-level Exit.
 // Notes    : Excludes Label::entry/Label::exit, synthetic jump labels, labels under an inlined
-//            stack-frame prefix, and Exit instructions themselves. The result is stored on
-//            Program, not on ProgramInfo -- it is an analysis-prep fact derived from the CFG,
-//            not a loader input.
+//            stack-frame prefix, and Exit instructions themselves.
 static void pass_compute_callback_metadata(CfgBuilder& builder) {
     const Program& prog = builder.prog;
     CallbackMetadata md;

@@ -10,13 +10,11 @@
 
 namespace prevail {
 
-// Primary entry points: the AnalysisContext owns the Program and options.
 AnalysisResult analyze(const AnalysisContext& context);
 AnalysisResult analyze(const StringInvariant& entry_invariant, const AnalysisContext& context);
 
-// Convenience overloads for callers that do not need the context after analysis.
-// These copy the Program into a fresh AnalysisContext. Heavy if used in a tight
-// loop; for repeated analysis, construct an AnalysisContext once and reuse it.
+// Convenience overloads that copy `prog` into a fresh AnalysisContext.
+// For repeated analysis of the same program, build one AnalysisContext and reuse it.
 AnalysisResult analyze(const Program& prog, const ebpf_verifier_options_t& options);
 AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invariant,
                        const ebpf_verifier_options_t& options);

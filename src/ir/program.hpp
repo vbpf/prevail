@@ -25,8 +25,8 @@ class Program {
 
     ProgramInfo m_info;
 
-    // Analysis-prep outputs populated by Program::from_sequence. Distinct from ProgramInfo
-    // because ProgramInfo is a loader output; these two sets are derived from the CFG.
+    // Derived from the CFG by Program::from_sequence. Lives on Program rather than in
+    // ProgramInfo because ProgramInfo holds loader output; these sets are analysis-prep.
     std::set<int32_t> m_callback_target_labels;
     std::set<int32_t> m_callback_targets_with_exit;
 
@@ -34,9 +34,9 @@ class Program {
     const Cfg& cfg() const { return m_cfg; }
     const ProgramInfo& info() const { return m_info; }
 
-    // Valid top-level instruction labels eligible as callback entry targets via PTR_TO_FUNC.
+    // Top-level instruction labels eligible as PTR_TO_FUNC callback targets.
     const std::set<int32_t>& callback_target_labels() const { return m_callback_target_labels; }
-    // Subset of callback_target_labels whose body can reach a top-level Exit in the CFG.
+    // Subset whose body can reach a top-level Exit in the CFG.
     const std::set<int32_t>& callback_targets_with_exit() const { return m_callback_targets_with_exit; }
 
     //! return a view of the labels, including entry and exit
