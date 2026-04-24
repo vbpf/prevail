@@ -440,31 +440,31 @@ static std::optional<Call> get_builtin_call_linux(const int32_t id) {
     switch (id) {
     case LINUX_BUILTIN_CALL_MEMSET:
         return Call{
-            .target = {.func = id, .name = "memset"},
+            .target = {.func = id, .kind = CallKind::builtin, .name = "memset"},
             .contract = {.singles = {{ArgSingle::Kind::ANYTHING, false, Reg{2}}},
                          .pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false}}},
         };
     case LINUX_BUILTIN_CALL_MEMCPY:
         return Call{
-            .target = {.func = id, .name = "memcpy"},
+            .target = {.func = id, .kind = CallKind::builtin, .name = "memcpy"},
             .contract = {.pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false},
                                    {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}}},
         };
     case LINUX_BUILTIN_CALL_MEMMOVE:
         return Call{
-            .target = {.func = id, .name = "memmove"},
+            .target = {.func = id, .kind = CallKind::builtin, .name = "memmove"},
             .contract = {.pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false},
                                    {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}}},
         };
     case LINUX_BUILTIN_CALL_MEMCMP:
         return Call{
-            .target = {.func = id, .name = "memcmp"},
+            .target = {.func = id, .kind = CallKind::builtin, .name = "memcmp"},
             .contract = {.pairs = {{ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{1}, Reg{3}, false},
                                    {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}}},
         };
     case LINUX_BUILTIN_CALL_EXTERN_UNSPEC:
         return Call{
-            .target = {.func = id, .name = "extern_unspecified"},
+            .target = {.func = id, .kind = CallKind::builtin, .name = "extern_unspecified"},
             .contract = {.singles = {{ArgSingle::Kind::ANYTHING, false, Reg{1}},
                                      {ArgSingle::Kind::ANYTHING, false, Reg{2}},
                                      {ArgSingle::Kind::ANYTHING, false, Reg{3}},

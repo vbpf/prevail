@@ -188,8 +188,11 @@ struct ArgPair {
 };
 
 enum class CallKind {
-    helper,
-    kfunc,
+    helper,  ///< Resolved via platform.get_helper_prototype(func, program_type).
+    kfunc,   ///< Resolved via platform.resolve_kfunc_call(btf_id, program_type).
+    builtin, ///< Resolved via platform.get_builtin_call(func). Used for compiler
+             ///< intrinsics (memset/memcpy/...) emitted at specific PCs where the
+             ///< ELF loader flagged the call as a relocation target.
 };
 
 /// Identity of a helper/kfunc plus the diagnostics that travel with that identity.

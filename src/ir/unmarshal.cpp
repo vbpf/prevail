@@ -704,6 +704,7 @@ struct Unmarshaller {
                     }
                 }
                 return Call{.target = {.func = inst.imm,
+                                       .kind = CallKind::builtin,
                                        .name = std::to_string(inst.imm),
                                        .is_supported = false,
                                        .unsupported_reason = "helper function is unavailable on this platform"}};
