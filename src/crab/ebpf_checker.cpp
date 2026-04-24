@@ -218,7 +218,8 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
     }
 
     for (const auto access_reg_type : dom.state.enumerate_types(s.access_reg)) {
-        if (access_reg_type == T_STACK) {
+        switch (access_reg_type) {
+        case T_STACK: {
             Interval offset = dom.state.values.eval_interval(access_reg.stack_offset);
             if (!dom.stack->all_num_width(offset, Interval{width})) {
                 auto lb_is = offset.lb().number();
@@ -250,19 +251,24 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
                     }
                 }
             }
-        } else if (access_reg_type == T_PACKET) {
+            break;
+        }
+        case T_PACKET: {
             Variable lb = access_reg.packet_offset;
             LinearExpression ub = lb + width;
             require_region_bounds(T_PACKET, access_reg, lb, ub);
             // Packet memory is both readable and writable.
-        } else if (access_reg_type == T_SHARED) {
+            break;
+        }
+        case T_SHARED: {
             Variable lb = access_reg.shared_offset;
             LinearExpression ub = lb + width;
             require_region_bounds(T_SHARED, access_reg, lb, ub);
             require_value(dom.state, access_reg.svalue > 0, "Possible null access");
             // Shared memory is zero-initialized when created so is safe to read and write.
-        } else {
-            throw_fail("Only stack, packet, or shared can be used as a parameter");
+            break;
+        }
+        default: throw_fail("Only stack, packet, or shared can be used as a parameter");
         }
     }
 }
@@ -283,52 +289,47 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
 
     const auto reg = reg_pack(s.reg);
     for (const auto type : dom.state.enumerate_types(s.reg)) {
-        switch (type) {
-        case T_PACKET: {
-            auto [lb, ub] = lb_ub_access_pair(s, reg.packet_offset);
+        if (is_region_access_type(type)) {
+            // Bounds-checked region access. The region's offset variable, the
+            // bounds rule, and per-region nuance live here together.
+            const auto offset_var = region_offset_variable(s.reg, type);
+            assert(offset_var.has_value() && "is_region_access_type implies an offset variable");
+            auto [lb, ub] = lb_ub_access_pair(s, *offset_var);
             const std::optional<Variable> packet_size =
-                is_comparison_check ? std::optional<Variable>{} : variable_registry.packet_size();
-            require_region_bounds(T_PACKET, reg, lb, ub, packet_size);
-            // if within bounds, it can never be null
-            // Context memory is both readable and writable.
-            break;
-        }
-        case T_STACK: {
-            auto [lb, ub] = lb_ub_access_pair(s, reg.stack_offset);
-            require_region_bounds(T_STACK, reg, lb, ub);
-            // if within bounds, it can never be null
-            if (s.access_type == AccessType::read &&
-                !dom.stack->all_num_lb_ub(dom.state.values.eval_interval(lb), dom.state.values.eval_interval(ub))) {
-
-                if (s.offset < 0) {
-                    throw_fail("Stack content is not numeric");
-                } else {
-                    using namespace dsl_syntax;
-                    LinearExpression w = std::holds_alternative<Imm>(s.width)
-                                             ? LinearExpression{std::get<Imm>(s.width).v}
-                                             : reg_pack(std::get<Reg>(s.width)).svalue;
-
-                    require_value(dom.state, w <= reg.stack_numeric_size - s.offset, "Stack content is not numeric");
+                (type == T_PACKET && !is_comparison_check) ? std::optional{variable_registry.packet_size()}
+                                                           : std::nullopt;
+            require_region_bounds(type, reg, lb, ub, packet_size);
+            switch (type) {
+            case T_STACK:
+                // Stack reads must hit known-numeric bytes.
+                if (s.access_type == AccessType::read &&
+                    !dom.stack->all_num_lb_ub(dom.state.values.eval_interval(lb),
+                                              dom.state.values.eval_interval(ub))) {
+                    if (s.offset < 0) {
+                        throw_fail("Stack content is not numeric");
+                    } else {
+                        LinearExpression w = std::holds_alternative<Imm>(s.width)
+                                                 ? LinearExpression{std::get<Imm>(s.width).v}
+                                                 : reg_pack(std::get<Reg>(s.width)).svalue;
+                        require_value(dom.state, w <= reg.stack_numeric_size - s.offset,
+                                      "Stack content is not numeric");
+                    }
                 }
+                break;
+            case T_SHARED:
+            case T_ALLOC_MEM:
+                // Both are nullable; constrain non-null when the access is a real dereference.
+                if (!is_comparison_check && !s.or_null) {
+                    require_value(dom.state, reg.svalue > 0, "Possible null access");
+                }
+                break;
+            default:
+                // T_PACKET, T_CTX: bounds suffice; both are non-null when in bounds.
+                break;
             }
-            break;
+            continue;
         }
-        case T_CTX: {
-            auto [lb, ub] = lb_ub_access_pair(s, reg.ctx_offset);
-            require_region_bounds(T_CTX, reg, lb, ub);
-            // if within bounds, it can never be null
-            // The context is both readable and writable.
-            break;
-        }
-        case T_SHARED: {
-            auto [lb, ub] = lb_ub_access_pair(s, reg.shared_offset);
-            require_region_bounds(T_SHARED, reg, lb, ub);
-            if (!is_comparison_check && !s.or_null) {
-                require_value(dom.state, reg.svalue > 0, "Possible null access");
-            }
-            // Shared memory is zero-initialized when created so is safe to read and write.
-            break;
-        }
+        switch (type) {
         case T_NUM:
             if (!is_comparison_check) {
                 if (s.or_null) {
@@ -360,15 +361,6 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
                 throw_fail("Unsupported pointer type for memory access");
             }
             break;
-        case T_ALLOC_MEM: {
-            // Treat like shared: offset-bounded access with null check.
-            auto [lb, ub] = lb_ub_access_pair(s, reg.alloc_mem_offset);
-            require_region_bounds(T_ALLOC_MEM, reg, lb, ub);
-            if (!is_comparison_check && !s.or_null) {
-                require_value(dom.state, reg.svalue > 0, "Possible null access");
-            }
-            break;
-        }
         case T_FUNC:
             if (!is_comparison_check) {
                 throw_fail("Function pointers cannot be dereferenced");
