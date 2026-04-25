@@ -188,29 +188,50 @@ struct ArgPair {
 };
 
 enum class CallKind {
-    helper,
-    kfunc,
+    helper,  ///< Resolved via platform.get_helper_prototype(func, program_type).
+    kfunc,   ///< Resolved via platform.resolve_kfunc_call(btf_id, program_type).
+    builtin, ///< Resolved via platform.get_builtin_call(func). Used for compiler
+             ///< intrinsics (memset/memcpy/...) emitted at specific PCs where the
+             ///< ELF loader flagged the call as a relocation target.
 };
 
+/// Static call to a helper / kfunc / compiler intrinsic. Pure key: the pair
+/// (func, kind) identifies the target given a ProgramInfo, and `resolve(call,
+/// info)` produces the full ResolvedCall with name, support status, and
+/// contract. Sibling key-only call instructions are `Callx` (register-indirect)
+/// and `CallBtf` (pre-resolution kfunc).
 struct Call {
     int32_t func{};
     CallKind kind{CallKind::helper};
-    // Equality intentionally matches only functional identity (call source + id).
-    // Metadata such as is_supported/unsupported_reason is diagnostic-only.
-    constexpr bool operator==(const Call& other) const { return func == other.func && kind == other.kind; }
 
-    // TODO: move name and signature information somewhere else
+    constexpr bool operator==(const Call&) const = default;
+};
+
+/// What a helper / kfunc / builtin requires of its arguments and how it
+/// shapes its return. Lives inside `ResolvedCall`; consumed by assertion
+/// extraction and the abstract transformer.
+struct CallContract {
+    std::vector<ArgSingle> singles;
+    std::vector<ArgPair> pairs;
+    std::optional<TypeEncoding> return_ptr_type{}; ///< Non-integer return pointer type, if any.
+    bool return_nullable{};                        ///< Whether the return pointer may be null.
+    bool is_map_lookup{};
+    bool reallocate_packet{};
+    std::optional<Reg> alloc_size_reg{}; ///< Register holding allocation size (for T_ALLOC_MEM returns).
+};
+
+/// Resolved form of a Call: the key (via `call`) plus everything derivable
+/// from resolving that key against a ProgramInfo (platform + program type).
+///
+/// Produced by `resolve(Call, ProgramInfo)`; consumed by assertion extraction,
+/// the abstract transformer, the reject gate in cfg_builder, and the rich
+/// printer.
+struct ResolvedCall {
+    Call call;
     std::string name;
     bool is_supported{true};
     std::string unsupported_reason;
-    bool is_map_lookup{};
-    bool reallocate_packet{};
-    std::optional<TypeEncoding> return_ptr_type{}; ///< Non-integer return pointer type, if any.
-    bool return_nullable{};                        ///< Whether the return pointer may be null.
-    std::optional<Reg> alloc_size_reg{};           ///< Register holding allocation size (for T_ALLOC_MEM returns).
-    std::vector<ArgSingle> singles;
-    std::vector<ArgPair> pairs;
-    std::string stack_frame_prefix; ///< Variable prefix at point of call.
+    CallContract contract;
 };
 
 /// Result of classifying an ABI call return type.
@@ -457,8 +478,12 @@ inline std::ostream& operator<<(std::ostream& os, Value const& a) {
 std::ostream& operator<<(std::ostream& os, const Assertion& a);
 std::string to_string(const Assertion& constraint);
 
+struct ProgramInfo;
+/// Prints an InstructionSeq. When `info` is non-null, Call instructions are
+/// resolved for a rich helper-name + arg-list render; otherwise they print
+/// cheaply as "r0 = call:<func>".
 void print(const InstructionSeq& insts, std::ostream& out, const std::optional<const Label>& label_to_print,
-           bool print_line_info = false);
+           bool print_line_info = false, const ProgramInfo* info = nullptr);
 
 int size(const Instruction& inst);
 

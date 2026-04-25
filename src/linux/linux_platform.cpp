@@ -352,8 +352,8 @@ const EbpfMapDescriptor& get_map_descriptor_linux(const int map_fd, const std::v
     throw UnmarshalError("map_fd " + std::to_string(map_fd) + " not found");
 }
 
-static std::optional<Call> resolve_kfunc_call_linux(const int32_t btf_id, const EbpfProgramType& program_type,
-                                                    std::string* why_not) {
+static std::optional<ResolvedCall> resolve_kfunc_call_linux(const int32_t btf_id, const EbpfProgramType& program_type,
+                                                            std::string* why_not) {
     return make_kfunc_call(btf_id, program_type, why_not);
 }
 
@@ -436,46 +436,47 @@ std::optional<KsymBtfId> resolve_ksym_btf_id_linux(const std::string& name) {
     return std::nullopt;
 }
 
-static std::optional<Call> get_builtin_call_linux(const int32_t id) {
+static std::optional<ResolvedCall> get_builtin_call_linux(const int32_t id) {
+    const Call key{.func = id, .kind = CallKind::builtin};
     switch (id) {
     case LINUX_BUILTIN_CALL_MEMSET:
-        return Call{
-            .func = id,
+        return ResolvedCall{
+            .call = key,
             .name = "memset",
-            .singles = {{ArgSingle::Kind::ANYTHING, false, Reg{2}}},
-            .pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false}},
+            .contract = {.singles = {{ArgSingle::Kind::ANYTHING, false, Reg{2}}},
+                         .pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false}}},
         };
     case LINUX_BUILTIN_CALL_MEMCPY:
-        return Call{
-            .func = id,
+        return ResolvedCall{
+            .call = key,
             .name = "memcpy",
-            .pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false},
-                      {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}},
+            .contract = {.pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false},
+                                   {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}}},
         };
     case LINUX_BUILTIN_CALL_MEMMOVE:
-        return Call{
-            .func = id,
+        return ResolvedCall{
+            .call = key,
             .name = "memmove",
-            .pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false},
-                      {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}},
+            .contract = {.pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false},
+                                   {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}}},
         };
     case LINUX_BUILTIN_CALL_MEMCMP:
-        return Call{
-            .func = id,
+        return ResolvedCall{
+            .call = key,
             .name = "memcmp",
-            .pairs = {{ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{1}, Reg{3}, false},
-                      {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}},
+            .contract = {.pairs = {{ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{1}, Reg{3}, false},
+                                   {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}}},
         };
     case LINUX_BUILTIN_CALL_EXTERN_UNSPEC:
-        return Call{
-            .func = id,
+        return ResolvedCall{
+            .call = key,
             .name = "extern_unspecified",
-            .reallocate_packet = true,
-            .singles = {{ArgSingle::Kind::ANYTHING, false, Reg{1}},
-                        {ArgSingle::Kind::ANYTHING, false, Reg{2}},
-                        {ArgSingle::Kind::ANYTHING, false, Reg{3}},
-                        {ArgSingle::Kind::ANYTHING, false, Reg{4}},
-                        {ArgSingle::Kind::ANYTHING, false, Reg{5}}},
+            .contract = {.singles = {{ArgSingle::Kind::ANYTHING, false, Reg{1}},
+                                     {ArgSingle::Kind::ANYTHING, false, Reg{2}},
+                                     {ArgSingle::Kind::ANYTHING, false, Reg{3}},
+                                     {ArgSingle::Kind::ANYTHING, false, Reg{4}},
+                                     {ArgSingle::Kind::ANYTHING, false, Reg{5}}},
+                         .reallocate_packet = true},
         };
     default: return std::nullopt;
     }

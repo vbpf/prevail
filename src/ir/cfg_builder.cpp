@@ -12,6 +12,7 @@
 #include "cfg/cfg.hpp"
 #include "cfg/wto.hpp"
 #include "config.hpp"
+#include "ir/call_resolver.hpp"
 #include "ir/program.hpp"
 #include "ir/syntax.hpp"
 #include "platform.hpp"
@@ -162,7 +163,8 @@ static bool un_requires_base64(const Un& un) {
     }
 }
 
-static std::optional<Call> resolve_kfunc_call(const CallBtf& call_btf, const ProgramInfo& info, std::string* why_not) {
+static std::optional<ResolvedCall> resolve_kfunc_call(const CallBtf& call_btf, const ProgramInfo& info,
+                                                      std::string* why_not) {
     if (!info.platform || !info.platform->resolve_kfunc_call) {
         if (why_not) {
             *why_not = "kfunc resolution is unavailable on this platform";
@@ -172,10 +174,13 @@ static std::optional<Call> resolve_kfunc_call(const CallBtf& call_btf, const Pro
     return info.platform->resolve_kfunc_call(call_btf.btf_id, info.type, why_not);
 }
 
+// CallBtf in the instruction stream is replaced by a key-only Call{func,
+// kind=kfunc}; the ResolvedCall is reproduced on demand via resolve(call, info).
 using ResolvedKfuncCalls = std::map<Label, Call>;
 
 static std::optional<RejectionReason> check_instruction_feature_support(const Instruction& ins,
-                                                                        const ebpf_platform_t& platform) {
+                                                                        const ProgramInfo& info) {
+    const ebpf_platform_t& platform = *info.platform;
     auto reject_not_implemented = [](std::string detail) {
         return RejectionReason{.kind = RejectKind::NotImplemented, .detail = std::move(detail)};
     };
@@ -184,8 +189,9 @@ static std::optional<RejectionReason> check_instruction_feature_support(const In
     };
 
     if (const auto p = std::get_if<Call>(&ins)) {
-        if (!p->is_supported) {
-            return reject_capability(p->unsupported_reason);
+        const auto resolved = resolve(*p, info);
+        if (!resolved.is_supported) {
+            return reject_capability(resolved.unsupported_reason);
         }
     }
     if (std::holds_alternative<Callx>(ins) && !supports(platform, bpf_conformance_groups_t::callx)) {
@@ -271,9 +277,9 @@ static std::optional<RejectionReason> check_instruction_feature_support(const In
 // Throws   : InvalidControlFlow on any instruction the platform cannot run.
 // Invariant: must run before CFG construction; pass_populate_nodes assumes
 //            every instruction has been vetted here.
-static void pass_validate_instruction_support(const InstructionSeq& insts, const ebpf_platform_t& platform) {
+static void pass_validate_instruction_support(const InstructionSeq& insts, const ProgramInfo& info) {
     for (const auto& [label, inst, _] : insts) {
-        if (const auto reason = check_instruction_feature_support(inst, platform)) {
+        if (const auto reason = check_instruction_feature_support(inst, info)) {
             const std::string prefix =
                 (reason->kind == RejectKind::NotImplemented) ? "not implemented: " : "rejected: ";
             throw InvalidControlFlow{prefix + reason->detail + " (at " + to_string(label) + ")"};
@@ -294,11 +300,11 @@ static ResolvedKfuncCalls pass_resolve_kfunc_calls(const InstructionSeq& insts, 
             continue;
         }
         std::string why_not;
-        const auto call = resolve_kfunc_call(*call_btf, info, &why_not);
-        if (!call) {
+        const auto r = resolve_kfunc_call(*call_btf, info, &why_not);
+        if (!r) {
             throw InvalidControlFlow{"not implemented: " + why_not + " (at " + to_string(label) + ")"};
         }
-        resolved.insert_or_assign(label, *call);
+        resolved.insert_or_assign(label, r->call);
     }
     return resolved;
 }
@@ -342,8 +348,6 @@ static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const 
         auto inst = builder.prog.instruction_at(macro_label);
         if (const auto pexit = std::get_if<Exit>(&inst)) {
             pexit->stack_frame_prefix = label.stack_frame_prefix;
-        } else if (const auto pcall = std::get_if<Call>(&inst)) {
-            pcall->stack_frame_prefix = label.stack_frame_prefix;
         }
         builder.insert(label, inst);
 
@@ -471,7 +475,7 @@ static void pass_populate_nodes(CfgBuilder& builder, const InstructionSeq& insts
                                 const ResolvedKfuncCalls& resolved_kfunc_calls,
                                 const LoweredPseudoLoads& lowered_pseudo_loads) {
     for (const auto& [label, inst, _] : insts) {
-        assert(!check_instruction_feature_support(inst, *info.platform).has_value() &&
+        assert(!check_instruction_feature_support(inst, info).has_value() &&
                "instruction support must be validated before CFG construction");
         if (std::holds_alternative<Undefined>(inst)) {
             continue;
@@ -807,7 +811,7 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
     assert(info.platform != nullptr && "info.platform must be set before Program::from_sequence");
 
     // --- Pass: ValidateInstructionSupport ---------------------------------
-    pass_validate_instruction_support(inst_seq, *info.platform);
+    pass_validate_instruction_support(inst_seq, info);
 
     // --- Pass: ResolveKfuncCalls ------------------------------------------
     const ResolvedKfuncCalls resolved_kfunc_calls = pass_resolve_kfunc_calls(inst_seq, info);

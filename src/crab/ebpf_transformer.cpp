@@ -15,9 +15,10 @@
 #include "config.hpp"
 #include "crab/array_domain.hpp"
 #include "crab/ebpf_domain.hpp"
+#include "crab/region_semantics.hpp"
 #include "crab/var_registry.hpp"
 #include "crab_utils/num_safety.hpp"
-#include "ir/unmarshal.hpp"
+#include "ir/call_resolver.hpp"
 #include "platform.hpp"
 #include "string_constraints.hpp"
 
@@ -252,8 +253,8 @@ void EbpfTransformer::operator()(const Assume& s) {
                 } else {
                     // Either pointers to a singleton region,
                     // or an equality comparison on map descriptors/pointers to non-singleton locations
-                    if (const auto dst_offset = get_type_offset_variable(cond.left, type)) {
-                        if (const auto src_offset = get_type_offset_variable(src_reg, type)) {
+                    if (const auto dst_offset = primary_kind_variable_for_type(cond.left, type)) {
+                        if (const auto src_offset = primary_kind_variable_for_type(src_reg, type)) {
                             state.values.add_constraint(
                                 assume_cst_offsets_reg(cond.op, dst_offset.value(), src_offset.value()));
                         }
@@ -588,39 +589,34 @@ void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
     }
     dom.state = dom.state.join_over_types(b.access.basereg, [&](TypeToNumDomain& state, TypeEncoding type) {
         switch (type) {
-        case T_UNINIT: return;
-        case T_MAP: return;
-        case T_MAP_PROGRAMS: return;
-        case T_NUM: return;
-        case T_FUNC: return;
-        case T_CTX: {
-            const LinearExpression addr = mem_reg.ctx_offset + offset;
-            do_load_ctx(state, context, target_reg, addr, width);
-            break;
-        }
-        case T_STACK: {
-            const LinearExpression addr = mem_reg.stack_offset + offset;
-            do_load_stack(state, target_reg, addr, width, b.access.basereg);
-            break;
-        }
-        case T_PACKET: {
-            LinearExpression addr = mem_reg.packet_offset + offset;
-            do_load_packet_or_shared(state, target_reg, width, b.is_signed);
-            break;
-        }
-        case T_SHARED: {
-            LinearExpression addr = mem_reg.shared_offset + offset;
-            do_load_packet_or_shared(state, target_reg, width, b.is_signed);
-            break;
-        }
+        case T_CTX: do_load_ctx(state, context, target_reg, mem_reg.ctx_offset + offset, width); break;
+        case T_STACK: do_load_stack(state, target_reg, mem_reg.stack_offset + offset, width, b.access.basereg); break;
+        case T_PACKET:
+        case T_SHARED:
+        case T_ALLOC_MEM:
         case T_SOCKET:
         case T_BTF_ID:
-        case T_ALLOC_MEM: {
-            // TODO: implement proper load semantics for these pointer types.
-            // For now, treat like packet/shared (havoc the result).
+            // Loadable but contents are not tracked: havoc the destination.
+            // T_SOCKET/T_BTF_ID dereferences are rejected by the checker
+            // (see ebpf_checker.cpp ValidAccess), so reaching this branch
+            // for those types means the checker was bypassed; havoc is the
+            // sound fallback. T_ALLOC_MEM remains a TODO for proper load
+            // semantics (offset-tracked content).
             do_load_packet_or_shared(state, target_reg, width, b.is_signed);
             break;
-        }
+        case T_UNINIT:
+        case T_MAP:
+        case T_MAP_PROGRAMS:
+        case T_NUM:
+        case T_FUNC:
+            // ebpf_checker.cpp ValidAccess rejects dereferences of each of
+            // these types, so the transformer can soundly treat them as a
+            // no-op here: a well-formed program has already cleared the
+            // checker, and an ill-formed program won't reach this branch
+            // with a real load (the checker would have thrown). Keeping the
+            // no-op explicit documents the invariant and avoids UB if the
+            // checker is ever weakened.
+            break;
         }
     });
 }
@@ -831,8 +827,14 @@ void EbpfTransformer::operator()(const Call& call) {
     if (dom.is_bottom()) {
         return;
     }
+    const ResolvedCall resolved = resolve(call, context.program_info());
+    // Precondition: cfg_builder::check_instruction_feature_support rejects
+    // unsupported Calls before CFG construction. If that ever drifts, an
+    // unsupported call here would silently fall through the empty-contract
+    // path and yield T_NUM on r0 with no diagnostic.
+    assert(resolved.is_supported && "unsupported Call reached transformer; cfg_builder should have rejected it");
     std::optional<Reg> maybe_fd_reg{};
-    for (ArgSingle param : call.singles) {
+    for (ArgSingle param : resolved.contract.singles) {
         switch (param.kind) {
         case ArgSingle::Kind::MAP_FD: maybe_fd_reg = param.reg; break;
         case ArgSingle::Kind::ANYTHING:
@@ -861,7 +863,7 @@ void EbpfTransformer::operator()(const Call& call) {
                 // Branch over possible pointer *types* for this register. This is separate from
                 // uncertainty over regions/offsets within one type (e.g., many shared regions).
                 if (type == T_STACK) {
-                    const auto offset = get_type_offset_variable(param.reg, type);
+                    const auto offset = primary_kind_variable_for_type(param.reg, type);
                     if (!offset.has_value()) {
                         return;
                     }
@@ -877,7 +879,7 @@ void EbpfTransformer::operator()(const Call& call) {
         }
         }
     }
-    for (ArgPair param : call.pairs) {
+    for (ArgPair param : resolved.contract.pairs) {
         switch (param.kind) {
         case ArgPair::Kind::PTR_TO_READABLE_MEM:
             // Do nothing. No side effect allowed.
@@ -885,7 +887,7 @@ void EbpfTransformer::operator()(const Call& call) {
 
         case ArgPair::Kind::PTR_TO_WRITABLE_MEM: {
             bool store_numbers = true;
-            auto variable = dom.state.get_type_offset_variable(param.mem);
+            auto variable = dom.state.primary_kind_variable_for_type(param.mem);
             if (!variable.has_value()) {
                 // checked by the checker
                 break;
@@ -951,15 +953,15 @@ void EbpfTransformer::operator()(const Call& call) {
         // Regular map: r0 is a shared pointer with known value size.
         assign_shared_map_value(dom.get_map_value_size(*maybe_fd_reg, context));
     };
-    if (call.is_map_lookup) {
+    if (resolved.contract.is_map_lookup) {
         resolve_map_lookup();
-    } else if (call.return_ptr_type.has_value()) {
-        assign_valid_ptr(r0_reg, call.return_nullable);
-        dom.state.assign_type(r0_reg, *call.return_ptr_type);
-        if (*call.return_ptr_type == T_ALLOC_MEM && call.alloc_size_reg.has_value()) {
+    } else if (resolved.contract.return_ptr_type.has_value()) {
+        assign_valid_ptr(r0_reg, resolved.contract.return_nullable);
+        dom.state.assign_type(r0_reg, *resolved.contract.return_ptr_type);
+        if (*resolved.contract.return_ptr_type == T_ALLOC_MEM && resolved.contract.alloc_size_reg.has_value()) {
             // Propagate allocation bounds: offset starts at 0, size is the allocation size argument.
             dom.state.values.assign(r0_pack.alloc_mem_offset, 0);
-            const auto size_value = dom.state.values.eval_interval(reg_pack(*call.alloc_size_reg).uvalue);
+            const auto size_value = dom.state.values.eval_interval(reg_pack(*resolved.contract.alloc_size_reg).uvalue);
             dom.state.values.set(r0_pack.alloc_mem_size, size_value);
         } else {
             dom.state.havoc_offsets(r0_reg);
@@ -970,7 +972,7 @@ void EbpfTransformer::operator()(const Call& call) {
         // dom.state.values.add_constraint(r0_pack.value < 0); for INTEGER_OR_NO_RETURN_IF_SUCCEED.
     }
     scratch_caller_saved_registers();
-    if (call.reallocate_packet) {
+    if (resolved.contract.reallocate_packet) {
         forget_packet_pointers();
     }
 }
@@ -1003,7 +1005,7 @@ void EbpfTransformer::operator()(const Callx& callx) {
             if (!context.is_helper_usable(imm)) {
                 return;
             }
-            const Call call = make_call(imm, context.platform(), context.program_info().type);
+            const Call call{.func = imm, .kind = CallKind::helper};
             (*this)(call);
         }
     }
@@ -1089,7 +1091,7 @@ void EbpfTransformer::recompute_stack_numeric_size(TypeToNumDomain& state, const
 void EbpfTransformer::add(const Reg& dst_reg, const int imm, const int finite_width) {
     const auto dst = reg_pack(dst_reg);
     dom.state.values->add_overflow(dst.svalue, dst.uvalue, imm, finite_width);
-    if (const auto offset = dom.state.get_type_offset_variable(dst_reg)) {
+    if (const auto offset = dom.state.primary_kind_variable_for_type(dst_reg)) {
         dom.state.values->add(*offset, imm);
         if (imm > 0) {
             // Since the start offset is increasing but
@@ -1274,9 +1276,12 @@ void EbpfTransformer::operator()(const Bin& bin) {
                                 if (dst_type == T_NUM && src_type != T_NUM) {
                                     // num += ptr
                                     state.assign_type(bin.dst, src_type);
-                                    if (const auto dst_offset = get_type_offset_variable(bin.dst, src_type)) {
+                                    // Note: primary_kind_variable_for_type's presence is purely
+                                    // type-indexed, so if dst_offset has a value then the src call
+                                    // for the same type also has one -- safe to unwrap.
+                                    if (const auto dst_offset = primary_kind_variable_for_type(bin.dst, src_type)) {
                                         state.values->apply(ArithBinOp::ADD, dst_offset.value(), dst.svalue,
-                                                            get_type_offset_variable(src_reg, src_type).value());
+                                                            primary_kind_variable_for_type(src_reg, src_type).value());
                                     }
                                     if (src_type == T_SHARED) {
                                         state.values.assign(dst.shared_region_size, src.shared_region_size);
@@ -1284,7 +1289,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
                                 } else if (dst_type != T_NUM && src_type == T_NUM) {
                                     // ptr += num
                                     state.assign_type(bin.dst, dst_type);
-                                    if (const auto dst_offset = get_type_offset_variable(bin.dst, dst_type)) {
+                                    if (const auto dst_offset = primary_kind_variable_for_type(bin.dst, dst_type)) {
                                         state.values->apply(ArithBinOp::ADD, dst_offset.value(), dst_offset.value(),
                                                             src.svalue);
                                         if (dst_type == T_STACK) {
@@ -1335,9 +1340,10 @@ void EbpfTransformer::operator()(const Bin& bin) {
                     default:
                         // ptr -= ptr
                         // Assertions should make sure we only perform this on non-shared pointers.
-                        if (const auto dst_offset = get_type_offset_variable(bin.dst, type)) {
+                        if (const auto dst_offset = primary_kind_variable_for_type(bin.dst, type)) {
                             state.values->apply_signed(ArithBinOp::SUB, dst.svalue, dst.uvalue, dst_offset.value(),
-                                                       get_type_offset_variable(src_reg, type).value(), finite_width);
+                                                       primary_kind_variable_for_type(src_reg, type).value(),
+                                                       finite_width);
                             state.values.havoc(dst_offset.value());
                         }
                         state.havoc_offsets(bin.dst);
@@ -1350,7 +1356,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
                 // Either they're different, or at least one is not a singleton.
                 if (dom.state.is_in_group(std::get<Reg>(bin.v), TS_NUM)) {
                     dom.state.values->sub_overflow(dst.svalue, dst.uvalue, src.svalue, finite_width);
-                    if (auto dst_offset = dom.state.get_type_offset_variable(bin.dst)) {
+                    if (auto dst_offset = dom.state.primary_kind_variable_for_type(bin.dst)) {
                         dom.state.values->sub(dst_offset.value(), src.svalue);
                         if (dom.state.may_have_type(bin.dst, T_STACK)) {
                             // Reduce the numeric size.

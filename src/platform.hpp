@@ -17,6 +17,7 @@
 
 namespace prevail {
 struct Call;
+struct ResolvedCall;
 
 struct KsymBtfId {
     int32_t btf_id{};
@@ -34,10 +35,10 @@ typedef bool (*ebpf_is_helper_usable_fn)(int32_t n, const EbpfProgramType& progr
 
 typedef std::optional<int32_t> (*ebpf_resolve_builtin_call_fn)(const std::string& name);
 typedef std::optional<KsymBtfId> (*ebpf_resolve_ksym_btf_id_fn)(const std::string& name);
-typedef std::optional<Call> (*ebpf_get_builtin_call_fn)(int32_t id);
+typedef std::optional<ResolvedCall> (*ebpf_get_builtin_call_fn)(int32_t id);
 
-typedef std::optional<Call> (*ebpf_resolve_kfunc_call_fn)(int32_t btf_id, const EbpfProgramType& program_type,
-                                                          std::string* why_not);
+typedef std::optional<ResolvedCall> (*ebpf_resolve_kfunc_call_fn)(int32_t btf_id, const EbpfProgramType& program_type,
+                                                                  std::string* why_not);
 
 // Parse map records and allocate map fd's.
 // In the future we may want to move map fd allocation after the verifier step.

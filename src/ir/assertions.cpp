@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "config.hpp"
+#include "ir/call_resolver.hpp"
 #include "ir/syntax.hpp"
 #include "platform.hpp"
 
@@ -73,9 +74,15 @@ class AssertExtractor {
     }
 
     vector<Assertion> operator()(const Call& call) const {
+        // Invariant: cfg_builder::check_instruction_feature_support has already
+        // rejected unsupported calls, so resolved.contract below is the real
+        // contract for this (func, kind) key. An unsupported call would have
+        // an empty contract and produce no preconditions here -- sound only
+        // because the cfg_builder gate ensures we never reach that state.
+        const ResolvedCall resolved = resolve(call, info);
         vector<Assertion> res;
         std::optional<Reg> map_fd_reg;
-        for (ArgSingle arg : call.singles) {
+        for (ArgSingle arg : resolved.contract.singles) {
             switch (arg.kind) {
             case ArgSingle::Kind::ANYTHING:
                 // avoid pointer leakage:
@@ -131,7 +138,7 @@ class AssertExtractor {
                 break;
             }
         }
-        for (ArgPair arg : call.pairs) {
+        for (ArgPair arg : resolved.contract.pairs) {
             const auto group = arg.or_null ? TypeGroup::mem_or_num : TypeGroup::mem;
             const auto access_type =
                 arg.kind == ArgPair::Kind::PTR_TO_READABLE_MEM ? AccessType::read : AccessType::write;

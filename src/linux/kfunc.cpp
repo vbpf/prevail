@@ -263,7 +263,8 @@ void set_unsupported(std::string* why_not, const std::string& reason) {
 
 } // namespace
 
-std::optional<Call> make_kfunc_call(const int32_t btf_id, const EbpfProgramType& program_type, std::string* why_not) {
+std::optional<ResolvedCall> make_kfunc_call(const int32_t btf_id, const EbpfProgramType& program_type,
+                                            std::string* why_not) {
     const auto entry = lookup_kfunc_prototype(btf_id);
     if (!entry) {
         set_unsupported(why_not, "kfunc prototype lookup failed for BTF id " + std::to_string(btf_id));
@@ -271,12 +272,11 @@ std::optional<Call> make_kfunc_call(const int32_t btf_id, const EbpfProgramType&
     }
     const auto& proto = entry->proto;
 
-    Call res;
-    res.func = btf_id;
-    res.kind = CallKind::kfunc;
+    ResolvedCall res;
+    res.call = Call{.func = btf_id, .kind = CallKind::kfunc};
     res.name = proto.name;
-    res.reallocate_packet = proto.reallocate_packet;
-    res.is_map_lookup = proto.return_type == EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL;
+    res.contract.reallocate_packet = proto.reallocate_packet;
+    res.contract.is_map_lookup = proto.return_type == EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL;
 
     // Per-flag handling: accept flags whose safety properties are covered by existing type checking,
     // reject flags that require unimplemented reference lifecycle tracking.
@@ -311,8 +311,8 @@ std::optional<Call> make_kfunc_call(const int32_t btf_id, const EbpfProgramType&
         set_unsupported(why_not, std::string("kfunc return type is unsupported on this platform: ") + proto.name);
         return std::nullopt;
     }
-    res.return_ptr_type = return_info->pointer_type;
-    res.return_nullable = return_info->pointer_nullable;
+    res.contract.return_ptr_type = return_info->pointer_type;
+    res.contract.return_nullable = return_info->pointer_nullable;
 
     const std::array<ebpf_argument_type_t, 7> args = {
         {EBPF_ARGUMENT_TYPE_DONTCARE, proto.argument_type[0], proto.argument_type[1], proto.argument_type[2],
@@ -330,11 +330,11 @@ std::optional<Call> make_kfunc_call(const int32_t btf_id, const EbpfProgramType&
         case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE:
         case EBPF_ARGUMENT_TYPE_PTR_TO_STACK:
         case EBPF_ARGUMENT_TYPE_PTR_TO_CTX:
-            res.singles.push_back({to_arg_single_kind(args[i]), false, Reg{gsl::narrow<uint8_t>(i)}});
+            res.contract.singles.push_back({to_arg_single_kind(args[i]), false, Reg{gsl::narrow<uint8_t>(i)}});
             break;
         case EBPF_ARGUMENT_TYPE_PTR_TO_STACK_OR_NULL:
         case EBPF_ARGUMENT_TYPE_PTR_TO_CTX_OR_NULL:
-            res.singles.push_back({to_arg_single_kind(args[i]), true, Reg{gsl::narrow<uint8_t>(i)}});
+            res.contract.singles.push_back({to_arg_single_kind(args[i]), true, Reg{gsl::narrow<uint8_t>(i)}});
             break;
         case EBPF_ARGUMENT_TYPE_CONST_SIZE:
             set_unsupported(
@@ -362,37 +362,38 @@ std::optional<Call> make_kfunc_call(const int32_t btf_id, const EbpfProgramType&
             const bool can_be_zero = (args[i + 1] == EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO);
             const bool or_null = args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL ||
                                  args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL;
-            res.pairs.push_back({to_arg_pair_kind(args[i]), or_null, Reg{gsl::narrow<uint8_t>(i)},
-                                 Reg{gsl::narrow<uint8_t>(i + 1)}, can_be_zero});
+            res.contract.pairs.push_back({to_arg_pair_kind(args[i]), or_null, Reg{gsl::narrow<uint8_t>(i)},
+                                          Reg{gsl::narrow<uint8_t>(i + 1)}, can_be_zero});
             i++;
             break;
         }
         case EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID_SOCK_COMMON:
         case EBPF_ARGUMENT_TYPE_PTR_TO_SOCK_COMMON:
-            res.singles.push_back({ArgSingle::Kind::PTR_TO_SOCKET, false, Reg{gsl::narrow<uint8_t>(i)}});
+            res.contract.singles.push_back({ArgSingle::Kind::PTR_TO_SOCKET, false, Reg{gsl::narrow<uint8_t>(i)}});
             break;
         case EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID:
         case EBPF_ARGUMENT_TYPE_PTR_TO_PERCPU_BTF_ID:
-            res.singles.push_back({ArgSingle::Kind::PTR_TO_BTF_ID, false, Reg{gsl::narrow<uint8_t>(i)}});
+            res.contract.singles.push_back({ArgSingle::Kind::PTR_TO_BTF_ID, false, Reg{gsl::narrow<uint8_t>(i)}});
             break;
         case EBPF_ARGUMENT_TYPE_PTR_TO_ALLOC_MEM:
-            res.singles.push_back({ArgSingle::Kind::PTR_TO_ALLOC_MEM, false, Reg{gsl::narrow<uint8_t>(i)}});
+            res.contract.singles.push_back({ArgSingle::Kind::PTR_TO_ALLOC_MEM, false, Reg{gsl::narrow<uint8_t>(i)}});
             break;
         case EBPF_ARGUMENT_TYPE_PTR_TO_SPIN_LOCK:
-            res.singles.push_back({ArgSingle::Kind::PTR_TO_SPIN_LOCK, false, Reg{gsl::narrow<uint8_t>(i)}});
+            res.contract.singles.push_back({ArgSingle::Kind::PTR_TO_SPIN_LOCK, false, Reg{gsl::narrow<uint8_t>(i)}});
             break;
         case EBPF_ARGUMENT_TYPE_PTR_TO_TIMER:
-            res.singles.push_back({ArgSingle::Kind::PTR_TO_TIMER, false, Reg{gsl::narrow<uint8_t>(i)}});
+            res.contract.singles.push_back({ArgSingle::Kind::PTR_TO_TIMER, false, Reg{gsl::narrow<uint8_t>(i)}});
             break;
         case EBPF_ARGUMENT_TYPE_CONST_ALLOC_SIZE_OR_ZERO:
-            res.singles.push_back({ArgSingle::Kind::CONST_SIZE_OR_ZERO, false, Reg{gsl::narrow<uint8_t>(i)}});
-            res.alloc_size_reg = Reg{gsl::narrow<uint8_t>(i)};
+            res.contract.singles.push_back({ArgSingle::Kind::CONST_SIZE_OR_ZERO, false, Reg{gsl::narrow<uint8_t>(i)}});
+            res.contract.alloc_size_reg = Reg{gsl::narrow<uint8_t>(i)};
             break;
         case EBPF_ARGUMENT_TYPE_PTR_TO_LONG:
-            res.singles.push_back({ArgSingle::Kind::PTR_TO_WRITABLE_LONG, false, Reg{gsl::narrow<uint8_t>(i)}});
+            res.contract.singles.push_back(
+                {ArgSingle::Kind::PTR_TO_WRITABLE_LONG, false, Reg{gsl::narrow<uint8_t>(i)}});
             break;
         case EBPF_ARGUMENT_TYPE_PTR_TO_INT:
-            res.singles.push_back({ArgSingle::Kind::PTR_TO_WRITABLE_INT, false, Reg{gsl::narrow<uint8_t>(i)}});
+            res.contract.singles.push_back({ArgSingle::Kind::PTR_TO_WRITABLE_INT, false, Reg{gsl::narrow<uint8_t>(i)}});
             break;
         case EBPF_ARGUMENT_TYPE_PTR_TO_CONST_STR:
         default:

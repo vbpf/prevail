@@ -6,6 +6,7 @@
 #include <catch2/catch_all.hpp>
 
 #include "ebpf_verifier.hpp"
+#include "ir/call_resolver.hpp"
 #include "ir/marshal.hpp"
 #include "ir/program.hpp"
 #include "ir/unmarshal.hpp"
@@ -458,7 +459,7 @@ TEST_CASE("disasm_marshal", "[disasm][marshal]") {
 
     SECTION("Call") {
         for (int func : {1, 17}) {
-            compare_marshal_unmarshal(Call{func});
+            compare_marshal_unmarshal(Call{.func = func});
         }
 
         // Test callx without support: decode still succeeds.
@@ -920,18 +921,23 @@ TEST_CASE("unmarshal builtin calls only when relocation-gated", "[disasm][marsha
     ProgramInfo info{.platform = &g_ebpf_platform_linux, .type = type};
 
     const Call ungated = unmarshal_single_call(call_memset, info);
-    REQUIRE_FALSE(ungated.is_supported);
-    REQUIRE(ungated.unsupported_reason == "helper function is unavailable on this platform");
+    REQUIRE(ungated.kind == CallKind::helper);
+    const ResolvedCall ungated_resolved = resolve(ungated, info);
+    REQUIRE_FALSE(ungated_resolved.is_supported);
+    REQUIRE(ungated_resolved.unsupported_reason == "helper function is unavailable on this platform");
 
     info.builtin_call_offsets.insert(0);
     const Call gated = unmarshal_single_call(call_memset, info);
-    REQUIRE(gated.is_supported);
-    REQUIRE(gated.name == "memset");
+    REQUIRE(gated.kind == CallKind::builtin);
     REQUIRE(gated.func == *memset_id);
-    REQUIRE(gated.singles.size() == 1);
-    REQUIRE(gated.pairs.size() == 1);
-    REQUIRE(gated.singles[0] == ArgSingle{ArgSingle::Kind::ANYTHING, false, Reg{2}});
-    REQUIRE(gated.pairs[0] == ArgPair{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false});
+    const ResolvedCall gated_resolved = resolve(gated, info);
+    REQUIRE(gated_resolved.is_supported);
+    REQUIRE(gated_resolved.name == "memset");
+    REQUIRE(gated_resolved.contract.singles.size() == 1);
+    REQUIRE(gated_resolved.contract.pairs.size() == 1);
+    REQUIRE(gated_resolved.contract.singles[0] == ArgSingle{ArgSingle::Kind::ANYTHING, false, Reg{2}});
+    REQUIRE(gated_resolved.contract.pairs[0] ==
+            ArgPair{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false});
 
     const auto assertions = get_assertions(gated, info, ebpf_verifier_options_t{}, Label{0});
     REQUIRE(has_assertion(assertions, TypeConstraint{Reg{1}, TypeGroup::mem}));
@@ -1020,7 +1026,7 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
         const auto* call = std::get_if<Call>(&prog.instruction_at(Label{0}));
         REQUIRE(call != nullptr);
-        REQUIRE(call->is_map_lookup);
+        REQUIRE(resolve(*call, info).contract.is_map_lookup);
         REQUIRE(verify(prog, {}));
     }
 
@@ -1032,7 +1038,7 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
         const auto* call = std::get_if<Call>(&prog.instruction_at(Label{0}));
         REQUIRE(call != nullptr);
-        REQUIRE(call->name == "kfunc_test_acquire_flag");
+        REQUIRE(resolve(*call, info).name == "kfunc_test_acquire_flag");
     }
 
     SECTION("kfunc with release flag is rejected") {
@@ -1314,8 +1320,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
         const auto* call = std::get_if<Call>(&prog.instruction_at(Label{5}));
         REQUIRE(call != nullptr);
-        REQUIRE(call->is_supported);
-        REQUIRE(std::ranges::any_of(call->singles, [](const ArgSingle& arg) {
+        const ResolvedCall resolved = resolve(*call, info);
+        REQUIRE(resolved.is_supported);
+        REQUIRE(std::ranges::any_of(resolved.contract.singles, [](const ArgSingle& arg) {
             return arg.kind == ArgSingle::Kind::PTR_TO_FUNC && arg.reg == Reg{2};
         }));
     }
@@ -1409,6 +1416,21 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
         REQUIRE_THROWS_WITH(
             Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
+            Catch::Matchers::ContainsSubstring("rejected: helper function is unavailable on this platform") &&
+                Catch::Matchers::ContainsSubstring("(at 0)"));
+    }
+
+    SECTION("helper id not usable for this program type") {
+        // bpf_get_socket_cookie (helper 46) is permitted in cgroup/connect4 but not in xdp.
+        // The resolver must consult is_helper_usable(func, program_type); otherwise a
+        // default prototype from get_helper_prototype would let the call slip through.
+        const ProgramInfo xdp_info{.platform = &g_ebpf_platform_linux,
+                                   .type = g_ebpf_platform_linux.get_program_type("xdp", "")};
+        RawProgram raw_prog{"", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .imm = 46}, exit}, xdp_info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        REQUIRE_THROWS_WITH(
+            Program::from_sequence(std::get<InstructionSeq>(prog_or_error), xdp_info, {}),
             Catch::Matchers::ContainsSubstring("rejected: helper function is unavailable on this platform") &&
                 Catch::Matchers::ContainsSubstring("(at 0)"));
     }

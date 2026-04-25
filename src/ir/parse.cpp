@@ -14,7 +14,6 @@
 #include "crab/type_encoding.hpp"
 #include "crab/var_registry.hpp"
 #include "ir/parse.hpp"
-#include "ir/unmarshal.hpp"
 #include "platform.hpp"
 #include "result.hpp"
 #include "string_constraints.hpp"
@@ -167,7 +166,7 @@ Instruction parse_instruction(const std::string& line, const std::map<std::strin
     }
     if (regex_match(text, m, regex("call " FUNC))) {
         const int func = to_int(m[1]);
-        return make_call(func, g_ebpf_platform_linux, program_type);
+        return Call{.func = func, .kind = CallKind::helper};
     }
     if (regex_match(text, m, regex("call " WRAPPED_LABEL))) {
         return CallLocal{.target = label_name_to_label.at(m[1])};
