@@ -255,7 +255,7 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
         case T_PACKET: {
             Variable lb = access_reg.packet_offset;
             LinearExpression ub = lb + width;
-            require_region_bounds(T_PACKET, access_reg, lb, ub);
+            require_region_bounds(T_PACKET, access_reg, lb, ub, variable_registry.packet_size());
             // Packet memory is both readable and writable.
             break;
         }
