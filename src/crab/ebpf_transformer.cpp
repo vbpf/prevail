@@ -199,11 +199,11 @@ void EbpfTransformer::havoc_subprogram_stack(const std::string& prefix) {
     if (!intv.is_singleton()) {
         return;
     }
-    const auto frame_size = context.options.subprogram_stack_size;
+    const auto frame_size = context.runtime().subprogram_stack_size;
     const int64_t stack_start = intv.singleton()->cast_to<int64_t>() - frame_size;
     stack.havoc_type(dom.state.types, Interval{stack_start}, Interval{frame_size});
     for (const DataKind kind : iterate_kinds()) {
-        stack.havoc(dom.state.values, kind, Interval{stack_start}, Interval{frame_size}, context.options.big_endian);
+        stack.havoc(dom.state.values, kind, Interval{stack_start}, Interval{frame_size}, context.runtime().big_endian);
     }
 }
 
@@ -345,7 +345,7 @@ void EbpfTransformer::operator()(const Un& stmt) {
     // so we use unsigned which still fits in a signed int64.
     switch (stmt.op) {
     case Un::Op::BE16:
-        if (!context.options.big_endian) {
+        if (!context.runtime().big_endian) {
             swap_endianness(dst.svalue, boost::endian::endian_reverse<uint16_t>);
             swap_endianness(dst.uvalue, boost::endian::endian_reverse<uint16_t>);
         } else {
@@ -354,7 +354,7 @@ void EbpfTransformer::operator()(const Un& stmt) {
         }
         break;
     case Un::Op::BE32:
-        if (!context.options.big_endian) {
+        if (!context.runtime().big_endian) {
             swap_endianness(dst.svalue, boost::endian::endian_reverse<uint32_t>);
             swap_endianness(dst.uvalue, boost::endian::endian_reverse<uint32_t>);
         } else {
@@ -363,13 +363,13 @@ void EbpfTransformer::operator()(const Un& stmt) {
         }
         break;
     case Un::Op::BE64:
-        if (!context.options.big_endian) {
+        if (!context.runtime().big_endian) {
             swap_endianness(dst.svalue, boost::endian::endian_reverse<int64_t>);
             swap_endianness(dst.uvalue, boost::endian::endian_reverse<uint64_t>);
         }
         break;
     case Un::Op::LE16:
-        if (context.options.big_endian) {
+        if (context.runtime().big_endian) {
             swap_endianness(dst.svalue, boost::endian::endian_reverse<uint16_t>);
             swap_endianness(dst.uvalue, boost::endian::endian_reverse<uint16_t>);
         } else {
@@ -378,7 +378,7 @@ void EbpfTransformer::operator()(const Un& stmt) {
         }
         break;
     case Un::Op::LE32:
-        if (context.options.big_endian) {
+        if (context.runtime().big_endian) {
             swap_endianness(dst.svalue, boost::endian::endian_reverse<uint32_t>);
             swap_endianness(dst.uvalue, boost::endian::endian_reverse<uint32_t>);
         } else {
@@ -387,7 +387,7 @@ void EbpfTransformer::operator()(const Un& stmt) {
         }
         break;
     case Un::Op::LE64:
-        if (context.options.big_endian) {
+        if (context.runtime().big_endian) {
             swap_endianness(dst.svalue, boost::endian::endian_reverse<int64_t>);
             swap_endianness(dst.uvalue, boost::endian::endian_reverse<uint64_t>);
         }
@@ -425,7 +425,7 @@ void EbpfTransformer::operator()(const Exit& a) {
 
     // Restore r10.
     constexpr Reg r10_reg{R10_STACK_POINTER};
-    add(r10_reg, context.options.subprogram_stack_size, 64);
+    add(r10_reg, context.runtime().subprogram_stack_size, 64);
 
     // Scratch r1-r5: the callee may have clobbered them (caller-saved per BPF ABI).
     scratch_caller_saved_registers();
@@ -464,7 +464,7 @@ void EbpfTransformer::do_load_stack(TypeToNumDomain& state, const Reg& target_re
     if (width == 1 || width == 2 || width == 4 || width == 8) {
         // Use the addr before we havoc the destination register since we might be getting the
         // addr from that same register.
-        const bool big_endian = context.options.big_endian;
+        const bool big_endian = context.runtime().big_endian;
         const std::optional<LinearExpression> sresult =
             stack.load(state.values, DataKind::svalues, addr, width, big_endian);
         const std::optional<LinearExpression> uresult =
@@ -533,7 +533,7 @@ static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, 
             // EXPERIMENTAL: Explicit upper bound since packet_size is min_only.
             // This preserves the relational constraint (packet_offset <= packet_size)
             // while ensuring comparison checks have a concrete upper bound.
-            state.values.add_constraint(target.packet_offset < context.options.max_packet_size);
+            state.values.add_constraint(target.packet_offset < context.runtime().max_packet_size);
         }
     } else if (addr == desc->meta) {
         if (width == offset_width) {
@@ -550,7 +550,7 @@ static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, 
     if (width == offset_width) {
         state.assign_type(target_reg, T_PACKET);
         state.values.add_constraint(4098 <= target.svalue);
-        state.values.add_constraint(target.svalue <= ptr_max(context.options.max_packet_size));
+        state.values.add_constraint(target.svalue <= ptr_max(context.runtime().max_packet_size));
     }
 }
 
@@ -587,7 +587,7 @@ void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
         do_load_stack(dom.state, target_reg, addr, width, b.access.basereg);
         return;
     }
-    dom.state = dom.state.join_over_types(b.access.basereg, [&](TypeToNumDomain& state, TypeEncoding type) {
+    dom.state = dom.state.join_over_types(b.access.basereg, [&](TypeToNumDomain& state, const TypeEncoding type) {
         switch (type) {
         case T_CTX: do_load_ctx(state, context, target_reg, mem_reg.ctx_offset + offset, width); break;
         case T_STACK: do_load_stack(state, target_reg, mem_reg.stack_offset + offset, width, b.access.basereg); break;
@@ -626,14 +626,14 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& state, const LinearExpress
                                      const std::optional<Reg>& opt_val_reg) {
     const Interval addr = state.values.eval_interval(symb_addr);
     const Interval width{exact_width};
-    const bool big_endian = context.options.big_endian;
+    const bool big_endian = context.runtime().big_endian;
     // no aliasing of val - we don't move from stack to stack, so we can just havoc first
     stack.havoc_type(state.types, addr, width);
     for (const DataKind kind : iterate_kinds()) {
         if (kind == DataKind::svalues || kind == DataKind::uvalues) {
             continue;
         }
-        stack.havoc(state.values, kind, addr, width, context.options.big_endian);
+        stack.havoc(state.values, kind, addr, width, context.runtime().big_endian);
     }
     bool must_be_num = false;
     if (opt_val_reg && !state.is_initialized(*opt_val_reg)) {
@@ -869,7 +869,7 @@ void EbpfTransformer::operator()(const Call& call) {
                     }
                     const Interval addr = state.values.eval_interval(*offset);
                     for (const DataKind kind : iterate_kinds()) {
-                        stack.havoc(state.values, kind, addr, w, context.options.big_endian);
+                        stack.havoc(state.values, kind, addr, w, context.runtime().big_endian);
                     }
                     // Keep this scoped to stack-typed pointers only.
                     stack.store_numbers(addr, w);
@@ -900,7 +900,7 @@ void EbpfTransformer::operator()(const Call& call) {
                     // Pointer to a memory region that the called function may change,
                     // so we must havoc.
                     for (const DataKind kind : iterate_kinds()) {
-                        stack.havoc(state.values, kind, addr, width, context.options.big_endian);
+                        stack.havoc(state.values, kind, addr, width, context.runtime().big_endian);
                     }
                 } else {
                     store_numbers = false;
@@ -986,7 +986,7 @@ void EbpfTransformer::operator()(const CallLocal& call) {
 
     // Update r10.
     constexpr Reg r10_reg{R10_STACK_POINTER};
-    add(r10_reg, -context.options.subprogram_stack_size, 64);
+    add(r10_reg, -context.runtime().subprogram_stack_size, 64);
 }
 
 void EbpfTransformer::operator()(const Callx& callx) {
@@ -1065,7 +1065,7 @@ void EbpfTransformer::assign_valid_ptr(const Reg& dst_reg, const bool maybe_null
     } else {
         dom.state.values.add_constraint(0 < reg.svalue);
     }
-    dom.state.values.add_constraint(reg.svalue <= ptr_max(context.options.max_packet_size));
+    dom.state.values.add_constraint(reg.svalue <= ptr_max(context.runtime().max_packet_size));
     dom.state.values.assign(reg.uvalue, reg.svalue);
 }
 
@@ -1118,7 +1118,7 @@ void EbpfTransformer::shl(const Reg& dst_reg, int imm, const int finite_width) {
     }
 }
 
-void EbpfTransformer::lshr(const Reg& dst_reg, int imm, int finite_width) {
+void EbpfTransformer::lshr(const Reg& dst_reg, int imm, const int finite_width) {
     dom.state.havoc_offsets(dst_reg);
 
     // The BPF ISA requires masking the imm.

@@ -113,7 +113,7 @@ struct BpfLoadMapDef {
 };
 
 static int create_map_linux(uint32_t map_type, uint32_t key_size, uint32_t value_size, uint32_t max_entries,
-                            ebpf_verifier_options_t);
+                            VerifierOptions);
 
 // Allow for comma as a separator between multiple prefixes, to make
 // the preprocessor treat a prefix list as one macro argument.
@@ -239,7 +239,7 @@ static const EbpfMapType linux_map_types[] = {
     {BPF_MAP_TYPE(ARENA)},
 };
 
-EbpfMapType get_map_type_linux(uint32_t platform_specific_type) {
+EbpfMapType get_map_type_linux(const uint32_t platform_specific_type) {
     const uint32_t index = platform_specific_type;
     if (index == 0 || index >= std::size(linux_map_types)) {
         return linux_map_types[0];
@@ -272,7 +272,7 @@ static int allocate_mock_map_fd(const std::vector<EbpfMapDescriptor>& map_descri
 
 void parse_maps_section_linux(std::vector<EbpfMapDescriptor>& map_descriptors, const char* data,
                               const size_t map_def_size, const int map_count, const ebpf_platform_t* platform,
-                              const ebpf_verifier_options_t options) {
+                              const VerifierOptions options) {
     auto mapdefs = std::vector<BpfLoadMapDef>();
     for (int i = 0; i < map_count; i++) {
         BpfLoadMapDef def = {0};
@@ -316,7 +316,7 @@ static int do_bpf(const bpf_cmd cmd, bpf_attr& attr) { return syscall(321, cmd, 
  *  This function requires admin privileges.
  */
 static int create_map_linux(const uint32_t map_type, const uint32_t key_size, const uint32_t value_size,
-                            const uint32_t max_entries, const ebpf_verifier_options_t) {
+                            const uint32_t max_entries, const VerifierOptions) {
 #if __linux__
     bpf_attr attr{};
     memset(&attr, '\0', sizeof(attr));

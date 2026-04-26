@@ -33,7 +33,7 @@ struct ElfProgramInfo {
 /// @note Not thread-safe. Callers must synchronize externally.
 class ElfObject {
   public:
-    ElfObject(std::string path, ebpf_verifier_options_t options, const ebpf_platform_t* platform);
+    ElfObject(std::string path, VerifierOptions options, const ebpf_platform_t* platform);
     ~ElfObject();
     ElfObject(ElfObject&&) noexcept;
     ElfObject& operator=(ElfObject&&) noexcept;

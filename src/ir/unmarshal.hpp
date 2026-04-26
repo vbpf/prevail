@@ -21,8 +21,8 @@ namespace prevail {
  */
 std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog,
                                                     std::vector<std::vector<std::string>>& notes,
-                                                    const prevail::ebpf_verifier_options_t& options);
+                                                    const prevail::VerifierOptions& options);
 std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog,
-                                                    const prevail::ebpf_verifier_options_t& options);
+                                                    const prevail::VerifierOptions& options);
 
 } // namespace prevail

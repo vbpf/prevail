@@ -165,7 +165,7 @@ struct DetailedPrinter : LineInfoPrinter {
     }
 };
 
-void print_program(const Program& prog, std::ostream& os, const verbosity_options_t& verbosity) {
+void print_program(const Program& prog, std::ostream& os, const VerbosityOptions& verbosity) {
     DetailedPrinter printer{os, prog, verbosity.print_line_info};
     for (const BasicBlock& bb : BasicBlock::collect_basic_blocks(prog.cfg(), verbosity.simplify)) {
         printer.print_jump("from", bb.first_label());
@@ -180,7 +180,7 @@ void print_program(const Program& prog, std::ostream& os, const verbosity_option
 }
 
 void print_invariants(std::ostream& os, const Program& prog, const AnalysisResult& result,
-                      const verbosity_options_t& verbosity) {
+                      const VerbosityOptions& verbosity) {
     DetailedPrinter printer{os, prog, verbosity.print_line_info};
     for (const BasicBlock& bb : BasicBlock::collect_basic_blocks(prog.cfg(), verbosity.simplify)) {
         if (result.invariants.at(bb.first_label()).pre.is_bottom()) {
@@ -263,7 +263,7 @@ std::string to_string(const VerificationError& error) {
 }
 
 void print_error(std::ostream& os, const VerificationError& error, const Program& prog,
-                 const verbosity_options_t& verbosity) {
+                 const VerbosityOptions& verbosity) {
     LineInfoPrinter printer{os, prog.info().line_info, verbosity.print_line_info};
     if (const auto& label = error.where) {
         printer.print_line_info(*label);
@@ -755,7 +755,7 @@ std::ostream& operator<<(std::ostream& os, const btf_line_info_t& line_info) {
 }
 
 void print_invariants_filtered(std::ostream& os, const Program& prog, const AnalysisResult& result,
-                               const std::set<Label>& filter, const verbosity_options_t& verbosity,
+                               const std::set<Label>& filter, const VerbosityOptions& verbosity,
                                const std::map<Label, RelevantState>* relevance) {
     DetailedPrinter printer{os, prog, verbosity.print_line_info};
     const bool compact = verbosity.compact_slice;
@@ -983,7 +983,7 @@ void print_invariants_filtered(std::ostream& os, const Program& prog, const Anal
 }
 
 void print_failure_slices(std::ostream& os, const Program& prog, const AnalysisResult& result,
-                          const std::vector<FailureSlice>& slices, const verbosity_options_t& verbosity) {
+                          const std::vector<FailureSlice>& slices, const VerbosityOptions& verbosity) {
     if (slices.empty()) {
         os << "No verification failures found.\n";
         return;

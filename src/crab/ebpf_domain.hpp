@@ -97,7 +97,7 @@ class EbpfDomain final {
     /// default-options size.
     static EbpfDomain from_constraints(const std::vector<std::pair<Variable, TypeSet>>& type_restrictions,
                                        const std::vector<LinearConstraint>& value_constraints,
-                                       size_t total_stack_size = ebpf_verifier_options_t{}.total_stack_size());
+                                       size_t total_stack_size = RuntimeConfig{}.total_stack_size());
     void initialize_packet(const AnalysisContext& context);
 
     StringInvariant to_set() const;

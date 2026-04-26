@@ -32,12 +32,12 @@ Condition eq0_zero_is64() { return Condition{.op = Condition::Op::EQ, .left = Re
 
 TEST_CASE("pass_connect_edges rejects an empty instruction sequence", "[passes]") {
     const ProgramInfo info = default_info();
-    const InstructionSeq empty;
+    constexpr InstructionSeq empty;
     REQUIRE_THROWS_WITH(Program::from_sequence(empty, info, {}),
                         Catch::Matchers::ContainsSubstring("empty instruction sequence"));
 }
 
-TEST_CASE("pass_connect_edges short-circuits when a conditional target equals fallthrough", "[passes]") {
+TEST_CASE("pass_connect_edges short-circuits", "[passes]") {
     // The true-branch target is also the fallthrough label, so no synthetic Assume jump-labels
     // should be created -- just a plain add_child edge.
     const ProgramInfo info = default_info();
@@ -106,8 +106,8 @@ TEST_CASE("pass_lower_pseudo_loads rewrites VARIABLE_ADDR to an lddw Bin MOV", "
     REQUIRE(bin->lddw);
     const auto* imm = std::get_if<Imm>(&bin->v);
     REQUIRE(imm != nullptr);
-    const uint64_t expected = (static_cast<uint64_t>(static_cast<uint32_t>(0x5678)) << 32) |
-                              static_cast<uint64_t>(static_cast<uint32_t>(0x1234));
+    constexpr uint64_t expected = (static_cast<uint64_t>(static_cast<uint32_t>(0x5678)) << 32) |
+                                  static_cast<uint64_t>(static_cast<uint32_t>(0x1234));
     REQUIRE(imm->v == expected);
 }
 
@@ -176,9 +176,9 @@ TEST_CASE("pass_insert_termination_counters adds a counter at a WTO loop head", 
     seq.push_back(at(0, Bin{.op = Bin::Op::MOV, .dst = Reg{0}, .v = Imm{0}, .is64 = true}));
     seq.push_back(at(1, Jmp{.cond = std::nullopt, .target = Label{0}}));
 
-    ebpf_verifier_options_t options;
-    options.cfg_opts.check_for_termination = true;
-    options.cfg_opts.must_have_exit = false; // cycle without an exit is fine for this test
+    VerifierOptions options;
+    options.runtime.check_for_termination = true;
+    options.must_have_exit = false; // cycle without an exit is fine for this test
     const Program prog = Program::from_sequence(seq, info, options);
 
     bool found_counter = false;
@@ -197,8 +197,8 @@ TEST_CASE("pass_insert_termination_counters is off by default", "[passes]") {
     seq.push_back(at(0, Bin{.op = Bin::Op::MOV, .dst = Reg{0}, .v = Imm{0}, .is64 = true}));
     seq.push_back(at(1, Jmp{.cond = std::nullopt, .target = Label{0}}));
 
-    ebpf_verifier_options_t options;
-    options.cfg_opts.must_have_exit = false;
+    VerifierOptions options;
+    options.must_have_exit = false;
     // check_for_termination defaults to false.
     const Program prog = Program::from_sequence(seq, info, options);
 

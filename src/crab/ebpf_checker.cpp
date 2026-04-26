@@ -97,8 +97,8 @@ void EbpfChecker::operator()(const Comparable& s) const {
             throw_fail("Cannot subtract pointers to non-singleton regions");
         }
         // And, to avoid wraparound errors, they must be within bounds.
-        this->operator()(ValidAccess{context.options.max_call_stack_frames, s.r1, 0, Imm{0}, false});
-        this->operator()(ValidAccess{context.options.max_call_stack_frames, s.r2, 0, Imm{0}, false});
+        this->operator()(ValidAccess{context.runtime().max_call_stack_frames, s.r1, 0, Imm{0}, false});
+        this->operator()(ValidAccess{context.runtime().max_call_stack_frames, s.r2, 0, Imm{0}, false});
     } else {
         // _Maybe_ different types, so r2 must be a number.
         // We checked in a previous assertion that r1 is a pointer or a number.
@@ -119,7 +119,7 @@ void EbpfChecker::operator()(const ValidDivisor& s) const {
     if (!dom.state.implies_superset(s.reg, TS_POINTER, s.reg, TS_NUM)) {
         throw_fail("Only numbers can be used as divisors");
     }
-    if (!context.options.allow_division_by_zero) {
+    if (!context.runtime().allow_division_by_zero) {
         const auto reg = reg_pack(s.reg);
         const auto v = s.is_signed ? reg.svalue : reg.uvalue;
         require_value(dom.state, v != 0, "Possible division by zero");
@@ -160,7 +160,7 @@ void EbpfChecker::operator()(const FuncConstraint& s) const {
                 throw_fail("invalid helper function id " + std::to_string(imm));
             }
             const Call call{.func = imm, .kind = CallKind::helper};
-            for (const Assertion& sub_assertion : get_assertions(call, context.program_info(), context.options, {})) {
+            for (const Assertion& sub_assertion : get_assertions(call, context.program_info(), context.runtime(), {})) {
                 // TODO: create explicit sub assertions elsewhere
                 EbpfChecker{dom, sub_assertion, context}.visit();
             }
@@ -225,7 +225,7 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
                 std::string ub_s = ub_is && ub_is->fits<int32_t>() ? std::to_string(ub_is->narrow<int32_t>()) : "oo";
                 require_value(dom.state, LinearConstraint::false_const(),
                               "Illegal map update with a non-numerical value [" + lb_s + "-" + ub_s + ")");
-            } else if (context.options.strict && fd_type.has_value()) {
+            } else if (context.runtime().strict && fd_type.has_value()) {
                 EbpfMapType map_type = context.platform().get_map_type(*fd_type);
                 if (map_type.is_array) {
                     // Get offset value.
@@ -291,9 +291,9 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
         switch (type) {
         case T_STACK: {
             const auto [lb, ub] = lb_ub_access_pair(s, reg.stack_offset);
-            require_lower_bound(lb, reg_pack(R10_STACK_POINTER).stack_offset - context.options.subprogram_stack_size,
+            require_lower_bound(lb, reg_pack(R10_STACK_POINTER).stack_offset - context.runtime().subprogram_stack_size,
                                 "Lower bound must be at least r10.stack_offset - subprogram_stack_size");
-            require_upper_bound(ub, LinearExpression{context.options.total_stack_size()},
+            require_upper_bound(ub, LinearExpression{context.runtime().total_stack_size()},
                                 "Upper bound must be at most total_stack_size");
             // Stack reads must hit known-numeric bytes.
             if (s.access_type == AccessType::read &&
@@ -326,7 +326,7 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             // max_packet_size ceiling. Real dereferences must be bounded by
             // the runtime packet_size variable.
             if (is_comparison_check) {
-                const auto max = context.options.max_packet_size;
+                const auto max = context.runtime().max_packet_size;
                 require_upper_bound(ub, LinearExpression{max}, "Upper bound must be at most " + std::to_string(max));
             } else {
                 require_upper_bound(ub, variable_registry.packet_size(), "Upper bound must be at most packet_size");

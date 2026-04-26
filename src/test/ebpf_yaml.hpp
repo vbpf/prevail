@@ -18,7 +18,7 @@ struct TestCase {
     // In that case, analysis is skipped and the exception message is compared.
     std::optional<std::string> expected_exception;
     std::optional<std::string> actual_exception;
-    ebpf_verifier_options_t options{};
+    VerifierOptions options{};
     StringInvariant assumed_pre_invariant;
     InstructionSeq instruction_seq;
     StringInvariant expected_post_invariant;

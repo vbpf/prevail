@@ -10,7 +10,7 @@
 
 using namespace prevail;
 
-int main(int argc, char** argv) {
+int main(const int argc, char** argv) {
     CLI::App app{"Run YAML test cases"};
 
     std::string filename;

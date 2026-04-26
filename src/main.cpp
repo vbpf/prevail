@@ -48,7 +48,7 @@ int main(int argc, char** argv) {
     // Always call ebpf_verifier_clear_thread_local_state on scope exit.
     ThreadLocalGuard thread_local_state_guard;
 
-    ebpf_verifier_options_t ebpf_verifier_options;
+    VerifierOptions ebpf_verifier_options;
 
     CrabEnableWarningMsg(false);
 
@@ -75,32 +75,33 @@ int main(int argc, char** argv) {
     bool print_cfg = false;
     app.add_flag("--cfg", print_cfg, "Print control-flow graph and exit");
 
-    app.add_flag("--termination,!--no-verify-termination", ebpf_verifier_options.cfg_opts.check_for_termination,
+    app.add_flag("--termination,!--no-verify-termination", ebpf_verifier_options.runtime.check_for_termination,
                  "Verify termination. Default: ignore")
         ->group("Features");
 
-    app.add_flag("--allow-division-by-zero,!--no-division-by-zero", ebpf_verifier_options.allow_division_by_zero,
+    app.add_flag("--allow-division-by-zero,!--no-division-by-zero",
+                 ebpf_verifier_options.runtime.allow_division_by_zero,
                  "Handling potential division by zero. Default: allow")
         ->group("Features");
 
-    app.add_flag("--strict,-s", ebpf_verifier_options.strict,
+    app.add_flag("--strict,-s", ebpf_verifier_options.runtime.strict,
                  "Apply additional checks that would cause runtime failures")
         ->group("Features");
 
-    app.add_option("--stack-size", ebpf_verifier_options.subprogram_stack_size,
+    app.add_option("--stack-size", ebpf_verifier_options.runtime.subprogram_stack_size,
                    "Per-subprogram stack frame size in bytes (default: 512)")
         ->group("Features")
-        ->check(CLI::Range(1, ebpf_verifier_options_t::MAX_SUBPROGRAM_STACK_SIZE));
+        ->check(CLI::Range(1, RuntimeConfig::MAX_SUBPROGRAM_STACK_SIZE));
 
-    app.add_option("--max-call-stack-frames", ebpf_verifier_options.max_call_stack_frames,
+    app.add_option("--max-call-stack-frames", ebpf_verifier_options.runtime.max_call_stack_frames,
                    "Maximum number of nested function calls (default: 8)")
         ->group("Features")
-        ->check(CLI::Range(1, ebpf_verifier_options_t::MAX_CALL_STACK_FRAMES_LIMIT));
+        ->check(CLI::Range(1, RuntimeConfig::MAX_CALL_STACK_FRAMES_LIMIT));
 
-    app.add_option("--max-packet-size", ebpf_verifier_options.max_packet_size,
+    app.add_option("--max-packet-size", ebpf_verifier_options.runtime.max_packet_size,
                    "Maximum packet size in bytes (default: 65535)")
         ->group("Features")
-        ->check(CLI::Range(1, ebpf_verifier_options_t::MAX_PACKET_SIZE_LIMIT));
+        ->check(CLI::Range(1, RuntimeConfig::MAX_PACKET_SIZE_LIMIT));
 
     std::set<std::string> include_groups = get_conformance_group_names();
     app.add_option("--include_groups", include_groups, "Include conformance groups")
@@ -266,7 +267,7 @@ int main(int argc, char** argv) {
         if (!quiet) {
             if (pass) {
                 std::cout << "PASS: " << label;
-                if (ebpf_verifier_options.cfg_opts.check_for_termination) {
+                if (ebpf_verifier_options.runtime.check_for_termination) {
                     std::cout << " (terminates within " << result.max_loop_count << " loop iterations)";
                 }
                 std::cout << "\n";

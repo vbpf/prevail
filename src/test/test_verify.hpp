@@ -48,7 +48,7 @@ enum class VerifyIssueKind {
     LegacyBccBehavior,
 };
 
-inline const char* to_string(VerifyIssueKind kind) noexcept {
+inline const char* to_string(const VerifyIssueKind kind) noexcept {
     switch (kind) {
     case VerifyIssueKind::VerifierTypeTracking: return "VerifierTypeTracking";
     case VerifyIssueKind::VerifierBoundsTracking: return "VerifierBoundsTracking";
@@ -90,7 +90,7 @@ struct ElfObjectCacheKeyHash {
 
 inline std::vector<prevail::RawProgram> read_elf_cached(const std::string& path, const std::string& desired_section,
                                                         const std::string& desired_program,
-                                                        const prevail::ebpf_verifier_options_t& options,
+                                                        const prevail::VerifierOptions& options,
                                                         const prevail::ebpf_platform_t* platform) {
     static std::mutex cache_mutex;
     static std::unordered_map<ElfObjectCacheKey, prevail::ElfObject, ElfObjectCacheKeyHash> object_cache;
@@ -101,7 +101,7 @@ inline std::vector<prevail::RawProgram> read_elf_cached(const std::string& path,
         .verbosity_print_line_info = options.verbosity_opts.print_line_info,
         .verbosity_dump_btf_types_json = options.verbosity_opts.dump_btf_types_json,
     };
-    prevail::ebpf_verifier_options_t loader_options{};
+    prevail::VerifierOptions loader_options{};
     loader_options.verbosity_opts.print_line_info = options.verbosity_opts.print_line_info;
     loader_options.verbosity_opts.dump_btf_types_json = options.verbosity_opts.dump_btf_types_json;
 
@@ -164,7 +164,7 @@ struct BoundedTestName {
 // Verify a program in a section that may have multiple programs in it.
 #define VERIFY_PROGRAM(dirname, filename, section_name, program_name, _options, platform, should_pass, count) \
     do {                                                                                                      \
-        const prevail::ebpf_verifier_options_t _prevail_opts = _options;                                      \
+        const prevail::VerifierOptions _prevail_opts = _options;                                              \
         auto raw_progs = verify_test::read_elf_cached("ebpf-samples/" dirname "/" filename, section_name, "", \
                                                       _prevail_opts, platform);                               \
         REQUIRE(raw_progs.size() == count);                                                                   \
@@ -249,9 +249,9 @@ struct BoundedTestName {
 
 #define TEST_SECTION_REJECT_IF_STRICT(project, filename, section)                                    \
     BOUNDED_TEST_CASE(project "/" filename " " section, "[verify][samples][" project "]") {          \
-        prevail::ebpf_verifier_options_t options{};                                                  \
+        prevail::VerifierOptions options{};                                                          \
         VERIFY_SECTION(project, filename, section, options, &prevail::g_ebpf_platform_linux, true);  \
-        options.strict = true;                                                                       \
+        options.runtime.strict = true;                                                               \
         VERIFY_SECTION(project, filename, section, options, &prevail::g_ebpf_platform_linux, false); \
     }
 

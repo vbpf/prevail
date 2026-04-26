@@ -612,11 +612,10 @@ struct Unmarshaller {
         }
     }
 
-    vector<LabeledInstruction> unmarshal(vector<EbpfInst> const& insts,
-                                         const prevail::ebpf_verifier_options_t& options) {
-        options.validate();
-        subprogram_stack_size = options.subprogram_stack_size;
-        allow_division_by_zero = options.allow_division_by_zero;
+    vector<LabeledInstruction> unmarshal(vector<EbpfInst> const& insts, const prevail::VerifierOptions& options) {
+        options.runtime.validate();
+        subprogram_stack_size = options.runtime.subprogram_stack_size;
+        allow_division_by_zero = options.runtime.allow_division_by_zero;
         vector<LabeledInstruction> prog;
         int exit_count = 0;
         if (insts.empty()) {
@@ -714,7 +713,7 @@ struct Unmarshaller {
 };
 
 std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog, vector<vector<string>>& notes,
-                                                    const prevail::ebpf_verifier_options_t& options) {
+                                                    const prevail::VerifierOptions& options) {
     try {
         return Unmarshaller{notes, raw_prog.info}.unmarshal(raw_prog.prog, options);
     } catch (InvalidInstruction& arg) {
@@ -725,7 +724,7 @@ std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog, 
 }
 
 std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog,
-                                                    const prevail::ebpf_verifier_options_t& options) {
+                                                    const prevail::VerifierOptions& options) {
     vector<vector<string>> notes;
     return unmarshal(raw_prog, notes, options);
 }

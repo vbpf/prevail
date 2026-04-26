@@ -29,7 +29,7 @@ namespace prevail {
 
 struct parse_params_t {
     const std::string& path;
-    const ebpf_verifier_options_t& options;
+    const VerifierOptions& options;
     const ebpf_platform_t* platform;
     const std::string desired_section;
 };
@@ -211,10 +211,10 @@ class ProgramReader {
 
 std::vector<RawProgram> read_elf(std::istream& input_stream, const std::string& path,
                                  const std::string& desired_section, const std::string& desired_program,
-                                 const ebpf_verifier_options_t& options, const ebpf_platform_t* platform);
+                                 const VerifierOptions& options, const ebpf_platform_t* platform);
 
 std::vector<RawProgram> read_elf(const std::string& path, const std::string& desired_section,
-                                 const std::string& desired_program, const ebpf_verifier_options_t& options,
+                                 const std::string& desired_program, const VerifierOptions& options,
                                  const ebpf_platform_t* platform);
 
 } // namespace prevail

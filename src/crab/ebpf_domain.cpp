@@ -39,7 +39,7 @@ std::optional<int64_t> EbpfDomain::get_stack_offset(const Reg& reg) const {
 }
 
 EbpfDomain EbpfDomain::top(const AnalysisContext& context) {
-    return top(static_cast<size_t>(context.options.total_stack_size()));
+    return top(static_cast<size_t>(context.runtime().total_stack_size()));
 }
 
 EbpfDomain EbpfDomain::top(const size_t total_stack_size) {
@@ -170,7 +170,7 @@ EbpfDomain EbpfDomain::calculate_constant_limits(const AnalysisContext& context,
         inv.add_value_constraint(r.svalue >= std::numeric_limits<int32_t>::min());
         inv.add_value_constraint(r.uvalue <= std::numeric_limits<uint32_t>::max());
         inv.add_value_constraint(r.uvalue >= 0);
-        inv.add_value_constraint(r.stack_offset <= context.options.total_stack_size());
+        inv.add_value_constraint(r.stack_offset <= context.runtime().total_stack_size());
         inv.add_value_constraint(r.stack_offset >= 0);
         inv.add_value_constraint(r.shared_offset <= r.shared_region_size);
         inv.add_value_constraint(r.shared_offset >= 0);
@@ -372,7 +372,7 @@ void EbpfDomain::initialize_packet(const AnalysisContext& context) {
     inv.havoc(variable_registry.meta_offset());
 
     inv.add_value_constraint(0 <= variable_registry.packet_size());
-    inv.add_value_constraint(variable_registry.packet_size() < context.options.max_packet_size);
+    inv.add_value_constraint(variable_registry.packet_size() < context.runtime().max_packet_size);
     if (context.program_info().type.ctx_descriptor->meta >= 0) {
         inv.add_value_constraint(variable_registry.meta_offset() <= 0);
         inv.add_value_constraint(variable_registry.meta_offset() >= -4098);
@@ -397,10 +397,10 @@ EbpfDomain EbpfDomain::from_constraints(const std::vector<std::pair<Variable, Ty
 
 EbpfDomain EbpfDomain::from_constraints(const std::set<std::string>& constraints, const bool setup_constraints,
                                         const AnalysisContext& context) {
-    EbpfDomain inv =
-        setup_constraints
-            ? setup_entry(false, context)
-            : EbpfDomain{TypeToNumDomain::top(), ArrayDomain{static_cast<size_t>(context.options.total_stack_size())}};
+    EbpfDomain inv = setup_constraints
+                         ? setup_entry(false, context)
+                         : EbpfDomain{TypeToNumDomain::top(),
+                                      ArrayDomain{static_cast<size_t>(context.runtime().total_stack_size())}};
     auto numeric_ranges = std::vector<Interval>();
     auto [type_equalities, type_restrictions, value_constraints] =
         parse_linear_constraints(constraints, numeric_ranges);
@@ -432,9 +432,9 @@ EbpfDomain EbpfDomain::setup_entry(const bool init_r1, const AnalysisContext& co
 
     const auto r10 = variable_registry.reg_pack(R10_STACK_POINTER);
     constexpr Reg r10_reg{R10_STACK_POINTER};
-    const auto total_stack = context.options.total_stack_size();
+    const auto total_stack = context.runtime().total_stack_size();
     inv.state.values.add_constraint(total_stack <= r10.svalue);
-    inv.state.values.add_constraint(r10.svalue <= ptr_max(context.options.max_packet_size));
+    inv.state.values.add_constraint(r10.svalue <= ptr_max(context.runtime().max_packet_size));
     inv.state.values.assign(r10.stack_offset, total_stack);
     // stack_numeric_size would be 0, but TOP has the same result
     // so no need to assign it.
@@ -444,7 +444,7 @@ EbpfDomain EbpfDomain::setup_entry(const bool init_r1, const AnalysisContext& co
         const auto r1 = variable_registry.reg_pack(R1_ARG);
         constexpr Reg r1_reg{R1_ARG};
         inv.state.values.add_constraint(1 <= r1.svalue);
-        inv.state.values.add_constraint(r1.svalue <= ptr_max(context.options.max_packet_size));
+        inv.state.values.add_constraint(r1.svalue <= ptr_max(context.runtime().max_packet_size));
         inv.state.values.assign(r1.ctx_offset, 0);
         inv.state.assign_type(r1_reg, T_CTX);
     }

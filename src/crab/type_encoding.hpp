@@ -73,7 +73,7 @@ constexpr unsigned type_to_bit(const TypeEncoding te) { return static_cast<unsig
 class TypeSet {
     std::bitset<NUM_TYPE_ENCODINGS> bits_;
 
-    explicit TypeSet(std::bitset<NUM_TYPE_ENCODINGS> bits) : bits_{bits} {}
+    explicit TypeSet(const std::bitset<NUM_TYPE_ENCODINGS> bits) : bits_{bits} {}
 
   public:
     TypeSet() = default;

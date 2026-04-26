@@ -793,10 +793,9 @@ static void pass_insert_termination_counters(CfgBuilder& builder, const Wto& wto
 // Writes   : Populates builder.prog.m_assertions with the per-label precondition vector
 //            (memory bounds, type guards, etc.) produced by get_assertions.
 // Notes    : Runs for every label in the CFG, including synthetic ones (Assume / counters).
-static void pass_extract_assertions(CfgBuilder& builder, const ProgramInfo& info,
-                                    const ebpf_verifier_options_t& options) {
+static void pass_extract_assertions(CfgBuilder& builder, const ProgramInfo& info, const VerifierOptions& options) {
     for (const auto& label : builder.prog.labels()) {
-        builder.set_assertions(label, get_assertions(builder.prog.instruction_at(label), info, options, label));
+        builder.set_assertions(label, get_assertions(builder.prog.instruction_at(label), info, options.runtime, label));
     }
 }
 
@@ -804,9 +803,9 @@ static void pass_extract_assertions(CfgBuilder& builder, const ProgramInfo& info
 // pre/postcondition; this function's job is just to sequence them and hand the
 // result off as a finalised Program.
 Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo& info,
-                               const ebpf_verifier_options_t& options) {
+                               const VerifierOptions& options) {
     // --- Pass: ValidateOptions --------------------------------------------
-    options.validate();
+    options.runtime.validate();
     // Preserves the platform-non-null invariant for every subsequent pass in this pipeline.
     assert(info.platform != nullptr && "info.platform must be set before Program::from_sequence");
 
@@ -825,10 +824,10 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
     // ProgramInfo rather than a default-constructed (null-platform) one.
     builder.prog.m_info = info;
     pass_populate_nodes(builder, inst_seq, info, resolved_kfunc_calls, lowered_pseudo_loads);
-    pass_connect_edges(builder, inst_seq, options.cfg_opts.must_have_exit);
+    pass_connect_edges(builder, inst_seq, options.must_have_exit);
 
     // --- Pass: InlineLocalCalls -------------------------------------------
-    pass_inline_local_calls(builder, inst_seq, options.max_call_stack_frames);
+    pass_inline_local_calls(builder, inst_seq, options.runtime.max_call_stack_frames);
 
     // --- Pass: ValidateTailCallDepth --------------------------------------
     const Wto wto{builder.prog.cfg()};
@@ -838,7 +837,7 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
     pass_compute_callback_metadata(builder);
 
     // --- Pass: InsertTerminationCounters ----------------------------------
-    if (options.cfg_opts.check_for_termination) {
+    if (options.runtime.check_for_termination) {
         pass_insert_termination_counters(builder, wto);
     }
 

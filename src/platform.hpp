@@ -44,7 +44,7 @@ typedef std::optional<ResolvedCall> (*ebpf_resolve_kfunc_call_fn)(int32_t btf_id
 // In the future we may want to move map fd allocation after the verifier step.
 typedef void (*ebpf_parse_maps_section_fn)(std::vector<EbpfMapDescriptor>& map_descriptors, const char* data,
                                            size_t map_record_size, int map_count, const ebpf_platform_t* platform,
-                                           ebpf_verifier_options_t options);
+                                           VerifierOptions options);
 typedef void (*ebpf_resolve_inner_map_references_fn)(std::vector<EbpfMapDescriptor>& map_descriptors);
 
 typedef const EbpfMapDescriptor& (*ebpf_get_map_descriptor_fn)(int map_fd,

@@ -111,7 +111,7 @@ void ZoneDomain::diffcsts_of_assign(const LinearExpression& exp, std::vector<std
 void ZoneDomain::diffcsts_of_assign(const LinearExpression& exp,
                                     /* if true then process the upper
                                        bounds, else the lower bounds */
-                                    bool extract_upper_bounds,
+                                    const bool extract_upper_bounds,
                                     /* foreach {v, k} \in diff_csts we have
                                        the difference constraint v - k <= k */
                                     std::vector<std::pair<Variable, Weight>>& diff_csts) const {
@@ -298,7 +298,7 @@ static Interval trim_interval(const Interval& i, const Number& n) {
     return i;
 }
 
-bool ZoneDomain::add_univar_disequation(Variable x, const Number& n) {
+bool ZoneDomain::add_univar_disequation(const Variable x, const Number& n) {
     const Interval i = get_interval(x);
     const Interval new_i = trim_interval(i, n);
     if (new_i.is_bottom()) {

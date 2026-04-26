@@ -14,7 +14,7 @@ static bool sample_exists(const std::string& filename) { return std::filesystem:
 
 // Helper to load a program, run analysis with deps collection, and compute slices
 static std::vector<FailureSlice> get_failure_slices(const std::string& filename, const std::string& section) {
-    ebpf_verifier_options_t options{};
+    VerifierOptions options{};
     options.verbosity_opts.collect_instruction_deps = true;
 
     ElfObject elf{filename, options, &g_ebpf_platform_linux};
@@ -38,9 +38,9 @@ TEST_CASE("extract_instruction_deps for Bin instruction", "[failure_slice][deps]
     // r1 = r1 + r2 should read r1, r2 and write r1
     Bin bin_add{Bin::Op::ADD, Reg{1}, Reg{2}, true, false};
     Instruction ins = bin_add;
-    EbpfDomain dom = EbpfDomain::top(static_cast<size_t>(ebpf_verifier_options_t{}.total_stack_size()));
+    EbpfDomain dom = EbpfDomain::top(static_cast<size_t>(RuntimeConfig{}.total_stack_size()));
 
-    auto deps = extract_instruction_deps(ins, dom, ebpf_verifier_options_t{}.total_stack_size());
+    auto deps = extract_instruction_deps(ins, dom, RuntimeConfig{}.total_stack_size());
 
     REQUIRE(deps.regs_written.contains(Reg{1}));
     REQUIRE(deps.regs_read.contains(Reg{1})); // ADD also reads dst
@@ -51,9 +51,9 @@ TEST_CASE("extract_instruction_deps for MOV instruction", "[failure_slice][deps]
     // r1 = r2 should read r2 and write r1 (but not read r1)
     Bin bin_mov{Bin::Op::MOV, Reg{1}, Reg{2}, true, false};
     Instruction ins = bin_mov;
-    EbpfDomain dom = EbpfDomain::top(static_cast<size_t>(ebpf_verifier_options_t{}.total_stack_size()));
+    EbpfDomain dom = EbpfDomain::top(static_cast<size_t>(RuntimeConfig{}.total_stack_size()));
 
-    auto deps = extract_instruction_deps(ins, dom, ebpf_verifier_options_t{}.total_stack_size());
+    auto deps = extract_instruction_deps(ins, dom, RuntimeConfig{}.total_stack_size());
 
     REQUIRE(deps.regs_written.contains(Reg{1}));
     REQUIRE_FALSE(deps.regs_read.contains(Reg{1})); // MOV doesn't read dst
@@ -64,9 +64,9 @@ TEST_CASE("extract_instruction_deps for Mem load", "[failure_slice][deps]") {
     // r1 = *(r10 - 8) should read r10, write r1, and read stack[-8]
     Mem mem_load{Deref{8, Reg{10}, -8}, Reg{1}, true};
     Instruction ins = mem_load;
-    EbpfDomain dom = EbpfDomain::top(static_cast<size_t>(ebpf_verifier_options_t{}.total_stack_size()));
+    EbpfDomain dom = EbpfDomain::top(static_cast<size_t>(RuntimeConfig{}.total_stack_size()));
 
-    auto deps = extract_instruction_deps(ins, dom, ebpf_verifier_options_t{}.total_stack_size());
+    auto deps = extract_instruction_deps(ins, dom, RuntimeConfig{}.total_stack_size());
 
     REQUIRE(deps.regs_written.contains(Reg{1}));
     REQUIRE(deps.regs_read.contains(Reg{10}));
@@ -77,9 +77,9 @@ TEST_CASE("extract_instruction_deps for Mem store", "[failure_slice][deps]") {
     // *(r10 - 8) = r1 should read r10, r1 and write stack[-8]
     Mem mem_store{Deref{8, Reg{10}, -8}, Reg{1}, false};
     Instruction ins = mem_store;
-    EbpfDomain dom = EbpfDomain::top(static_cast<size_t>(ebpf_verifier_options_t{}.total_stack_size()));
+    EbpfDomain dom = EbpfDomain::top(static_cast<size_t>(RuntimeConfig{}.total_stack_size()));
 
-    auto deps = extract_instruction_deps(ins, dom, ebpf_verifier_options_t{}.total_stack_size());
+    auto deps = extract_instruction_deps(ins, dom, RuntimeConfig{}.total_stack_size());
 
     REQUIRE(deps.regs_read.contains(Reg{10}));
     REQUIRE(deps.regs_read.contains(Reg{1}));
@@ -176,7 +176,7 @@ TEST_CASE("print_failure_slices produces structured output", "[failure_slice][pr
     if (!sample_exists(sample)) {
         SKIP("Sample file not found: " << sample);
     }
-    ebpf_verifier_options_t options{};
+    VerifierOptions options{};
     options.verbosity_opts.collect_instruction_deps = true;
 
     ElfObject elf{sample, options, &g_ebpf_platform_linux};
@@ -194,7 +194,7 @@ TEST_CASE("print_failure_slices produces structured output", "[failure_slice][pr
     auto slices = result.compute_failure_slices(context);
 
     std::stringstream output;
-    verbosity_options_t verbosity{.simplify = false};
+    VerbosityOptions verbosity{.simplify = false};
     print_failure_slices(output, context.program, result, slices, verbosity);
 
     std::string output_str = output.str();
@@ -213,7 +213,7 @@ TEST_CASE("passing program produces no failure slices", "[failure_slice][integra
     if (!sample_exists(sample)) {
         SKIP("Sample file not found: " << sample);
     }
-    ebpf_verifier_options_t options{};
+    VerifierOptions options{};
     options.verbosity_opts.collect_instruction_deps = true;
 
     ElfObject elf{sample, options, &g_ebpf_platform_linux};
@@ -251,7 +251,7 @@ TEST_CASE("assume guard registers become relevant in slice", "[failure_slice][in
 
     // Check that at least one Assume label is in the slice
     // (the guard condition that determines reachability of the failing label)
-    ebpf_verifier_options_t options{};
+    VerifierOptions options{};
     options.verbosity_opts.collect_instruction_deps = true;
     ElfObject elf{sample, options, &g_ebpf_platform_linux};
     const auto& raw_progs = elf.get_programs("xdp");

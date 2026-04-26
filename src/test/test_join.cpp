@@ -395,7 +395,7 @@ TEST_CASE("close_after_widen recovers transitive edge through unstable vertex", 
     // close_after_widen should run Dijkstra recovery from unstable vertex 1
     // and discover the transitive path 1->2->3 = 5+5 = 10, adding edge 1->3: 10.
 
-    auto make_graph = [](Weight w13) {
+    auto make_graph = [](const Weight w13) {
         Graph g;
         g.growTo(4);
         g.add_edge(0, Weight(100), 1);

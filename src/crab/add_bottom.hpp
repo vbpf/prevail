@@ -180,7 +180,7 @@ class AddBottom final {
         return Interval::bottom();
     }
 
-    void set(Variable x, const Interval& intv) {
+    void set(const Variable x, const Interval& intv) {
         if (intv.is_bottom()) {
             dom = {};
         } else if (dom) {

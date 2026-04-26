@@ -67,7 +67,7 @@ class Program {
     }
 
     static Program from_sequence(const InstructionSeq& inst_seq, const ProgramInfo& info,
-                                 const ebpf_verifier_options_t& options);
+                                 const VerifierOptions& options);
 };
 
 class InvalidControlFlow final : public std::runtime_error {
@@ -75,9 +75,9 @@ class InvalidControlFlow final : public std::runtime_error {
     explicit InvalidControlFlow(const std::string& what) : std::runtime_error(what) {}
 };
 
-std::vector<Assertion> get_assertions(const Instruction& ins, const ProgramInfo& info,
-                                      const ebpf_verifier_options_t& options, const std::optional<Label>& label);
+std::vector<Assertion> get_assertions(const Instruction& ins, const ProgramInfo& info, const RuntimeConfig& runtime,
+                                      const std::optional<Label>& label);
 
-void print_program(const Program& prog, std::ostream& os, const verbosity_options_t& verbosity);
+void print_program(const Program& prog, std::ostream& os, const VerbosityOptions& verbosity);
 void print_dot(const Program& prog, const std::string& outfile);
 } // namespace prevail

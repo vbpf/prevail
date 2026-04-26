@@ -8,7 +8,7 @@ namespace prevail::dsl_syntax {
 
 inline LinearExpression operator-(const LinearExpression& e) { return e.negate(); }
 
-inline LinearExpression operator*(Variable x, const Number& n) { return LinearExpression(n, x); }
+inline LinearExpression operator*(const Variable x, const Number& n) { return LinearExpression(n, x); }
 
 inline LinearExpression operator*(const Number& n, const LinearExpression& e) { return e.multiply(n); }
 

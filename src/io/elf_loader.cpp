@@ -43,7 +43,7 @@ struct SectionCacheEntry {
 
 struct ElfObject::ElfObjectState {
     std::string path;
-    ebpf_verifier_options_t options;
+    VerifierOptions options;
     const ebpf_platform_t* platform;
 
     bool catalog_loaded{};
@@ -58,7 +58,7 @@ struct ElfObject::ElfObjectState {
     std::optional<ELFIO::elfio> reader;
     std::optional<ELFIO::const_symbol_section_accessor> symbols;
 
-    ElfObjectState(std::string p, ebpf_verifier_options_t opts, const ebpf_platform_t* plat)
+    ElfObjectState(std::string p, VerifierOptions opts, const ebpf_platform_t* plat)
         : path(std::move(p)), options(std::move(opts)), platform(plat) {}
 
     void discover_programs();
@@ -177,7 +177,7 @@ std::vector<RawProgram> filter_section_programs(const std::vector<RawProgram>& p
 // ElfObject facade (delegates to ElfObjectState)
 // ---------------------------------------------------------------------------
 
-ElfObject::ElfObject(std::string path, ebpf_verifier_options_t options, const ebpf_platform_t* platform)
+ElfObject::ElfObject(std::string path, VerifierOptions options, const ebpf_platform_t* platform)
     : state_(std::make_unique<ElfObjectState>(std::move(path), std::move(options), platform)) {}
 
 ElfObject::~ElfObject() = default;

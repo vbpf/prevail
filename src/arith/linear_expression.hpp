@@ -38,7 +38,7 @@ class LinearExpression final {
 
     LinearExpression(std::integral auto coefficient) : _constant_term(coefficient) {}
     LinearExpression(is_enum auto coefficient) : _constant_term(coefficient) {}
-    LinearExpression(Variable variable) { _variable_terms[variable] = 1; }
+    LinearExpression(const Variable variable) { _variable_terms[variable] = 1; }
 
     LinearExpression(const Number& coefficient, const Variable& variable) {
         if (coefficient != 0) {
