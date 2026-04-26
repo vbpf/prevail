@@ -52,38 +52,45 @@ class EbpfChecker final {
         throw VerificationError(msg + " (" + to_string(assertion) + ")");
     }
 
-    // In-region access bounds: requires `access_lb >= floor` and
-    // `access_ub <= ceiling`. The overload set mirrors region_bounds(): each
-    // call site selects the per-type ceiling shape via the explicit T template
-    // argument, so the wrong combination is a compile error rather than a
-    // silently-ignored argument.
-    template <TypeEncoding T>
-        requires CtxDerivedCeiling<T>
-    void require_region_bounds(const LinearExpression& access_lb, const LinearExpression& access_ub) const {
-        const auto bounds = region_bounds<T>(context);
-        require_in_bounds(bounds, access_lb, access_ub);
-    }
-    template <TypeEncoding T>
-        requires RegDerivedCeiling<T>
-    void require_region_bounds(const RegPack& reg, const LinearExpression& access_lb,
-                               const LinearExpression& access_ub) const {
-        const auto bounds = region_bounds<T>(reg);
-        require_in_bounds(bounds, access_lb, access_ub);
-    }
-    template <TypeEncoding T>
-        requires(T == T_PACKET)
-    void require_region_bounds(Variable packet_size, const LinearExpression& access_lb,
-                               const LinearExpression& access_ub) const {
-        const auto bounds = region_bounds<T>(packet_size);
-        require_in_bounds(bounds, access_lb, access_ub);
-    }
+    // Bounds checks for in-region accesses are split by *what determines the
+    // region's ceiling*:
+    //
+    //  - "static" regions have a ceiling that is a property of the program
+    //    invocation as a whole, not of the specific allocation that produced
+    //    the pointer. T_STACK and T_CTX read fixed ceilings from
+    //    AnalysisContext (total_stack_size, ctx_descriptor->size). T_PACKET
+    //    fits here, *not* under "dynamic", because there is exactly one
+    //    packet per program invocation: its bounds (packet_size, set once at
+    //    entry; or the loose max_packet_size constant) do not vary with the
+    //    allocation site of the pointer. The two T_PACKET ceilings split
+    //    further by access shape -- see the (Variable) overload below.
+    //
+    //  - "dynamic" regions have a ceiling that *does* depend on the
+    //    allocation site: T_SHARED's shared_region_size and T_ALLOC_MEM's
+    //    alloc_mem_size are kind variables on the RegPack, set when the
+    //    pointer was produced (map lookup, ringbuf_reserve, ...). The
+    //    TypeEncoding adds nothing the size variable does not already
+    //    carry, so the dynamic-region check takes the size directly.
 
-    void require_in_bounds(const RegionBounds& bounds, const LinearExpression& access_lb,
-                           const LinearExpression& access_ub) const {
-        using namespace dsl_syntax;
-        require_value(dom.state, access_lb >= bounds.lb_floor, bounds.lb_message);
-        require_value(dom.state, access_ub <= bounds.ub_ceiling, bounds.ub_message);
-    }
+    // Static-region bounds, ceiling chosen by `type`:
+    //   T_STACK / T_CTX -> their AnalysisContext-derived ceilings;
+    //   T_PACKET        -> the loose max_packet_size constant. Use this
+    //                      T_PACKET form *only* for pointer-comparison
+    //                      checks (width == 0) where the pointer may
+    //                      legitimately be past the runtime packet_size
+    //                      until the comparison gates the actual access.
+    void check_access_to_static_region(TypeEncoding type, const LinearExpression& access_lb,
+                                       const LinearExpression& access_ub) const;
+    // T_PACKET dereference: bound by the runtime packet_size variable. Pass
+    // `variable_registry.packet_size()`. The TypeEncoding is implicit here
+    // (only T_PACKET has a runtime-Variable ceiling).
+    void check_access_to_static_region(Variable packet_size, const LinearExpression& access_lb,
+                                       const LinearExpression& access_ub) const;
+    // Dynamic-region bounds: pass the per-allocation size variable
+    // (RegPack::shared_region_size for T_SHARED,
+    // RegPack::alloc_mem_size for T_ALLOC_MEM).
+    void check_access_to_dynamic_region(Variable region_size, const LinearExpression& access_lb,
+                                        const LinearExpression& access_ub) const;
 
     const Assertion assertion;
 
@@ -103,6 +110,52 @@ std::optional<VerificationError> ebpf_domain_check(const EbpfDomain& dom, const 
         return {error};
     }
     return {};
+}
+
+void EbpfChecker::check_access_to_static_region(const TypeEncoding type, const LinearExpression& access_lb,
+                                                const LinearExpression& access_ub) const {
+    using namespace dsl_syntax;
+    switch (type) {
+    case T_STACK: {
+        const auto floor = reg_pack(R10_STACK_POINTER).stack_offset - context.options.subprogram_stack_size;
+        require_value(dom.state, access_lb >= floor,
+                      "Lower bound must be at least r10.stack_offset - subprogram_stack_size");
+        require_value(dom.state, access_ub <= LinearExpression{context.options.total_stack_size()},
+                      "Upper bound must be at most total_stack_size");
+        return;
+    }
+    case T_CTX: {
+        const auto ctx_size = context.program_info().type.ctx_descriptor->size;
+        require_value(dom.state, access_lb >= LinearExpression{0}, "Lower bound must be at least 0");
+        require_value(dom.state, access_ub <= LinearExpression{ctx_size},
+                      std::string("Upper bound must be at most ") + std::to_string(ctx_size));
+        return;
+    }
+    case T_PACKET: {
+        const auto max = context.options.max_packet_size;
+        require_value(dom.state, access_lb >= variable_registry.meta_offset(),
+                      "Lower bound must be at least meta_offset");
+        require_value(dom.state, access_ub <= LinearExpression{max},
+                      std::string("Upper bound must be at most ") + std::to_string(max));
+        return;
+    }
+    default: throw_fail("internal error: check_access_to_static_region called on non-static region type");
+    }
+}
+
+void EbpfChecker::check_access_to_static_region(const Variable packet_size, const LinearExpression& access_lb,
+                                                const LinearExpression& access_ub) const {
+    using namespace dsl_syntax;
+    require_value(dom.state, access_lb >= variable_registry.meta_offset(), "Lower bound must be at least meta_offset");
+    require_value(dom.state, access_ub <= packet_size, "Upper bound must be at most packet_size");
+}
+
+void EbpfChecker::check_access_to_dynamic_region(const Variable region_size, const LinearExpression& access_lb,
+                                                 const LinearExpression& access_ub) const {
+    using namespace dsl_syntax;
+    require_value(dom.state, access_lb >= LinearExpression{0}, "Lower bound must be at least 0");
+    require_value(dom.state, access_ub <= region_size,
+                  std::string("Upper bound must be at most ") + variable_registry.name(region_size));
 }
 
 void EbpfChecker::operator()(const Comparable& s) const {
@@ -271,14 +324,14 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
         case T_PACKET: {
             Variable lb = access_reg.packet_offset;
             LinearExpression ub = lb + width;
-            require_region_bounds<T_PACKET>(variable_registry.packet_size(), lb, ub);
+            check_access_to_static_region(variable_registry.packet_size(), lb, ub);
             // Packet memory is both readable and writable.
             break;
         }
         case T_SHARED: {
             Variable lb = access_reg.shared_offset;
             LinearExpression ub = lb + width;
-            require_region_bounds<T_SHARED>(access_reg, lb, ub);
+            check_access_to_dynamic_region(access_reg.shared_region_size, lb, ub);
             require_value(dom.state, access_reg.svalue > 0, "Possible null access");
             // Shared memory is zero-initialized when created so is safe to read and write.
             break;
@@ -307,7 +360,7 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
         switch (type) {
         case T_STACK: {
             const auto [lb, ub] = lb_ub_access_pair(s, reg.stack_offset);
-            require_region_bounds<T_STACK>(lb, ub);
+            check_access_to_static_region(T_STACK, lb, ub);
             // Stack reads must hit known-numeric bytes.
             if (s.access_type == AccessType::read &&
                 !dom.stack->all_num_lb_ub(dom.state.values.eval_interval(lb), dom.state.values.eval_interval(ub))) {
@@ -324,7 +377,7 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
         }
         case T_CTX: {
             const auto [lb, ub] = lb_ub_access_pair(s, reg.ctx_offset);
-            require_region_bounds<T_CTX>(lb, ub);
+            check_access_to_static_region(T_CTX, lb, ub);
             // T_CTX: bounds suffice; non-null when in bounds.
             break;
         }
@@ -332,18 +385,19 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             const auto [lb, ub] = lb_ub_access_pair(s, reg.packet_offset);
             // Pointer-comparison checks (width == 0) may legitimately reach
             // past the runtime packet_size, so they use the looser
-            // max_packet_size ceiling. Real dereferences must be bounded by
-            // the runtime packet_size variable.
+            // max_packet_size ceiling (the TypeEncoding overload). Real
+            // dereferences must be bounded by the runtime packet_size
+            // variable (the Variable overload).
             if (is_comparison_check) {
-                require_region_bounds<T_PACKET>(lb, ub);
+                check_access_to_static_region(T_PACKET, lb, ub);
             } else {
-                require_region_bounds<T_PACKET>(variable_registry.packet_size(), lb, ub);
+                check_access_to_static_region(variable_registry.packet_size(), lb, ub);
             }
             break;
         }
         case T_SHARED: {
             const auto [lb, ub] = lb_ub_access_pair(s, reg.shared_offset);
-            require_region_bounds<T_SHARED>(reg, lb, ub);
+            check_access_to_dynamic_region(reg.shared_region_size, lb, ub);
             if (!is_comparison_check && !s.or_null) {
                 require_value(dom.state, reg.svalue > 0, "Possible null access");
             }
@@ -351,7 +405,7 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
         }
         case T_ALLOC_MEM: {
             const auto [lb, ub] = lb_ub_access_pair(s, reg.alloc_mem_offset);
-            require_region_bounds<T_ALLOC_MEM>(reg, lb, ub);
+            check_access_to_dynamic_region(reg.alloc_mem_size, lb, ub);
             if (!is_comparison_check && !s.or_null) {
                 require_value(dom.state, reg.svalue > 0, "Possible null access");
             }
