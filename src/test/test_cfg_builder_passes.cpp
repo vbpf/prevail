@@ -32,7 +32,7 @@ Condition eq0_zero_is64() { return Condition{.op = Condition::Op::EQ, .left = Re
 
 TEST_CASE("pass_connect_edges rejects an empty instruction sequence", "[passes]") {
     const ProgramInfo info = default_info();
-    constexpr InstructionSeq empty;
+    const InstructionSeq empty;
     REQUIRE_THROWS_WITH(Program::from_sequence(empty, info, {}),
                         Catch::Matchers::ContainsSubstring("empty instruction sequence"));
 }
