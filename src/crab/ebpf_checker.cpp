@@ -52,14 +52,20 @@ class EbpfChecker final {
         throw VerificationError(msg + " (" + to_string(assertion) + ")");
     }
 
-    // Single driver for in-region access bounds: requires `access_lb >= floor`
-    // and `access_ub <= ceiling` for the region. `packet_size` overrides the
-    // T_PACKET upper bound; see region_bounds().
-    void require_region_bounds(TypeEncoding type, const RegPack& reg, const LinearExpression& access_lb,
-                               const LinearExpression& access_ub,
-                               std::optional<Variable> packet_size = std::nullopt) const;
+    // Per-region bounds checks compose two primitives at each call site, so
+    // the floor and ceiling for a given access are spelled out where they
+    // are checked rather than picked by a dispatcher.
+    void require_lower_bound(const LinearExpression& access_lb, const LinearExpression& floor,
+                             const std::string& msg) const {
+        using namespace dsl_syntax;
+        require_value(dom.state, access_lb >= floor, msg);
+    }
+    void require_upper_bound(const LinearExpression& access_ub, const LinearExpression& ceiling,
+                             const std::string& msg) const {
+        using namespace dsl_syntax;
+        require_value(dom.state, access_ub <= ceiling, msg);
+    }
 
-  private:
     const Assertion assertion;
 
     const EbpfDomain& dom;
@@ -78,15 +84,6 @@ std::optional<VerificationError> ebpf_domain_check(const EbpfDomain& dom, const 
         return {error};
     }
     return {};
-}
-
-void EbpfChecker::require_region_bounds(const TypeEncoding type, const RegPack& reg, const LinearExpression& access_lb,
-                                        const LinearExpression& access_ub,
-                                        const std::optional<Variable> packet_size) const {
-    using namespace dsl_syntax;
-    const auto bounds = region_bounds(type, reg, context, packet_size);
-    require_value(dom.state, access_lb >= bounds.lb_floor, bounds.lb_message);
-    require_value(dom.state, access_ub <= bounds.ub_ceiling, bounds.ub_message);
 }
 
 void EbpfChecker::operator()(const Comparable& s) const {
@@ -255,14 +252,17 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
         case T_PACKET: {
             Variable lb = access_reg.packet_offset;
             LinearExpression ub = lb + width;
-            require_region_bounds(T_PACKET, access_reg, lb, ub);
+            require_lower_bound(lb, variable_registry.meta_offset(), "Lower bound must be at least meta_offset");
+            require_upper_bound(ub, variable_registry.packet_size(), "Upper bound must be at most packet_size");
             // Packet memory is both readable and writable.
             break;
         }
         case T_SHARED: {
             Variable lb = access_reg.shared_offset;
             LinearExpression ub = lb + width;
-            require_region_bounds(T_SHARED, access_reg, lb, ub);
+            require_lower_bound(lb, LinearExpression{0}, "Lower bound must be at least 0");
+            require_upper_bound(ub, access_reg.shared_region_size,
+                                "Upper bound must be at most " + variable_registry.name(access_reg.shared_region_size));
             require_value(dom.state, access_reg.svalue > 0, "Possible null access");
             // Shared memory is zero-initialized when created so is safe to read and write.
             break;
@@ -288,50 +288,71 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
 
     const auto reg = reg_pack(s.reg);
     for (const auto type : dom.state.enumerate_types(s.reg)) {
-        if (is_region_access_type(type)) {
-            // Bounds-checked region access. The region's offset variable, the
-            // bounds rule, and per-region nuance live here together.
-            const auto offset_var = primary_kind_variable_for_type(s.reg, type);
-            if (!offset_var.has_value()) {
-                // is_region_access_type and primary_kind_variable_for_type should agree;
-                // if they ever drift, fail closed in release builds rather than UB-dereference.
-                throw_fail("internal error: region access type has no primary kind variable");
-            }
-            auto [lb, ub] = lb_ub_access_pair(s, *offset_var);
-            const std::optional<Variable> packet_size = (type == T_PACKET && !is_comparison_check)
-                                                            ? std::optional{variable_registry.packet_size()}
-                                                            : std::nullopt;
-            require_region_bounds(type, reg, lb, ub, packet_size);
-            switch (type) {
-            case T_STACK:
-                // Stack reads must hit known-numeric bytes.
-                if (s.access_type == AccessType::read &&
-                    !dom.stack->all_num_lb_ub(dom.state.values.eval_interval(lb), dom.state.values.eval_interval(ub))) {
-                    if (s.offset < 0) {
-                        throw_fail("Stack content is not numeric");
-                    } else {
-                        LinearExpression w = std::holds_alternative<Imm>(s.width)
-                                                 ? LinearExpression{std::get<Imm>(s.width).v}
-                                                 : reg_pack(std::get<Reg>(s.width)).svalue;
-                        require_value(dom.state, w <= reg.stack_numeric_size - s.offset,
-                                      "Stack content is not numeric");
-                    }
-                }
-                break;
-            case T_SHARED:
-            case T_ALLOC_MEM:
-                // Both are nullable; constrain non-null when the access is a real dereference.
-                if (!is_comparison_check && !s.or_null) {
-                    require_value(dom.state, reg.svalue > 0, "Possible null access");
-                }
-                break;
-            default:
-                // T_PACKET, T_CTX: bounds suffice; both are non-null when in bounds.
-                break;
-            }
-            continue;
-        }
         switch (type) {
+        case T_STACK: {
+            const auto [lb, ub] = lb_ub_access_pair(s, reg.stack_offset);
+            require_lower_bound(lb, reg_pack(R10_STACK_POINTER).stack_offset - context.options.subprogram_stack_size,
+                                "Lower bound must be at least r10.stack_offset - subprogram_stack_size");
+            require_upper_bound(ub, LinearExpression{context.options.total_stack_size()},
+                                "Upper bound must be at most total_stack_size");
+            // Stack reads must hit known-numeric bytes.
+            if (s.access_type == AccessType::read &&
+                !dom.stack->all_num_lb_ub(dom.state.values.eval_interval(lb), dom.state.values.eval_interval(ub))) {
+                if (s.offset < 0) {
+                    throw_fail("Stack content is not numeric");
+                } else {
+                    LinearExpression w = std::holds_alternative<Imm>(s.width)
+                                             ? LinearExpression{std::get<Imm>(s.width).v}
+                                             : reg_pack(std::get<Reg>(s.width)).svalue;
+                    require_value(dom.state, w <= reg.stack_numeric_size - s.offset, "Stack content is not numeric");
+                }
+            }
+            break;
+        }
+        case T_CTX: {
+            const auto ctx_size = context.program_info().type.ctx_descriptor->size;
+            const auto [lb, ub] = lb_ub_access_pair(s, reg.ctx_offset);
+            require_lower_bound(lb, LinearExpression{0}, "Lower bound must be at least 0");
+            require_upper_bound(ub, LinearExpression{ctx_size},
+                                "Upper bound must be at most " + std::to_string(ctx_size));
+            // T_CTX: bounds suffice; non-null when in bounds.
+            break;
+        }
+        case T_PACKET: {
+            const auto [lb, ub] = lb_ub_access_pair(s, reg.packet_offset);
+            require_lower_bound(lb, variable_registry.meta_offset(), "Lower bound must be at least meta_offset");
+            // Pointer-comparison checks (width == 0) may legitimately reach
+            // past the runtime packet_size, so they use the looser
+            // max_packet_size ceiling. Real dereferences must be bounded by
+            // the runtime packet_size variable.
+            if (is_comparison_check) {
+                const auto max = context.options.max_packet_size;
+                require_upper_bound(ub, LinearExpression{max}, "Upper bound must be at most " + std::to_string(max));
+            } else {
+                require_upper_bound(ub, variable_registry.packet_size(), "Upper bound must be at most packet_size");
+            }
+            break;
+        }
+        case T_SHARED: {
+            const auto [lb, ub] = lb_ub_access_pair(s, reg.shared_offset);
+            require_lower_bound(lb, LinearExpression{0}, "Lower bound must be at least 0");
+            require_upper_bound(ub, reg.shared_region_size,
+                                "Upper bound must be at most " + variable_registry.name(reg.shared_region_size));
+            if (!is_comparison_check && !s.or_null) {
+                require_value(dom.state, reg.svalue > 0, "Possible null access");
+            }
+            break;
+        }
+        case T_ALLOC_MEM: {
+            const auto [lb, ub] = lb_ub_access_pair(s, reg.alloc_mem_offset);
+            require_lower_bound(lb, LinearExpression{0}, "Lower bound must be at least 0");
+            require_upper_bound(ub, reg.alloc_mem_size,
+                                "Upper bound must be at most " + variable_registry.name(reg.alloc_mem_size));
+            if (!is_comparison_check && !s.or_null) {
+                require_value(dom.state, reg.svalue > 0, "Possible null access");
+            }
+            break;
+        }
         case T_NUM:
             if (!is_comparison_check) {
                 if (s.or_null) {
