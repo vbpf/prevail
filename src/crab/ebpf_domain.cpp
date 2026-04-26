@@ -14,6 +14,7 @@
 #include "crab/array_domain.hpp"
 #include "crab/ebpf_domain.hpp"
 #include "crab/var_registry.hpp"
+#include "crab_utils/num_safety.hpp"
 #include "ir/unmarshal.hpp"
 
 namespace prevail {
@@ -39,7 +40,7 @@ std::optional<int64_t> EbpfDomain::get_stack_offset(const Reg& reg) const {
 }
 
 EbpfDomain EbpfDomain::top(const AnalysisContext& context) {
-    return top(static_cast<size_t>(context.runtime().total_stack_size()));
+    return top(to_unsigned(context.runtime().total_stack_size()));
 }
 
 EbpfDomain EbpfDomain::top(const size_t total_stack_size) {
@@ -397,10 +398,9 @@ EbpfDomain EbpfDomain::from_constraints(const std::vector<std::pair<Variable, Ty
 
 EbpfDomain EbpfDomain::from_constraints(const std::set<std::string>& constraints, const bool setup_constraints,
                                         const AnalysisContext& context) {
-    EbpfDomain inv = setup_constraints
-                         ? setup_entry(false, context)
-                         : EbpfDomain{TypeToNumDomain::top(),
-                                      ArrayDomain{static_cast<size_t>(context.runtime().total_stack_size())}};
+    EbpfDomain inv = setup_constraints ? setup_entry(false, context)
+                                       : EbpfDomain{TypeToNumDomain::top(),
+                                                    ArrayDomain{to_unsigned(context.runtime().total_stack_size())}};
     auto numeric_ranges = std::vector<Interval>();
     auto [type_equalities, type_restrictions, value_constraints] =
         parse_linear_constraints(constraints, numeric_ranges);

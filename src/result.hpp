@@ -5,6 +5,7 @@
 #include <iosfwd>
 #include <map>
 #include <optional>
+#include <ranges>
 #include <set>
 #include <vector>
 

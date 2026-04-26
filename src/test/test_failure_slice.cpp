@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <sstream>
 
+#include "crab_utils/num_safety.hpp"
 #include "ebpf_verifier.hpp"
 
 using namespace prevail;
@@ -38,7 +39,7 @@ TEST_CASE("extract_instruction_deps for Bin instruction", "[failure_slice][deps]
     // r1 = r1 + r2 should read r1, r2 and write r1
     Bin bin_add{Bin::Op::ADD, Reg{1}, Reg{2}, true, false};
     Instruction ins = bin_add;
-    EbpfDomain dom = EbpfDomain::top(static_cast<size_t>(RuntimeConfig{}.total_stack_size()));
+    EbpfDomain dom = EbpfDomain::top(to_unsigned(RuntimeConfig{}.total_stack_size()));
 
     auto deps = extract_instruction_deps(ins, dom, RuntimeConfig{}.total_stack_size());
 
@@ -51,7 +52,7 @@ TEST_CASE("extract_instruction_deps for MOV instruction", "[failure_slice][deps]
     // r1 = r2 should read r2 and write r1 (but not read r1)
     Bin bin_mov{Bin::Op::MOV, Reg{1}, Reg{2}, true, false};
     Instruction ins = bin_mov;
-    EbpfDomain dom = EbpfDomain::top(static_cast<size_t>(RuntimeConfig{}.total_stack_size()));
+    EbpfDomain dom = EbpfDomain::top(to_unsigned(RuntimeConfig{}.total_stack_size()));
 
     auto deps = extract_instruction_deps(ins, dom, RuntimeConfig{}.total_stack_size());
 
@@ -64,7 +65,7 @@ TEST_CASE("extract_instruction_deps for Mem load", "[failure_slice][deps]") {
     // r1 = *(r10 - 8) should read r10, write r1, and read stack[-8]
     Mem mem_load{Deref{8, Reg{10}, -8}, Reg{1}, true};
     Instruction ins = mem_load;
-    EbpfDomain dom = EbpfDomain::top(static_cast<size_t>(RuntimeConfig{}.total_stack_size()));
+    EbpfDomain dom = EbpfDomain::top(to_unsigned(RuntimeConfig{}.total_stack_size()));
 
     auto deps = extract_instruction_deps(ins, dom, RuntimeConfig{}.total_stack_size());
 
@@ -77,7 +78,7 @@ TEST_CASE("extract_instruction_deps for Mem store", "[failure_slice][deps]") {
     // *(r10 - 8) = r1 should read r10, r1 and write stack[-8]
     Mem mem_store{Deref{8, Reg{10}, -8}, Reg{1}, false};
     Instruction ins = mem_store;
-    EbpfDomain dom = EbpfDomain::top(static_cast<size_t>(RuntimeConfig{}.total_stack_size()));
+    EbpfDomain dom = EbpfDomain::top(to_unsigned(RuntimeConfig{}.total_stack_size()));
 
     auto deps = extract_instruction_deps(ins, dom, RuntimeConfig{}.total_stack_size());
 

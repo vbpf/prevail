@@ -78,7 +78,7 @@ static std::optional<ResolvedCall> ebpf_resolve_kfunc_call(const int32_t btf_id,
 }
 
 static void ebpf_parse_maps_section(vector<EbpfMapDescriptor>&, const char*, size_t, int, const ebpf_platform_t*,
-                                    VerifierOptions) {}
+                                    const VerifierOptions&) {}
 
 static EbpfMapDescriptor test_map_descriptor = {.original_fd = 0,
                                                 .type = 0,

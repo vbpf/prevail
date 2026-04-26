@@ -109,7 +109,7 @@ class InterleavedFwdFixpointIterator final {
         for (const auto& label : _cfg.labels()) {
             result.invariants.emplace(label, InvariantMapPair{EbpfDomain::bottom(), {}, EbpfDomain::bottom()});
         }
-        if (context.options.runtime.check_for_termination) {
+        if (context.runtime().check_for_termination) {
             _wto.for_each_loop_head([&](const Label& label) {
                 _loop_counters.push_back(variable_registry.loop_counter(to_string(label)));
             });
@@ -290,7 +290,7 @@ AnalysisResult InterleavedFwdFixpointIterator::run(const AnalysisContext& contex
     const Program& prog = context.program;
     AnalysisResult result;
     InterleavedFwdFixpointIterator analyzer(context, result);
-    if (context.options.runtime.check_for_termination) {
+    if (context.runtime().check_for_termination) {
         // Initialize loop counters for potential loop headers.
         // This enables enforcement of upper bounds on loop iterations
         // during program verification.
@@ -302,7 +302,7 @@ AnalysisResult InterleavedFwdFixpointIterator::run(const AnalysisContext& contex
     for (const auto& component : analyzer._wto) {
         std::visit(analyzer, component);
     }
-    if (!result.failed && context.options.runtime.check_for_termination) {
+    if (!result.failed && context.runtime().check_for_termination) {
         analyzer.find_termination_errors(prog);
         if (!result.failed) {
             result.max_loop_count = analyzer.max_loop_count();
