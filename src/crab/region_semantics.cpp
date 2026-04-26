@@ -1,5 +1,6 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
+#include <cassert>
 #include <stdexcept>
 #include <string>
 
@@ -29,6 +30,9 @@ std::optional<Variable> primary_kind_variable_for_type(const Reg& reg, const Typ
 RegionBounds region_bounds(const TypeEncoding type, const RegPack& reg, const AnalysisContext& ctx,
                            const std::optional<Variable> packet_size) {
     using namespace dsl_syntax;
+    // packet_size only refines the T_PACKET upper bound; passing it for other
+    // region types is silently ignored downstream and indicates a caller bug.
+    assert(!packet_size || type == T_PACKET);
     switch (type) {
     case T_STACK:
         return {.lb_floor = reg_pack(R10_STACK_POINTER).stack_offset - ctx.options.subprogram_stack_size,
