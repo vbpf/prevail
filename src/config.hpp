@@ -6,14 +6,10 @@
 #include <string>
 
 namespace prevail {
-struct prepare_cfg_options {
-    /// When true, verifies that the program terminates.
-    bool check_for_termination = false;
-    /// When true, ensures the program has a valid exit block.
-    bool must_have_exit = true;
-};
 
-struct verbosity_options_t {
+/// Display and diagnostics knobs. Reading or writing any of these never
+/// affects which programs the verifier accepts.
+struct VerbosityOptions {
     /// When true, prints simplified control flow graph by merging chains into basic blocks.
     bool simplify = true;
 
@@ -41,13 +37,9 @@ struct verbosity_options_t {
     bool compact_slice = false;
 };
 
-struct ebpf_verifier_options_t {
-    // Options that control how the control flow graph is built.
-    prepare_cfg_options cfg_opts;
-
-    // False to use actual map fd's, true to use mock fd's.
-    bool mock_map_fds = true;
-
+/// Runtime/semantic configuration: knobs read by the analyzer, checker,
+/// and abstract domain whose values affect which programs are accepted.
+struct RuntimeConfig {
     // True to do additional checks for some things that would fail at runtime.
     bool strict = false;
 
@@ -59,6 +51,10 @@ struct ebpf_verifier_options_t {
 
     // True if the ELF file is built on a big endian system.
     bool big_endian = false;
+
+    // When true, instrument loop heads with bounded-loop-count counters and
+    // require the analysis to prove they remain within the loop bound.
+    bool check_for_termination = false;
 
     // Per-subprogram stack frame size in bytes.
     int subprogram_stack_size = 512;
@@ -94,11 +90,20 @@ struct ebpf_verifier_options_t {
                                         "], got " + std::to_string(max_packet_size));
         }
     }
-
-    verbosity_options_t verbosity_opts;
 };
 
-struct ebpf_verifier_stats_t {
+struct VerifierOptions {
+    RuntimeConfig runtime;
+    VerbosityOptions verbosity_opts;
+
+    /// When true, ensures the program has a valid exit block.
+    bool must_have_exit = true;
+
+    // False to use actual map fd's, true to use mock fd's.
+    bool mock_map_fds = true;
+};
+
+struct VerifierStats {
     int total_errors{};
     int max_loop_count{};
 };

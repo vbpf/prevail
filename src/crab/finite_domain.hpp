@@ -160,7 +160,7 @@ class FiniteDomain {
     void set(const Variable x, const Interval& intv) { dom.set(x, intv); }
 
     /// Forget everything we know about the value of a variable.
-    void havoc(Variable v) { dom.havoc(v); }
+    void havoc(const Variable v) { dom.havoc(v); }
 
     [[nodiscard]]
     std::pair<std::size_t, std::size_t> size() const {

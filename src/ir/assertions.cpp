@@ -17,7 +17,7 @@ using std::vector;
 namespace prevail {
 class AssertExtractor {
     const ProgramInfo& info;
-    const ebpf_verifier_options_t& options;
+    const RuntimeConfig& runtime;
     const std::optional<Label>& current_label; ///< Pre-simplification label this assert is part of.
 
     static Imm imm(const Value& v) { return std::get<Imm>(v); }
@@ -37,9 +37,8 @@ class AssertExtractor {
     }
 
   public:
-    explicit AssertExtractor(const ProgramInfo& info, const ebpf_verifier_options_t& options,
-                             const std::optional<Label>& label)
-        : info{info}, options{options}, current_label{label} {}
+    explicit AssertExtractor(const ProgramInfo& info, const RuntimeConfig& runtime, const std::optional<Label>& label)
+        : info{info}, runtime{runtime}, current_label{label} {}
 
     vector<Assertion> operator()(const Undefined&) const { return {}; }
 
@@ -239,7 +238,7 @@ class AssertExtractor {
         const int offset = ins.access.offset;
         if (basereg.v == R10_STACK_POINTER) {
             // We know we are accessing the stack.
-            if (offset < -options.subprogram_stack_size || offset + static_cast<int>(width.v) > 0) {
+            if (offset < -runtime.subprogram_stack_size || offset + static_cast<int>(width.v) > 0) {
                 // This assertion will fail
                 res.emplace_back(make_valid_access(basereg, offset, width, false,
                                                    ins.is_load ? AccessType::read : AccessType::write));
@@ -342,8 +341,8 @@ class AssertExtractor {
 /// compare numbers and pointers, or pointers to potentially distinct memory
 /// regions. The verifier will use these assertions to treat the program as
 /// unsafe unless it can prove that the assertions can never fail.
-vector<Assertion> get_assertions(const Instruction& ins, const ProgramInfo& info,
-                                 const ebpf_verifier_options_t& options, const std::optional<Label>& label) {
-    return std::visit(AssertExtractor{info, options, label}, ins);
+vector<Assertion> get_assertions(const Instruction& ins, const ProgramInfo& info, const RuntimeConfig& runtime,
+                                 const std::optional<Label>& label) {
+    return std::visit(AssertExtractor{info, runtime, label}, ins);
 }
 } // namespace prevail

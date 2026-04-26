@@ -69,7 +69,6 @@ static Variable cell_var(const DataKind kind, const Cell& c) {
 // At these sizes, specialized data structures (patricia tries, flat sorted vectors) show no
 // macro-level improvement while adding complexity or external dependencies.
 class offset_map_t final {
-  private:
     friend class ArrayDomain;
 
     using cell_set_t = std::set<Cell>;
@@ -91,11 +90,6 @@ class offset_map_t final {
     offset_map_t() = default;
 
     [[nodiscard]]
-    bool empty() const {
-        return _map.empty();
-    }
-
-    [[nodiscard]]
     std::size_t size() const {
         return _map.size();
     }
@@ -115,25 +109,6 @@ class offset_map_t final {
     std::vector<Cell> get_overlap_cells_symbolic_offset(const Interval& range);
 
     friend std::ostream& operator<<(std::ostream& o, offset_map_t& m);
-
-    /* Operations needed if used as value in a separate_domain */
-    [[nodiscard]]
-    bool is_top() const {
-        return empty();
-    }
-
-    [[nodiscard]]
-    // ReSharper disable once CppMemberFunctionMayBeStatic
-    bool is_bottom() const {
-        return false;
-    }
-    /*
-       We don't distinguish between bottom and top.
-       This is fine because separate_domain only calls bottom if operator[] is called over a bottom state.
-       Thus, we will make sure that we don't call operator[] in that case.
-    */
-    static offset_map_t bottom() { return offset_map_t(); }
-    static offset_map_t top() { return offset_map_t(); }
 };
 
 void offset_map_t::remove_cell(const Cell& c) {
@@ -266,7 +241,7 @@ std::ostream& operator<<(std::ostream& o, offset_map_t& m) {
 
 // Create a new cell that is a subset of an existing cell.
 void ArrayDomain::split_cell(NumAbsDomain& inv, const DataKind kind, const int cell_start_index, const unsigned int len,
-                             const bool big_endian) const {
+                             const bool big_endian) {
     assert(kind == DataKind::svalues || kind == DataKind::uvalues);
 
     // Get the values from the indicated stack range.
@@ -284,8 +259,8 @@ void ArrayDomain::split_cell(NumAbsDomain& inv, const DataKind kind, const int c
 
 // Prepare to havoc bytes in the middle of a cell by potentially splitting the cell if it is numeric,
 // into the part to the left of the havoced portion, and the part to the right of the havoced portion.
-void ArrayDomain::split_number_var(NumAbsDomain& inv, DataKind kind, const Interval& ii, const Interval& elem_size,
-                                   const bool big_endian) const {
+void ArrayDomain::split_number_var(NumAbsDomain& inv, const DataKind kind, const Interval& ii,
+                                   const Interval& elem_size, const bool big_endian) const {
     assert(kind == DataKind::svalues || kind == DataKind::uvalues);
     offset_map_t& offset_map = lookup_array_map(kind);
     const std::optional<Number> n = ii.singleton();
@@ -330,7 +305,7 @@ void ArrayDomain::split_number_var(NumAbsDomain& inv, DataKind kind, const Inter
 // Find overlapping cells for the given index range and kill (havoc + remove) them.
 // Returns the exact offset and size if the index and element size are both constant.
 template <typename HavocFn>
-static std::optional<std::pair<offset_t, unsigned>> kill_and_find_var(const HavocFn& havoc_var, DataKind kind,
+static std::optional<std::pair<offset_t, unsigned>> kill_and_find_var(const HavocFn& havoc_var, const DataKind kind,
                                                                       const Interval& ii, const Interval& elem_size) {
     std::optional<std::pair<offset_t, unsigned>> res;
 
@@ -437,7 +412,7 @@ std::optional<uint8_t> get_value_byte(const NumAbsDomain& inv, const offset_t o,
 }
 
 std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, const DataKind kind, const Interval& i,
-                                                  const int width, const bool big_endian) const {
+                                                  const int width, const bool big_endian) {
     if (const std::optional<Number> n = i.singleton()) {
         offset_map_t& offset_map = lookup_array_map(kind);
         const int64_t k = n->narrow<int64_t>();
@@ -527,7 +502,7 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, const
     return {};
 }
 
-std::optional<LinearExpression> ArrayDomain::load_type(const Interval& i, int width) const {
+std::optional<LinearExpression> ArrayDomain::load_type(const Interval& i, const int width) const {
     if (const std::optional<Number> n = i.singleton()) {
         offset_map_t& offset_map = lookup_array_map(DataKind::types);
         const int64_t k = n->narrow<int64_t>();
@@ -585,11 +560,11 @@ static std::optional<std::pair<offset_t, unsigned>> split_and_find_var(const Arr
     if (kind == DataKind::svalues || kind == DataKind::uvalues) {
         array_domain.split_number_var(inv, kind, idx, elem_size, big_endian);
     }
-    return kill_and_find_var([&inv](Variable v) { inv.havoc(v); }, kind, idx, elem_size);
+    return kill_and_find_var([&inv](const Variable v) { inv.havoc(v); }, kind, idx, elem_size);
 }
 
 std::optional<Variable> ArrayDomain::store(NumAbsDomain& inv, const DataKind kind, const Interval& idx,
-                                           const Interval& elem_size, const bool big_endian) {
+                                           const Interval& elem_size, const bool big_endian) const {
     if (auto maybe_cell = split_and_find_var(*this, inv, kind, idx, elem_size, big_endian)) {
         // perform strong update
         auto [offset, size] = *maybe_cell;
@@ -603,7 +578,7 @@ std::optional<Variable> ArrayDomain::store(NumAbsDomain& inv, const DataKind kin
 std::optional<Variable> ArrayDomain::store_type(TypeDomain& inv, const Interval& idx, const Interval& width,
                                                 const bool is_num) {
     constexpr auto kind = DataKind::types;
-    if (auto maybe_cell = kill_and_find_var([&inv](Variable v) { inv.havoc_type(v); }, kind, idx, width)) {
+    if (auto maybe_cell = kill_and_find_var([&inv](const Variable v) { inv.havoc_type(v); }, kind, idx, width)) {
         // perform strong update
         auto [offset, size] = *maybe_cell;
         if (is_num) {
@@ -632,13 +607,13 @@ std::optional<Variable> ArrayDomain::store_type(TypeDomain& inv, const Interval&
 }
 
 void ArrayDomain::havoc(NumAbsDomain& inv, const DataKind kind, const Interval& idx, const Interval& elem_size,
-                        const bool big_endian) {
+                        const bool big_endian) const {
     split_and_find_var(*this, inv, kind, idx, elem_size, big_endian);
 }
 
 void ArrayDomain::havoc_type(TypeDomain& inv, const Interval& idx, const Interval& elem_size) {
     constexpr auto kind = DataKind::types;
-    if (auto maybe_cell = kill_and_find_var([&inv](Variable v) { inv.havoc_type(v); }, kind, idx, elem_size)) {
+    if (auto maybe_cell = kill_and_find_var([&inv](const Variable v) { inv.havoc_type(v); }, kind, idx, elem_size)) {
         auto [offset, size] = *maybe_cell;
         num_bytes.havoc(offset, size);
     }

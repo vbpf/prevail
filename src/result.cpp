@@ -117,7 +117,7 @@ bool RelevantState::is_relevant_constraint(const std::string& constraint) const 
 bool AnalysisResult::is_valid_after(const Label& label, const StringInvariant& state,
                                     const AnalysisContext& context) const {
     const EbpfDomain abstract_state =
-        EbpfDomain::from_constraints(state.value(), context.options.setup_constraints, context);
+        EbpfDomain::from_constraints(state.value(), context.runtime().setup_constraints, context);
     return abstract_state <= invariants.at(label).post;
 }
 
@@ -135,7 +135,7 @@ ObservationCheckResult AnalysisResult::check_observation_at_label(const Label& l
     const EbpfDomain observed_state =
         observation.is_bottom()
             ? EbpfDomain::bottom()
-            : EbpfDomain::from_constraints(observation.value(), context.options.setup_constraints, context);
+            : EbpfDomain::from_constraints(observation.value(), context.runtime().setup_constraints, context);
 
     if (observed_state.is_bottom()) {
         return {.ok = false, .message = "Observation constraints are unsatisfiable (domain is bottom)"};

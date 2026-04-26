@@ -10,7 +10,6 @@
 #include "ir/marshal.hpp"
 #include "ir/program.hpp"
 #include "ir/unmarshal.hpp"
-#include "linux/gpl/spec_type_descriptors.hpp"
 
 using namespace prevail;
 
@@ -215,8 +214,8 @@ static const EbpfInstructionTemplate instruction_template[] = {
 static void check_unmarshal_succeed(const EbpfInst& ins, const ebpf_platform_t& platform = g_ebpf_platform_linux) {
     const ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
     constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
-    const InstructionSeq parsed = std::get<InstructionSeq>(
-        unmarshal(RawProgram{"", "", 0, "", {ins, exit, exit}, info}, ebpf_verifier_options_t{}));
+    const InstructionSeq parsed =
+        std::get<InstructionSeq>(unmarshal(RawProgram{"", "", 0, "", {ins, exit, exit}, info}, VerifierOptions{}));
     REQUIRE(parsed.size() == 3);
 }
 
@@ -226,7 +225,7 @@ static void check_unmarshal_succeed(EbpfInst inst1, EbpfInst inst2,
     const ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
     constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
     const InstructionSeq parsed = std::get<InstructionSeq>(
-        unmarshal(RawProgram{"", "", 0, "", {inst1, inst2, exit, exit}, info}, ebpf_verifier_options_t{}));
+        unmarshal(RawProgram{"", "", 0, "", {inst1, inst2, exit, exit}, info}, VerifierOptions{}));
     REQUIRE(parsed.size() == 3);
 }
 
@@ -236,8 +235,8 @@ static void compare_unmarshal_marshal(const EbpfInst& ins, const EbpfInst& expec
                                       const ebpf_platform_t& platform = g_ebpf_platform_linux) {
     ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
     constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
-    const InstructionSeq inst_seq = std::get<InstructionSeq>(
-        unmarshal(RawProgram{"", "", 0, "", {ins, exit, exit}, info}, ebpf_verifier_options_t{}));
+    const InstructionSeq inst_seq =
+        std::get<InstructionSeq>(unmarshal(RawProgram{"", "", 0, "", {ins, exit, exit}, info}, VerifierOptions{}));
     REQUIRE(inst_seq.size() == 3);
     auto [_, single, _2] = inst_seq.front();
     (void)_;  // unused
@@ -255,7 +254,7 @@ static void compare_unmarshal_marshal(const EbpfInst& ins1, const EbpfInst& ins2
                      .type = g_ebpf_platform_linux.get_program_type("unspec", "unspec")};
     constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
     InstructionSeq parsed = std::get<InstructionSeq>(
-        unmarshal(RawProgram{"", "", 0, "", {ins1, ins2, exit, exit}, info}, ebpf_verifier_options_t{}));
+        unmarshal(RawProgram{"", "", 0, "", {ins1, ins2, exit, exit}, info}, VerifierOptions{}));
     REQUIRE(parsed.size() == 3);
     auto [_, single, _2] = parsed.front();
     (void)_;  // unused
@@ -274,7 +273,7 @@ static void compare_unmarshal_marshal(const EbpfInst& ins1, const EbpfInst& ins2
                      .type = g_ebpf_platform_linux.get_program_type("unspec", "unspec")};
     constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
     const InstructionSeq inst_seq = std::get<InstructionSeq>(
-        unmarshal(RawProgram{"", "", 0, "", {ins1, ins2, exit, exit}, info}, ebpf_verifier_options_t{}));
+        unmarshal(RawProgram{"", "", 0, "", {ins1, ins2, exit, exit}, info}, VerifierOptions{}));
     REQUIRE(inst_seq.size() == 3);
     auto [_, single, _2] = inst_seq.front();
     (void)_;  // unused
@@ -292,8 +291,8 @@ static void compare_unmarshal_marshal(const EbpfInst& ins1, const EbpfInst& ins2
 static void compare_marshal_unmarshal(const Instruction& ins, bool double_cmd = false,
                                       const ebpf_platform_t& platform = g_ebpf_platform_linux) {
     ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
-    const InstructionSeq inst_seq = std::get<InstructionSeq>(
-        unmarshal(RawProgram{"", "", 0, "", marshal(ins, 0), info}, ebpf_verifier_options_t{}));
+    const InstructionSeq inst_seq =
+        std::get<InstructionSeq>(unmarshal(RawProgram{"", "", 0, "", marshal(ins, 0), info}, VerifierOptions{}));
     REQUIRE(inst_seq.size() == 1);
     auto [_, single, _2] = inst_seq.back();
     (void)_;  // unused
@@ -304,7 +303,7 @@ static void compare_marshal_unmarshal(const Instruction& ins, bool double_cmd = 
 static void check_marshal_unmarshal_fail(const Instruction& ins, const std::string& expected_error_message,
                                          const ebpf_platform_t& platform = g_ebpf_platform_linux) {
     const ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
-    auto result = unmarshal(RawProgram{"", "", 0, "", marshal(ins, 0), info}, ebpf_verifier_options_t{});
+    auto result = unmarshal(RawProgram{"", "", 0, "", marshal(ins, 0), info}, VerifierOptions{});
     auto* error_message = std::get_if<std::string>(&result);
     REQUIRE(error_message != nullptr);
     REQUIRE(*error_message == expected_error_message);
@@ -314,7 +313,7 @@ static void check_unmarshal_fail(EbpfInst inst, const std::string& expected_erro
                                  const ebpf_platform_t& platform = g_ebpf_platform_linux) {
     ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
     std::vector insns = {inst};
-    auto result = unmarshal(RawProgram{"", "", 0, "", insns, info}, ebpf_verifier_options_t{});
+    auto result = unmarshal(RawProgram{"", "", 0, "", insns, info}, VerifierOptions{});
     auto* error_message = std::get_if<std::string>(&result);
     REQUIRE(error_message != nullptr);
     REQUIRE(*error_message == expected_error_message);
@@ -325,7 +324,7 @@ static void check_unmarshal_fail_goto(EbpfInst inst, const std::string& expected
     ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
     constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
     std::vector insns{inst, exit, exit};
-    auto result = unmarshal(RawProgram{"", "", 0, "", insns, info}, ebpf_verifier_options_t{});
+    auto result = unmarshal(RawProgram{"", "", 0, "", insns, info}, VerifierOptions{});
     auto* error_message = std::get_if<std::string>(&result);
     REQUIRE(error_message != nullptr);
     REQUIRE(*error_message == expected_error_message);
@@ -336,7 +335,7 @@ static void check_unmarshal_fail(EbpfInst inst1, EbpfInst inst2, const std::stri
                                  const ebpf_platform_t& platform = g_ebpf_platform_linux) {
     ProgramInfo info{.platform = &platform, .type = platform.get_program_type("unspec", "unspec")};
     std::vector insns{inst1, inst2};
-    auto result = unmarshal(RawProgram{"", "", 0, "", insns, info}, ebpf_verifier_options_t{});
+    auto result = unmarshal(RawProgram{"", "", 0, "", insns, info}, VerifierOptions{});
     auto* error_message = std::get_if<std::string>(&result);
     REQUIRE(error_message != nullptr);
     REQUIRE(*error_message == expected_error_message);
@@ -344,7 +343,7 @@ static void check_unmarshal_fail(EbpfInst inst1, EbpfInst inst2, const std::stri
 
 static Call unmarshal_single_call(const EbpfInst& call_inst, const ProgramInfo& info) {
     constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
-    const auto parsed = unmarshal(RawProgram{"", "", 0, "", {call_inst, exit, exit}, info}, ebpf_verifier_options_t{});
+    const auto parsed = unmarshal(RawProgram{"", "", 0, "", {call_inst, exit, exit}, info}, VerifierOptions{});
     auto* inst_seq = std::get_if<InstructionSeq>(&parsed);
     REQUIRE(inst_seq != nullptr);
     REQUIRE(inst_seq->size() == 3);
@@ -939,7 +938,7 @@ TEST_CASE("unmarshal builtin calls only when relocation-gated", "[disasm][marsha
     REQUIRE(gated_resolved.contract.pairs[0] ==
             ArgPair{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false});
 
-    const auto assertions = get_assertions(gated, info, ebpf_verifier_options_t{}, Label{0});
+    const auto assertions = get_assertions(gated, info, RuntimeConfig{}, Label{0});
     REQUIRE(has_assertion(assertions, TypeConstraint{Reg{1}, TypeGroup::mem}));
     REQUIRE(has_assertion(assertions, TypeConstraint{Reg{2}, TypeGroup::number}));
     REQUIRE(has_assertion(assertions, TypeConstraint{Reg{3}, TypeGroup::number}));

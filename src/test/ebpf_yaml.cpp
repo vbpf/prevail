@@ -78,7 +78,7 @@ static std::optional<ResolvedCall> ebpf_resolve_kfunc_call(const int32_t btf_id,
 }
 
 static void ebpf_parse_maps_section(vector<EbpfMapDescriptor>&, const char*, size_t, int, const ebpf_platform_t*,
-                                    ebpf_verifier_options_t) {}
+                                    const VerifierOptions&) {}
 
 static EbpfMapDescriptor test_map_descriptor = {.original_fd = 0,
                                                 .type = 0,
@@ -313,34 +313,34 @@ static InstructionSeq raw_cfg_to_instruction_seq(const vector<std::tuple<string,
     return res;
 }
 
-static ebpf_verifier_options_t raw_options_to_options(const std::set<string>& raw_options) {
-    ebpf_verifier_options_t options{};
+static VerifierOptions raw_options_to_options(const std::set<string>& raw_options) {
+    VerifierOptions options{};
 
     // Use ~simplify for YAML tests unless otherwise specified.
     options.verbosity_opts.simplify = false;
 
     // All YAML tests use !setup_constraints.
-    options.setup_constraints = false;
+    options.runtime.setup_constraints = false;
 
     // Default to the machine's native endianness.
-    options.big_endian = std::endian::native == std::endian::big;
+    options.runtime.big_endian = std::endian::native == std::endian::big;
 
     // Permit test cases to not have an exit instruction.
-    options.cfg_opts.must_have_exit = false;
+    options.must_have_exit = false;
 
     for (const string& name : raw_options) {
         if (name == "!allow_division_by_zero") {
-            options.allow_division_by_zero = false;
+            options.runtime.allow_division_by_zero = false;
         } else if (name == "termination") {
-            options.cfg_opts.check_for_termination = true;
+            options.runtime.check_for_termination = true;
         } else if (name == "strict") {
-            options.strict = true;
+            options.runtime.strict = true;
         } else if (name == "simplify") {
             options.verbosity_opts.simplify = true;
         } else if (name == "big_endian") {
-            options.big_endian = true;
+            options.runtime.big_endian = true;
         } else if (name == "!big_endian") {
-            options.big_endian = false;
+            options.runtime.big_endian = false;
         } else {
             throw std::runtime_error("Unknown option: " + name);
         }
@@ -527,7 +527,7 @@ static StringInvariant stack_contents_invariant(const std::vector<uint8_t>& memo
 
 ConformanceTestResult run_conformance_test_case(const std::vector<uint8_t>& memory_bytes,
                                                 std::span<const EbpfInst> instructions, bool debug) {
-    ebpf_verifier_options_t options{};
+    VerifierOptions options{};
     ebpf_ctx_descriptor_t ctx_descriptor{64, -1, -1, -1};
     EbpfProgramType program_type = make_program_type("conformance_check", &ctx_descriptor);
 
@@ -538,11 +538,11 @@ ConformanceTestResult run_conformance_test_case(const std::vector<uint8_t>& memo
     StringInvariant pre_invariant = StringInvariant::top();
 
     if (!memory_bytes.empty()) {
-        if (memory_bytes.size() > to_unsigned(options.total_stack_size())) {
+        if (memory_bytes.size() > to_unsigned(options.runtime.total_stack_size())) {
             std::cerr << "memory size overflow\n";
             return {};
         }
-        pre_invariant = pre_invariant + stack_contents_invariant(memory_bytes, options.total_stack_size());
+        pre_invariant = pre_invariant + stack_contents_invariant(memory_bytes, options.runtime.total_stack_size());
     }
     RawProgram raw_prog{.prog = insts};
     ebpf_platform_t platform = g_ebpf_platform_linux;

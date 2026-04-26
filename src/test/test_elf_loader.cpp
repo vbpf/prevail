@@ -573,7 +573,7 @@ TEST_CASE("read_elf succeeds with istream and non-file path", "[elf]") {
     std::istringstream stream(data);
 
     // Use a non-file path — this is how ebpf-for-windows loads ELF from memory.
-    ebpf_verifier_options_t options{};
+    VerifierOptions options{};
     auto programs = read_elf(stream, "memory", ".text", "", options, &g_ebpf_platform_linux);
     REQUIRE(!programs.empty());
 }

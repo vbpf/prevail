@@ -18,7 +18,7 @@ class LinearConstraint final {
     ConstraintKind _constraint_kind;
 
   public:
-    LinearConstraint(LinearExpression expression, ConstraintKind constraint_kind)
+    LinearConstraint(LinearExpression expression, const ConstraintKind constraint_kind)
         : _expression(std::move(expression)), _constraint_kind(constraint_kind) {}
 
     [[nodiscard]]

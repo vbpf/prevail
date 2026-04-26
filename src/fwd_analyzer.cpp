@@ -72,7 +72,7 @@ class InterleavedFwdFixpointIterator final {
         // checks so that failing instructions still have deps recorded —
         // compute_failure_slices seeds its backward worklist from them.
         if (context.options.verbosity_opts.collect_instruction_deps) {
-            result.invariants.at(label).deps = extract_instruction_deps(ins, pre, context.options.total_stack_size());
+            result.invariants.at(label).deps = extract_instruction_deps(ins, pre, context.runtime().total_stack_size());
         }
 
         if (!std::holds_alternative<IncrementLoopCounter>(ins)) {
@@ -109,7 +109,7 @@ class InterleavedFwdFixpointIterator final {
         for (const auto& label : _cfg.labels()) {
             result.invariants.emplace(label, InvariantMapPair{EbpfDomain::bottom(), {}, EbpfDomain::bottom()});
         }
-        if (context.options.cfg_opts.check_for_termination) {
+        if (context.runtime().check_for_termination) {
             _wto.for_each_loop_head([&](const Label& label) {
                 _loop_counters.push_back(variable_registry.loop_counter(to_string(label)));
             });
@@ -160,25 +160,24 @@ class InterleavedFwdFixpointIterator final {
     static AnalysisResult run(const AnalysisContext& context, EbpfDomain entry_inv);
 };
 
-AnalysisResult analyze(const Program& prog, const ebpf_verifier_options_t& options) {
+AnalysisResult analyze(const Program& prog, const VerifierOptions& options) {
     return analyze(AnalysisContext{prog, options});
 }
 
-AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invariant,
-                       const ebpf_verifier_options_t& options) {
+AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invariant, const VerifierOptions& options) {
     return analyze(entry_invariant, AnalysisContext{prog, options});
 }
 
 AnalysisResult analyze(const AnalysisContext& context) {
     clear_analysis_thread_local_state();
     return InterleavedFwdFixpointIterator::run(context,
-                                               EbpfDomain::setup_entry(context.options.setup_constraints, context));
+                                               EbpfDomain::setup_entry(context.runtime().setup_constraints, context));
 }
 
 AnalysisResult analyze(const StringInvariant& entry_invariant, const AnalysisContext& context) {
     clear_analysis_thread_local_state();
     return InterleavedFwdFixpointIterator::run(
-        context, EbpfDomain::from_constraints(entry_invariant.value(), context.options.setup_constraints, context));
+        context, EbpfDomain::from_constraints(entry_invariant.value(), context.runtime().setup_constraints, context));
 }
 
 static EbpfDomain extrapolate(const EbpfDomain& before, const EbpfDomain& after, const unsigned int iteration,
@@ -291,7 +290,7 @@ AnalysisResult InterleavedFwdFixpointIterator::run(const AnalysisContext& contex
     const Program& prog = context.program;
     AnalysisResult result;
     InterleavedFwdFixpointIterator analyzer(context, result);
-    if (context.options.cfg_opts.check_for_termination) {
+    if (context.runtime().check_for_termination) {
         // Initialize loop counters for potential loop headers.
         // This enables enforcement of upper bounds on loop iterations
         // during program verification.
@@ -303,7 +302,7 @@ AnalysisResult InterleavedFwdFixpointIterator::run(const AnalysisContext& contex
     for (const auto& component : analyzer._wto) {
         std::visit(analyzer, component);
     }
-    if (!result.failed && context.options.cfg_opts.check_for_termination) {
+    if (!result.failed && context.runtime().check_for_termination) {
         analyzer.find_termination_errors(prog);
         if (!result.failed) {
             result.max_loop_count = analyzer.max_loop_count();

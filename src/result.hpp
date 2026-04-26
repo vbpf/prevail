@@ -5,6 +5,7 @@
 #include <iosfwd>
 #include <map>
 #include <optional>
+#include <ranges>
 #include <set>
 #include <vector>
 
@@ -68,7 +69,7 @@ struct RelevantState {
     std::set<Reg> registers;
     std::set<int64_t> stack_offsets; // Relative stack offsets (e.g., Mem.access.offset values like -8)
 
-    explicit RelevantState(const AnalysisContext& context) : total_stack_size(context.options.total_stack_size()) {}
+    explicit RelevantState(const AnalysisContext& context) : total_stack_size(context.runtime().total_stack_size()) {}
 
     /// Merge another relevance set into this one (union of registers and stack offsets).
     /// `total_stack_size` is invariant within one analysis and not touched.
@@ -132,7 +133,7 @@ struct FailureSlice {
     [[nodiscard]]
     std::set<Label> impacted_labels() const {
         std::set<Label> result;
-        for (const auto& [label, _] : relevance) {
+        for (const auto& label : relevance | std::views::keys) {
             result.insert(label);
         }
         return result;
@@ -200,18 +201,18 @@ struct AnalysisResult {
 };
 
 void print_error(std::ostream& os, const VerificationError& error, const Program& prog,
-                 const verbosity_options_t& verbosity);
+                 const VerbosityOptions& verbosity);
 void print_invariants(std::ostream& os, const Program& prog, const AnalysisResult& result,
-                      const verbosity_options_t& verbosity);
+                      const VerbosityOptions& verbosity);
 void print_unreachable(std::ostream& os, const Program& prog, const AnalysisResult& result);
 
 void print_invariants_filtered(std::ostream& os, const Program& prog, const AnalysisResult& result,
-                               const std::set<Label>& filter, const verbosity_options_t& verbosity,
+                               const std::set<Label>& filter, const VerbosityOptions& verbosity,
                                const std::map<Label, RelevantState>* relevance = nullptr);
 
 /// Print all failure slices in a structured diagnostic format.
 /// Use `verbosity.compact_slice = true` to skip detailed invariants.
 void print_failure_slices(std::ostream& os, const Program& prog, const AnalysisResult& result,
-                          const std::vector<FailureSlice>& slices, const verbosity_options_t& verbosity);
+                          const std::vector<FailureSlice>& slices, const VerbosityOptions& verbosity);
 
 } // namespace prevail

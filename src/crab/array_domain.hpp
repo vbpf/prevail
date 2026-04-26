@@ -79,13 +79,13 @@ class ArrayDomain final {
     int min_all_num_size(const NumAbsDomain& inv, Variable offset) const;
 
     [[nodiscard]]
-    std::optional<LinearExpression> load(const NumAbsDomain& inv, DataKind kind, const Interval& i, int width,
-                                         bool big_endian) const;
+    static std::optional<LinearExpression> load(const NumAbsDomain& inv, DataKind kind, const Interval& i, int width,
+                                                bool big_endian);
     std::optional<LinearExpression> load_type(const Interval& i, int width) const;
     std::optional<Variable> store(NumAbsDomain& inv, DataKind kind, const Interval& idx, const Interval& elem_size,
-                                  bool big_endian);
+                                  bool big_endian) const;
     std::optional<Variable> store_type(TypeDomain& inv, const Interval& idx, const Interval& width, bool is_num);
-    void havoc(NumAbsDomain& inv, DataKind kind, const Interval& idx, const Interval& elem_size, bool big_endian);
+    void havoc(NumAbsDomain& inv, DataKind kind, const Interval& idx, const Interval& elem_size, bool big_endian) const;
     void havoc_type(TypeDomain& inv, const Interval& idx, const Interval& elem_size);
 
     // Perform array stores over an array segment
@@ -93,7 +93,7 @@ class ArrayDomain final {
 
     void split_number_var(NumAbsDomain& inv, DataKind kind, const Interval& ii, const Interval& elem_size,
                           bool big_endian) const;
-    void split_cell(NumAbsDomain& inv, DataKind kind, int cell_start_index, unsigned int len, bool big_endian) const;
+    static void split_cell(NumAbsDomain& inv, DataKind kind, int cell_start_index, unsigned int len, bool big_endian);
 
     void initialize_numbers(int lb, int width);
 };
