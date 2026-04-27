@@ -69,7 +69,17 @@ constexpr bool kfunc_prototypes_are_sorted_by_btf_id() {
     return true;
 }
 
+constexpr bool kfunc_prototypes_have_names() {
+    for (const auto& entry : kfunc_prototypes) {
+        if (entry.proto.name == nullptr) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static_assert(kfunc_prototypes_are_sorted_by_btf_id(), "kfunc_prototypes must be strictly sorted by btf_id");
+static_assert(kfunc_prototypes_have_names(), "kfunc_prototypes entries must define proto.name");
 
 std::optional<KfuncPrototypeEntry> lookup_kfunc_prototype(const int32_t btf_id) {
     const auto it =
