@@ -5,9 +5,9 @@
 
 #include <algorithm>
 #include <array>
-#include <stdexcept>
 #include <string_view>
 
+#include "ir/arg_kind.hpp"
 #include "spec/function_prototypes.hpp"
 
 namespace prevail {
@@ -15,196 +15,49 @@ namespace prevail {
 namespace {
 
 struct KfuncPrototypeEntry {
-    int32_t btf_id;
-    EbpfHelperPrototype proto;
-    KfuncFlags flags;
+    int32_t btf_id{};
+    EbpfHelperPrototype proto{};
+    KfuncFlags flags = KfuncFlags::none;
     std::string_view required_program_type;
-    bool requires_privileged;
+    bool requires_privileged = false;
 };
 
 constexpr std::array<KfuncPrototypeEntry, 12> kfunc_prototypes{{
-    {
-        12,
-        EbpfHelperPrototype{
-            .name = "kfunc_test_id_overlap_tail_call",
-            .return_type = EBPF_RETURN_TYPE_INTEGER,
-            .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
-                              EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
-            .reallocate_packet = false,
-            .ctx_descriptor = nullptr,
-            .unsupported = false,
-        },
-        KfuncFlags::none,
-        "",
-        false,
-    },
-    {
-        1000,
-        EbpfHelperPrototype{
-            .name = "kfunc_test_ret_int",
-            .return_type = EBPF_RETURN_TYPE_INTEGER,
-            .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
-                              EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
-            .reallocate_packet = false,
-            .ctx_descriptor = nullptr,
-            .unsupported = false,
-        },
-        KfuncFlags::none,
-        "",
-        false,
-    },
-    {
-        1001,
-        EbpfHelperPrototype{
-            .name = "kfunc_test_ctx_arg",
-            .return_type = EBPF_RETURN_TYPE_INTEGER,
-            .argument_type = {EBPF_ARGUMENT_TYPE_PTR_TO_CTX, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
-                              EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
-            .reallocate_packet = false,
-            .ctx_descriptor = nullptr,
-            .unsupported = false,
-        },
-        KfuncFlags::none,
-        "",
-        false,
-    },
-    {
-        1002,
-        EbpfHelperPrototype{
-            .name = "kfunc_test_acquire_flag",
-            .return_type = EBPF_RETURN_TYPE_INTEGER,
-            .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
-                              EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
-            .reallocate_packet = false,
-            .ctx_descriptor = nullptr,
-            .unsupported = false,
-        },
-        KfuncFlags::acquire,
-        "",
-        false,
-    },
-    {
-        1003,
-        EbpfHelperPrototype{
-            .name = "kfunc_test_xdp_only",
-            .return_type = EBPF_RETURN_TYPE_INTEGER,
-            .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
-                              EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
-            .reallocate_packet = false,
-            .ctx_descriptor = nullptr,
-            .unsupported = false,
-        },
-        KfuncFlags::none,
-        "xdp",
-        false,
-    },
-    {
-        1004,
-        EbpfHelperPrototype{
-            .name = "kfunc_test_privileged_only",
-            .return_type = EBPF_RETURN_TYPE_INTEGER,
-            .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
-                              EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
-            .reallocate_packet = false,
-            .ctx_descriptor = nullptr,
-            .unsupported = false,
-        },
-        KfuncFlags::none,
-        "",
-        true,
-    },
-    {
-        1005,
-        EbpfHelperPrototype{
-            .name = "kfunc_test_ret_map_value_or_null",
-            .return_type = EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL,
-            .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
-                              EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
-            .reallocate_packet = false,
-            .ctx_descriptor = nullptr,
-            .unsupported = false,
-        },
-        KfuncFlags::none,
-        "",
-        false,
-    },
-    {
-        1006,
-        EbpfHelperPrototype{
-            .name = "kfunc_test_readable_mem_or_null_size",
-            .return_type = EBPF_RETURN_TYPE_INTEGER,
-            .argument_type = {EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL, EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO,
-                              EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
-            .reallocate_packet = false,
-            .ctx_descriptor = nullptr,
-            .unsupported = false,
-        },
-        KfuncFlags::none,
-        "",
-        false,
-    },
-    {
-        1007,
-        EbpfHelperPrototype{
-            .name = "kfunc_test_writable_mem_size",
-            .return_type = EBPF_RETURN_TYPE_INTEGER,
-            .argument_type = {EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM, EBPF_ARGUMENT_TYPE_CONST_SIZE,
-                              EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
-            .reallocate_packet = false,
-            .ctx_descriptor = nullptr,
-            .unsupported = false,
-        },
-        KfuncFlags::none,
-        "",
-        false,
-    },
-    {
-        1008,
-        EbpfHelperPrototype{
-            .name = "kfunc_test_release_flag",
-            .return_type = EBPF_RETURN_TYPE_INTEGER,
-            .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
-                              EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
-            .reallocate_packet = false,
-            .ctx_descriptor = nullptr,
-            .unsupported = false,
-        },
-        KfuncFlags::release,
-        "",
-        false,
-    },
+    {.btf_id = 12, .proto = {.name = "kfunc_test_id_overlap_tail_call", .return_type = EBPF_RETURN_TYPE_INTEGER}},
+    {.btf_id = 1000, .proto = {.name = "kfunc_test_ret_int", .return_type = EBPF_RETURN_TYPE_INTEGER}},
+    {.btf_id = 1001,
+     .proto = {.name = "kfunc_test_ctx_arg",
+               .return_type = EBPF_RETURN_TYPE_INTEGER,
+               .argument_type = {EBPF_ARGUMENT_TYPE_PTR_TO_CTX}}},
+    {.btf_id = 1002,
+     .proto = {.name = "kfunc_test_acquire_flag", .return_type = EBPF_RETURN_TYPE_INTEGER},
+     .flags = KfuncFlags::acquire},
+    {.btf_id = 1003,
+     .proto = {.name = "kfunc_test_xdp_only", .return_type = EBPF_RETURN_TYPE_INTEGER},
+     .required_program_type = "xdp"},
+    {.btf_id = 1004,
+     .proto = {.name = "kfunc_test_privileged_only", .return_type = EBPF_RETURN_TYPE_INTEGER},
+     .requires_privileged = true},
+    {.btf_id = 1005,
+     .proto = {.name = "kfunc_test_ret_map_value_or_null", .return_type = EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL}},
+    {.btf_id = 1006,
+     .proto = {.name = "kfunc_test_readable_mem_or_null_size",
+               .return_type = EBPF_RETURN_TYPE_INTEGER,
+               .argument_type = {EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL,
+                                 EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO}}},
+    {.btf_id = 1007,
+     .proto = {.name = "kfunc_test_writable_mem_size",
+               .return_type = EBPF_RETURN_TYPE_INTEGER,
+               .argument_type = {EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM, EBPF_ARGUMENT_TYPE_CONST_SIZE}}},
+    {.btf_id = 1008,
+     .proto = {.name = "kfunc_test_release_flag", .return_type = EBPF_RETURN_TYPE_INTEGER},
+     .flags = KfuncFlags::release},
     // bpf_cpumask_create/bpf_cpumask_release form an acquire/release pair.
     // Acquire without enforced release — verifier does not yet track release obligations (see ID 1010).
-    {
-        1009,
-        EbpfHelperPrototype{
-            .name = "bpf_cpumask_create",
-            .return_type = EBPF_RETURN_TYPE_INTEGER,
-            .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
-                              EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
-            .reallocate_packet = false,
-            .ctx_descriptor = nullptr,
-            .unsupported = false,
-        },
-        KfuncFlags::acquire,
-        "",
-        false,
-    },
-    {
-        1010,
-        EbpfHelperPrototype{
-            .name = "bpf_cpumask_release",
-            .return_type = EBPF_RETURN_TYPE_INTEGER,
-            .argument_type = {EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE,
-                              EBPF_ARGUMENT_TYPE_DONTCARE, EBPF_ARGUMENT_TYPE_DONTCARE},
-            .reallocate_packet = false,
-            .ctx_descriptor = nullptr,
-            .unsupported = false,
-        },
-        KfuncFlags::none, // release semantics not yet enforced by verifier
-        "",
-        false,
-    },
+    {.btf_id = 1009,
+     .proto = {.name = "bpf_cpumask_create", .return_type = EBPF_RETURN_TYPE_INTEGER},
+     .flags = KfuncFlags::acquire},
+    {.btf_id = 1010, .proto = {.name = "bpf_cpumask_release", .return_type = EBPF_RETURN_TYPE_INTEGER}},
 }};
 
 constexpr bool kfunc_prototypes_are_sorted_by_btf_id() {
@@ -216,7 +69,17 @@ constexpr bool kfunc_prototypes_are_sorted_by_btf_id() {
     return true;
 }
 
+constexpr bool kfunc_prototypes_have_names() {
+    for (const auto& entry : kfunc_prototypes) {
+        if (entry.proto.name == nullptr) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static_assert(kfunc_prototypes_are_sorted_by_btf_id(), "kfunc_prototypes must be strictly sorted by btf_id");
+static_assert(kfunc_prototypes_have_names(), "kfunc_prototypes entries must define proto.name");
 
 std::optional<KfuncPrototypeEntry> lookup_kfunc_prototype(const int32_t btf_id) {
     const auto it =
@@ -226,33 +89,6 @@ std::optional<KfuncPrototypeEntry> lookup_kfunc_prototype(const int32_t btf_id) 
         return *it;
     }
     return std::nullopt;
-}
-
-ArgSingle::Kind to_arg_single_kind(const ebpf_argument_type_t t) {
-    switch (t) {
-    case EBPF_ARGUMENT_TYPE_ANYTHING: return ArgSingle::Kind::ANYTHING;
-    case EBPF_ARGUMENT_TYPE_PTR_TO_STACK:
-    case EBPF_ARGUMENT_TYPE_PTR_TO_STACK_OR_NULL: return ArgSingle::Kind::PTR_TO_STACK;
-    case EBPF_ARGUMENT_TYPE_PTR_TO_MAP: return ArgSingle::Kind::MAP_FD;
-    case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_OF_PROGRAMS: return ArgSingle::Kind::MAP_FD_PROGRAMS;
-    case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_KEY: return ArgSingle::Kind::PTR_TO_MAP_KEY;
-    case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE: return ArgSingle::Kind::PTR_TO_MAP_VALUE;
-    case EBPF_ARGUMENT_TYPE_PTR_TO_CTX:
-    case EBPF_ARGUMENT_TYPE_PTR_TO_CTX_OR_NULL: return ArgSingle::Kind::PTR_TO_CTX;
-    default: break;
-    }
-    throw std::runtime_error("internal error: unmapped kfunc single-arg type " + std::to_string(static_cast<int>(t)));
-}
-
-ArgPair::Kind to_arg_pair_kind(const ebpf_argument_type_t t) {
-    switch (t) {
-    case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL:
-    case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM: return ArgPair::Kind::PTR_TO_READABLE_MEM;
-    case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL:
-    case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM: return ArgPair::Kind::PTR_TO_WRITABLE_MEM;
-    default: break;
-    }
-    throw std::runtime_error("internal error: unmapped kfunc pair-arg type " + std::to_string(static_cast<int>(t)));
 }
 
 void set_unsupported(std::string* why_not, const std::string& reason) {
@@ -317,87 +153,19 @@ std::optional<ResolvedCall> make_kfunc_call(const int32_t btf_id, const EbpfProg
     const std::array<ebpf_argument_type_t, 7> args = {
         {EBPF_ARGUMENT_TYPE_DONTCARE, proto.argument_type[0], proto.argument_type[1], proto.argument_type[2],
          proto.argument_type[3], proto.argument_type[4], EBPF_ARGUMENT_TYPE_DONTCARE}};
-    for (size_t i = 1; i < args.size() - 1; i++) {
-        switch (args[i]) {
-        case EBPF_ARGUMENT_TYPE_DONTCARE: return res;
-        case EBPF_ARGUMENT_TYPE_UNSUPPORTED:
-            set_unsupported(why_not, std::string("kfunc argument type is unavailable on this platform: ") + proto.name);
-            return std::nullopt;
-        case EBPF_ARGUMENT_TYPE_ANYTHING:
-        case EBPF_ARGUMENT_TYPE_PTR_TO_MAP:
-        case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_OF_PROGRAMS:
-        case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_KEY:
-        case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE:
-        case EBPF_ARGUMENT_TYPE_PTR_TO_STACK:
-        case EBPF_ARGUMENT_TYPE_PTR_TO_CTX:
-            res.contract.singles.push_back({to_arg_single_kind(args[i]), false, Reg{gsl::narrow<uint8_t>(i)}});
-            break;
-        case EBPF_ARGUMENT_TYPE_PTR_TO_STACK_OR_NULL:
-        case EBPF_ARGUMENT_TYPE_PTR_TO_CTX_OR_NULL:
-            res.contract.singles.push_back({to_arg_single_kind(args[i]), true, Reg{gsl::narrow<uint8_t>(i)}});
-            break;
-        case EBPF_ARGUMENT_TYPE_CONST_SIZE:
-            set_unsupported(
-                why_not,
-                std::string("mismatched kfunc EBPF_ARGUMENT_TYPE_PTR_TO* and EBPF_ARGUMENT_TYPE_CONST_SIZE: ") +
-                    proto.name);
-            return std::nullopt;
-        case EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO:
-            set_unsupported(why_not, std::string("mismatched kfunc EBPF_ARGUMENT_TYPE_PTR_TO* and "
-                                                 "EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO: ") +
-                                         proto.name);
-            return std::nullopt;
-        case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL:
-        case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM:
-        case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL:
-        case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM: {
-            // args[i+1] is always in bounds: args has a DONTCARE sentinel at index 6.
-            if (args[i + 1] != EBPF_ARGUMENT_TYPE_CONST_SIZE && args[i + 1] != EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO) {
-                set_unsupported(why_not,
-                                std::string("kfunc pointer argument not followed by EBPF_ARGUMENT_TYPE_CONST_SIZE or "
-                                            "EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO: ") +
-                                    proto.name);
-                return std::nullopt;
-            }
-            const bool can_be_zero = (args[i + 1] == EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO);
-            const bool or_null = args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL ||
-                                 args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL;
-            res.contract.pairs.push_back({to_arg_pair_kind(args[i]), or_null, Reg{gsl::narrow<uint8_t>(i)},
-                                          Reg{gsl::narrow<uint8_t>(i + 1)}, can_be_zero});
-            i++;
-            break;
-        }
-        case EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID_SOCK_COMMON:
-        case EBPF_ARGUMENT_TYPE_PTR_TO_SOCK_COMMON:
-            res.contract.singles.push_back({ArgSingle::Kind::PTR_TO_SOCKET, false, Reg{gsl::narrow<uint8_t>(i)}});
-            break;
-        case EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID:
-        case EBPF_ARGUMENT_TYPE_PTR_TO_PERCPU_BTF_ID:
-            res.contract.singles.push_back({ArgSingle::Kind::PTR_TO_BTF_ID, false, Reg{gsl::narrow<uint8_t>(i)}});
-            break;
-        case EBPF_ARGUMENT_TYPE_PTR_TO_ALLOC_MEM:
-            res.contract.singles.push_back({ArgSingle::Kind::PTR_TO_ALLOC_MEM, false, Reg{gsl::narrow<uint8_t>(i)}});
-            break;
-        case EBPF_ARGUMENT_TYPE_PTR_TO_SPIN_LOCK:
-            res.contract.singles.push_back({ArgSingle::Kind::PTR_TO_SPIN_LOCK, false, Reg{gsl::narrow<uint8_t>(i)}});
-            break;
-        case EBPF_ARGUMENT_TYPE_PTR_TO_TIMER:
-            res.contract.singles.push_back({ArgSingle::Kind::PTR_TO_TIMER, false, Reg{gsl::narrow<uint8_t>(i)}});
-            break;
-        case EBPF_ARGUMENT_TYPE_CONST_ALLOC_SIZE_OR_ZERO:
-            res.contract.singles.push_back({ArgSingle::Kind::CONST_SIZE_OR_ZERO, false, Reg{gsl::narrow<uint8_t>(i)}});
-            res.contract.alloc_size_reg = Reg{gsl::narrow<uint8_t>(i)};
-            break;
-        case EBPF_ARGUMENT_TYPE_PTR_TO_LONG:
-            res.contract.singles.push_back(
-                {ArgSingle::Kind::PTR_TO_WRITABLE_LONG, false, Reg{gsl::narrow<uint8_t>(i)}});
-            break;
-        case EBPF_ARGUMENT_TYPE_PTR_TO_INT:
-            res.contract.singles.push_back({ArgSingle::Kind::PTR_TO_WRITABLE_INT, false, Reg{gsl::narrow<uint8_t>(i)}});
-            break;
-        case EBPF_ARGUMENT_TYPE_PTR_TO_CONST_STR:
-        default:
+    for (size_t i = 1; i < args.size() - 1;) {
+        switch (process_arg(res.contract, args, i)) {
+        case ArgOutcome::Single: i += 1; break;
+        case ArgOutcome::Pair: i += 2; break;
+        case ArgOutcome::Stop: return res;
+        case ArgOutcome::Unavailable:
             set_unsupported(why_not, std::string("kfunc argument type is unsupported on this platform: ") + proto.name);
+            return std::nullopt;
+        case ArgOutcome::MismatchedSize:
+            set_unsupported(why_not,
+                            std::string("kfunc pointer argument not followed by EBPF_ARGUMENT_TYPE_CONST_SIZE or "
+                                        "EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO: ") +
+                                proto.name);
             return std::nullopt;
         }
     }
