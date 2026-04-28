@@ -577,3 +577,62 @@ TEST_CASE("read_elf succeeds with istream and non-file path", "[elf]") {
     auto programs = read_elf(stream, "memory", ".text", "", options, &g_ebpf_platform_linux);
     REQUIRE(!programs.empty());
 }
+
+// Verify that the ELF loader rejects FUNC symbols at non-instruction-aligned offsets.
+// Such a symbol would cause compute_reachable_program_span to inflate the extracted byte
+// span via truncating integer division, leading to a read past the section data buffer.
+TEST_CASE("ELF loader rejects non-instruction-aligned FUNC symbol", "[elf][hardening]") {
+
+    // Build a minimal ELF with an executable section and a FUNC symbol at an unaligned offset.
+    // We need enough instructions that the unaligned boundary causes the second iteration
+    // to enter read_programs' inner loop with a non-aligned offset.
+    ELFIO::elfio writer;
+    writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+    writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+    writer.set_type(ELFIO::ET_REL);
+    writer.set_machine(ELFIO::EM_BPF);
+
+    // Create a .text section with 32 BPF "exit" instructions (256 bytes).
+    // This ensures the section is big enough that the second iteration's
+    // compute_reachable_program_span can return an aligned-but-overflowing span.
+    ELFIO::section* text_sec = writer.sections.add(".text");
+    text_sec->set_type(ELFIO::SHT_PROGBITS);
+    text_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+    text_sec->set_addr_align(8);
+    const uint8_t exit_inst[8] = {0x95, 0, 0, 0, 0, 0, 0, 0};
+    std::string inst_data;
+    for (int i = 0; i < 32; ++i) {
+        inst_data.append(reinterpret_cast<const char*>(exit_inst), sizeof(exit_inst));
+    }
+    text_sec->set_data(inst_data);
+
+    // Create a string table and symbol table.
+    ELFIO::section* str_sec = writer.sections.add(".strtab");
+    str_sec->set_type(ELFIO::SHT_STRTAB);
+    ELFIO::string_section_accessor str_writer(str_sec);
+
+    ELFIO::section* sym_sec = writer.sections.add(".symtab");
+    sym_sec->set_type(ELFIO::SHT_SYMTAB);
+    sym_sec->set_addr_align(8);
+    sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+    sym_sec->set_link(str_sec->get_index());
+    sym_sec->set_info(1); // First global symbol index.
+    ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+
+    // Add two FUNC symbols: one at offset 0 (the default) and one at UNALIGNED offset 7.
+    // The non-aligned FUNC symbol is rejected by get_program_name_and_size before
+    // it can produce a non-aligned program boundary.
+    sym_writer.add_symbol(str_writer, "prog_a", 0 /* aligned */, 7 /* size */,
+                          ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0, text_sec->get_index());
+    sym_writer.add_symbol(str_writer, "prog_b", 7 /* NOT 8-aligned */, 256 - 7,
+                          ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0, text_sec->get_index());
+
+    // Serialize to an in-memory stream.
+    std::ostringstream out_stream;
+    writer.save(out_stream);
+    std::istringstream in_stream(out_stream.str());
+
+    VerifierOptions options{};
+    REQUIRE_THROWS_WITH(read_elf(in_stream, "memory", ".text", "", options, &g_ebpf_platform_linux),
+                        Catch::Matchers::ContainsSubstring("Non-instruction-aligned FUNC symbol"));
+}

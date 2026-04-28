@@ -92,6 +92,11 @@ get_program_name_and_size(const ELFIO::section& sec, const ELFIO::Elf_Xword star
                 continue;
             }
             const auto relocation_offset = symbol_details.value;
+            if (relocation_offset % sizeof(EbpfInst) != 0) {
+                throw UnmarshalError("Non-instruction-aligned FUNC symbol '" + symbol_details.name +
+                                     "' at offset " + std::to_string(relocation_offset) + " in section " +
+                                     sec.get_name());
+            }
             if (relocation_offset == start) {
                 program_name = symbol_details.name;
             } else if (relocation_offset > start && relocation_offset < start + size) {
@@ -691,6 +696,9 @@ void ProgramReader::read_programs() {
             builtin_offsets_for_current_program.clear();
             auto [name, symbol_size] = get_program_name_and_size(*sec, offset, symbols);
             const auto extracted_size = compute_reachable_program_span(section_instructions, offset, symbol_size);
+            if (offset + extracted_size > sec->get_size()) {
+                throw UnmarshalError("Program span exceeds section bounds in section " + sec->get_name());
+            }
             auto instructions = vector_of<EbpfInst>(sec->get_data() + offset, extracted_size);
             if (const auto reloc_sec = get_relocation_section(sec_name)) {
                 process_relocations(instructions, ELFIO::const_relocation_section_accessor{reader, reloc_sec}, sec_name,
