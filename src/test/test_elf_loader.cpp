@@ -636,3 +636,51 @@ TEST_CASE("ELF loader rejects non-instruction-aligned FUNC symbol", "[elf][harde
     REQUIRE_THROWS_WITH(read_elf(in_stream, "memory", ".text", "", options, &g_ebpf_platform_linux),
                         Catch::Matchers::ContainsSubstring("Non-instruction-aligned FUNC symbol"));
 }
+
+// Verify that the ELF loader accepts FUNC symbols at instruction-aligned offsets.
+// Companion to the rejection test above — ensures the alignment check does not
+// reject well-formed ELF files.
+TEST_CASE("ELF loader accepts instruction-aligned FUNC symbols", "[elf][hardening]") {
+
+    ELFIO::elfio writer;
+    writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+    writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+    writer.set_type(ELFIO::ET_REL);
+    writer.set_machine(ELFIO::EM_BPF);
+
+    ELFIO::section* text_sec = writer.sections.add(".text");
+    text_sec->set_type(ELFIO::SHT_PROGBITS);
+    text_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+    text_sec->set_addr_align(8);
+    const uint8_t exit_inst[8] = {0x95, 0, 0, 0, 0, 0, 0, 0};
+    std::string inst_data;
+    for (int i = 0; i < 32; ++i) {
+        inst_data.append(reinterpret_cast<const char*>(exit_inst), sizeof(exit_inst));
+    }
+    text_sec->set_data(inst_data);
+
+    ELFIO::section* str_sec = writer.sections.add(".strtab");
+    str_sec->set_type(ELFIO::SHT_STRTAB);
+    ELFIO::string_section_accessor str_writer(str_sec);
+
+    ELFIO::section* sym_sec = writer.sections.add(".symtab");
+    sym_sec->set_type(ELFIO::SHT_SYMTAB);
+    sym_sec->set_addr_align(8);
+    sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+    sym_sec->set_link(str_sec->get_index());
+    sym_sec->set_info(1);
+    ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+
+    // Both FUNC symbols are at 8-byte-aligned offsets.
+    sym_writer.add_symbol(str_writer, "prog_a", 0, 8, ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0, text_sec->get_index());
+    sym_writer.add_symbol(str_writer, "prog_b", 8, 256 - 8, ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0,
+                          text_sec->get_index());
+
+    std::ostringstream out_stream;
+    writer.save(out_stream);
+    std::istringstream in_stream(out_stream.str());
+
+    VerifierOptions options{};
+    const auto programs = read_elf(in_stream, "memory", ".text", "", options, &g_ebpf_platform_linux);
+    REQUIRE_FALSE(programs.empty());
+}
