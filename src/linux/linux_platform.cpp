@@ -336,7 +336,7 @@ static int create_map_linux(const uint32_t map_type, const uint32_t key_size, co
     }
     return map_fd;
 #else
-    throw std::runtime_error(std::string("cannot create a Linux map"));
+    throw RuntimeInputError(std::string("cannot create a Linux map"));
 #endif
 }
 

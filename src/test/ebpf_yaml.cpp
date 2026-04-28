@@ -360,25 +360,33 @@ static TestCase read_case(const RawTestCase& raw_case) {
 
 static vector<TestCase> read_suite(const string& path) {
     std::ifstream f{path};
+    if (!f) {
+        throw RuntimeInputError("could not open YAML suite: " + path);
+    }
     vector<TestCase> res;
-    for (const YAML::Node& config : YAML::LoadAll(f)) {
-        const RawTestCase raw_case = parse_case(config);
-        if (raw_case.expected_exception.has_value()) {
-            TestCase tc;
-            tc.name = raw_case.test_case;
-            tc.expected_exception = raw_case.expected_exception;
+    try {
+        for (const YAML::Node& config : YAML::LoadAll(f)) {
+            const RawTestCase raw_case = parse_case(config);
+            if (raw_case.expected_exception.has_value()) {
+                TestCase tc;
+                tc.name = raw_case.test_case;
+                tc.expected_exception = raw_case.expected_exception;
 
-            try {
-                (void)read_case(raw_case);
-                tc.actual_exception = std::nullopt;
-            } catch (const std::exception& ex) {
-                tc.actual_exception = ex.what();
+                try {
+                    (void)read_case(raw_case);
+                    tc.actual_exception = std::nullopt;
+                } catch (const std::exception& ex) {
+                    tc.actual_exception = ex.what();
+                }
+
+                res.push_back(std::move(tc));
+            } else {
+                res.push_back(read_case(raw_case));
             }
-
-            res.push_back(std::move(tc));
-        } else {
-            res.push_back(read_case(raw_case));
         }
+    } catch (const YAML::Exception& e) {
+        // yaml-cpp's what() includes line/column when available.
+        throw RuntimeInputError("in YAML suite " + path + ": " + e.what());
     }
     return res;
 }

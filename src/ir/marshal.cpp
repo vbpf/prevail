@@ -222,7 +222,12 @@ struct MarshalVisitor {
         return {EbpfInst{.opcode = INST_OP_EXIT, .dst = 0, .src = 0, .offset = 0, .imm = 0}};
     }
 
-    vector<EbpfInst> operator()(Assume const&) const { throw std::invalid_argument("Cannot marshal assumptions"); }
+    vector<EbpfInst> operator()(Assume const&) const {
+        // Assume is an analyzer-internal IR annotation; it should never reach
+        // the marshaller. Reaching here means a caller serialized a program
+        // that retained Assume nodes — a contract violation.
+        CRAB_ERROR("Cannot marshal assumptions");
+    }
 
     vector<EbpfInst> operator()(Jmp const& b) const {
         if (b.cond) {
@@ -252,7 +257,7 @@ struct MarshalVisitor {
     vector<EbpfInst> operator()(Mem const& b) const {
         const Deref access = b.access;
         if (b.is_signed && (!b.is_load || access.width == 8)) {
-            throw std::runtime_error(std::string("Invalid MEMSX form: ") + to_string(b));
+            CRAB_ERROR("Invalid MEMSX form: ", to_string(b));
         }
         EbpfInst res{
             .opcode =
@@ -263,14 +268,14 @@ struct MarshalVisitor {
         };
         if (b.is_load) {
             if (!std::holds_alternative<Reg>(b.value)) {
-                throw std::runtime_error(std::string("LD IMM: ") + to_string(b));
+                CRAB_ERROR("LD IMM: ", to_string(b));
             }
             res.opcode |= INST_CLS_LDX;
             res.dst = gsl::narrow<uint8_t>(std::get<Reg>(b.value).v);
             res.src = access.basereg.v;
         } else {
             if (b.is_signed) {
-                throw std::runtime_error(std::string("ST MEMSX: ") + to_string(b));
+                CRAB_ERROR("ST MEMSX: ", to_string(b));
             }
             res.opcode |= INST_CLS_ST;
             res.dst = access.basereg.v;

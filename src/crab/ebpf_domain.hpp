@@ -7,6 +7,8 @@
 #include <limits>
 #include <optional>
 #include <span>
+#include <string>
+#include <utility>
 
 #include "analysis_context.hpp"
 #include "arith/variable.hpp"
@@ -29,13 +31,15 @@ inline int64_t ptr_max(const int max_packet_size) noexcept {
 
 class EbpfDomain;
 
-struct VerificationError final : std::runtime_error {
+struct VerificationError final {
+    std::string message;
     std::optional<Label> where;
-    explicit VerificationError(const std::string& what) : std::runtime_error(what) {}
+    explicit VerificationError(std::string what) : message(std::move(what)) {}
 };
 std::string to_string(const VerificationError& error);
 
 void ebpf_domain_transform(EbpfDomain& inv, const Instruction& ins, const AnalysisContext& context);
+[[nodiscard]]
 std::optional<VerificationError> ebpf_domain_check(const EbpfDomain& dom, const Assertion& assertion,
                                                    const Label& where, const AnalysisContext& context);
 

@@ -166,6 +166,10 @@ int main(int argc, char** argv) {
     if (!list) {
         try {
             raw_progs = elf.get_programs(desired_section, desired_program);
+        } catch (const InternalError& e) {
+            std::cerr << "internal error: " << e.what() << std::endl;
+            std::cerr << "this is a bug in Prevail; please file an issue." << std::endl;
+            return 2;
         } catch (const std::runtime_error& e) {
             load_error = e.what();
         }
@@ -189,6 +193,10 @@ int main(int argc, char** argv) {
                 }
                 std::cout << std::endl;
             }
+        } catch (const InternalError& e) {
+            std::cerr << "internal error: " << e.what() << std::endl;
+            std::cerr << "this is a bug in Prevail; please file an issue." << std::endl;
+            return 2;
         } catch (const std::runtime_error& e) {
             std::cerr << "error listing programs: " << e.what() << std::endl;
             return 1;
@@ -283,10 +291,15 @@ int main(int argc, char** argv) {
             }
         }
         return pass ? 0 : 1;
-    } catch (const UnmarshalError& e) {
+    } catch (const InternalError& e) {
+        std::cerr << "internal error: " << e.what() << std::endl;
+        std::cerr << "this is a bug in Prevail; please file an issue." << std::endl;
+        return 2;
+    } catch (const RuntimeInputError& e) {
         std::cerr << "error: " << e.what() << std::endl;
         return 1;
     } catch (const std::exception& e) {
+        // Residual: anything not yet routed through the typed hierarchy.
         std::cerr << "error: " << e.what() << std::endl;
         return 1;
     }

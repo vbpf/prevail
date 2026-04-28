@@ -239,7 +239,7 @@ void print_dot(const Program& prog, std::ostream& out) {
 void print_dot(const Program& prog, const std::string& outfile) {
     std::ofstream out{outfile};
     if (out.fail()) {
-        throw std::runtime_error(std::string("Could not open file ") + outfile);
+        throw RuntimeInputError(std::string("Could not open file ") + outfile);
     }
     print_dot(prog, out);
 }
@@ -258,7 +258,7 @@ std::string to_string(const VerificationError& error) {
     if (const auto& label = error.where) {
         ss << *label << ": ";
     }
-    ss << error.what();
+    ss << error.message;
     return ss.str();
 }
 
@@ -269,7 +269,7 @@ void print_error(std::ostream& os, const VerificationError& error, const Program
         printer.print_line_info(*label);
         os << *label << ": ";
     }
-    os << error.what() << "\n";
+    os << error.message << "\n";
     os << "\n";
 }
 
@@ -721,7 +721,7 @@ void print(const InstructionSeq& insts, std::ostream& out, const std::optional<c
             }
             if (const auto jmp = std::get_if<Jmp>(&ins)) {
                 if (!pc_of_label.contains(jmp->target)) {
-                    throw std::runtime_error(string("Cannot find label ") + to_string(jmp->target));
+                    CRAB_ERROR("Cannot find label ", to_string(jmp->target));
                 }
                 const Pc target_pc = pc_of_label.at(jmp->target);
                 visitor(*jmp, gsl::narrow<int>(target_pc) - static_cast<int>(pc) - 1);
@@ -995,7 +995,7 @@ void print_failure_slices(std::ostream& os, const Program& prog, const AnalysisR
         os << "=== Failure Slice " << (i + 1) << " of " << slices.size() << " ===\n\n";
 
         // Print error summary
-        os << "[ERROR] " << slice.error.what() << "\n";
+        os << "[ERROR] " << slice.error.message << "\n";
         os << "[LOCATION] " << slice.failing_label << "\n";
 
         // Print relevant registers at failure point

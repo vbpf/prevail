@@ -12,6 +12,7 @@
 #include "arith/variable.hpp"
 #include "crab/interval.hpp"
 #include "crab/type_encoding.hpp"
+#include "crab_utils/debug.hpp"
 
 namespace prevail {
 struct StringInvariant {
@@ -41,7 +42,7 @@ struct StringInvariant {
     [[nodiscard]]
     const std::set<std::string>& value() const {
         if (is_bottom()) {
-            throw std::runtime_error("cannot iterate bottom");
+            CRAB_ERROR("cannot iterate bottom");
         }
         return *maybe_inv;
     }

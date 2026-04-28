@@ -116,6 +116,7 @@ class InterleavedFwdFixpointIterator final {
         }
     }
 
+    [[nodiscard]]
     static std::optional<VerificationError> check_loop_bound(const Program& prog, const Label& label,
                                                              const EbpfDomain& pre, const AnalysisContext& context) {
         if (std::holds_alternative<IncrementLoopCounter>(prog.instruction_at(label))) {

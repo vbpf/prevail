@@ -178,6 +178,7 @@ static std::optional<ResolvedCall> resolve_kfunc_call(const CallBtf& call_btf, c
 // kind=kfunc}; the ResolvedCall is reproduced on demand via resolve(call, info).
 using ResolvedKfuncCalls = std::map<Label, Call>;
 
+[[nodiscard]]
 static std::optional<RejectionReason> check_instruction_feature_support(const Instruction& ins,
                                                                         const ProgramInfo& info) {
     const ebpf_platform_t& platform = *info.platform;
@@ -272,6 +273,22 @@ static std::optional<RejectionReason> check_instruction_feature_support(const In
 }
 
 // Pass: ValidateInstructionSupport
+// Throwing wrapper around the value-returning check_instruction_feature_support.
+// Single named place that converts a rejection into the throw shape; the
+// value-returning checker is preserved for sites that want to query without
+// throwing (see the assert at pass_populate_nodes).
+[[noreturn]]
+static void throw_unsupported(const RejectionReason& reason, const Label& label) {
+    const std::string prefix = (reason.kind == RejectKind::NotImplemented) ? "not implemented: " : "rejected: ";
+    throw InvalidControlFlow{prefix + reason.detail + " (at " + to_string(label) + ")"};
+}
+
+static void enforce_instruction_feature_support(const Instruction& ins, const Label& label, const ProgramInfo& info) {
+    if (const auto reason = check_instruction_feature_support(ins, info)) {
+        throw_unsupported(*reason, label);
+    }
+}
+
 // Reads    : instruction sequence, platform conformance groups.
 // Writes   : nothing.
 // Throws   : InvalidControlFlow on any instruction the platform cannot run.
@@ -279,11 +296,7 @@ static std::optional<RejectionReason> check_instruction_feature_support(const In
 //            every instruction has been vetted here.
 static void pass_validate_instruction_support(const InstructionSeq& insts, const ProgramInfo& info) {
     for (const auto& [label, inst, _] : insts) {
-        if (const auto reason = check_instruction_feature_support(inst, info)) {
-            const std::string prefix =
-                (reason->kind == RejectKind::NotImplemented) ? "not implemented: " : "rejected: ";
-            throw InvalidControlFlow{prefix + reason->detail + " (at " + to_string(label) + ")"};
-        }
+        enforce_instruction_feature_support(inst, label, info);
     }
 }
 
@@ -483,8 +496,7 @@ static void pass_populate_nodes(CfgBuilder& builder, const InstructionSeq& insts
         if (std::holds_alternative<CallBtf>(inst)) {
             const auto it = resolved_kfunc_calls.find(label);
             if (it == resolved_kfunc_calls.end()) {
-                throw InvalidControlFlow{"internal error: missing validated kfunc resolution (at " + to_string(label) +
-                                         ")"};
+                CRAB_ERROR("missing validated kfunc resolution at ", to_string(label));
             }
             builder.insert(label, it->second);
             continue;

@@ -3,23 +3,18 @@
 #pragma once
 
 #include <memory>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
+#include "crab_utils/prevail_errors.hpp"
 #include "ir/program.hpp"
 #include "platform.hpp"
 
 namespace prevail {
 
-class UnmarshalError : public std::runtime_error {
+class UnmarshalError : public RuntimeInputError {
   public:
-    explicit UnmarshalError(const std::string& what) : std::runtime_error(what) {}
-};
-
-class MalformedElf final : public UnmarshalError {
-  public:
-    explicit MalformedElf(const std::string& what) : UnmarshalError(what) {}
+    explicit UnmarshalError(const std::string& what) : RuntimeInputError(what) {}
 };
 
 struct ElfProgramInfo {
