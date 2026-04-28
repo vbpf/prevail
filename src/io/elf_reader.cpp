@@ -73,7 +73,7 @@ symbol_details_t get_symbol_details(const ELFIO::const_symbol_section_accessor& 
     symbol_details_t details;
     if (!symbols.get_symbol(index, details.name, details.value, details.size, details.bind, details.type,
                             details.section_index, details.other)) {
-        throw MalformedElf("Invalid symbol index in ELF symbol table: " + std::to_string(index));
+        throw UnmarshalError("Invalid symbol index in ELF symbol table: " + std::to_string(index));
     }
     return details;
 }
@@ -231,7 +231,7 @@ static std::uintmax_t get_data_size(std::istream& input_stream, const std::strin
     input_stream.seekg(0, std::ios::end);
     const auto end_pos = input_stream.tellg();
     if (end_pos < 0) {
-        throw MalformedElf("Cannot determine data size for " + path);
+        throw UnmarshalError("Cannot determine data size for " + path);
     }
     input_stream.seekg(0);
     return end_pos;
@@ -240,11 +240,11 @@ static std::uintmax_t get_data_size(std::istream& input_stream, const std::strin
 ELFIO::elfio load_elf(std::istream& input_stream, const std::string& path) {
     ELFIO::elfio reader;
     if (!reader.load(input_stream)) {
-        throw MalformedElf("Can't process ELF file " + path);
+        throw UnmarshalError("Can't process ELF file " + path);
     }
 
     if (reader.get_machine() != ELFIO::EM_BPF && reader.get_machine() != ELFIO::EM_NONE) {
-        throw MalformedElf("Unsupported ELF machine in file " + path + ": expected EM_BPF");
+        throw UnmarshalError("Unsupported ELF machine in file " + path + ": expected EM_BPF");
     }
 
     const std::uintmax_t data_size = get_data_size(input_stream, path);
@@ -256,7 +256,7 @@ ELFIO::elfio load_elf(std::istream& input_stream, const std::string& path) {
         const std::uintmax_t offset = section->get_offset();
         const std::uintmax_t size = section->get_size();
         if (offset > data_size || size > data_size - offset) {
-            throw MalformedElf("ELF section '" + section->get_name() + "' has out-of-bounds file range");
+            throw UnmarshalError("ELF section '" + section->get_name() + "' has out-of-bounds file range");
         }
     }
 
@@ -267,19 +267,19 @@ ELFIO::const_symbol_section_accessor read_and_validate_symbol_section(const ELFI
                                                                       const std::string& path) {
     const ELFIO::section* symbol_section = reader.sections[".symtab"];
     if (!symbol_section) {
-        throw MalformedElf("No symbol section found in ELF file " + path);
+        throw UnmarshalError("No symbol section found in ELF file " + path);
     }
     const auto expected_entry_size =
         reader.get_class() == ELFIO::ELFCLASS32 ? sizeof(ELFIO::Elf32_Sym) : sizeof(ELFIO::Elf64_Sym);
     if (symbol_section->get_entry_size() != expected_entry_size || symbol_section->get_entry_size() == 0 ||
         symbol_section->get_data() == nullptr || symbol_section->get_size() % symbol_section->get_entry_size() != 0) {
-        throw MalformedElf("Invalid symbol section in ELF file " + path);
+        throw UnmarshalError("Invalid symbol section in ELF file " + path);
     }
 
     const auto linked_strtab_index = symbol_section->get_link();
     if (linked_strtab_index >= reader.sections.size() || reader.sections[linked_strtab_index] == nullptr ||
         reader.sections[linked_strtab_index]->get_data() == nullptr) {
-        throw MalformedElf("Invalid symbol string table link in ELF file " + path);
+        throw UnmarshalError("Invalid symbol string table link in ELF file " + path);
     }
     return ELFIO::const_symbol_section_accessor{reader, symbol_section};
 }
@@ -625,18 +625,18 @@ void ProgramReader::process_relocations(std::vector<EbpfInst>& instructions,
         unsigned type{};
         ELFIO::Elf_Sxword addend{};
         if (!reloc.get_entry(i, o, idx, type, addend)) {
-            throw MalformedElf("Malformed relocation entry in section " + section_name + " at index " +
-                               std::to_string(i));
+            throw UnmarshalError("Malformed relocation entry in section " + section_name + " at index " +
+                                 std::to_string(i));
         }
         if (!is_supported_bpf_relocation_type(type)) {
-            throw MalformedElf("Unsupported relocation type " + std::to_string(type) + " in section " + section_name);
+            throw UnmarshalError("Unsupported relocation type " + std::to_string(type) + " in section " + section_name);
         }
         if (type == R_BPF_NONE_TYPE && idx == 0) {
             continue;
         }
         if (idx >= symbols.get_symbols_num()) {
-            throw MalformedElf("Invalid relocation symbol index " + std::to_string(idx) + " in section " +
-                               section_name);
+            throw UnmarshalError("Invalid relocation symbol index " + std::to_string(idx) + " in section " +
+                                 section_name);
         }
         if (o < program_offset || o >= program_offset + program_size) {
             continue;

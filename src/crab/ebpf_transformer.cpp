@@ -131,7 +131,7 @@ void ebpf_domain_transform(EbpfDomain& inv, const Instruction& ins, const Analys
             msg << "Bug! pre-invariant:\n"
                 << pre << "\n followed by instruction: " << ins << "\n"
                 << "leads to bottom";
-            throw std::logic_error(msg.str());
+            CRAB_ERROR(msg.str());
         }
     }
 }

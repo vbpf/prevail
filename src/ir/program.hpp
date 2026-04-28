@@ -9,7 +9,8 @@
 #include "cfg/cfg.hpp"
 #include "cfg/label.hpp"
 #include "config.hpp"
-#include "crab_utils/debug.hpp"
+#include "crab_utils/debug.hpp"          // CRAB_ERROR (used by inline methods below)
+#include "crab_utils/prevail_errors.hpp" // RuntimeInputError base for InvalidControlFlow
 #include "ir/syntax.hpp"
 #include "spec/type_descriptors.hpp"
 
@@ -70,9 +71,9 @@ class Program {
                                  const VerifierOptions& options);
 };
 
-class InvalidControlFlow final : public std::runtime_error {
+class InvalidControlFlow final : public RuntimeInputError {
   public:
-    explicit InvalidControlFlow(const std::string& what) : std::runtime_error(what) {}
+    explicit InvalidControlFlow(const std::string& what) : RuntimeInputError(what) {}
 };
 
 std::vector<Assertion> get_assertions(const Instruction& ins, const ProgramInfo& info, const RuntimeConfig& runtime,

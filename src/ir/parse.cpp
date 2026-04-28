@@ -105,11 +105,47 @@ static const std::map<std::string, int> str_to_width = {
 
 static bool is64_reg(const std::string& s) { return s.at(0) == 'r'; }
 
-static int to_int(const std::string& s) { return std::stoi(s, nullptr, 0); }
+// Wrappers around std::stoi/stoll/stoull that translate the underlying
+// std::invalid_argument / std::out_of_range into RuntimeInputError with the
+// offending token. The mechanism stays "throw"; the addition is the context.
+template <typename Parse>
+static auto parse_with_context(const std::string& s, const char* what, Parse parse) {
+    try {
+        return parse(s);
+    } catch (const std::invalid_argument&) {
+        throw RuntimeInputError(std::string("not a valid ") + what + ": '" + s + "'");
+    } catch (const std::out_of_range&) {
+        throw RuntimeInputError(std::string(what) + " out of range: '" + s + "'");
+    }
+}
 
-static Number signed_number(const std::string& s) { return std::stoll(s, nullptr, 0); }
+static int to_int(const std::string& s) {
+    return parse_with_context(s, "integer", [](const std::string& t) { return std::stoi(t, nullptr, 0); });
+}
 
-static Number unsigned_number(const std::string& s) { return std::stoull(s, nullptr, 0); }
+// Lookup helpers that classify the failing kind in the error message.
+template <typename V>
+static V lookup_op(const std::map<std::string, V>& table, const std::string& token, const char* kind) {
+    if (const auto it = table.find(token); it != table.end()) {
+        return it->second;
+    }
+    throw RuntimeInputError(std::string("unknown ") + kind + ": '" + token + "'");
+}
+
+static Label lookup_label(const std::map<std::string, Label>& table, const std::string& name) {
+    if (const auto it = table.find(name); it != table.end()) {
+        return it->second;
+    }
+    throw RuntimeInputError("undefined label: '" + name + "'");
+}
+
+static Number signed_number(const std::string& s) {
+    return parse_with_context(s, "signed integer", [](const std::string& t) { return std::stoll(t, nullptr, 0); });
+}
+
+static Number unsigned_number(const std::string& s) {
+    return parse_with_context(s, "unsigned integer", [](const std::string& t) { return std::stoull(t, nullptr, 0); });
+}
 
 static Reg reg(const std::string& s) {
     assert(s.at(0) == 'r' || s.at(0) == 'w');
@@ -122,15 +158,19 @@ static uint8_t regnum(const std::string& s) { return static_cast<uint8_t>(to_int
 static Imm imm(const std::string& s, const bool lddw) {
     if (lddw) {
         if (s.at(0) == '-') {
-            return Imm{static_cast<uint64_t>(std::stoll(s, nullptr, 0))};
+            return Imm{static_cast<uint64_t>(parse_with_context(
+                s, "signed integer", [](const std::string& t) { return std::stoll(t, nullptr, 0); }))};
         } else {
-            return Imm{std::stoull(s, nullptr, 0)};
+            return Imm{parse_with_context(s, "unsigned integer",
+                                          [](const std::string& t) { return std::stoull(t, nullptr, 0); })};
         }
     } else {
         if (s.at(0) == '-') {
-            return Imm{static_cast<uint64_t>(std::stol(s, nullptr, 0))};
+            return Imm{static_cast<uint64_t>(parse_with_context(
+                s, "signed integer", [](const std::string& t) { return std::stol(t, nullptr, 0); }))};
         } else {
-            return Imm{static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(std::stoul(s, nullptr, 0))))};
+            return Imm{static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(parse_with_context(
+                s, "unsigned integer", [](const std::string& t) { return std::stoul(t, nullptr, 0); }))))};
         }
     }
 }
@@ -146,14 +186,15 @@ static Deref deref(const std::string& /*is_signed*/, const std::string& width, c
                    const std::string& sign, const std::string& _offset) {
     const int offset = to_int(_offset);
     return Deref{
-        .width = str_to_width.at(width),
+        .width = lookup_op(str_to_width, width, "memory width"),
         .basereg = reg(basereg),
         .offset = (sign == "-" ? -offset : +offset),
     };
 }
 
-Instruction parse_instruction(const std::string& line, const std::map<std::string, Label>& label_name_to_label,
-                              const EbpfProgramType& program_type) {
+static Instruction parse_instruction_inner(const std::string& line,
+                                           const std::map<std::string, Label>& label_name_to_label,
+                                           const EbpfProgramType& program_type) {
     // treat ";" as a comment
     std::string text = line.substr(0, line.find(';'));
     const size_t end = text.find_last_not_of(' ');
@@ -169,7 +210,7 @@ Instruction parse_instruction(const std::string& line, const std::map<std::strin
         return Call{.func = func, .kind = CallKind::helper};
     }
     if (regex_match(text, m, regex("call " WRAPPED_LABEL))) {
-        return CallLocal{.target = label_name_to_label.at(m[1])};
+        return CallLocal{.target = lookup_label(label_name_to_label, m[1])};
     }
     if (regex_match(text, m, regex("callx " REG))) {
         return Callx{reg(m[1])};
@@ -177,7 +218,7 @@ Instruction parse_instruction(const std::string& line, const std::map<std::strin
     if (regex_match(text, m, regex("call_btf " FUNC R"_(\s+module\s+)_" IMM))) {
         const auto module_val = to_int(m[2]);
         if (module_val < 0 || module_val > std::numeric_limits<int16_t>::max()) {
-            throw std::invalid_argument("module value out of range in call_btf");
+            throw RuntimeInputError("module value out of range in call_btf");
         }
         return CallBtf{.btf_id = to_int(m[1]), .module = gsl::narrow<int16_t>(module_val)};
     }
@@ -186,13 +227,17 @@ Instruction parse_instruction(const std::string& line, const std::map<std::strin
     }
     if (regex_match(text, m, regex(WREG OPASSIGN WREG))) {
         const std::string r = m[1];
-        return Bin{.op = str_to_binop.at(m[2]), .dst = reg(r), .v = reg(m[3]), .is64 = is64_reg(r), .lddw = false};
+        return Bin{.op = lookup_op(str_to_binop, m[2], "binary operator"),
+                   .dst = reg(r),
+                   .v = reg(m[3]),
+                   .is64 = is64_reg(r),
+                   .lddw = false};
     }
     if (regex_match(text, m, regex(WREG ASSIGN UNOP WREG))) {
         if (m[1] != m[3]) {
-            throw std::invalid_argument(std::string("Invalid unary operation: ") + text);
+            throw RuntimeInputError(std::string("invalid unary operation: ") + text);
         }
-        return Un{.op = str_to_unop.at(m[2]), .dst = reg(m[1]), .is64 = is64_reg(m[1])};
+        return Un{.op = lookup_op(str_to_unop, m[2], "unary operator"), .dst = reg(m[1]), .is64 = is64_reg(m[1])};
     }
     if (regex_match(text, m, regex(WREG ASSIGN MAP_VAL))) {
         return LoadMapAddress{.dst = reg(m[1]), .mapfd = to_int(m[2]), .offset = to_int(m[3])};
@@ -218,7 +263,11 @@ Instruction parse_instruction(const std::string& line, const std::map<std::strin
     if (regex_match(text, m, regex(WREG OPASSIGN IMM LONGLONG))) {
         const std::string r = m[1];
         const bool lddw = !m[4].str().empty();
-        return Bin{.op = str_to_binop.at(m[2]), .dst = reg(r), .v = imm(m[3], lddw), .is64 = is64_reg(r), .lddw = lddw};
+        return Bin{.op = lookup_op(str_to_binop, m[2], "binary operator"),
+                   .dst = reg(r),
+                   .v = imm(m[3], lddw),
+                   .is64 = is64_reg(r),
+                   .lddw = lddw};
     }
     if (regex_match(text, m, regex(REG ASSIGN DEREF PAREN(REG PLUSMINUS IMM)))) {
         return Mem{
@@ -236,14 +285,14 @@ Instruction parse_instruction(const std::string& line, const std::map<std::strin
         };
     }
     if (regex_match(text, m, regex("lock " DEREF PAREN(REG PLUSMINUS IMM) " " ATOMICOP " " REG "( fetch)?"))) {
-        const Atomic::Op op = str_to_atomicop.at(m[6]);
+        const Atomic::Op op = lookup_op(str_to_atomicop, m[6], "atomic operator");
         return Atomic{.op = op,
                       .fetch = m[8].matched || op == Atomic::Op::XCHG || op == Atomic::Op::CMPXCHG,
                       .access = deref(m[1], m[2], m[3], m[4], m[5]),
                       .valreg = reg(m[7])};
     }
     if (regex_match(text, m, regex("r0 = " DEREF "skb\\[(.*)\\]"))) {
-        const auto width = str_to_width.at(m[2]);
+        const auto width = lookup_op(str_to_width, m[2], "memory width");
         const std::string access = m[3].str();
         if (regex_match(access, m, regex(REG))) {
             return Packet{.width = width, .offset = 0, .regoffset = reg(m[1])};
@@ -261,23 +310,31 @@ Instruction parse_instruction(const std::string& line, const std::map<std::strin
     }
     if (regex_match(text, m, regex("assume " WREG CMPOP REG_OR_IMM))) {
         Assume res{
-            .cond =
-                Condition{
-                    .op = str_to_cmpop.at(m[2]), .left = reg(m[1]), .right = reg_or_imm(m[3]), .is64 = is64_reg(m[1])},
+            .cond = Condition{.op = lookup_op(str_to_cmpop, m[2], "comparison operator"),
+                              .left = reg(m[1]),
+                              .right = reg_or_imm(m[3]),
+                              .is64 = is64_reg(m[1])},
             .is_implicit = false,
         };
         return res;
     }
     if (regex_match(text, m, regex("(?:if " WREG CMPOP REG_OR_IMM " )?goto\\s+(?:" IMM ")?" WRAPPED_LABEL))) {
         // We ignore second IMM
-        Jmp res{.cond = {}, .target = label_name_to_label.at(m[5])};
+        Jmp res{.cond = {}, .target = lookup_label(label_name_to_label, m[5])};
         if (m[1].matched) {
-            res.cond = Condition{
-                .op = str_to_cmpop.at(m[2]), .left = reg(m[1]), .right = reg_or_imm(m[3]), .is64 = is64_reg(m[1])};
+            res.cond = Condition{.op = lookup_op(str_to_cmpop, m[2], "comparison operator"),
+                                 .left = reg(m[1]),
+                                 .right = reg_or_imm(m[3]),
+                                 .is64 = is64_reg(m[1])};
         }
         return res;
     }
     return Undefined{0};
+}
+
+Instruction parse_instruction(const std::string& line, const std::map<std::string, Label>& label_name_to_label,
+                              const EbpfProgramType& program_type) {
+    return parse_instruction_inner(line, label_name_to_label, program_type);
 }
 
 [[maybe_unused]]
@@ -292,7 +349,7 @@ static InstructionSeq parse_program(std::istream& is) {
         if (regex_search(line, m, regex(LABEL ":"))) {
             next_label = Label{to_int(m[1])};
             if (seen_labels.contains(*next_label)) {
-                throw std::invalid_argument("duplicate labels");
+                throw RuntimeInputError("duplicate labels");
             }
             line = m.suffix();
         }
@@ -323,7 +380,7 @@ static Variable special_var(const std::string& s) {
     if (s == "meta_offset") {
         return variable_registry.meta_offset();
     }
-    throw std::runtime_error(std::string() + "Bad special variable: " + s);
+    throw RuntimeInputError(std::string() + "Bad special variable: " + s);
 }
 
 TypeValueConstraints parse_linear_constraints(const std::set<std::string>& constraints,
@@ -384,7 +441,7 @@ TypeValueConstraints parse_linear_constraints(const std::set<std::string>& const
             }
 
             if (!any) {
-                throw std::runtime_error("Empty type set in 'in { ... }' constraint: " + cst_text);
+                throw RuntimeInputError("Empty type set in 'in { ... }' constraint: " + cst_text);
             }
 
             type_restrictions.push_back({d, ts});
@@ -441,7 +498,7 @@ TypeValueConstraints parse_linear_constraints(const std::set<std::string>& const
             Variable d = variable_registry.cell_var(DataKind::uvalues, lb, ub - lb + 1);
             value_csts.push_back(d == unsigned_number(m[3]));
         } else {
-            throw std::runtime_error(std::string("Unknown constraint: ") + cst_text);
+            throw RuntimeInputError(std::string("Unknown constraint: ") + cst_text);
         }
     }
     return {type_equalities, type_restrictions, value_csts};

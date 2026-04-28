@@ -10,6 +10,8 @@
 #include <set>
 #include <string>
 
+#include "crab_utils/prevail_errors.hpp"
+
 namespace prevail {
 
 #define CRAB_LOG(TAG, CODE)                          \
@@ -48,7 +50,7 @@ void ___print___(std::ostream& os, ArgTypes... args) {
         ___print___(_os, __VA_ARGS__);                                  \
         ___print___(_os, "; function ", __func__, ", line ", __LINE__); \
         _os << "\n";                                                    \
-        throw std::runtime_error(_os.str());                            \
+        throw prevail::InternalError(_os.str());                        \
     } while (0)
 
 extern bool CrabWarningFlag;

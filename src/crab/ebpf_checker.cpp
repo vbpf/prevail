@@ -20,6 +20,15 @@
 
 namespace prevail {
 
+namespace {
+// Internal control-flow signal used by EbpfChecker to abort the current
+// assertion check. Caught only inside ebpf_domain_check, where it is
+// converted into a VerificationError value. Not part of the public API.
+struct VerificationFailureSignal final : std::runtime_error {
+    using std::runtime_error::runtime_error;
+};
+} // namespace
+
 class EbpfChecker final {
   public:
     explicit EbpfChecker(const EbpfDomain& dom, Assertion assertion, const AnalysisContext& context)
@@ -49,7 +58,7 @@ class EbpfChecker final {
 
     [[noreturn]]
     void throw_fail(const std::string& msg) const {
-        throw VerificationError(msg + " (" + to_string(assertion) + ")");
+        throw VerificationFailureSignal(msg + " (" + to_string(assertion) + ")");
     }
 
     // Per-region bounds checks compose two primitives at each call site, so
@@ -79,9 +88,10 @@ std::optional<VerificationError> ebpf_domain_check(const EbpfDomain& dom, const 
     }
     try {
         EbpfChecker{dom, assertion, context}.visit();
-    } catch (VerificationError& error) {
+    } catch (const VerificationFailureSignal& signal) {
+        VerificationError error(signal.what());
         error.where = where;
-        return {error};
+        return {std::move(error)};
     }
     return {};
 }

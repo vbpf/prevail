@@ -113,7 +113,7 @@ DataKind regkind(const std::string& s) {
     if (string_to_kind.contains(s)) {
         return string_to_kind.at(s);
     }
-    throw std::runtime_error(std::string() + "Bad kind: " + s);
+    throw RuntimeInputError(std::string() + "Bad kind: " + s);
 }
 
 std::ostream& operator<<(std::ostream& os, const TypeEncoding s) {
@@ -152,7 +152,7 @@ TypeEncoding string_to_type_encoding(const std::string& s) {
     if (string_to_type.contains(s)) {
         return string_to_type[s];
     }
-    throw std::runtime_error(std::string("Unsupported type name: ") + s);
+    throw RuntimeInputError(std::string("Unsupported type name: ") + s);
 }
 
 std::optional<TypeEncoding> int_to_type_encoding(const int v) {

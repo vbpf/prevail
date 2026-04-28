@@ -19,9 +19,11 @@ namespace prevail {
  *  \param[out] notes is a vector for storing errors and warnings.
  *  \return a sequence of instructions if successful, an error string otherwise.
  */
+[[nodiscard]]
 std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog,
                                                     std::vector<std::vector<std::string>>& notes,
                                                     const prevail::VerifierOptions& options);
+[[nodiscard]]
 std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog,
                                                     const prevail::VerifierOptions& options);
 
