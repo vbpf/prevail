@@ -54,7 +54,7 @@ struct StringInvariant {
 
     [[nodiscard]]
     bool contains(const std::string& item) const {
-        return maybe_inv.value().contains(item);
+        return value().contains(item);
     }
 
     friend std::ostream& operator<<(std::ostream&, const StringInvariant& inv);

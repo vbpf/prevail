@@ -170,8 +170,11 @@ int main(int argc, char** argv) {
             std::cerr << "internal error: " << e.what() << std::endl;
             std::cerr << "this is a bug in Prevail; please file an issue." << std::endl;
             return 2;
-        } catch (const std::runtime_error& e) {
+        } catch (const RuntimeInputError& e) {
             load_error = e.what();
+        } catch (const std::exception& e) {
+            std::cerr << "error: " << e.what() << std::endl;
+            return 1;
         }
     }
 
@@ -197,7 +200,10 @@ int main(int argc, char** argv) {
             std::cerr << "internal error: " << e.what() << std::endl;
             std::cerr << "this is a bug in Prevail; please file an issue." << std::endl;
             return 2;
-        } catch (const std::runtime_error& e) {
+        } catch (const RuntimeInputError& e) {
+            std::cerr << "error listing programs: " << e.what() << std::endl;
+            return 1;
+        } catch (const std::exception& e) {
             std::cerr << "error listing programs: " << e.what() << std::endl;
             return 1;
         }

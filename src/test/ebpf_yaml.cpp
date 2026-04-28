@@ -140,7 +140,7 @@ static StringInvariant read_invariant(const vector<string>& raw_invariant) {
 
 static Label parse_label_scalar(const YAML::Node& node) {
     if (!node.IsDefined() || node.IsNull() || !node.IsScalar()) {
-        throw std::runtime_error("Invalid observation label; expected scalar 'entry'/'exit' or instruction index");
+        throw RuntimeInputError("Invalid observation label; expected scalar 'entry'/'exit' or instruction index");
     }
 
     const auto s = node.as<string>();
@@ -155,14 +155,14 @@ static Label parse_label_scalar(const YAML::Node& node) {
         size_t pos = 0;
         const int index = std::stoi(s, &pos);
         if (pos != s.size()) {
-            throw std::runtime_error("Invalid observation label: " + s);
+            throw RuntimeInputError("Invalid observation label: " + s);
         }
         if (index < 0) {
-            throw std::runtime_error("Invalid observation label: " + s);
+            throw RuntimeInputError("Invalid observation label: " + s);
         }
         return Label{index};
     } catch (const std::exception&) {
-        throw std::runtime_error("Invalid observation label: " + s);
+        throw RuntimeInputError("Invalid observation label: " + s);
     }
 }
 
@@ -177,7 +177,7 @@ static InvariantPoint parse_point(const YAML::Node& node) {
     if (s == "post") {
         return InvariantPoint::post;
     }
-    throw std::runtime_error("Invalid observation point: " + s);
+    throw RuntimeInputError("Invalid observation point: " + s);
 }
 
 static ObservationCheckMode parse_mode(const YAML::Node& node) {
@@ -191,7 +191,7 @@ static ObservationCheckMode parse_mode(const YAML::Node& node) {
     if (s == "entailed") {
         return ObservationCheckMode::entailed;
     }
-    throw std::runtime_error("Invalid observation mode: " + s);
+    throw RuntimeInputError("Invalid observation mode: " + s);
 }
 
 static std::vector<TestCase::Observation> parse_observations(const YAML::Node& observe_node) {
@@ -200,21 +200,21 @@ static std::vector<TestCase::Observation> parse_observations(const YAML::Node& o
         return res;
     }
     if (!observe_node.IsSequence()) {
-        throw std::runtime_error("observe must be a sequence");
+        throw RuntimeInputError("observe must be a sequence");
     }
     for (const auto& item : observe_node) {
         if (!item.IsMap()) {
-            throw std::runtime_error("observe item must be a map");
+            throw RuntimeInputError("observe item must be a map");
         }
         const Label label = parse_label_scalar(item["at"]);
         const InvariantPoint point = parse_point(item["point"]);
         const ObservationCheckMode mode = parse_mode(item["mode"]);
         const YAML::Node constraints_node = item["constraints"];
         if (!constraints_node.IsDefined() || constraints_node.IsNull()) {
-            throw std::runtime_error("observe item missing required 'constraints' field");
+            throw RuntimeInputError("observe item missing required 'constraints' field");
         }
         if (!constraints_node.IsSequence()) {
-            throw std::runtime_error("observe.constraints must be a sequence of strings");
+            throw RuntimeInputError("observe.constraints must be a sequence of strings");
         }
         const auto constraints_vec = constraints_node.as<vector<string>>();
         TestCase::Observation obs;
@@ -342,7 +342,7 @@ static VerifierOptions raw_options_to_options(const std::set<string>& raw_option
         } else if (name == "!big_endian") {
             options.runtime.big_endian = false;
         } else {
-            throw std::runtime_error("Unknown option: " + name);
+            throw RuntimeInputError("Unknown option: " + name);
         }
     }
     return options;
@@ -375,9 +375,13 @@ static vector<TestCase> read_suite(const string& path) {
                 try {
                     (void)read_case(raw_case);
                     tc.actual_exception = std::nullopt;
-                } catch (const std::exception& ex) {
+                } catch (const RuntimeInputError& ex) {
                     tc.actual_exception = ex.what();
+                } catch (const YAML::Exception& ex) {
+                    tc.actual_exception = std::string("in YAML suite ") + path + ": " + ex.what();
                 }
+                // InternalError (and any other unexpected exception) is *not* caught
+                // here so a Prevail bug cannot match an `expected-exception` clause.
 
                 res.push_back(std::move(tc));
             } else {
