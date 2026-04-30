@@ -88,12 +88,14 @@ class VariableRegistry final {
     RegPack reg_pack(int i) const;
 };
 
-// Direct thread_local rather than wrapped in LazyAllocator because:
-// (a) the registry is needed by every analysis, so lazy construction buys
-//     nothing — first-touch initialization is fine.
-// (b) the registry is a global interning service with no notion of clearing
-//     between runs (names accumulate monotonically, like a string pool), so
-//     LazyAllocator's clear/set/operator= API would only invite misuse.
-extern thread_local VariableRegistry variable_registry;
+/// Returns the per-thread VariableRegistry, constructing it on first access.
+/// Uses function-local thread_local so construction is deferred until first
+/// call rather than running in a TLS dynamic-init callback (which can race
+/// with CRT startup when extra threads are created early, e.g. by ASan).
+VariableRegistry& get_variable_registry();
 
 } // namespace prevail
+
+// Backward-compatible alias: all existing code uses `variable_registry.method()`.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
+#define variable_registry (::prevail::get_variable_registry())
