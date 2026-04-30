@@ -140,9 +140,15 @@ static std::vector<std::string> default_variable_names() {
 
 VariableRegistry::VariableRegistry() : names(default_variable_names()) {}
 
-thread_local VariableRegistry variable_registry;
+VariableRegistry& get_variable_registry() {
+    // Use function-local thread_local to defer construction until first use,
+    // avoiding TLS dynamic-init callbacks that can race with CRT startup
+    // (e.g. ASan threads created before CRT debug locks are initialized).
+    thread_local VariableRegistry instance;
+    return instance;
+}
 
-std::ostream& operator<<(std::ostream& o, const Variable& v) { return o << variable_registry.name(v); }
+std::ostream& operator<<(std::ostream& o, const Variable& v) { return o << get_variable_registry().name(v); }
 
 std::ostream& operator<<(std::ostream& o, const DataKind& s) { return o << name_of(s); }
 
