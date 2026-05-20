@@ -95,12 +95,41 @@ add_subdirectory("${prevail_source_dir}/external/bpf_conformance/lib" "${CMAKE_C
 
 include(cmake/SetupBoostHeaders.cmake)
 
-# Escape regex metacharacters in prevail_source_dir for use in list(FILTER ... REGEX ...)
-string(REGEX REPLACE "([][+.*()^$?|\\\\])" "\\\\\\1" prevail_source_dir_escaped "${prevail_source_dir}")
-
-file(GLOB_RECURSE prevail_LIB_SRC CONFIGURE_DEPENDS "${prevail_source_dir}/src/*.cpp")
-list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${prevail_source_dir_escaped}/src/main\\.cpp$")
-list(FILTER prevail_LIB_SRC EXCLUDE REGEX "${prevail_source_dir_escaped}/src/test/.*")
+set(prevail_LIB_SRC
+  src/cfg/wto.cpp
+  src/crab/array_domain.cpp
+  src/crab/bitset_domain.cpp
+  src/crab/ebpf_checker.cpp
+  src/crab/ebpf_domain.cpp
+  src/crab/ebpf_transformer.cpp
+  src/crab/finite_domain.cpp
+  src/crab/interval.cpp
+  src/crab/region_semantics.cpp
+  src/crab/splitdbm/split_dbm.cpp
+  src/crab/type_domain.cpp
+  src/crab/type_to_num.cpp
+  src/crab/var_registry.cpp
+  src/crab/zone_domain.cpp
+  src/crab_utils/debug.cpp
+  src/fwd_analyzer.cpp
+  src/io/elf_core_reloc.cpp
+  src/io/elf_extern_resolve.cpp
+  src/io/elf_loader.cpp
+  src/io/elf_map_parser.cpp
+  src/io/elf_reader.cpp
+  src/ir/assertions.cpp
+  src/ir/call_resolver.cpp
+  src/ir/cfg_builder.cpp
+  src/ir/marshal.cpp
+  src/ir/parse.cpp
+  src/ir/unmarshal.cpp
+  src/linux/gpl/spec_prototypes.cpp
+  src/linux/kfunc.cpp
+  src/linux/linux_platform.cpp
+  src/printing.cpp
+  src/result.cpp
+)
+list(TRANSFORM prevail_LIB_SRC PREPEND "${prevail_source_dir}/")
 
 add_library(prevail ${prevail_LIB_SRC})
 # 1. Standard library include paths
@@ -207,7 +236,42 @@ if (prevail_ENABLE_TESTS)
 
   add_executable(run_yaml "${prevail_source_dir}/src/test/run_yaml.cpp")
 
-  file(GLOB prevail_TEST_SRC CONFIGURE_DEPENDS "${prevail_source_dir}/src/test/test_*.cpp")
+  set(prevail_TEST_SRC
+    src/test/test_cfg_builder_passes.cpp
+    src/test/test_conformance.cpp
+    src/test/test_elf_loader.cpp
+    src/test/test_failure_slice.cpp
+    src/test/test_interval_bitwise.cpp
+    src/test/test_join.cpp
+    src/test/test_marshal.cpp
+    src/test/test_platform_tables.cpp
+    src/test/test_print.cpp
+    src/test/test_runtime_config.cpp
+    src/test/test_sign_extension.cpp
+    src/test/test_subsumption.cpp
+    src/test/test_type_domain.cpp
+    src/test/test_verify_bcc.cpp
+    src/test/test_verify_bpf_cilium_test.cpp
+    src/test/test_verify_build.cpp
+    src/test/test_verify_cilium.cpp
+    src/test/test_verify_cilium_core.cpp
+    src/test/test_verify_cilium_ebpf.cpp
+    src/test/test_verify_cilium_examples.cpp
+    src/test/test_verify_falco.cpp
+    src/test/test_verify_invalid.cpp
+    src/test/test_verify_katran.cpp
+    src/test/test_verify_libbpf_bootstrap.cpp
+    src/test/test_verify_linux.cpp
+    src/test/test_verify_linux_selftests.cpp
+    src/test/test_verify_multithreading.cpp
+    src/test/test_verify_new_linux.cpp
+    src/test/test_verify_ovs.cpp
+    src/test/test_verify_prototype_kernel.cpp
+    src/test/test_verify_suricata.cpp
+    src/test/test_wto.cpp
+    src/test/test_yaml.cpp
+  )
+  list(TRANSFORM prevail_TEST_SRC PREPEND "${prevail_source_dir}/")
   add_executable(tests ${prevail_TEST_SRC}
     "${prevail_source_dir}/src/test/setup_msvc_debug.cpp"
   )
