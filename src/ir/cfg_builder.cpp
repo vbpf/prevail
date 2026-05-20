@@ -317,12 +317,19 @@ static ResolvedKfuncCalls pass_resolve_kfunc_calls(const InstructionSeq& insts, 
         if (!r) {
             throw InvalidControlFlow{"not implemented: " + why_not + " (at " + to_string(label) + ")"};
         }
-        // Stamp the key directly from the source CallBtf so we do not rely on
-        // every platform implementation to populate Call::module — two kfuncs
-        // sharing a BTF id across modules must remain distinguishable in the
-        // lowered IR.
-        Call lowered = r->call;
-        lowered.module = call_btf->module;
+        // Build the lowered Call key directly from the source CallBtf rather
+        // than trusting any field the platform returned. The lowered IR's
+        // identity is the pre-resolution (btf_id, module) pair plus the fixed
+        // CallKind::kfunc tag; nothing else can soundly change it. Constructing
+        // the key here makes that invariant audit-visible and removes a class
+        // of bugs where a misbehaving resolver mis-keys the lowered IR — in
+        // particular, two kfuncs sharing a BTF id across modules must remain
+        // distinguishable.
+        const Call lowered{
+            .func = call_btf->btf_id,
+            .kind = CallKind::kfunc,
+            .module = call_btf->module,
+        };
         resolved.insert_or_assign(label, lowered);
     }
     return resolved;
