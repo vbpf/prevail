@@ -16,15 +16,23 @@ namespace {
 
 struct KfuncPrototypeEntry {
     int32_t btf_id{};
+    int16_t module{};
     EbpfHelperPrototype proto{};
     KfuncFlags flags = KfuncFlags::none;
     std::string_view required_program_type;
     bool requires_privileged = false;
 };
 
-constexpr std::array<KfuncPrototypeEntry, 12> kfunc_prototypes{{
+constexpr std::array<KfuncPrototypeEntry, 13> kfunc_prototypes{{
     {.btf_id = 12, .proto = {.name = "kfunc_test_id_overlap_tail_call", .return_type = EBPF_RETURN_TYPE_INTEGER}},
     {.btf_id = 1000, .proto = {.name = "kfunc_test_ret_int", .return_type = EBPF_RETURN_TYPE_INTEGER}},
+    // Same BTF id as the prior entry, but provided by a different kernel module.
+    // Used to verify that (btf_id, module) is the disambiguating key for kfunc
+    // resolution — without this, two kfuncs sharing a BTF id across modules
+    // would alias to the same prototype. See issue #1098.
+    {.btf_id = 1000,
+     .module = 1,
+     .proto = {.name = "kfunc_test_ret_int_other_module", .return_type = EBPF_RETURN_TYPE_INTEGER}},
     {.btf_id = 1001,
      .proto = {.name = "kfunc_test_ctx_arg",
                .return_type = EBPF_RETURN_TYPE_INTEGER,
@@ -60,9 +68,18 @@ constexpr std::array<KfuncPrototypeEntry, 12> kfunc_prototypes{{
     {.btf_id = 1010, .proto = {.name = "bpf_cpumask_release", .return_type = EBPF_RETURN_TYPE_INTEGER}},
 }};
 
-constexpr bool kfunc_prototypes_are_sorted_by_btf_id() {
+constexpr bool kfunc_prototypes_are_sorted_by_key() {
+    // Strict ordering on the (btf_id, module) pair: same btf_id is allowed
+    // across distinct modules, but no exact duplicates and no out-of-order
+    // pairs. This is what lets lookup_kfunc_prototype binary-search by btf_id
+    // and then linear-scan the (small) module run to disambiguate.
     for (size_t i = 1; i < kfunc_prototypes.size(); ++i) {
-        if (kfunc_prototypes[i - 1].btf_id >= kfunc_prototypes[i].btf_id) {
+        const auto& a = kfunc_prototypes[i - 1];
+        const auto& b = kfunc_prototypes[i];
+        if (a.btf_id > b.btf_id) {
+            return false;
+        }
+        if (a.btf_id == b.btf_id && a.module >= b.module) {
             return false;
         }
     }
@@ -78,15 +95,16 @@ constexpr bool kfunc_prototypes_have_names() {
     return true;
 }
 
-static_assert(kfunc_prototypes_are_sorted_by_btf_id(), "kfunc_prototypes must be strictly sorted by btf_id");
+static_assert(kfunc_prototypes_are_sorted_by_key(), "kfunc_prototypes must be strictly sorted by (btf_id, module)");
 static_assert(kfunc_prototypes_have_names(), "kfunc_prototypes entries must define proto.name");
 
-std::optional<KfuncPrototypeEntry> lookup_kfunc_prototype(const int32_t btf_id) {
-    const auto it =
-        std::lower_bound(kfunc_prototypes.begin(), kfunc_prototypes.end(), btf_id,
-                         [](const KfuncPrototypeEntry& entry, const int32_t id) { return entry.btf_id < id; });
-    if (it != kfunc_prototypes.end() && it->btf_id == btf_id) {
-        return *it;
+std::optional<KfuncPrototypeEntry> lookup_kfunc_prototype(const int32_t btf_id, const int16_t module) {
+    auto it = std::lower_bound(kfunc_prototypes.begin(), kfunc_prototypes.end(), btf_id,
+                               [](const KfuncPrototypeEntry& entry, const int32_t id) { return entry.btf_id < id; });
+    for (; it != kfunc_prototypes.end() && it->btf_id == btf_id; ++it) {
+        if (it->module == module) {
+            return *it;
+        }
     }
     return std::nullopt;
 }
@@ -99,17 +117,21 @@ void set_unsupported(std::string* why_not, const std::string& reason) {
 
 } // namespace
 
-std::optional<ResolvedCall> make_kfunc_call(const int32_t btf_id, const EbpfProgramType& program_type,
-                                            std::string* why_not) {
-    const auto entry = lookup_kfunc_prototype(btf_id);
+std::optional<ResolvedCall> make_kfunc_call(const int32_t btf_id, const int16_t module,
+                                            const EbpfProgramType& program_type, std::string* why_not) {
+    const auto entry = lookup_kfunc_prototype(btf_id, module);
     if (!entry) {
-        set_unsupported(why_not, "kfunc prototype lookup failed for BTF id " + std::to_string(btf_id));
+        std::string reason = "kfunc prototype lookup failed for BTF id " + std::to_string(btf_id);
+        if (module != 0) {
+            reason += " in module " + std::to_string(module);
+        }
+        set_unsupported(why_not, reason);
         return std::nullopt;
     }
     const auto& proto = entry->proto;
 
     ResolvedCall res;
-    res.call = Call{.func = btf_id, .kind = CallKind::kfunc};
+    res.call = Call{.func = btf_id, .kind = CallKind::kfunc, .module = module};
     res.name = proto.name;
     res.contract.reallocate_packet = proto.reallocate_packet;
     res.contract.is_map_lookup = proto.return_type == EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL;

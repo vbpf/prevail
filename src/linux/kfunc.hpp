@@ -47,9 +47,12 @@ constexpr KfuncFlags& operator^=(KfuncFlags& a, const KfuncFlags b) {
     return a;
 }
 
-// Resolve a Linux kfunc BTF ID to a ResolvedCall used by the verifier.
-// Returns nullopt and populates `why_not` if the ID is unknown or currently unsupported.
-std::optional<ResolvedCall> make_kfunc_call(int32_t btf_id, const EbpfProgramType& program_type,
+// Resolve a Linux kfunc identified by (`btf_id`, `module`) to a ResolvedCall
+// used by the verifier. `module` is the kernel module identifier (0 == vmlinux),
+// matching `CallBtf::module`. BTF ids are not unique across modules, so callers
+// must pass both. Returns nullopt and populates `why_not` if the (btf_id, module)
+// pair is unknown or currently unsupported.
+std::optional<ResolvedCall> make_kfunc_call(int32_t btf_id, int16_t module, const EbpfProgramType& program_type,
                                             std::string* why_not = nullptr);
 
 } // namespace prevail

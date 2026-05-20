@@ -171,7 +171,7 @@ static std::optional<ResolvedCall> resolve_kfunc_call(const CallBtf& call_btf, c
         }
         return std::nullopt;
     }
-    return info.platform->resolve_kfunc_call(call_btf.btf_id, info.type, why_not);
+    return info.platform->resolve_kfunc_call(call_btf.btf_id, call_btf.module, info.type, why_not);
 }
 
 // CallBtf in the instruction stream is replaced by a key-only Call{func,
@@ -317,7 +317,13 @@ static ResolvedKfuncCalls pass_resolve_kfunc_calls(const InstructionSeq& insts, 
         if (!r) {
             throw InvalidControlFlow{"not implemented: " + why_not + " (at " + to_string(label) + ")"};
         }
-        resolved.insert_or_assign(label, r->call);
+        // Stamp the key directly from the source CallBtf so we do not rely on
+        // every platform implementation to populate Call::module — two kfuncs
+        // sharing a BTF id across modules must remain distinguishable in the
+        // lowered IR.
+        Call lowered = r->call;
+        lowered.module = call_btf->module;
+        resolved.insert_or_assign(label, lowered);
     }
     return resolved;
 }

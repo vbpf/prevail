@@ -37,7 +37,12 @@ typedef std::optional<int32_t> (*ebpf_resolve_builtin_call_fn)(const std::string
 typedef std::optional<KsymBtfId> (*ebpf_resolve_ksym_btf_id_fn)(const std::string& name);
 typedef std::optional<ResolvedCall> (*ebpf_get_builtin_call_fn)(int32_t id);
 
-typedef std::optional<ResolvedCall> (*ebpf_resolve_kfunc_call_fn)(int32_t btf_id, const EbpfProgramType& program_type,
+// `module` identifies the kernel module providing the kfunc (0 == vmlinux),
+// matching `CallBtf::module`. It is passed alongside `btf_id` because BTF ids
+// are not unique across modules — two modules may legitimately use the same id
+// for different kfuncs.
+typedef std::optional<ResolvedCall> (*ebpf_resolve_kfunc_call_fn)(int32_t btf_id, int16_t module,
+                                                                  const EbpfProgramType& program_type,
                                                                   std::string* why_not);
 
 // Parse map records and allocate map fd's.
