@@ -16,12 +16,10 @@
 
 namespace prevail {
 
-static void clear_analysis_thread_local_state() { clear_thread_local_state(); }
-
-void ebpf_verifier_clear_thread_local_state() {
-    clear_thread_local_state();
-    ZoneDomain::clear_thread_local_state();
-}
+// The array-domain cell registry now lives in AnalysisContext, so it dies with the
+// context — no thread-local clear needed.  SplitDBM still uses a thread-local scratch
+// buffer for transient graph operations; clear it to keep peak memory down.
+void ebpf_verifier_clear_thread_local_state() { ZoneDomain::clear_thread_local_state(); }
 
 class InterleavedFwdFixpointIterator final {
     const AnalysisContext& context;
@@ -170,13 +168,11 @@ AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invaria
 }
 
 AnalysisResult analyze(const AnalysisContext& context) {
-    clear_analysis_thread_local_state();
     return InterleavedFwdFixpointIterator::run(context,
                                                EbpfDomain::setup_entry(context.runtime().setup_constraints, context));
 }
 
 AnalysisResult analyze(const StringInvariant& entry_invariant, const AnalysisContext& context) {
-    clear_analysis_thread_local_state();
     return InterleavedFwdFixpointIterator::run(
         context, EbpfDomain::from_constraints(entry_invariant.value(), context.runtime().setup_constraints, context));
 }

@@ -206,18 +206,23 @@ std::vector<Cell> offset_map_t::get_overlap_cells(const offset_t o, const unsign
     return out;
 }
 
-// We use a global array map
-using array_map_t = std::unordered_map<DataKind, offset_map_t>;
+// Per-analysis registry of the stack cells currently tracked, keyed by DataKind.
+// Owned by AnalysisContext; threaded into ArrayDomain methods that mutate or query
+// the cell set.
+class StackCellRegistry final {
+    std::unordered_map<DataKind, offset_map_t> _maps;
 
-static thread_local LazyAllocator<array_map_t> thread_local_array_map;
+  public:
+    offset_map_t& get(const DataKind kind) { return _maps[kind]; }
+};
 
-void clear_thread_local_state() { thread_local_array_map.clear(); }
+void StackCellRegistryDeleter::operator()(StackCellRegistry* p) const noexcept { delete p; }
 
-static offset_map_t& lookup_array_map(const DataKind kind) { return (*thread_local_array_map)[kind]; }
+StackCellRegistryPtr make_stack_cell_registry() { return StackCellRegistryPtr{new StackCellRegistry()}; }
 
-void ArrayDomain::initialize_numbers(const int lb, const int width) {
+void ArrayDomain::initialize_numbers(StackCellRegistry& cells, const int lb, const int width) {
     num_bytes.reset(lb, width);
-    lookup_array_map(DataKind::svalues).mk_cell(offset_t{gsl::narrow_cast<Index>(lb)}, width);
+    cells.get(DataKind::svalues).mk_cell(offset_t{gsl::narrow_cast<Index>(lb)}, width);
 }
 
 std::ostream& operator<<(std::ostream& o, offset_map_t& m) {
@@ -240,18 +245,18 @@ std::ostream& operator<<(std::ostream& o, offset_map_t& m) {
 }
 
 // Create a new cell that is a subset of an existing cell.
-void ArrayDomain::split_cell(NumAbsDomain& inv, const DataKind kind, const int cell_start_index, const unsigned int len,
-                             const bool big_endian) {
+void ArrayDomain::split_cell(StackCellRegistry& cells, NumAbsDomain& inv, const DataKind kind,
+                             const int cell_start_index, const unsigned int len, const bool big_endian) {
     assert(kind == DataKind::svalues || kind == DataKind::uvalues);
 
     // Get the values from the indicated stack range.
     const std::optional<LinearExpression> svalue =
-        load(inv, DataKind::svalues, Interval{cell_start_index}, len, big_endian);
+        load(cells, inv, DataKind::svalues, Interval{cell_start_index}, len, big_endian);
     const std::optional<LinearExpression> uvalue =
-        load(inv, DataKind::uvalues, Interval{cell_start_index}, len, big_endian);
+        load(cells, inv, DataKind::uvalues, Interval{cell_start_index}, len, big_endian);
 
     // Create a new cell for that range.
-    offset_map_t& offset_map = lookup_array_map(kind);
+    offset_map_t& offset_map = cells.get(kind);
     const Cell new_cell = offset_map.mk_cell(offset_t{gsl::narrow_cast<Index>(cell_start_index)}, len);
     inv.assign(cell_var(DataKind::svalues, new_cell), svalue);
     inv.assign(cell_var(DataKind::uvalues, new_cell), uvalue);
@@ -259,10 +264,10 @@ void ArrayDomain::split_cell(NumAbsDomain& inv, const DataKind kind, const int c
 
 // Prepare to havoc bytes in the middle of a cell by potentially splitting the cell if it is numeric,
 // into the part to the left of the havoced portion, and the part to the right of the havoced portion.
-void ArrayDomain::split_number_var(NumAbsDomain& inv, const DataKind kind, const Interval& ii,
+void ArrayDomain::split_number_var(StackCellRegistry& cells, NumAbsDomain& inv, const DataKind kind, const Interval& ii,
                                    const Interval& elem_size, const bool big_endian) const {
     assert(kind == DataKind::svalues || kind == DataKind::uvalues);
-    offset_map_t& offset_map = lookup_array_map(kind);
+    offset_map_t& offset_map = cells.get(kind);
     const std::optional<Number> n = ii.singleton();
     if (!n) {
         // We can only split a singleton offset.
@@ -276,8 +281,8 @@ void ArrayDomain::split_number_var(NumAbsDomain& inv, const DataKind kind, const
     const auto size = n_bytes->narrow<unsigned int>();
     const offset_t o(n->narrow<Index>());
 
-    const std::vector<Cell> cells = offset_map.get_overlap_cells(o, size);
-    for (const Cell& c : cells) {
+    const std::vector<Cell> overlaps = offset_map.get_overlap_cells(o, size);
+    for (const Cell& c : overlaps) {
         const auto [cell_start_index, cell_end_index] = cell_to_interval(c.offset, c.size).pair<int>();
         if (!this->num_bytes.all_num(cell_start_index, cell_end_index + 1) ||
             cell_end_index + 1UL < cell_start_index + sizeof(int64_t)) {
@@ -291,42 +296,42 @@ void ArrayDomain::split_number_var(NumAbsDomain& inv, const DataKind kind, const
         }
         if (gsl::narrow_cast<Index>(cell_start_index) < o) {
             // Use the bytes to the left of the specified range.
-            split_cell(inv, kind, cell_start_index, gsl::narrow<unsigned int>(o - cell_start_index), big_endian);
+            split_cell(cells, inv, kind, cell_start_index, gsl::narrow<unsigned int>(o - cell_start_index), big_endian);
         }
         if (o + size < cell_end_index + 1UL) {
             // Use the bytes to the right of the specified range.
-            split_cell(inv, kind, gsl::narrow<int>(o + size),
+            split_cell(cells, inv, kind, gsl::narrow<int>(o + size),
                        gsl::narrow<unsigned int>(cell_end_index - (o + size - 1)), big_endian);
         }
     }
 }
 
-// we can only treat this as non-member because we use global state
 // Find overlapping cells for the given index range and kill (havoc + remove) them.
 // Returns the exact offset and size if the index and element size are both constant.
 template <typename HavocFn>
-static std::optional<std::pair<offset_t, unsigned>> kill_and_find_var(const HavocFn& havoc_var, const DataKind kind,
+static std::optional<std::pair<offset_t, unsigned>> kill_and_find_var(StackCellRegistry& cells,
+                                                                      const HavocFn& havoc_var, const DataKind kind,
                                                                       const Interval& ii, const Interval& elem_size) {
     std::optional<std::pair<offset_t, unsigned>> res;
 
-    offset_map_t& offset_map = lookup_array_map(kind);
-    std::vector<Cell> cells;
+    offset_map_t& offset_map = cells.get(kind);
+    std::vector<Cell> overlaps;
     if (const std::optional<Number> n = ii.singleton()) {
         if (const auto n_bytes = elem_size.singleton()) {
             auto size = n_bytes->narrow<unsigned int>();
             // -- Constant index: kill overlapping cells
             offset_t o(n->narrow<Index>());
-            cells = offset_map.get_overlap_cells(o, size);
+            overlaps = offset_map.get_overlap_cells(o, size);
             res = std::make_pair(o, size);
         }
     }
     if (!res) {
         // -- Non-constant index: kill overlapping cells
-        cells = offset_map.get_overlap_cells_symbolic_offset(ii | (ii + elem_size));
+        overlaps = offset_map.get_overlap_cells_symbolic_offset(ii | (ii + elem_size));
     }
-    if (!cells.empty()) {
+    if (!overlaps.empty()) {
         // Forget the scalars from the relevant domain
-        for (const auto& c : cells) {
+        for (const auto& c : overlaps) {
             havoc_var(cell_var(kind, c));
 
             // Forget signed and unsigned values together.
@@ -337,7 +342,7 @@ static std::optional<std::pair<offset_t, unsigned>> kill_and_find_var(const Havo
             }
         }
         // Remove the cells. If needed again they will be re-created.
-        offset_map -= cells;
+        offset_map -= overlaps;
     }
     return res;
 }
@@ -411,14 +416,15 @@ std::optional<uint8_t> get_value_byte(const NumAbsDomain& inv, const offset_t o,
     return bytes[o % width];
 }
 
-std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, const DataKind kind, const Interval& i,
-                                                  const int width, const bool big_endian) {
+std::optional<LinearExpression> ArrayDomain::load(StackCellRegistry& cells, const NumAbsDomain& inv,
+                                                  const DataKind kind, const Interval& i, const int width,
+                                                  const bool big_endian) {
     if (const std::optional<Number> n = i.singleton()) {
-        offset_map_t& offset_map = lookup_array_map(kind);
+        offset_map_t& offset_map = cells.get(kind);
         const int64_t k = n->narrow<int64_t>();
         const offset_t o(k);
         const unsigned size = to_unsigned(width);
-        if (const auto cell = lookup_array_map(kind).get_cell(o, size)) {
+        if (const auto cell = offset_map.get_cell(o, size)) {
             return cell_var(kind, *cell);
         }
         if (kind == DataKind::svalues || kind == DataKind::uvalues) {
@@ -481,15 +487,15 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, const
             }
         }
 
-        const std::vector<Cell> cells = offset_map.get_overlap_cells(o, size);
-        if (cells.empty()) {
+        const std::vector<Cell> overlaps = offset_map.get_overlap_cells(o, size);
+        if (overlaps.empty()) {
             const Cell c = offset_map.mk_cell(o, size);
             // Here it's ok to do assignment (instead of expand) because c is not a summarized variable.
             // Otherwise, it would be unsound.
             return cell_var(kind, c);
         }
         CRAB_WARN("Ignored read from cell ", kind, "[", o, "...", o + size - 1, "]", " because it overlaps with ",
-                  cells.size(), " cells");
+                  overlaps.size(), " cells");
         /*
             TODO: we can apply here "Value Recomposition" a la Mine'06 (https://arxiv.org/pdf/cs/0703074.pdf)
                 to construct values of some type from a sequence of bytes.
@@ -502,9 +508,10 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, const
     return {};
 }
 
-std::optional<LinearExpression> ArrayDomain::load_type(const Interval& i, const int width) const {
+std::optional<LinearExpression> ArrayDomain::load_type(StackCellRegistry& cells, const Interval& i,
+                                                       const int width) const {
     if (const std::optional<Number> n = i.singleton()) {
-        offset_map_t& offset_map = lookup_array_map(DataKind::types);
+        offset_map_t& offset_map = cells.get(DataKind::types);
         const int64_t k = n->narrow<int64_t>();
         auto [only_num, only_non_num] = num_bytes.uniformity(k, width);
         if (only_num) {
@@ -515,18 +522,18 @@ std::optional<LinearExpression> ArrayDomain::load_type(const Interval& i, const 
         }
         const offset_t o(k);
         const unsigned size = to_unsigned(width);
-        if (const auto cell = lookup_array_map(DataKind::types).get_cell(o, size)) {
+        if (const auto cell = offset_map.get_cell(o, size)) {
             return cell_var(DataKind::types, *cell);
         }
-        const std::vector<Cell> cells = offset_map.get_overlap_cells(o, size);
-        if (cells.empty()) {
+        const std::vector<Cell> overlaps = offset_map.get_overlap_cells(o, size);
+        if (overlaps.empty()) {
             const Cell c = offset_map.mk_cell(o, size);
             // Here it's ok to do assignment (instead of expand) because c is not a summarized variable.
             // Otherwise, it would be unsound.
             return cell_var(DataKind::types, c);
         }
         CRAB_WARN("Ignored read from cell ", DataKind::types, "[", o, "...", o + size - 1, "]",
-                  " because it overlaps with ", cells.size(), " cells");
+                  " because it overlaps with ", overlaps.size(), " cells");
         /*
             TODO: we can apply here "Value Recomposition" a la Mine'06 (https://arxiv.org/pdf/cs/0703074.pdf)
                 to construct values of some type from a sequence of bytes.
@@ -553,32 +560,32 @@ std::optional<LinearExpression> ArrayDomain::load_type(const Interval& i, const 
 // We are about to write to a given range of bytes on the stack.
 // Any cells covering that range need to be removed, and any cells that only
 // partially cover that range can be split such that any non-covered portions become new cells.
-static std::optional<std::pair<offset_t, unsigned>> split_and_find_var(const ArrayDomain& array_domain,
-                                                                       NumAbsDomain& inv, const DataKind kind,
-                                                                       const Interval& idx, const Interval& elem_size,
-                                                                       const bool big_endian) {
+static std::optional<std::pair<offset_t, unsigned>>
+split_and_find_var(StackCellRegistry& cells, const ArrayDomain& array_domain, NumAbsDomain& inv, const DataKind kind,
+                   const Interval& idx, const Interval& elem_size, const bool big_endian) {
     if (kind == DataKind::svalues || kind == DataKind::uvalues) {
-        array_domain.split_number_var(inv, kind, idx, elem_size, big_endian);
+        array_domain.split_number_var(cells, inv, kind, idx, elem_size, big_endian);
     }
-    return kill_and_find_var([&inv](const Variable v) { inv.havoc(v); }, kind, idx, elem_size);
+    return kill_and_find_var(cells, [&inv](const Variable v) { inv.havoc(v); }, kind, idx, elem_size);
 }
 
-std::optional<Variable> ArrayDomain::store(NumAbsDomain& inv, const DataKind kind, const Interval& idx,
-                                           const Interval& elem_size, const bool big_endian) const {
-    if (auto maybe_cell = split_and_find_var(*this, inv, kind, idx, elem_size, big_endian)) {
+std::optional<Variable> ArrayDomain::store(StackCellRegistry& cells, NumAbsDomain& inv, const DataKind kind,
+                                           const Interval& idx, const Interval& elem_size,
+                                           const bool big_endian) const {
+    if (auto maybe_cell = split_and_find_var(cells, *this, inv, kind, idx, elem_size, big_endian)) {
         // perform strong update
         auto [offset, size] = *maybe_cell;
-        const Cell c = lookup_array_map(kind).mk_cell(offset, size);
+        const Cell c = cells.get(kind).mk_cell(offset, size);
         Variable v = cell_var(kind, c);
         return v;
     }
     return {};
 }
 
-std::optional<Variable> ArrayDomain::store_type(TypeDomain& inv, const Interval& idx, const Interval& width,
-                                                const bool is_num) {
+std::optional<Variable> ArrayDomain::store_type(StackCellRegistry& cells, TypeDomain& inv, const Interval& idx,
+                                                const Interval& width, const bool is_num) {
     constexpr auto kind = DataKind::types;
-    if (auto maybe_cell = kill_and_find_var([&inv](const Variable v) { inv.havoc_type(v); }, kind, idx, width)) {
+    if (auto maybe_cell = kill_and_find_var(cells, [&inv](const Variable v) { inv.havoc_type(v); }, kind, idx, width)) {
         // perform strong update
         auto [offset, size] = *maybe_cell;
         if (is_num) {
@@ -586,7 +593,7 @@ std::optional<Variable> ArrayDomain::store_type(TypeDomain& inv, const Interval&
         } else {
             num_bytes.havoc(offset, size);
         }
-        const Cell c = lookup_array_map(kind).mk_cell(offset, size);
+        const Cell c = cells.get(kind).mk_cell(offset, size);
         Variable v = cell_var(kind, c);
         return v;
     } else {
@@ -606,14 +613,16 @@ std::optional<Variable> ArrayDomain::store_type(TypeDomain& inv, const Interval&
     return {};
 }
 
-void ArrayDomain::havoc(NumAbsDomain& inv, const DataKind kind, const Interval& idx, const Interval& elem_size,
-                        const bool big_endian) const {
-    split_and_find_var(*this, inv, kind, idx, elem_size, big_endian);
+void ArrayDomain::havoc(StackCellRegistry& cells, NumAbsDomain& inv, const DataKind kind, const Interval& idx,
+                        const Interval& elem_size, const bool big_endian) const {
+    split_and_find_var(cells, *this, inv, kind, idx, elem_size, big_endian);
 }
 
-void ArrayDomain::havoc_type(TypeDomain& inv, const Interval& idx, const Interval& elem_size) {
+void ArrayDomain::havoc_type(StackCellRegistry& cells, TypeDomain& inv, const Interval& idx,
+                             const Interval& elem_size) {
     constexpr auto kind = DataKind::types;
-    if (auto maybe_cell = kill_and_find_var([&inv](const Variable v) { inv.havoc_type(v); }, kind, idx, elem_size)) {
+    if (auto maybe_cell =
+            kill_and_find_var(cells, [&inv](const Variable v) { inv.havoc_type(v); }, kind, idx, elem_size)) {
         auto [offset, size] = *maybe_cell;
         num_bytes.havoc(offset, size);
     }

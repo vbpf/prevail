@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "config.hpp"
+#include "crab/array_domain.hpp"
 #include "ir/program.hpp"
 #include "platform.hpp"
 #include "spec/type_descriptors.hpp"
@@ -26,13 +27,23 @@ namespace prevail {
 /// same name always maps to the same id, so analyses can freely share one
 /// instance. Domain code reaches for the global `variable_registry`
 /// directly.
+///
+/// `cell_registry` IS per-analysis state: it tracks which symbolic stack
+/// cells the analysis is currently maintaining for ArrayDomain operations.
+/// It is mutated by load/store/havoc on the stack array, hence held by
+/// unique_ptr so that `const AnalysisContext&` still permits mutation of
+/// the pointee.
 struct AnalysisContext {
     Program program;
     VerifierOptions options;
+    StackCellRegistryPtr cell_registry;
 
-    AnalysisContext(Program p, VerifierOptions o) : program(std::move(p)), options(std::move(o)) {}
+    AnalysisContext(Program p, VerifierOptions o)
+        : program(std::move(p)), options(std::move(o)), cell_registry(make_stack_cell_registry()) {}
 
     const RuntimeConfig& runtime() const { return options.runtime; }
+
+    StackCellRegistry& cells() const { return *cell_registry; }
 
     const ProgramInfo& program_info() const { return program.info(); }
     const ebpf_platform_t& platform() const {

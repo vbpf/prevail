@@ -23,6 +23,7 @@
 
 #pragma once
 
+#include <memory>
 #include <optional>
 
 #include "arith/variable.hpp"
@@ -32,7 +33,17 @@
 
 namespace prevail {
 
-void clear_thread_local_state();
+/// Per-analysis registry of the stack cells the analysis is currently tracking, keyed
+/// by DataKind. Owned by AnalysisContext; shared by reference across all ArrayDomain
+/// instances belonging to one analysis run. Each entry corresponds to a cell variable
+/// at a (offset, size); the registry exists so ArrayDomain can deduplicate `mk_cell`
+/// calls and answer overlap queries.
+class StackCellRegistry;
+struct StackCellRegistryDeleter {
+    void operator()(StackCellRegistry*) const noexcept;
+};
+using StackCellRegistryPtr = std::unique_ptr<StackCellRegistry, StackCellRegistryDeleter>;
+StackCellRegistryPtr make_stack_cell_registry();
 
 class ArrayDomain final {
     BitsetDomain num_bytes;
@@ -79,23 +90,26 @@ class ArrayDomain final {
     int min_all_num_size(const NumAbsDomain& inv, Variable offset) const;
 
     [[nodiscard]]
-    static std::optional<LinearExpression> load(const NumAbsDomain& inv, DataKind kind, const Interval& i, int width,
-                                                bool big_endian);
-    std::optional<LinearExpression> load_type(const Interval& i, int width) const;
-    std::optional<Variable> store(NumAbsDomain& inv, DataKind kind, const Interval& idx, const Interval& elem_size,
-                                  bool big_endian) const;
-    std::optional<Variable> store_type(TypeDomain& inv, const Interval& idx, const Interval& width, bool is_num);
-    void havoc(NumAbsDomain& inv, DataKind kind, const Interval& idx, const Interval& elem_size, bool big_endian) const;
-    void havoc_type(TypeDomain& inv, const Interval& idx, const Interval& elem_size);
+    static std::optional<LinearExpression> load(StackCellRegistry& cells, const NumAbsDomain& inv, DataKind kind,
+                                                const Interval& i, int width, bool big_endian);
+    std::optional<LinearExpression> load_type(StackCellRegistry& cells, const Interval& i, int width) const;
+    std::optional<Variable> store(StackCellRegistry& cells, NumAbsDomain& inv, DataKind kind, const Interval& idx,
+                                  const Interval& elem_size, bool big_endian) const;
+    std::optional<Variable> store_type(StackCellRegistry& cells, TypeDomain& inv, const Interval& idx,
+                                       const Interval& width, bool is_num);
+    void havoc(StackCellRegistry& cells, NumAbsDomain& inv, DataKind kind, const Interval& idx,
+               const Interval& elem_size, bool big_endian) const;
+    void havoc_type(StackCellRegistry& cells, TypeDomain& inv, const Interval& idx, const Interval& elem_size);
 
     // Perform array stores over an array segment
     void store_numbers(const Interval& _idx, const Interval& _width);
 
-    void split_number_var(NumAbsDomain& inv, DataKind kind, const Interval& ii, const Interval& elem_size,
-                          bool big_endian) const;
-    static void split_cell(NumAbsDomain& inv, DataKind kind, int cell_start_index, unsigned int len, bool big_endian);
+    void split_number_var(StackCellRegistry& cells, NumAbsDomain& inv, DataKind kind, const Interval& ii,
+                          const Interval& elem_size, bool big_endian) const;
+    static void split_cell(StackCellRegistry& cells, NumAbsDomain& inv, DataKind kind, int cell_start_index,
+                           unsigned int len, bool big_endian);
 
-    void initialize_numbers(int lb, int width);
+    void initialize_numbers(StackCellRegistry& cells, int lb, int width);
 };
 
 } // namespace prevail
