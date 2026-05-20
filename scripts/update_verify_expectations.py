@@ -130,8 +130,8 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def classify_invalid_program_from_inventory(program: dict) -> tuple[str, str | None, str] | None:
-    if not program.get("invalid", False):
+def classify_reject_load_from_inventory(program: dict) -> tuple[str, str | None, str] | None:
+    if not program.get("reject_load", False):
         return None
     return "reject_load", None, ""
 
@@ -199,7 +199,7 @@ def refresh_expectations(
         else:
             program = next(p for p in odata["sections"][section] if p["function"] == function_name)
         reported_function = function_name or program["function"]
-        inventory_classification = classify_invalid_program_from_inventory(program)
+        inventory_classification = classify_reject_load_from_inventory(program)
         if inventory_classification is not None:
             status, kind, reason = inventory_classification
             return (

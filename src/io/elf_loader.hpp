@@ -21,8 +21,8 @@ struct ElfProgramInfo {
     std::string section_name;
     std::string function_name;
     uint32_t section_offset{};
-    bool invalid{};
-    std::string invalid_reason;
+    bool reject_load{};
+    std::string reject_load_reason;
 };
 
 /// @note Not thread-safe. Callers must synchronize externally.
@@ -37,7 +37,7 @@ class ElfObject {
     const std::vector<ElfProgramInfo>& list_programs();
     const std::vector<RawProgram>& get_programs(const std::string& desired_section = {},
                                                 const std::string& desired_program = {});
-    static bool is_valid(const ElfProgramInfo& program) noexcept { return !program.invalid; }
+    static bool is_valid(const ElfProgramInfo& program) noexcept { return !program.reject_load; }
 
   private:
     struct ElfObjectState;
