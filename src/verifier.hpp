@@ -11,12 +11,11 @@
 namespace prevail {
 
 AnalysisResult analyze(const AnalysisContext& context);
-AnalysisResult analyze(const StringInvariant& entry_invariant, const AnalysisContext& context);
+AnalysisResult analyze(const EbpfDomain& entry_invariant, const AnalysisContext& context);
 
-// Convenience overloads that copy `prog` into a fresh AnalysisContext.
+// Convenience overload that copies `prog` into a fresh AnalysisContext.
 // For repeated analysis of the same program, build one AnalysisContext and reuse it.
 AnalysisResult analyze(const Program& prog, const VerifierOptions& options);
-AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invariant, const VerifierOptions& options);
 
 void ebpf_verifier_clear_thread_local_state();
 inline bool verify(const Program& prog, const VerifierOptions& options) {

@@ -396,21 +396,19 @@ EbpfDomain EbpfDomain::from_constraints(const std::vector<std::pair<Variable, Ty
     return inv;
 }
 
-EbpfDomain EbpfDomain::from_constraints(const std::set<std::string>& constraints, const bool setup_constraints,
+EbpfDomain EbpfDomain::from_constraints(const TypeValueConstraints& constraints,
+                                        const std::vector<Interval>& numeric_ranges, const bool setup_constraints,
                                         const AnalysisContext& context) {
     EbpfDomain inv = setup_constraints ? setup_entry(false, context)
                                        : EbpfDomain{TypeToNumDomain::top(),
                                                     ArrayDomain{to_unsigned(context.runtime().total_stack_size())}};
-    auto numeric_ranges = std::vector<Interval>();
-    auto [type_equalities, type_restrictions, value_constraints] =
-        parse_linear_constraints(constraints, numeric_ranges);
-    for (const auto& [v1, v2] : type_equalities) {
+    for (const auto& [v1, v2] : constraints.type_equalities) {
         inv.assume_eq_types(v1, v2);
     }
-    for (const auto& [var, ts] : type_restrictions) {
+    for (const auto& [var, ts] : constraints.type_restrictions) {
         inv.restrict_type(var, ts);
     }
-    for (const auto& cst : value_constraints) {
+    for (const auto& cst : constraints.value_csts) {
         inv.add_value_constraint(cst);
     }
     if (inv.is_bottom()) {

@@ -7,9 +7,9 @@
 
 #include "ebpf_verifier.hpp"
 #include "ir/call_resolver.hpp"
-#include "ir/marshal.hpp"
 #include "ir/program.hpp"
 #include "ir/unmarshal.hpp"
+#include "test/marshal.hpp"
 
 using namespace prevail;
 

@@ -147,20 +147,14 @@ struct AnalysisResult {
     Interval exit_value = Interval::top();
 
     [[nodiscard]]
-    bool is_valid_after(const Label& label, const StringInvariant& state, const AnalysisContext& context) const;
-
-    [[nodiscard]]
     ObservationCheckResult check_observation_at_label(const Label& label, InvariantPoint point,
-                                                      const StringInvariant& observation, ObservationCheckMode mode,
-                                                      const AnalysisContext& context) const;
+                                                      const EbpfDomain& observation, ObservationCheckMode mode) const;
 
     [[nodiscard]]
-    bool is_consistent_before(const Label& label, const StringInvariant& observation,
-                              const AnalysisContext& context) const;
+    bool is_consistent_before(const Label& label, const EbpfDomain& observation) const;
 
     [[nodiscard]]
-    bool is_consistent_after(const Label& label, const StringInvariant& observation,
-                             const AnalysisContext& context) const;
+    bool is_consistent_after(const Label& label, const EbpfDomain& observation) const;
 
     [[nodiscard]]
     StringInvariant invariant_at(const Label& label) const;

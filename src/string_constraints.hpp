@@ -10,7 +10,6 @@
 
 #include "arith/linear_constraint.hpp"
 #include "arith/variable.hpp"
-#include "crab/interval.hpp"
 #include "crab/type_encoding.hpp"
 #include "crab_utils/debug.hpp"
 
@@ -76,7 +75,4 @@ struct TypeValueConstraints {
     std::vector<TypeSetRestriction> type_restrictions;
     std::vector<LinearConstraint> value_csts;
 };
-
-TypeValueConstraints parse_linear_constraints(const std::set<std::string>& constraints,
-                                              std::vector<Interval>& numeric_ranges);
 } // namespace prevail
