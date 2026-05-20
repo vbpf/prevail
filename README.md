@@ -24,6 +24,13 @@ cd prevail
 
 #### Dependencies (Ubuntu)
 
+Prevail is built as C++23, which requires GCC 13+ or Clang 17+. The
+default toolchain on Ubuntu 24.04 LTS (`build-essential` → GCC 13) is
+sufficient. On Ubuntu 22.04 install `g++-13` from the
+[ubuntu-toolchain-r PPA](https://launchpad.net/~ubuntu-toolchain-r/+archive/ubuntu/test);
+the default GCC 11 will not build the project. Earlier Ubuntu releases
+(e.g. 20.04) are not supported.
+
 ```bash
 sudo apt install build-essential git cmake libboost-dev libyaml-cpp-dev
 sudo apt install libboost-filesystem-dev libboost-program-options-dev
@@ -68,8 +75,8 @@ cmake --build build --config Release
 brew install llvm cmake boost yaml-cpp
 ```
 
-The system llvm currently comes with Clang 15, which isn't enough to compile prevail, as it depends on C++20. Brew's
-llvm comes with Clang 17.
+The system llvm currently comes with Clang 15, which isn't enough to compile prevail, as it depends on C++23. Brew's
+llvm comes with Clang 17 (or newer), which has sufficient C++23 support.
 
 #### Make:
 
