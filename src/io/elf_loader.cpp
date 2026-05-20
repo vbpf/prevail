@@ -122,8 +122,8 @@ void ElfObject::ElfObjectState::mark_section_validity(const std::string& section
         return;
     }
     for (const size_t index : section_program_indices.at(section_name)) {
-        programs[index].invalid = !valid;
-        programs[index].invalid_reason = valid ? std::string{} : reason;
+        programs[index].reject_load = !valid;
+        programs[index].reject_load_reason = valid ? std::string{} : reason;
     }
 }
 

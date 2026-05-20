@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 
-PROGRAM_LINE = re.compile(r"^section=(?P<section>\S+) function=(?P<function>\S+)(?: \[invalid: (?P<reason>.*)\])?$")
+PROGRAM_LINE = re.compile(r"^section=(?P<section>\S+) function=(?P<function>\S+)(?: \[reject_load: (?P<reason>.*)\])?$")
 
 
 def is_elf_file(path: Path) -> bool:
@@ -49,9 +49,9 @@ def parse_check_output(output_lines: list[str]) -> tuple[dict[str, list[dict[str
         function = match.group("function")
         reason = match.group("reason")
 
-        program = {"function": function, "invalid": reason is not None}
+        program = {"function": function, "reject_load": reason is not None}
         if reason:
-            program["invalid_reason"] = reason
+            program["reject_load_reason"] = reason
         sections.setdefault(section, []).append(program)
 
     for section in sections:

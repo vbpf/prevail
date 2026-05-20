@@ -191,8 +191,8 @@ int main(int argc, char** argv) {
         try {
             for (const ElfProgramInfo& prog : elf.list_programs()) {
                 std::cout << "section=" << prog.section_name << " function=" << prog.function_name;
-                if (prog.invalid) {
-                    std::cout << " [invalid: " << prog.invalid_reason << "]";
+                if (prog.reject_load) {
+                    std::cout << " [reject_load: " << prog.reject_load_reason << "]";
                 }
                 std::cout << std::endl;
             }
