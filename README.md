@@ -75,8 +75,8 @@ cmake --build build --config Release
 brew install llvm cmake boost yaml-cpp
 ```
 
-The system llvm currently comes with Clang 15, which isn't enough to compile prevail, as it depends on C++23. Brew's
-llvm comes with Clang 17 (or newer), which has sufficient C++23 support.
+The system LLVM (shipped with Xcode Command Line Tools) provides Clang 15, which isn't enough to compile prevail since
+it depends on C++23. Brew's LLVM comes with Clang 17 (or newer), which has sufficient C++23 support.
 
 #### Make:
 
