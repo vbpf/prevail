@@ -56,6 +56,7 @@ int main(int argc, char** argv) {
 
     CLI::App app{"PREVAIL is a new eBPF verifier based on abstract interpretation."};
     app.option_defaults()->delimiter(',');
+    app.set_version_flag("--version", PREVAIL_VERSION_STRING);
 
     std::string filename;
     app.add_option("path", filename, "Elf file to analyze")->required()->check(CLI::ExistingFile);
