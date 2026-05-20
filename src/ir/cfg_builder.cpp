@@ -171,7 +171,7 @@ static std::optional<ResolvedCall> resolve_kfunc_call(const CallBtf& call_btf, c
         }
         return std::nullopt;
     }
-    return info.platform->resolve_kfunc_call(call_btf.btf_id, info.type, why_not);
+    return info.platform->resolve_kfunc_call(call_btf.btf_id, call_btf.module, info.type, why_not);
 }
 
 // CallBtf in the instruction stream is replaced by a key-only Call{func,
@@ -317,7 +317,20 @@ static ResolvedKfuncCalls pass_resolve_kfunc_calls(const InstructionSeq& insts, 
         if (!r) {
             throw InvalidControlFlow{"not implemented: " + why_not + " (at " + to_string(label) + ")"};
         }
-        resolved.insert_or_assign(label, r->call);
+        // Build the lowered Call key directly from the source CallBtf rather
+        // than trusting any field the platform returned. The lowered IR's
+        // identity is the pre-resolution (btf_id, module) pair plus the fixed
+        // CallKind::kfunc tag; nothing else can soundly change it. Constructing
+        // the key here makes that invariant audit-visible and removes a class
+        // of bugs where a misbehaving resolver mis-keys the lowered IR — in
+        // particular, two kfuncs sharing a BTF id across modules must remain
+        // distinguishable.
+        const Call lowered{
+            .func = call_btf->btf_id,
+            .kind = CallKind::kfunc,
+            .module = call_btf->module,
+        };
+        resolved.insert_or_assign(label, lowered);
     }
     return resolved;
 }

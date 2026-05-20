@@ -76,7 +76,7 @@ ResolvedCall resolve_kfunc(const Call& call, const ProgramInfo& info) {
         return make_unsupported(call, std::to_string(call.func), "kfunc resolution is unavailable on this platform");
     }
     std::string why_not;
-    if (const auto c = info.platform->resolve_kfunc_call(call.func, info.type, &why_not)) {
+    if (const auto c = info.platform->resolve_kfunc_call(call.func, call.module, info.type, &why_not)) {
         // Stamp the key from our argument so the invariant is enforced here
         // rather than relying on every platform implementation to set it.
         ResolvedCall r = *c;

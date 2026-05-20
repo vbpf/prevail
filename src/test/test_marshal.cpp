@@ -997,6 +997,52 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         REQUIRE(verify(prog, {}));
     }
 
+    SECTION("kfunc resolution disambiguates same BTF id across modules") {
+        RawProgram vmlinux_raw{
+            "",
+            "",
+            0,
+            "",
+            {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .offset = 0, .imm = 1000}, exit},
+            info};
+        auto vmlinux_or_error = unmarshal(vmlinux_raw, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(vmlinux_or_error));
+        const Program vmlinux_prog = Program::from_sequence(std::get<InstructionSeq>(vmlinux_or_error), info, {});
+        const auto* vmlinux_call = std::get_if<Call>(&vmlinux_prog.instruction_at(Label{0}));
+        REQUIRE(vmlinux_call != nullptr);
+        REQUIRE(vmlinux_call->module == 0);
+        REQUIRE(resolve(*vmlinux_call, info).name == "kfunc_test_ret_int");
+
+        RawProgram module_raw{
+            "",
+            "",
+            0,
+            "",
+            {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .offset = 1, .imm = 1000}, exit},
+            info};
+        auto module_or_error = unmarshal(module_raw, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(module_or_error));
+        const Program module_prog = Program::from_sequence(std::get<InstructionSeq>(module_or_error), info, {});
+        const auto* module_call = std::get_if<Call>(&module_prog.instruction_at(Label{0}));
+        REQUIRE(module_call != nullptr);
+        REQUIRE(module_call->module == 1);
+        REQUIRE(resolve(*module_call, info).name == "kfunc_test_ret_int_other_module");
+
+        RawProgram unknown_module_raw{
+            "",
+            "",
+            0,
+            "",
+            {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .offset = 2, .imm = 1000}, exit},
+            info};
+        auto unknown_or_error = unmarshal(unknown_module_raw, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(unknown_or_error));
+        REQUIRE_THROWS_WITH(
+            Program::from_sequence(std::get<InstructionSeq>(unknown_or_error), info, {}),
+            Catch::Matchers::ContainsSubstring("kfunc prototype lookup failed for BTF id 1000 in module 2") &&
+                Catch::Matchers::ContainsSubstring("(at 0)"));
+    }
+
     SECTION("kfunc in subprogram is not misclassified when BTF id overlaps helper id") {
         RawProgram raw_prog{"",
                             "",

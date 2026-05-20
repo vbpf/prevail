@@ -7,10 +7,10 @@
 
 namespace prevail {
 
-/// Resolves a Call's (func, kind) key against a program's platform and type
-/// to produce the full ABI/diagnostic info:
+/// Resolves a Call's (func, kind, module) key against a program's platform and
+/// type to produce the full ABI/diagnostic info:
 ///   * CallKind::helper  -> platform.get_helper_prototype(func, type)
-///   * CallKind::kfunc   -> platform.resolve_kfunc_call(func, type)
+///   * CallKind::kfunc   -> platform.resolve_kfunc_call(func, module, type)
 ///   * CallKind::builtin -> platform.get_builtin_call(func)
 ///
 /// When resolution fails the returned ResolvedCall has is_supported == false

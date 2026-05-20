@@ -189,20 +189,26 @@ struct ArgPair {
 
 enum class CallKind {
     helper,  ///< Resolved via platform.get_helper_prototype(func, program_type).
-    kfunc,   ///< Resolved via platform.resolve_kfunc_call(btf_id, program_type).
+    kfunc,   ///< Resolved via platform.resolve_kfunc_call(btf_id, module, program_type).
     builtin, ///< Resolved via platform.get_builtin_call(func). Used for compiler
              ///< intrinsics (memset/memcpy/...) emitted at specific PCs where the
              ///< ELF loader flagged the call as a relocation target.
 };
 
-/// Static call to a helper / kfunc / compiler intrinsic. Pure key: the pair
-/// (func, kind) identifies the target given a ProgramInfo, and `resolve(call,
-/// info)` produces the full ResolvedCall with name, support status, and
-/// contract. Sibling key-only call instructions are `Callx` (register-indirect)
-/// and `CallBtf` (pre-resolution kfunc).
+/// Static call to a helper / kfunc / compiler intrinsic. Pure key: the triple
+/// (func, kind, module) identifies the target given a ProgramInfo, and
+/// `resolve(call, info)` produces the full ResolvedCall with name, support
+/// status, and contract. Sibling key-only call instructions are `Callx`
+/// (register-indirect) and `CallBtf` (pre-resolution kfunc).
+///
+/// `module` is only meaningful when `kind == CallKind::kfunc`: it carries the
+/// `CallBtf::module` from which this call was lowered, so that two kfuncs
+/// sharing the same BTF id across distinct kernel modules remain
+/// distinguishable. For helper and builtin calls the field is unused (0).
 struct Call {
     int32_t func{};
     CallKind kind{CallKind::helper};
+    int16_t module{};
 
     constexpr bool operator==(const Call&) const = default;
 };
