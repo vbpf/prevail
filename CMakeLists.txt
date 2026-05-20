@@ -182,7 +182,10 @@ set(prevail_binary_dir "${prevail_source_dir}/bin" CACHE INTERNAL "")
 # Prefer `git describe` so non-release builds are unambiguous; fall back to the
 # project version when building outside a git checkout (e.g. tarball or install).
 set(prevail_VERSION_STRING "")
-if (IS_DIRECTORY "${prevail_source_dir}/.git" AND NOT CMAKE_CROSSCOMPILING)
+# Accept both a `.git` directory (normal clone) and a `.git` file (linked
+# worktrees, submodules) — both are valid Git layouts that resolve under
+# `git -C`.
+if (EXISTS "${prevail_source_dir}/.git" AND NOT CMAKE_CROSSCOMPILING)
   find_package(Git QUIET)
   if (GIT_FOUND)
     execute_process(
