@@ -27,9 +27,12 @@ StringInvariant StringInvariant::operator+(const StringInvariant& b) const {
     if (this->is_bottom()) {
         return b;
     }
+    if (b.is_bottom()) {
+        return *this;
+    }
     StringInvariant res = *this;
     for (const std::string& cst : b.value()) {
-        if (res.is_bottom() || !res.contains(cst)) {
+        if (!res.contains(cst)) {
             res.maybe_inv->insert(cst);
         }
     }

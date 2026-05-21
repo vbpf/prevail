@@ -116,8 +116,20 @@ static EbpfProgramType make_program_type(const string& name, const ebpf_ctx_desc
                            .is_privileged = false};
 }
 
-// Bridge: parse a textual invariant and lift it to an EbpfDomain. This is the test-only
-// path that previously lived in EbpfDomain::from_constraints(set<string>).
+// Parse a textual invariant and lift it to an EbpfDomain. The shared parsing core
+// used by both the entry-domain and observation-domain bridges below.
+static EbpfDomain parse_string_invariant_to_domain(const StringInvariant& inv, const bool setup_constraints,
+                                                   const AnalysisContext& context) {
+    if (inv.is_bottom()) {
+        return EbpfDomain::bottom();
+    }
+    std::vector<Interval> numeric_ranges;
+    const TypeValueConstraints parsed = parse_linear_constraints(inv.value(), numeric_ranges);
+    return EbpfDomain::from_constraints(parsed, numeric_ranges, setup_constraints, context);
+}
+
+// Bridge for entry-domain construction. Test-only path that previously lived in
+// EbpfDomain::from_constraints(set<string>).
 //
 // The clear before from_constraints() is a band-aid: an EbpfDomain's ArrayDomain cells
 // live in thread_local_array_map (see crab/array_domain.cpp), so any cached cells from
@@ -126,15 +138,18 @@ static EbpfProgramType make_program_type(const string& name, const ebpf_ctx_desc
 // state; until then, the contract is "clear before building the entry, then call
 // analyze(EbpfDomain, ...)" — and analyze(EbpfDomain, ...) deliberately skips its own
 // clear so it doesn't orphan the cells we just allocated.
-static EbpfDomain string_invariant_to_domain(const StringInvariant& inv, const bool setup_constraints,
-                                             const AnalysisContext& context) {
+static EbpfDomain string_invariant_to_entry_domain(const StringInvariant& inv, const bool setup_constraints,
+                                                   const AnalysisContext& context) {
     ebpf_verifier_clear_thread_local_state();
-    if (inv.is_bottom()) {
-        return EbpfDomain::bottom();
-    }
-    std::vector<Interval> numeric_ranges;
-    const TypeValueConstraints parsed = parse_linear_constraints(inv.value(), numeric_ranges);
-    return EbpfDomain::from_constraints(parsed, numeric_ranges, setup_constraints, context);
+    return parse_string_invariant_to_domain(inv, setup_constraints, context);
+}
+
+// Bridge for observation-domain construction, called after analyze() has produced
+// invariants. Skips the thread-local clear because clearing here would destroy the
+// cell map entries that the result's invariants reference.
+static EbpfDomain string_invariant_to_observation_domain(const StringInvariant& inv, const bool setup_constraints,
+                                                         const AnalysisContext& context) {
+    return parse_string_invariant_to_domain(inv, setup_constraints, context);
 }
 
 static std::set<string> vector_to_set(const vector<string>& s) {
@@ -453,8 +468,8 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
     try {
         Program prog = Program::from_sequence(test_case.instruction_seq, info, test_case.options);
         const AnalysisContext context{std::move(prog), test_case.options};
-        const EbpfDomain entry =
-            string_invariant_to_domain(test_case.assumed_pre_invariant, context.runtime().setup_constraints, context);
+        const EbpfDomain entry = string_invariant_to_entry_domain(test_case.assumed_pre_invariant,
+                                                                  context.runtime().setup_constraints, context);
         const AnalysisResult result = analyze(entry, context);
         const StringInvariant actual_last_invariant = result.invariant_at(Label::exit);
         std::set<string> actual_messages;
@@ -470,7 +485,7 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
         // Evaluate optional observation checks.
         for (const auto& obs : test_case.observations) {
             const EbpfDomain observed =
-                string_invariant_to_domain(obs.constraints, context.runtime().setup_constraints, context);
+                string_invariant_to_observation_domain(obs.constraints, context.runtime().setup_constraints, context);
             const ObservationCheckResult check =
                 result.check_observation_at_label(obs.label, obs.point, observed, obs.mode);
             if (!check.ok) {
@@ -606,7 +621,7 @@ ConformanceTestResult run_conformance_test_case(const std::vector<uint8_t>& memo
         Program prog = Program::from_sequence(inst_seq, info, options);
         const AnalysisContext context{std::move(prog), options};
         const EbpfDomain entry =
-            string_invariant_to_domain(pre_invariant, context.runtime().setup_constraints, context);
+            string_invariant_to_entry_domain(pre_invariant, context.runtime().setup_constraints, context);
         const AnalysisResult result = analyze(entry, context);
         return ConformanceTestResult{.success = !result.failed, .r0_value = result.exit_value};
     } catch (const std::exception& ex) {
