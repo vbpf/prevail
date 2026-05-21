@@ -217,7 +217,7 @@ class StackCellRegistry final {
     void clear() { _maps.clear(); }
 };
 
-void StackCellRegistryDeleter::operator()(StackCellRegistry* p) const noexcept { delete p; }
+void StackCellRegistryDeleter::operator()(StackCellRegistry* ptr) const noexcept { delete ptr; }
 
 StackCellRegistryPtr make_stack_cell_registry() { return StackCellRegistryPtr{new StackCellRegistry()}; }
 
