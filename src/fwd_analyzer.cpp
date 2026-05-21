@@ -168,11 +168,17 @@ AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invaria
 }
 
 AnalysisResult analyze(const AnalysisContext& context) {
+    // Reset the per-context cell registry so a reused context starts each run with
+    // an empty cell map. setup_entry() below allocates fresh cells into it.
+    clear_stack_cell_registry(context.cells());
     return InterleavedFwdFixpointIterator::run(context,
                                                EbpfDomain::setup_entry(context.runtime().setup_constraints, context));
 }
 
 AnalysisResult analyze(const StringInvariant& entry_invariant, const AnalysisContext& context) {
+    // Same rationale as analyze(context): from_constraints below populates the cell
+    // registry as part of building the entry domain.
+    clear_stack_cell_registry(context.cells());
     return InterleavedFwdFixpointIterator::run(
         context, EbpfDomain::from_constraints(entry_invariant.value(), context.runtime().setup_constraints, context));
 }

@@ -44,6 +44,9 @@ struct StackCellRegistryDeleter {
 };
 using StackCellRegistryPtr = std::unique_ptr<StackCellRegistry, StackCellRegistryDeleter>;
 StackCellRegistryPtr make_stack_cell_registry();
+/// Drop all tracked cells. Call this when starting a fresh analysis run against
+/// a reused context so stale entries from a prior run don't leak into the new one.
+void clear_stack_cell_registry(StackCellRegistry& registry);
 
 class ArrayDomain final {
     BitsetDomain num_bytes;

@@ -214,11 +214,14 @@ class StackCellRegistry final {
 
   public:
     offset_map_t& get(const DataKind kind) { return _maps[kind]; }
+    void clear() { _maps.clear(); }
 };
 
 void StackCellRegistryDeleter::operator()(StackCellRegistry* p) const noexcept { delete p; }
 
 StackCellRegistryPtr make_stack_cell_registry() { return StackCellRegistryPtr{new StackCellRegistry()}; }
+
+void clear_stack_cell_registry(StackCellRegistry& registry) { registry.clear(); }
 
 void ArrayDomain::initialize_numbers(StackCellRegistry& cells, const int lb, const int width) {
     num_bytes.reset(lb, width);
