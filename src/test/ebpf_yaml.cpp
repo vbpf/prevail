@@ -131,13 +131,11 @@ static EbpfDomain parse_string_invariant_to_domain(const StringInvariant& inv, c
 // Bridge for entry-domain construction. Test-only path that previously lived in
 // EbpfDomain::from_constraints(set<string>).
 //
-// The clear before from_constraints() is a band-aid: an EbpfDomain's ArrayDomain cells
-// live in thread_local_array_map (see crab/array_domain.cpp), so any cached cells from
-// a previous test would otherwise bleed into the new entry's stack initialization.
-// The proper fix is to thread the cell map through AnalysisContext like other shared
-// state; until then, the contract is "clear before building the entry, then call
-// analyze(EbpfDomain, ...)" — and analyze(EbpfDomain, ...) deliberately skips its own
-// clear so it doesn't orphan the cells we just allocated.
+// ebpf_verifier_clear_thread_local_state() resets ZoneDomain::SplitDBM::scratch_ — a
+// transient cross-run buffer. Doing it at the start of an entry build keeps peak
+// memory low between test cases (relevant for callers like run_conformance_test_case
+// that don't wrap with ThreadLocalGuard). It does NOT touch ArrayDomain cells; those
+// live in AnalysisContext::cells() and are scoped to the per-test context.
 static EbpfDomain string_invariant_to_entry_domain(const StringInvariant& inv, const bool setup_constraints,
                                                    const AnalysisContext& context) {
     ebpf_verifier_clear_thread_local_state();
@@ -145,8 +143,8 @@ static EbpfDomain string_invariant_to_entry_domain(const StringInvariant& inv, c
 }
 
 // Bridge for observation-domain construction, called after analyze() has produced
-// invariants. Skips the thread-local clear because clearing here would destroy the
-// cell map entries that the result's invariants reference.
+// invariants. No scratch clear needed: analysis is done, and the next entry build
+// will clear if it cares.
 static EbpfDomain string_invariant_to_observation_domain(const StringInvariant& inv, const bool setup_constraints,
                                                          const AnalysisContext& context) {
     return parse_string_invariant_to_domain(inv, setup_constraints, context);
