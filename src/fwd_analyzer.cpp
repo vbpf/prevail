@@ -163,10 +163,6 @@ AnalysisResult analyze(const Program& prog, const VerifierOptions& options) {
     return analyze(AnalysisContext{prog, options});
 }
 
-AnalysisResult analyze(const Program& prog, const StringInvariant& entry_invariant, const VerifierOptions& options) {
-    return analyze(entry_invariant, AnalysisContext{prog, options});
-}
-
 AnalysisResult analyze(const AnalysisContext& context) {
     // Reset the per-context cell registry so a reused context starts each run with
     // an empty cell map. setup_entry() below allocates fresh cells into it.
@@ -175,12 +171,13 @@ AnalysisResult analyze(const AnalysisContext& context) {
                                                EbpfDomain::setup_entry(context.runtime().setup_constraints, context));
 }
 
-AnalysisResult analyze(const StringInvariant& entry_invariant, const AnalysisContext& context) {
-    // Same rationale as analyze(context): from_constraints below populates the cell
-    // registry as part of building the entry domain.
-    clear_stack_cell_registry(context.cells());
-    return InterleavedFwdFixpointIterator::run(
-        context, EbpfDomain::from_constraints(entry_invariant.value(), context.runtime().setup_constraints, context));
+// Caller-supplied entry overload.  Does NOT reset context.cells(): the entry
+// domain may already reference cells in this context's registry (e.g. when
+// built via EbpfDomain::from_constraints(..., context)), and resetting here
+// would orphan them.  Callers reusing an AnalysisContext across runs must
+// clear the registry before constructing the entry.
+AnalysisResult analyze(const EbpfDomain& entry_invariant, const AnalysisContext& context) {
+    return InterleavedFwdFixpointIterator::run(context, entry_invariant);
 }
 
 static EbpfDomain extrapolate(const EbpfDomain& before, const EbpfDomain& after, const unsigned int iteration,

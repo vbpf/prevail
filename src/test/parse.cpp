@@ -13,10 +13,9 @@
 #include "arith/linear_constraint.hpp"
 #include "crab/type_encoding.hpp"
 #include "crab/var_registry.hpp"
-#include "ir/parse.hpp"
 #include "platform.hpp"
-#include "result.hpp"
 #include "string_constraints.hpp"
+#include "test/parse.hpp"
 
 using std::regex;
 using std::regex_match;
@@ -337,42 +336,6 @@ Instruction parse_instruction(const std::string& line, const std::map<std::strin
     return parse_instruction_inner(line, label_name_to_label, program_type);
 }
 
-[[maybe_unused]]
-static InstructionSeq parse_program(std::istream& is) {
-    std::string line;
-    std::vector<Label> pc_to_label;
-    InstructionSeq labeled_insts;
-    const std::set<Label> seen_labels;
-    std::optional<Label> next_label;
-    while (std::getline(is, line)) {
-        std::smatch m;
-        if (regex_search(line, m, regex(LABEL ":"))) {
-            next_label = Label{to_int(m[1])};
-            if (seen_labels.contains(*next_label)) {
-                throw RuntimeInputError("duplicate labels");
-            }
-            line = m.suffix();
-        }
-        if (regex_search(line, m, regex(R"(^\s*(\d+:)?\s*)"))) {
-            line = m.suffix();
-        }
-        if (line.empty()) {
-            continue;
-        }
-        Instruction ins = parse_instruction(line, {}, {});
-        if (std::holds_alternative<Undefined>(ins)) {
-            continue;
-        }
-
-        if (!next_label) {
-            next_label = Label(static_cast<int>(labeled_insts.size()));
-        }
-        labeled_insts.emplace_back(*next_label, ins, std::optional<btf_line_info_t>());
-        next_label = {};
-    }
-    return labeled_insts;
-}
-
 static Variable special_var(const std::string& s) {
     if (s == "packet_size") {
         return variable_registry.packet_size();
@@ -383,13 +346,13 @@ static Variable special_var(const std::string& s) {
     throw RuntimeInputError(std::string() + "Bad special variable: " + s);
 }
 
-TypeValueConstraints parse_linear_constraints(const std::set<std::string>& constraints,
-                                              std::vector<Interval>& numeric_ranges) {
+ParsedConstraints parse_linear_constraints(const std::set<std::string>& constraints) {
     using namespace dsl_syntax;
 
     std::vector<LinearConstraint> value_csts;
     std::vector<TypeEquality> type_equalities;
     std::vector<TypeSetRestriction> type_restrictions;
+    std::vector<Interval> numeric_ranges;
     for (const std::string& cst_text : constraints) {
         std::smatch m;
         if (regex_match(cst_text, m, regex(SPECIAL_VAR "=" IMM))) {
@@ -501,70 +464,7 @@ TypeValueConstraints parse_linear_constraints(const std::set<std::string>& const
             throw RuntimeInputError(std::string("Unknown constraint: ") + cst_text);
         }
     }
-    return {type_equalities, type_restrictions, value_csts};
+    return {std::move(type_equalities), std::move(type_restrictions), std::move(value_csts), std::move(numeric_ranges)};
 }
 
-// return a-b, taking account potential optional-none
-StringInvariant StringInvariant::operator-(const StringInvariant& b) const {
-    if (this->is_bottom()) {
-        return bottom();
-    }
-    StringInvariant res = top();
-    for (const std::string& cst : this->value()) {
-        if (b.is_bottom() || !b.contains(cst)) {
-            res.maybe_inv->insert(cst);
-        }
-    }
-    return res;
-}
-
-// return a+b, taking account potential optional-none
-StringInvariant StringInvariant::operator+(const StringInvariant& b) const {
-    if (this->is_bottom()) {
-        return b;
-    }
-    StringInvariant res = *this;
-    for (const std::string& cst : b.value()) {
-        if (res.is_bottom() || !res.contains(cst)) {
-            res.maybe_inv->insert(cst);
-        }
-    }
-    return res;
-}
-
-std::ostream& operator<<(std::ostream& o, const StringInvariant& inv) {
-    if (inv.is_bottom()) {
-        return o << "_|_";
-    }
-
-    // Check for invariant filter
-    const RelevantState* filter = get_invariant_filter(o);
-
-    // Intervals
-    bool first = true;
-    o << "[";
-    auto& set = inv.maybe_inv.value();
-    std::string lastbase;
-    for (const auto& item : set) {
-        // Skip items that don't involve relevant registers (if filter is set)
-        if (filter && !filter->is_relevant_constraint(item)) {
-            continue;
-        }
-
-        if (first) {
-            first = false;
-        } else {
-            o << ", ";
-        }
-        const size_t pos = item.find_first_of(".=[");
-        std::string base = item.substr(0, pos);
-        if (base != lastbase) {
-            o << "\n    ";
-            lastbase = base;
-        }
-        o << item;
-    }
-    o << "]";
-    return o;
-}
 } // namespace prevail

@@ -71,12 +71,15 @@ struct TypeEquality {
     Variable v2;
 };
 
-struct TypeValueConstraints {
+/// All constraint kinds produced by parsing a `StringInvariant`. Consumed as a
+/// single bundle by `EbpfDomain::from_constraints`. `numeric_ranges` carries
+/// stack byte ranges that should be marked numeric in `ArrayDomain::num_bytes`
+/// — distinct sub-domain from the other three, but always parsed and applied
+/// alongside them.
+struct ParsedConstraints {
     std::vector<TypeEquality> type_equalities;
     std::vector<TypeSetRestriction> type_restrictions;
     std::vector<LinearConstraint> value_csts;
+    std::vector<Interval> numeric_ranges;
 };
-
-TypeValueConstraints parse_linear_constraints(const std::set<std::string>& constraints,
-                                              std::vector<Interval>& numeric_ranges);
 } // namespace prevail

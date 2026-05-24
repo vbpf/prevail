@@ -729,4 +729,22 @@ std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog,
     return unmarshal(raw_prog, notes, options);
 }
 
+int size(const Instruction& inst) {
+    if (const auto pins = std::get_if<Bin>(&inst)) {
+        if (pins->lddw) {
+            return 2;
+        }
+    }
+    if (std::holds_alternative<LoadMapFd>(inst)) {
+        return 2;
+    }
+    if (std::holds_alternative<LoadMapAddress>(inst)) {
+        return 2;
+    }
+    if (std::holds_alternative<LoadPseudo>(inst)) {
+        return 2;
+    }
+    return 1;
+}
+
 } // namespace prevail

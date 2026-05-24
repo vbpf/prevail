@@ -120,14 +120,13 @@ set(prevail_LIB_SRC
   src/ir/assertions.cpp
   src/ir/call_resolver.cpp
   src/ir/cfg_builder.cpp
-  src/ir/marshal.cpp
-  src/ir/parse.cpp
   src/ir/unmarshal.cpp
   src/linux/gpl/spec_prototypes.cpp
   src/linux/kfunc.cpp
   src/linux/linux_platform.cpp
   src/printing.cpp
   src/result.cpp
+  src/string_constraints.cpp
 )
 list(TRANSFORM prevail_LIB_SRC PREPEND "${prevail_source_dir}/")
 
@@ -299,7 +298,11 @@ if (prevail_ENABLE_TESTS)
     "${prevail_source_dir}/src/test/setup_msvc_debug.cpp"
   )
 
-  add_library(ebpf_yaml_lib STATIC "${prevail_source_dir}/src/test/ebpf_yaml.cpp")
+  add_library(ebpf_yaml_lib STATIC
+    "${prevail_source_dir}/src/test/ebpf_yaml.cpp"
+    "${prevail_source_dir}/src/test/marshal.cpp"
+    "${prevail_source_dir}/src/test/parse.cpp"
+  )
   target_link_libraries(ebpf_yaml_lib PRIVATE prevail bpf_conformance_core yaml-cpp::yaml-cpp)
 
   target_link_libraries(run_yaml PRIVATE prevail ebpf_yaml_lib)

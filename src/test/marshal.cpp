@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "crab_utils/num_safety.hpp"
-#include "ir/marshal.hpp"
+#include "test/marshal.hpp"
 
 #include "crab_utils/debug.hpp"
 
@@ -325,24 +325,6 @@ struct MarshalVisitor {
 
 vector<EbpfInst> marshal(const Instruction& ins, const Pc pc) {
     return std::visit(MarshalVisitor{label_to_offset16(pc), label_to_offset32(pc)}, ins);
-}
-
-int size(const Instruction& inst) {
-    if (const auto pins = std::get_if<Bin>(&inst)) {
-        if (pins->lddw) {
-            return 2;
-        }
-    }
-    if (std::holds_alternative<LoadMapFd>(inst)) {
-        return 2;
-    }
-    if (std::holds_alternative<LoadMapAddress>(inst)) {
-        return 2;
-    }
-    if (std::holds_alternative<LoadPseudo>(inst)) {
-        return 2;
-    }
-    return 1;
 }
 
 static auto get_labels(const InstructionSeq& insts) {
