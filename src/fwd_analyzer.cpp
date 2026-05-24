@@ -163,8 +163,12 @@ AnalysisResult analyze(const Program& prog, const VerifierOptions& options) {
 }
 
 AnalysisResult analyze(const AnalysisContext& context) {
-    return InterleavedFwdFixpointIterator::run(context,
-                                               EbpfDomain::setup_entry(context.runtime().setup_constraints, context));
+    // Initialise r1 to the program's context pointer iff the program type
+    // declares a non-empty context descriptor. The verifier's `setup_constraints`
+    // option no longer gates this — it's a property of the program, not the run.
+    const auto* ctx = context.program_info().type.ctx_descriptor;
+    const bool init_r1 = ctx != nullptr && ctx->size > 0;
+    return InterleavedFwdFixpointIterator::run(context, EbpfDomain::setup_entry(init_r1, context));
 }
 
 AnalysisResult analyze(const EbpfDomain& entry_invariant, const AnalysisContext& context) {
