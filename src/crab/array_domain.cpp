@@ -215,9 +215,10 @@ class StackCellRegistry final {
   public:
     offset_map_t& get(const DataKind kind) { return _maps[kind]; }
 
-    // Union `other` into `*this` so the resulting registry tracks every cell
-    // either side knew about. Idempotent insert: cells already present stay.
     void merge_from(const StackCellRegistry& other) {
+        if (this == &other) {
+            return;
+        }
         for (const auto& [kind, omap] : other._maps) {
             offset_map_t& dst = _maps[kind];
             for (const auto& [_off, cell_set] : omap._map) {
@@ -229,37 +230,11 @@ class StackCellRegistry final {
     }
 };
 
-void StackCellRegistryDeleter::operator()(StackCellRegistry* ptr) const noexcept { delete ptr; }
-
-StackCellRegistryPtr make_stack_cell_registry() { return StackCellRegistryPtr{new StackCellRegistry()}; }
-
-StackCellRegistryPtr clone_stack_cell_registry(const StackCellRegistry& registry) {
-    return StackCellRegistryPtr{new StackCellRegistry(registry)};
-}
-
-ArrayDomain::ArrayDomain(const ArrayDomain& other)
-    : num_bytes(other.num_bytes), cells_(clone_stack_cell_registry(*other.cells_)) {}
-
-ArrayDomain::ArrayDomain(ArrayDomain&& other) noexcept
-    : num_bytes(std::move(other.num_bytes)), cells_(std::exchange(other.cells_, make_stack_cell_registry())) {}
-
-ArrayDomain& ArrayDomain::operator=(const ArrayDomain& other) {
-    if (this != &other) {
-        num_bytes = other.num_bytes;
-        cells_ = clone_stack_cell_registry(*other.cells_);
-    }
-    return *this;
-}
-
-ArrayDomain& ArrayDomain::operator=(ArrayDomain&& other) noexcept {
-    num_bytes = std::move(other.num_bytes);
-    std::swap(cells_, other.cells_);
-    return *this;
-}
+std::shared_ptr<StackCellRegistry> make_stack_cell_registry() { return std::make_shared<StackCellRegistry>(); }
 
 void ArrayDomain::initialize_numbers(const int lb, const int width) {
     num_bytes.reset(lb, width);
-    cells_->get(DataKind::svalues).mk_cell(offset_t{gsl::narrow_cast<Index>(lb)}, width);
+    cells_.get_mutable().get(DataKind::svalues).mk_cell(offset_t{gsl::narrow_cast<Index>(lb)}, width);
 }
 
 std::ostream& operator<<(std::ostream& o, offset_map_t& m) {
@@ -293,7 +268,7 @@ void ArrayDomain::split_cell(NumAbsDomain& inv, const DataKind kind, const int c
         load(inv, DataKind::uvalues, Interval{cell_start_index}, len, big_endian);
 
     // Create a new cell for that range.
-    offset_map_t& offset_map = cells_->get(kind);
+    offset_map_t& offset_map = cells_.get_mutable().get(kind);
     const Cell new_cell = offset_map.mk_cell(offset_t{gsl::narrow_cast<Index>(cell_start_index)}, len);
     inv.assign(cell_var(DataKind::svalues, new_cell), svalue);
     inv.assign(cell_var(DataKind::uvalues, new_cell), uvalue);
@@ -304,7 +279,7 @@ void ArrayDomain::split_cell(NumAbsDomain& inv, const DataKind kind, const int c
 void ArrayDomain::split_number_var(NumAbsDomain& inv, const DataKind kind, const Interval& ii,
                                    const Interval& elem_size, const bool big_endian) {
     assert(kind == DataKind::svalues || kind == DataKind::uvalues);
-    offset_map_t& offset_map = cells_->get(kind);
+    offset_map_t& offset_map = cells_.get_mutable().get(kind);
     const std::optional<Number> n = ii.singleton();
     if (!n) {
         // We can only split a singleton offset.
@@ -456,7 +431,7 @@ std::optional<uint8_t> get_value_byte(const NumAbsDomain& inv, const offset_t o,
 std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, const DataKind kind, const Interval& i,
                                                   const int width, const bool big_endian) {
     if (const std::optional<Number> n = i.singleton()) {
-        offset_map_t& offset_map = cells_->get(kind);
+        offset_map_t& offset_map = cells_.get_mutable().get(kind);
         const int64_t k = n->narrow<int64_t>();
         const offset_t o(k);
         const unsigned size = to_unsigned(width);
@@ -546,7 +521,7 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, const
 
 std::optional<LinearExpression> ArrayDomain::load_type(const Interval& i, const int width) {
     if (const std::optional<Number> n = i.singleton()) {
-        offset_map_t& offset_map = cells_->get(DataKind::types);
+        offset_map_t& offset_map = cells_.get_mutable().get(DataKind::types);
         const int64_t k = n->narrow<int64_t>();
         auto [only_num, only_non_num] = num_bytes.uniformity(k, width);
         if (only_num) {
@@ -606,10 +581,10 @@ split_and_find_var(ArrayDomain& array_domain, StackCellRegistry& cells, NumAbsDo
 
 std::optional<Variable> ArrayDomain::store(NumAbsDomain& inv, const DataKind kind, const Interval& idx,
                                            const Interval& elem_size, const bool big_endian) {
-    if (auto maybe_cell = split_and_find_var(*this, *cells_, inv, kind, idx, elem_size, big_endian)) {
+    if (auto maybe_cell = split_and_find_var(*this, cells_.get_mutable(), inv, kind, idx, elem_size, big_endian)) {
         // perform strong update
         auto [offset, size] = *maybe_cell;
-        const Cell c = cells_->get(kind).mk_cell(offset, size);
+        const Cell c = cells_.get_mutable().get(kind).mk_cell(offset, size);
         Variable v = cell_var(kind, c);
         return v;
     }
@@ -619,8 +594,8 @@ std::optional<Variable> ArrayDomain::store(NumAbsDomain& inv, const DataKind kin
 std::optional<Variable> ArrayDomain::store_type(TypeDomain& inv, const Interval& idx, const Interval& width,
                                                 const bool is_num) {
     constexpr auto kind = DataKind::types;
-    if (auto maybe_cell =
-            kill_and_find_var(*cells_, [&inv](const Variable v) { inv.havoc_type(v); }, kind, idx, width)) {
+    if (auto maybe_cell = kill_and_find_var(
+            cells_.get_mutable(), [&inv](const Variable v) { inv.havoc_type(v); }, kind, idx, width)) {
         // perform strong update
         auto [offset, size] = *maybe_cell;
         if (is_num) {
@@ -628,7 +603,7 @@ std::optional<Variable> ArrayDomain::store_type(TypeDomain& inv, const Interval&
         } else {
             num_bytes.havoc(offset, size);
         }
-        const Cell c = cells_->get(kind).mk_cell(offset, size);
+        const Cell c = cells_.get_mutable().get(kind).mk_cell(offset, size);
         Variable v = cell_var(kind, c);
         return v;
     } else {
@@ -650,13 +625,13 @@ std::optional<Variable> ArrayDomain::store_type(TypeDomain& inv, const Interval&
 
 void ArrayDomain::havoc(NumAbsDomain& inv, const DataKind kind, const Interval& idx, const Interval& elem_size,
                         const bool big_endian) {
-    split_and_find_var(*this, *cells_, inv, kind, idx, elem_size, big_endian);
+    split_and_find_var(*this, cells_.get_mutable(), inv, kind, idx, elem_size, big_endian);
 }
 
 void ArrayDomain::havoc_type(TypeDomain& inv, const Interval& idx, const Interval& elem_size) {
     constexpr auto kind = DataKind::types;
-    if (auto maybe_cell =
-            kill_and_find_var(*cells_, [&inv](const Variable v) { inv.havoc_type(v); }, kind, idx, elem_size)) {
+    if (auto maybe_cell = kill_and_find_var(
+            cells_.get_mutable(), [&inv](const Variable v) { inv.havoc_type(v); }, kind, idx, elem_size)) {
         auto [offset, size] = *maybe_cell;
         num_bytes.havoc(offset, size);
     }
@@ -695,12 +670,12 @@ bool ArrayDomain::operator==(const ArrayDomain& other) const { return num_bytes 
 
 void ArrayDomain::operator|=(const ArrayDomain& other) {
     num_bytes |= other.num_bytes;
-    cells_->merge_from(*other.cells_);
+    cells_.get_mutable().merge_from(*other.cells_);
 }
 
 void ArrayDomain::operator|=(ArrayDomain&& other) {
     num_bytes |= std::move(other.num_bytes);
-    cells_->merge_from(*other.cells_);
+    cells_.get_mutable().merge_from(*other.cells_);
 }
 
 // Lattice combinators build a fresh ArrayDomain whose cells map is the union of
@@ -710,29 +685,29 @@ void ArrayDomain::operator|=(ArrayDomain&& other) {
 // names so two domains independently tracking the same cell agree on its name.
 ArrayDomain ArrayDomain::operator|(const ArrayDomain& other) const {
     ArrayDomain res{num_bytes | other.num_bytes};
-    res.cells_->merge_from(*cells_);
-    res.cells_->merge_from(*other.cells_);
+    res.cells_.get_mutable().merge_from(*cells_);
+    res.cells_.get_mutable().merge_from(*other.cells_);
     return res;
 }
 
 ArrayDomain ArrayDomain::operator&(const ArrayDomain& other) const {
     ArrayDomain res{num_bytes & other.num_bytes};
-    res.cells_->merge_from(*cells_);
-    res.cells_->merge_from(*other.cells_);
+    res.cells_.get_mutable().merge_from(*cells_);
+    res.cells_.get_mutable().merge_from(*other.cells_);
     return res;
 }
 
 ArrayDomain ArrayDomain::widen(const ArrayDomain& other) const {
     ArrayDomain res{num_bytes | other.num_bytes};
-    res.cells_->merge_from(*cells_);
-    res.cells_->merge_from(*other.cells_);
+    res.cells_.get_mutable().merge_from(*cells_);
+    res.cells_.get_mutable().merge_from(*other.cells_);
     return res;
 }
 
 ArrayDomain ArrayDomain::narrow(const ArrayDomain& other) const {
     ArrayDomain res{num_bytes & other.num_bytes};
-    res.cells_->merge_from(*cells_);
-    res.cells_->merge_from(*other.cells_);
+    res.cells_.get_mutable().merge_from(*cells_);
+    res.cells_.get_mutable().merge_from(*other.cells_);
     return res;
 }
 

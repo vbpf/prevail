@@ -29,28 +29,21 @@
 #include "arith/variable.hpp"
 #include "crab/add_bottom.hpp"
 #include "crab/bitset_domain.hpp"
+#include "crab/cow.hpp"
 #include "crab/type_domain.hpp"
 
 namespace prevail {
 
 /// Stack-cell tracking state — kept opaque via pImpl so callers don't depend on
-/// the offset-map / cell-set internals. Owned by `ArrayDomain` (per-domain); each
-/// instance maps `DataKind → cells at (offset, size)`. The registry exists so
+/// the offset-map / cell-set internals. Shared (COW) across `ArrayDomain` copies;
+/// each instance maps `DataKind -> cells at (offset, size)`. The registry exists so
 /// `ArrayDomain` can deduplicate `mk_cell` calls and answer overlap queries.
 class StackCellRegistry;
-struct StackCellRegistryDeleter {
-    void operator()(StackCellRegistry*) const noexcept;
-};
-using StackCellRegistryPtr = std::unique_ptr<StackCellRegistry, StackCellRegistryDeleter>;
-StackCellRegistryPtr make_stack_cell_registry();
-StackCellRegistryPtr clone_stack_cell_registry(const StackCellRegistry& registry);
+std::shared_ptr<StackCellRegistry> make_stack_cell_registry();
 
 class ArrayDomain final {
     BitsetDomain num_bytes;
-    /// Per-domain stack-cell registry. Joining two ArrayDomains unions their cell
-    /// sets; underlying Variable names are interned globally by (kind, offset, size)
-    /// so two domains independently tracking the same cell agree on its name.
-    StackCellRegistryPtr cells_;
+    Cow<StackCellRegistry> cells_;
 
   public:
     // Top at the requested size.
@@ -62,15 +55,11 @@ class ArrayDomain final {
     }
 
     explicit ArrayDomain(const BitsetDomain& num_bytes) : num_bytes(num_bytes), cells_(make_stack_cell_registry()) {}
-    ArrayDomain(const ArrayDomain& other);
-    // Move operations leave the source with a valid non-null cells_ (an empty
-    // registry for move-construct; the destination's prior cells for move-assign).
-    // The invariant "cells_ is never null" holds for all accessible instances,
-    // including moved-from ones — so callers that re-touch a moved-from ArrayDomain
-    // by copy or merge stay sound.
-    ArrayDomain(ArrayDomain&& other) noexcept;
-    ArrayDomain& operator=(const ArrayDomain& other);
-    ArrayDomain& operator=(ArrayDomain&& other) noexcept;
+    ArrayDomain(const ArrayDomain& other) = default;
+    ArrayDomain(ArrayDomain&& other) noexcept = default;
+    ArrayDomain& operator=(const ArrayDomain& other) = default;
+    ArrayDomain& operator=(ArrayDomain&& other) noexcept = default;
+    ~ArrayDomain() = default;
 
     // ArrayDomain has no bottom of its own; bottom is represented externally
     // (EbpfDomain wraps the stack in std::optional).
