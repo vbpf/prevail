@@ -118,14 +118,11 @@ static EbpfProgramType make_program_type(const string& name, const ebpf_ctx_desc
 
 // Parse a textual invariant and lift it to an EbpfDomain. The shared parsing core
 // used by both the entry-domain and observation-domain bridges below.
-static EbpfDomain parse_string_invariant_to_domain(const StringInvariant& inv, const bool setup_constraints,
-                                                   const AnalysisContext& context) {
+static EbpfDomain parse_string_invariant_to_domain(const StringInvariant& inv, const AnalysisContext& context) {
     if (inv.is_bottom()) {
         return EbpfDomain::bottom();
     }
-    std::vector<Interval> numeric_ranges;
-    const TypeValueConstraints parsed = parse_linear_constraints(inv.value(), numeric_ranges);
-    return EbpfDomain::from_constraints(parsed, numeric_ranges, setup_constraints, context);
+    return EbpfDomain::from_constraints(parse_linear_constraints(inv.value()), context);
 }
 
 // Bridge for entry-domain construction. Test-only path that previously lived in
@@ -136,18 +133,16 @@ static EbpfDomain parse_string_invariant_to_domain(const StringInvariant& inv, c
 // memory low between test cases (relevant for callers like run_conformance_test_case
 // that don't wrap with ThreadLocalGuard). It does NOT touch ArrayDomain cells; those
 // live in AnalysisContext::cells() and are scoped to the per-test context.
-static EbpfDomain string_invariant_to_entry_domain(const StringInvariant& inv, const bool setup_constraints,
-                                                   const AnalysisContext& context) {
+static EbpfDomain string_invariant_to_entry_domain(const StringInvariant& inv, const AnalysisContext& context) {
     ebpf_verifier_clear_thread_local_state();
-    return parse_string_invariant_to_domain(inv, setup_constraints, context);
+    return parse_string_invariant_to_domain(inv, context);
 }
 
 // Bridge for observation-domain construction, called after analyze() has produced
 // invariants. No scratch clear needed: analysis is done, and the next entry build
 // will clear if it cares.
-static EbpfDomain string_invariant_to_observation_domain(const StringInvariant& inv, const bool setup_constraints,
-                                                         const AnalysisContext& context) {
-    return parse_string_invariant_to_domain(inv, setup_constraints, context);
+static EbpfDomain string_invariant_to_observation_domain(const StringInvariant& inv, const AnalysisContext& context) {
+    return parse_string_invariant_to_domain(inv, context);
 }
 
 static std::set<string> vector_to_set(const vector<string>& s) {
@@ -466,8 +461,7 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
     try {
         Program prog = Program::from_sequence(test_case.instruction_seq, info, test_case.options);
         const AnalysisContext context{std::move(prog), test_case.options};
-        const EbpfDomain entry = string_invariant_to_entry_domain(test_case.assumed_pre_invariant,
-                                                                  context.runtime().setup_constraints, context);
+        const EbpfDomain entry = string_invariant_to_entry_domain(test_case.assumed_pre_invariant, context);
         const AnalysisResult result = analyze(entry, context);
         const StringInvariant actual_last_invariant = result.invariant_at(Label::exit);
         std::set<string> actual_messages;
@@ -482,8 +476,7 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
 
         // Evaluate optional observation checks.
         for (const auto& obs : test_case.observations) {
-            const EbpfDomain observed =
-                string_invariant_to_observation_domain(obs.constraints, context.runtime().setup_constraints, context);
+            const EbpfDomain observed = string_invariant_to_observation_domain(obs.constraints, context);
             const ObservationCheckResult check =
                 result.check_observation_at_label(obs.label, obs.point, observed, obs.mode);
             if (!check.ok) {
@@ -618,8 +611,7 @@ ConformanceTestResult run_conformance_test_case(const std::vector<uint8_t>& memo
     try {
         Program prog = Program::from_sequence(inst_seq, info, options);
         const AnalysisContext context{std::move(prog), options};
-        const EbpfDomain entry =
-            string_invariant_to_entry_domain(pre_invariant, context.runtime().setup_constraints, context);
+        const EbpfDomain entry = string_invariant_to_entry_domain(pre_invariant, context);
         const AnalysisResult result = analyze(entry, context);
         return ConformanceTestResult{.success = !result.failed, .r0_value = result.exit_value};
     } catch (const std::exception& ex) {

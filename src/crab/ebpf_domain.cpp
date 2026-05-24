@@ -396,12 +396,11 @@ EbpfDomain EbpfDomain::from_constraints(const std::vector<std::pair<Variable, Ty
     return inv;
 }
 
-EbpfDomain EbpfDomain::from_constraints(const TypeValueConstraints& constraints,
-                                        const std::vector<Interval>& numeric_ranges, const bool setup_constraints,
-                                        const AnalysisContext& context) {
-    EbpfDomain inv = setup_constraints ? setup_entry(false, context)
-                                       : EbpfDomain{TypeToNumDomain::top(),
-                                                    ArrayDomain{to_unsigned(context.runtime().total_stack_size())}};
+EbpfDomain EbpfDomain::from_constraints(const ParsedConstraints& constraints, const AnalysisContext& context) {
+    EbpfDomain inv =
+        context.runtime().setup_constraints
+            ? setup_entry(false, context)
+            : EbpfDomain{TypeToNumDomain::top(), ArrayDomain{to_unsigned(context.runtime().total_stack_size())}};
     for (const auto& [v1, v2] : constraints.type_equalities) {
         inv.assume_eq_types(v1, v2);
     }
@@ -414,7 +413,7 @@ EbpfDomain EbpfDomain::from_constraints(const TypeValueConstraints& constraints,
     if (inv.is_bottom()) {
         return inv;
     }
-    for (const Interval& range : numeric_ranges) {
+    for (const Interval& range : constraints.numeric_ranges) {
         const auto [start, ub] = range.pair<int64_t>();
         const int width = gsl::narrow<int>(1 + (ub - start));
         inv.stack->initialize_numbers(context.cells(), gsl::narrow<int>(start), width);

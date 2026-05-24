@@ -346,13 +346,13 @@ static Variable special_var(const std::string& s) {
     throw RuntimeInputError(std::string() + "Bad special variable: " + s);
 }
 
-TypeValueConstraints parse_linear_constraints(const std::set<std::string>& constraints,
-                                              std::vector<Interval>& numeric_ranges) {
+ParsedConstraints parse_linear_constraints(const std::set<std::string>& constraints) {
     using namespace dsl_syntax;
 
     std::vector<LinearConstraint> value_csts;
     std::vector<TypeEquality> type_equalities;
     std::vector<TypeSetRestriction> type_restrictions;
+    std::vector<Interval> numeric_ranges;
     for (const std::string& cst_text : constraints) {
         std::smatch m;
         if (regex_match(cst_text, m, regex(SPECIAL_VAR "=" IMM))) {
@@ -464,7 +464,7 @@ TypeValueConstraints parse_linear_constraints(const std::set<std::string>& const
             throw RuntimeInputError(std::string("Unknown constraint: ") + cst_text);
         }
     }
-    return {type_equalities, type_restrictions, value_csts};
+    return {std::move(type_equalities), std::move(type_restrictions), std::move(value_csts), std::move(numeric_ranges)};
 }
 
 } // namespace prevail
