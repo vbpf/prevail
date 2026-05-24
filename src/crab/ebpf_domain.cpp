@@ -416,7 +416,7 @@ EbpfDomain EbpfDomain::from_constraints(const ParsedConstraints& constraints, co
     for (const Interval& range : constraints.numeric_ranges) {
         const auto [start, ub] = range.pair<int64_t>();
         const int width = gsl::narrow<int>(1 + (ub - start));
-        inv.stack->initialize_numbers(context.cells(), gsl::narrow<int>(start), width);
+        inv.stack->initialize_numbers(gsl::narrow<int>(start), width);
     }
     // TODO: handle other stack type constraints
     return inv;

@@ -16,9 +16,8 @@
 
 namespace prevail {
 
-// The array-domain cell registry now lives in AnalysisContext, so it dies with the
-// context — no thread-local clear needed.  SplitDBM still uses a thread-local scratch
-// buffer for transient graph operations; clear it to keep peak memory down.
+// Resets the SplitDBM thread-local scratch buffer used for transient graph
+// operations. Call between analyses to keep peak memory down.
 void ebpf_verifier_clear_thread_local_state() { ZoneDomain::clear_thread_local_state(); }
 
 class InterleavedFwdFixpointIterator final {
@@ -27,9 +26,9 @@ class InterleavedFwdFixpointIterator final {
     const Cfg& _cfg;
     const Wto _wto;
     AnalysisResult& result;
-    /// Counter Variables for *this* program's loop heads. Computed once
-    /// from `_wto`. Used wherever we previously asked the registry "what
-    /// loop counters exist?" — that's analysis-specific, not registry data.
+    /// Counter Variables for *this* program's loop heads, computed once
+    /// from `_wto`. The set is analysis-specific, not derivable from the
+    /// global `variable_registry`.
     std::vector<Variable> _loop_counters;
 
     /// number of narrowing iterations. If the narrowing operator is
@@ -164,18 +163,10 @@ AnalysisResult analyze(const Program& prog, const VerifierOptions& options) {
 }
 
 AnalysisResult analyze(const AnalysisContext& context) {
-    // Reset the per-context cell registry so a reused context starts each run with
-    // an empty cell map. setup_entry() below allocates fresh cells into it.
-    clear_stack_cell_registry(context.cells());
     return InterleavedFwdFixpointIterator::run(context,
                                                EbpfDomain::setup_entry(context.runtime().setup_constraints, context));
 }
 
-// Caller-supplied entry overload.  Does NOT reset context.cells(): the entry
-// domain may already reference cells in this context's registry (e.g. when
-// built via EbpfDomain::from_constraints(..., context)), and resetting here
-// would orphan them.  Callers reusing an AnalysisContext across runs must
-// clear the registry before constructing the entry.
 AnalysisResult analyze(const EbpfDomain& entry_invariant, const AnalysisContext& context) {
     return InterleavedFwdFixpointIterator::run(context, entry_invariant);
 }
@@ -281,7 +272,9 @@ void InterleavedFwdFixpointIterator::operator()(const std::shared_ptr<WtoCycle>&
                 break;
             }
             invariant = refine(invariant, std::move(new_pre), iteration);
-            set_pre(head, std::move(invariant));
+            // Copy (not move): next iteration reads `invariant` again.
+            // Consider aliasing `invariant` to the map slot to elide this sync.
+            set_pre(head, invariant);
         }
     }
 }
