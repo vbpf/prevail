@@ -397,10 +397,7 @@ EbpfDomain EbpfDomain::from_constraints(const std::vector<std::pair<Variable, Ty
 }
 
 EbpfDomain EbpfDomain::from_constraints(const ParsedConstraints& constraints, const AnalysisContext& context) {
-    EbpfDomain inv =
-        context.runtime().setup_constraints
-            ? setup_entry(false, context)
-            : EbpfDomain{TypeToNumDomain::top(), ArrayDomain{to_unsigned(context.runtime().total_stack_size())}};
+    EbpfDomain inv{TypeToNumDomain::top(), ArrayDomain{to_unsigned(context.runtime().total_stack_size())}};
     for (const auto& [v1, v2] : constraints.type_equalities) {
         inv.assume_eq_types(v1, v2);
     }

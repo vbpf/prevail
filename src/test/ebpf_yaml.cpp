@@ -128,10 +128,18 @@ static EbpfDomain parse_string_invariant_to_domain(const StringInvariant& inv, c
 // Test-only bridge for entry-domain construction. Resets the SplitDBM
 // thread-local scratch buffer before parsing so peak memory stays bounded
 // across test cases that don't wrap with ThreadLocalGuard
-// (run_conformance_test_case is one such caller).
+// (run_conformance_test_case is one such caller). When
+// `setup_constraints` is on, composes the parsed invariant with
+// `setup_entry()` so the entry state carries the standard BPF entry
+// preconditions (r10 = stack pointer, etc.) on top of whatever the
+// test specified.
 static EbpfDomain string_invariant_to_entry_domain(const StringInvariant& inv, const AnalysisContext& context) {
     ebpf_verifier_clear_thread_local_state();
-    return parse_string_invariant_to_domain(inv, context);
+    EbpfDomain dom = parse_string_invariant_to_domain(inv, context);
+    if (context.runtime().setup_constraints && !dom.is_bottom()) {
+        dom = dom & EbpfDomain::setup_entry(false, context);
+    }
+    return dom;
 }
 
 // Test-only bridge for observation-domain construction, called after

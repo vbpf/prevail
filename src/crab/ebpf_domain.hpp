@@ -100,12 +100,13 @@ class EbpfDomain final {
     static EbpfDomain from_constraints(const std::vector<std::pair<Variable, TypeSet>>& type_restrictions,
                                        const std::vector<LinearConstraint>& value_constraints,
                                        size_t total_stack_size = RuntimeConfig{}.total_stack_size());
-    /// Construction from fully parsed constraints. Seeds with `setup_entry()` first
-    /// when `context.runtime().setup_constraints` is true (the standard BPF entry
-    /// preconditions: r10 stack pointer, etc.), otherwise starts blank; then layers
-    /// the parsed type equalities, type restrictions, value constraints, and stack
-    /// numeric ranges on top. String parsing is intentionally not part of this API;
-    /// callers parse upstream and pass the structured form here.
+    /// Construction from fully parsed constraints. Always seeds blank (top, with
+    /// a stack of the configured size), then layers the parsed type equalities,
+    /// type restrictions, value constraints, and stack numeric ranges on top.
+    /// Callers that want the BPF entry preconditions (r10 stack pointer, etc.)
+    /// compose `setup_entry()` explicitly — this keeps construction orthogonal
+    /// from entry-state seeding. String parsing is intentionally not part of
+    /// this API; callers parse upstream and pass the structured form here.
     static EbpfDomain from_constraints(const ParsedConstraints& constraints, const AnalysisContext& context);
     void initialize_packet(const AnalysisContext& context);
 
