@@ -54,9 +54,15 @@ class InterleavedFwdFixpointIterator final {
     void set_pre(const Label& label, EbpfDomain&& v) { result.invariants.at(label).pre = std::move(v); }
     void set_pre(const Label& label, const EbpfDomain& v) { result.invariants.at(label).pre = v; }
 
-    EbpfDomain get_pre(const Label& node) const { return result.invariants.at(node).pre; }
+    [[nodiscard]]
+    const EbpfDomain& get_pre(const Label& node) const {
+        return result.invariants.at(node).pre;
+    }
 
-    EbpfDomain get_post(const Label& node) const { return result.invariants.at(node).post; }
+    [[nodiscard]]
+    const EbpfDomain& get_post(const Label& node) const {
+        return result.invariants.at(node).post;
+    }
 
     void transform_to_post(const Label& label, EbpfDomain pre) {
         const auto& ins = _prog.instruction_at(label);

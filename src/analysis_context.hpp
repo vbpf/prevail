@@ -6,7 +6,6 @@
 #include <utility>
 
 #include "config.hpp"
-#include "crab/array_domain.hpp"
 #include "ir/program.hpp"
 #include "platform.hpp"
 #include "spec/type_descriptors.hpp"
