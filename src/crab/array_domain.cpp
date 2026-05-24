@@ -70,6 +70,7 @@ static Variable cell_var(const DataKind kind, const Cell& c) {
 // macro-level improvement while adding complexity or external dependencies.
 class offset_map_t final {
     friend class ArrayDomain;
+    friend class StackCellRegistry;
 
     using cell_set_t = std::set<Cell>;
 
@@ -206,26 +207,59 @@ std::vector<Cell> offset_map_t::get_overlap_cells(const offset_t o, const unsign
     return out;
 }
 
-// Per-analysis registry of the stack cells currently tracked, keyed by DataKind.
-// Owned by AnalysisContext; threaded into ArrayDomain methods that mutate or query
-// the cell set.
+// Per-domain registry of the stack cells `ArrayDomain` is currently tracking,
+// keyed by DataKind. Owned by `ArrayDomain`; copied/merged alongside the domain.
 class StackCellRegistry final {
     std::unordered_map<DataKind, offset_map_t> _maps;
 
   public:
     offset_map_t& get(const DataKind kind) { return _maps[kind]; }
-    void clear() { _maps.clear(); }
+
+    // Union `other` into `*this` so the resulting registry tracks every cell
+    // either side knew about. Idempotent insert: cells already present stay.
+    void merge_from(const StackCellRegistry& other) {
+        for (const auto& [kind, omap] : other._maps) {
+            offset_map_t& dst = _maps[kind];
+            for (const auto& [_off, cell_set] : omap._map) {
+                for (const Cell& c : cell_set) {
+                    dst.insert_cell(c);
+                }
+            }
+        }
+    }
 };
 
 void StackCellRegistryDeleter::operator()(StackCellRegistry* ptr) const noexcept { delete ptr; }
 
 StackCellRegistryPtr make_stack_cell_registry() { return StackCellRegistryPtr{new StackCellRegistry()}; }
 
-void clear_stack_cell_registry(StackCellRegistry& registry) { registry.clear(); }
+StackCellRegistryPtr clone_stack_cell_registry(const StackCellRegistry& registry) {
+    return StackCellRegistryPtr{new StackCellRegistry(registry)};
+}
 
-void ArrayDomain::initialize_numbers(StackCellRegistry& cells, const int lb, const int width) {
+ArrayDomain::ArrayDomain(const ArrayDomain& other)
+    : num_bytes(other.num_bytes), cells_(clone_stack_cell_registry(*other.cells_)) {}
+
+ArrayDomain::ArrayDomain(ArrayDomain&& other) noexcept
+    : num_bytes(std::move(other.num_bytes)), cells_(std::exchange(other.cells_, make_stack_cell_registry())) {}
+
+ArrayDomain& ArrayDomain::operator=(const ArrayDomain& other) {
+    if (this != &other) {
+        num_bytes = other.num_bytes;
+        cells_ = clone_stack_cell_registry(*other.cells_);
+    }
+    return *this;
+}
+
+ArrayDomain& ArrayDomain::operator=(ArrayDomain&& other) noexcept {
+    num_bytes = std::move(other.num_bytes);
+    std::swap(cells_, other.cells_);
+    return *this;
+}
+
+void ArrayDomain::initialize_numbers(const int lb, const int width) {
     num_bytes.reset(lb, width);
-    cells.get(DataKind::svalues).mk_cell(offset_t{gsl::narrow_cast<Index>(lb)}, width);
+    cells_->get(DataKind::svalues).mk_cell(offset_t{gsl::narrow_cast<Index>(lb)}, width);
 }
 
 std::ostream& operator<<(std::ostream& o, offset_map_t& m) {
@@ -248,18 +282,18 @@ std::ostream& operator<<(std::ostream& o, offset_map_t& m) {
 }
 
 // Create a new cell that is a subset of an existing cell.
-void ArrayDomain::split_cell(StackCellRegistry& cells, NumAbsDomain& inv, const DataKind kind,
-                             const int cell_start_index, const unsigned int len, const bool big_endian) {
+void ArrayDomain::split_cell(NumAbsDomain& inv, const DataKind kind, const int cell_start_index, const unsigned int len,
+                             const bool big_endian) {
     assert(kind == DataKind::svalues || kind == DataKind::uvalues);
 
     // Get the values from the indicated stack range.
     const std::optional<LinearExpression> svalue =
-        load(cells, inv, DataKind::svalues, Interval{cell_start_index}, len, big_endian);
+        load(inv, DataKind::svalues, Interval{cell_start_index}, len, big_endian);
     const std::optional<LinearExpression> uvalue =
-        load(cells, inv, DataKind::uvalues, Interval{cell_start_index}, len, big_endian);
+        load(inv, DataKind::uvalues, Interval{cell_start_index}, len, big_endian);
 
     // Create a new cell for that range.
-    offset_map_t& offset_map = cells.get(kind);
+    offset_map_t& offset_map = cells_->get(kind);
     const Cell new_cell = offset_map.mk_cell(offset_t{gsl::narrow_cast<Index>(cell_start_index)}, len);
     inv.assign(cell_var(DataKind::svalues, new_cell), svalue);
     inv.assign(cell_var(DataKind::uvalues, new_cell), uvalue);
@@ -267,10 +301,10 @@ void ArrayDomain::split_cell(StackCellRegistry& cells, NumAbsDomain& inv, const 
 
 // Prepare to havoc bytes in the middle of a cell by potentially splitting the cell if it is numeric,
 // into the part to the left of the havoced portion, and the part to the right of the havoced portion.
-void ArrayDomain::split_number_var(StackCellRegistry& cells, NumAbsDomain& inv, const DataKind kind, const Interval& ii,
-                                   const Interval& elem_size, const bool big_endian) const {
+void ArrayDomain::split_number_var(NumAbsDomain& inv, const DataKind kind, const Interval& ii,
+                                   const Interval& elem_size, const bool big_endian) {
     assert(kind == DataKind::svalues || kind == DataKind::uvalues);
-    offset_map_t& offset_map = cells.get(kind);
+    offset_map_t& offset_map = cells_->get(kind);
     const std::optional<Number> n = ii.singleton();
     if (!n) {
         // We can only split a singleton offset.
@@ -299,11 +333,11 @@ void ArrayDomain::split_number_var(StackCellRegistry& cells, NumAbsDomain& inv, 
         }
         if (gsl::narrow_cast<Index>(cell_start_index) < o) {
             // Use the bytes to the left of the specified range.
-            split_cell(cells, inv, kind, cell_start_index, gsl::narrow<unsigned int>(o - cell_start_index), big_endian);
+            split_cell(inv, kind, cell_start_index, gsl::narrow<unsigned int>(o - cell_start_index), big_endian);
         }
         if (o + size < cell_end_index + 1UL) {
             // Use the bytes to the right of the specified range.
-            split_cell(cells, inv, kind, gsl::narrow<int>(o + size),
+            split_cell(inv, kind, gsl::narrow<int>(o + size),
                        gsl::narrow<unsigned int>(cell_end_index - (o + size - 1)), big_endian);
         }
     }
@@ -419,11 +453,10 @@ std::optional<uint8_t> get_value_byte(const NumAbsDomain& inv, const offset_t o,
     return bytes[o % width];
 }
 
-std::optional<LinearExpression> ArrayDomain::load(StackCellRegistry& cells, const NumAbsDomain& inv,
-                                                  const DataKind kind, const Interval& i, const int width,
-                                                  const bool big_endian) {
+std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, const DataKind kind, const Interval& i,
+                                                  const int width, const bool big_endian) {
     if (const std::optional<Number> n = i.singleton()) {
-        offset_map_t& offset_map = cells.get(kind);
+        offset_map_t& offset_map = cells_->get(kind);
         const int64_t k = n->narrow<int64_t>();
         const offset_t o(k);
         const unsigned size = to_unsigned(width);
@@ -511,10 +544,9 @@ std::optional<LinearExpression> ArrayDomain::load(StackCellRegistry& cells, cons
     return {};
 }
 
-std::optional<LinearExpression> ArrayDomain::load_type(StackCellRegistry& cells, const Interval& i,
-                                                       const int width) const {
+std::optional<LinearExpression> ArrayDomain::load_type(const Interval& i, const int width) {
     if (const std::optional<Number> n = i.singleton()) {
-        offset_map_t& offset_map = cells.get(DataKind::types);
+        offset_map_t& offset_map = cells_->get(DataKind::types);
         const int64_t k = n->narrow<int64_t>();
         auto [only_num, only_non_num] = num_bytes.uniformity(k, width);
         if (only_num) {
@@ -564,31 +596,31 @@ std::optional<LinearExpression> ArrayDomain::load_type(StackCellRegistry& cells,
 // Any cells covering that range need to be removed, and any cells that only
 // partially cover that range can be split such that any non-covered portions become new cells.
 static std::optional<std::pair<offset_t, unsigned>>
-split_and_find_var(StackCellRegistry& cells, const ArrayDomain& array_domain, NumAbsDomain& inv, const DataKind kind,
+split_and_find_var(ArrayDomain& array_domain, StackCellRegistry& cells, NumAbsDomain& inv, const DataKind kind,
                    const Interval& idx, const Interval& elem_size, const bool big_endian) {
     if (kind == DataKind::svalues || kind == DataKind::uvalues) {
-        array_domain.split_number_var(cells, inv, kind, idx, elem_size, big_endian);
+        array_domain.split_number_var(inv, kind, idx, elem_size, big_endian);
     }
     return kill_and_find_var(cells, [&inv](const Variable v) { inv.havoc(v); }, kind, idx, elem_size);
 }
 
-std::optional<Variable> ArrayDomain::store(StackCellRegistry& cells, NumAbsDomain& inv, const DataKind kind,
-                                           const Interval& idx, const Interval& elem_size,
-                                           const bool big_endian) const {
-    if (auto maybe_cell = split_and_find_var(cells, *this, inv, kind, idx, elem_size, big_endian)) {
+std::optional<Variable> ArrayDomain::store(NumAbsDomain& inv, const DataKind kind, const Interval& idx,
+                                           const Interval& elem_size, const bool big_endian) {
+    if (auto maybe_cell = split_and_find_var(*this, *cells_, inv, kind, idx, elem_size, big_endian)) {
         // perform strong update
         auto [offset, size] = *maybe_cell;
-        const Cell c = cells.get(kind).mk_cell(offset, size);
+        const Cell c = cells_->get(kind).mk_cell(offset, size);
         Variable v = cell_var(kind, c);
         return v;
     }
     return {};
 }
 
-std::optional<Variable> ArrayDomain::store_type(StackCellRegistry& cells, TypeDomain& inv, const Interval& idx,
-                                                const Interval& width, const bool is_num) {
+std::optional<Variable> ArrayDomain::store_type(TypeDomain& inv, const Interval& idx, const Interval& width,
+                                                const bool is_num) {
     constexpr auto kind = DataKind::types;
-    if (auto maybe_cell = kill_and_find_var(cells, [&inv](const Variable v) { inv.havoc_type(v); }, kind, idx, width)) {
+    if (auto maybe_cell =
+            kill_and_find_var(*cells_, [&inv](const Variable v) { inv.havoc_type(v); }, kind, idx, width)) {
         // perform strong update
         auto [offset, size] = *maybe_cell;
         if (is_num) {
@@ -596,7 +628,7 @@ std::optional<Variable> ArrayDomain::store_type(StackCellRegistry& cells, TypeDo
         } else {
             num_bytes.havoc(offset, size);
         }
-        const Cell c = cells.get(kind).mk_cell(offset, size);
+        const Cell c = cells_->get(kind).mk_cell(offset, size);
         Variable v = cell_var(kind, c);
         return v;
     } else {
@@ -616,16 +648,15 @@ std::optional<Variable> ArrayDomain::store_type(StackCellRegistry& cells, TypeDo
     return {};
 }
 
-void ArrayDomain::havoc(StackCellRegistry& cells, NumAbsDomain& inv, const DataKind kind, const Interval& idx,
-                        const Interval& elem_size, const bool big_endian) const {
-    split_and_find_var(cells, *this, inv, kind, idx, elem_size, big_endian);
+void ArrayDomain::havoc(NumAbsDomain& inv, const DataKind kind, const Interval& idx, const Interval& elem_size,
+                        const bool big_endian) {
+    split_and_find_var(*this, *cells_, inv, kind, idx, elem_size, big_endian);
 }
 
-void ArrayDomain::havoc_type(StackCellRegistry& cells, TypeDomain& inv, const Interval& idx,
-                             const Interval& elem_size) {
+void ArrayDomain::havoc_type(TypeDomain& inv, const Interval& idx, const Interval& elem_size) {
     constexpr auto kind = DataKind::types;
     if (auto maybe_cell =
-            kill_and_find_var(cells, [&inv](const Variable v) { inv.havoc_type(v); }, kind, idx, elem_size)) {
+            kill_and_find_var(*cells_, [&inv](const Variable v) { inv.havoc_type(v); }, kind, idx, elem_size)) {
         auto [offset, size] = *maybe_cell;
         num_bytes.havoc(offset, size);
     }
@@ -662,17 +693,48 @@ bool ArrayDomain::operator<=(const ArrayDomain& other) const { return num_bytes 
 
 bool ArrayDomain::operator==(const ArrayDomain& other) const { return num_bytes == other.num_bytes; }
 
-void ArrayDomain::operator|=(const ArrayDomain& other) { num_bytes |= other.num_bytes; }
+void ArrayDomain::operator|=(const ArrayDomain& other) {
+    num_bytes |= other.num_bytes;
+    cells_->merge_from(*other.cells_);
+}
 
-void ArrayDomain::operator|=(ArrayDomain&& other) { num_bytes |= std::move(other.num_bytes); }
+void ArrayDomain::operator|=(ArrayDomain&& other) {
+    num_bytes |= std::move(other.num_bytes);
+    cells_->merge_from(*other.cells_);
+}
 
-ArrayDomain ArrayDomain::operator|(const ArrayDomain& other) const { return ArrayDomain(num_bytes | other.num_bytes); }
+// Lattice combinators build a fresh ArrayDomain whose cells map is the union of
+// both sides' cells. Cell membership is purely advisory (it enables overlap
+// detection and dedup of mk_cell calls); the underlying numeric domain's join
+// determines abstract values, and it operates on globally-interned Variable
+// names so two domains independently tracking the same cell agree on its name.
+ArrayDomain ArrayDomain::operator|(const ArrayDomain& other) const {
+    ArrayDomain res{num_bytes | other.num_bytes};
+    res.cells_->merge_from(*cells_);
+    res.cells_->merge_from(*other.cells_);
+    return res;
+}
 
-ArrayDomain ArrayDomain::operator&(const ArrayDomain& other) const { return ArrayDomain(num_bytes & other.num_bytes); }
+ArrayDomain ArrayDomain::operator&(const ArrayDomain& other) const {
+    ArrayDomain res{num_bytes & other.num_bytes};
+    res.cells_->merge_from(*cells_);
+    res.cells_->merge_from(*other.cells_);
+    return res;
+}
 
-ArrayDomain ArrayDomain::widen(const ArrayDomain& other) const { return ArrayDomain(num_bytes | other.num_bytes); }
+ArrayDomain ArrayDomain::widen(const ArrayDomain& other) const {
+    ArrayDomain res{num_bytes | other.num_bytes};
+    res.cells_->merge_from(*cells_);
+    res.cells_->merge_from(*other.cells_);
+    return res;
+}
 
-ArrayDomain ArrayDomain::narrow(const ArrayDomain& other) const { return ArrayDomain(num_bytes & other.num_bytes); }
+ArrayDomain ArrayDomain::narrow(const ArrayDomain& other) const {
+    ArrayDomain res{num_bytes & other.num_bytes};
+    res.cells_->merge_from(*cells_);
+    res.cells_->merge_from(*other.cells_);
+    return res;
+}
 
 std::ostream& operator<<(std::ostream& o, const ArrayDomain& dom) { return o << dom.num_bytes; }
 } // namespace prevail

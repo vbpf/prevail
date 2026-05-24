@@ -125,22 +125,18 @@ static EbpfDomain parse_string_invariant_to_domain(const StringInvariant& inv, c
     return EbpfDomain::from_constraints(parse_linear_constraints(inv.value()), context);
 }
 
-// Bridge for entry-domain construction. Test-only path that previously lived in
-// EbpfDomain::from_constraints(set<string>).
-//
-// ebpf_verifier_clear_thread_local_state() resets ZoneDomain::SplitDBM::scratch_ — a
-// transient cross-run buffer. Doing it at the start of an entry build keeps peak
-// memory low between test cases (relevant for callers like run_conformance_test_case
-// that don't wrap with ThreadLocalGuard). It does NOT touch ArrayDomain cells; those
-// live in AnalysisContext::cells() and are scoped to the per-test context.
+// Test-only bridge for entry-domain construction. Resets the SplitDBM
+// thread-local scratch buffer before parsing so peak memory stays bounded
+// across test cases that don't wrap with ThreadLocalGuard
+// (run_conformance_test_case is one such caller).
 static EbpfDomain string_invariant_to_entry_domain(const StringInvariant& inv, const AnalysisContext& context) {
     ebpf_verifier_clear_thread_local_state();
     return parse_string_invariant_to_domain(inv, context);
 }
 
-// Bridge for observation-domain construction, called after analyze() has produced
-// invariants. No scratch clear needed: analysis is done, and the next entry build
-// will clear if it cares.
+// Test-only bridge for observation-domain construction, called after
+// analyze() has produced invariants. Skips the scratch reset because
+// analysis is done and the next entry build will reset if it cares.
 static EbpfDomain string_invariant_to_observation_domain(const StringInvariant& inv, const AnalysisContext& context) {
     return parse_string_invariant_to_domain(inv, context);
 }

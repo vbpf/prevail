@@ -33,36 +33,44 @@
 
 namespace prevail {
 
-/// Per-analysis registry of the stack cells the analysis is currently tracking, keyed
-/// by DataKind. Owned by AnalysisContext; shared by reference across all ArrayDomain
-/// instances belonging to one analysis run. Each entry corresponds to a cell variable
-/// at a (offset, size); the registry exists so ArrayDomain can deduplicate `mk_cell`
-/// calls and answer overlap queries.
+/// Stack-cell tracking state — kept opaque via pImpl so callers don't depend on
+/// the offset-map / cell-set internals. Owned by `ArrayDomain` (per-domain); each
+/// instance maps `DataKind → cells at (offset, size)`. The registry exists so
+/// `ArrayDomain` can deduplicate `mk_cell` calls and answer overlap queries.
 class StackCellRegistry;
 struct StackCellRegistryDeleter {
     void operator()(StackCellRegistry*) const noexcept;
 };
 using StackCellRegistryPtr = std::unique_ptr<StackCellRegistry, StackCellRegistryDeleter>;
 StackCellRegistryPtr make_stack_cell_registry();
-/// Drop all tracked cells. Call this when starting a fresh analysis run against
-/// a reused context so stale entries from a prior run don't leak into the new one.
-void clear_stack_cell_registry(StackCellRegistry& registry);
+StackCellRegistryPtr clone_stack_cell_registry(const StackCellRegistry& registry);
 
 class ArrayDomain final {
     BitsetDomain num_bytes;
+    /// Per-domain stack-cell registry. Joining two ArrayDomains unions their cell
+    /// sets; underlying Variable names are interned globally by (kind, offset, size)
+    /// so two domains independently tracking the same cell agree on its name.
+    StackCellRegistryPtr cells_;
 
   public:
     // Top at the requested size.
-    explicit ArrayDomain(const size_t stack_size) : num_bytes(BitsetDomain{stack_size}) {}
+    explicit ArrayDomain(size_t stack_size) : num_bytes(BitsetDomain{stack_size}), cells_(make_stack_cell_registry()) {}
 
     [[nodiscard]]
     int total_stack_size() const {
         return gsl::narrow<int>(num_bytes.size());
     }
 
-    // no move constructor to BitsetDomain, and therefore no copy-then-move for ArrayDomain
-    explicit ArrayDomain(const BitsetDomain& num_bytes) : num_bytes(num_bytes) {}
-    ArrayDomain(const ArrayDomain& arr) = default;
+    explicit ArrayDomain(const BitsetDomain& num_bytes) : num_bytes(num_bytes), cells_(make_stack_cell_registry()) {}
+    ArrayDomain(const ArrayDomain& other);
+    // Move operations leave the source with a valid non-null cells_ (an empty
+    // registry for move-construct; the destination's prior cells for move-assign).
+    // The invariant "cells_ is never null" holds for all accessible instances,
+    // including moved-from ones — so callers that re-touch a moved-from ArrayDomain
+    // by copy or merge stay sound.
+    ArrayDomain(ArrayDomain&& other) noexcept;
+    ArrayDomain& operator=(const ArrayDomain& other);
+    ArrayDomain& operator=(ArrayDomain&& other) noexcept;
 
     // ArrayDomain has no bottom of its own; bottom is represented externally
     // (EbpfDomain wraps the stack in std::optional).
@@ -93,26 +101,23 @@ class ArrayDomain final {
     int min_all_num_size(const NumAbsDomain& inv, Variable offset) const;
 
     [[nodiscard]]
-    static std::optional<LinearExpression> load(StackCellRegistry& cells, const NumAbsDomain& inv, DataKind kind,
-                                                const Interval& i, int width, bool big_endian);
-    std::optional<LinearExpression> load_type(StackCellRegistry& cells, const Interval& i, int width) const;
-    std::optional<Variable> store(StackCellRegistry& cells, NumAbsDomain& inv, DataKind kind, const Interval& idx,
-                                  const Interval& elem_size, bool big_endian) const;
-    std::optional<Variable> store_type(StackCellRegistry& cells, TypeDomain& inv, const Interval& idx,
-                                       const Interval& width, bool is_num);
-    void havoc(StackCellRegistry& cells, NumAbsDomain& inv, DataKind kind, const Interval& idx,
-               const Interval& elem_size, bool big_endian) const;
-    void havoc_type(StackCellRegistry& cells, TypeDomain& inv, const Interval& idx, const Interval& elem_size);
+    std::optional<LinearExpression> load(const NumAbsDomain& inv, DataKind kind, const Interval& i, int width,
+                                         bool big_endian);
+    std::optional<LinearExpression> load_type(const Interval& i, int width);
+    std::optional<Variable> store(NumAbsDomain& inv, DataKind kind, const Interval& idx, const Interval& elem_size,
+                                  bool big_endian);
+    std::optional<Variable> store_type(TypeDomain& inv, const Interval& idx, const Interval& width, bool is_num);
+    void havoc(NumAbsDomain& inv, DataKind kind, const Interval& idx, const Interval& elem_size, bool big_endian);
+    void havoc_type(TypeDomain& inv, const Interval& idx, const Interval& elem_size);
 
     // Perform array stores over an array segment
     void store_numbers(const Interval& _idx, const Interval& _width);
 
-    void split_number_var(StackCellRegistry& cells, NumAbsDomain& inv, DataKind kind, const Interval& ii,
-                          const Interval& elem_size, bool big_endian) const;
-    static void split_cell(StackCellRegistry& cells, NumAbsDomain& inv, DataKind kind, int cell_start_index,
-                           unsigned int len, bool big_endian);
+    void split_number_var(NumAbsDomain& inv, DataKind kind, const Interval& ii, const Interval& elem_size,
+                          bool big_endian);
+    void split_cell(NumAbsDomain& inv, DataKind kind, int cell_start_index, unsigned int len, bool big_endian);
 
-    void initialize_numbers(StackCellRegistry& cells, int lb, int width);
+    void initialize_numbers(int lb, int width);
 };
 
 } // namespace prevail

@@ -201,10 +201,9 @@ void EbpfTransformer::havoc_subprogram_stack(const std::string& prefix) {
     }
     const auto frame_size = context.runtime().subprogram_stack_size;
     const int64_t stack_start = intv.singleton()->cast_to<int64_t>() - frame_size;
-    stack.havoc_type(context.cells(), dom.state.types, Interval{stack_start}, Interval{frame_size});
+    stack.havoc_type(dom.state.types, Interval{stack_start}, Interval{frame_size});
     for (const DataKind kind : iterate_kinds()) {
-        stack.havoc(context.cells(), dom.state.values, kind, Interval{stack_start}, Interval{frame_size},
-                    context.runtime().big_endian);
+        stack.havoc(dom.state.values, kind, Interval{stack_start}, Interval{frame_size}, context.runtime().big_endian);
     }
 }
 
@@ -453,7 +452,7 @@ void EbpfTransformer::do_load_stack(TypeToNumDomain& state, const Reg& target_re
     if (state.values.entail(width <= reg_pack(src_reg).stack_numeric_size)) {
         state.assign_type(target_reg, T_NUM);
     } else {
-        state.assign_type(target_reg, stack.load_type(context.cells(), addr, width));
+        state.assign_type(target_reg, stack.load_type(addr, width));
         if (!state.is_initialized(target_reg)) {
             // We don't know what we loaded, so just havoc the destination register.
             state.havoc_register(target_reg);
@@ -467,16 +466,16 @@ void EbpfTransformer::do_load_stack(TypeToNumDomain& state, const Reg& target_re
         // addr from that same register.
         const bool big_endian = context.runtime().big_endian;
         const std::optional<LinearExpression> sresult =
-            stack.load(context.cells(), state.values, DataKind::svalues, addr, width, big_endian);
+            stack.load(state.values, DataKind::svalues, addr, width, big_endian);
         const std::optional<LinearExpression> uresult =
-            stack.load(context.cells(), state.values, DataKind::uvalues, addr, width, big_endian);
+            stack.load(state.values, DataKind::uvalues, addr, width, big_endian);
         state.havoc_register_except_type(target_reg);
         state.values.assign(target.svalue, sresult);
         state.values.assign(target.uvalue, uresult);
         for (const TypeEncoding type : state.iterate_types(target_reg)) {
             for (const auto& kind : type_to_kinds.at(type)) {
                 const Variable dst_var = variable_registry.reg(kind, target_reg.v);
-                state.values.assign(dst_var, stack.load(context.cells(), state.values, kind, addr, width, big_endian));
+                state.values.assign(dst_var, stack.load(state.values, kind, addr, width, big_endian));
             }
         }
     } else {
@@ -629,60 +628,55 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& state, const LinearExpress
     const Interval width{exact_width};
     const bool big_endian = context.runtime().big_endian;
     // no aliasing of val - we don't move from stack to stack, so we can just havoc first
-    stack.havoc_type(context.cells(), state.types, addr, width);
+    stack.havoc_type(state.types, addr, width);
     for (const DataKind kind : iterate_kinds()) {
         if (kind == DataKind::svalues || kind == DataKind::uvalues) {
             continue;
         }
-        stack.havoc(context.cells(), state.values, kind, addr, width, context.runtime().big_endian);
+        stack.havoc(state.values, kind, addr, width, context.runtime().big_endian);
     }
     bool must_be_num = false;
     if (opt_val_reg && !state.is_initialized(*opt_val_reg)) {
-        stack.havoc(context.cells(), state.values, DataKind::svalues, addr, width, big_endian);
-        stack.havoc(context.cells(), state.values, DataKind::uvalues, addr, width, big_endian);
+        stack.havoc(state.values, DataKind::svalues, addr, width, big_endian);
+        stack.havoc(state.values, DataKind::uvalues, addr, width, big_endian);
     } else {
         // opt_val_reg is unset when storing an immediate value.
         must_be_num = !opt_val_reg || state.is_in_group(*opt_val_reg, TS_NUM);
         const LinearExpression val_type =
             must_be_num ? LinearExpression{T_NUM} : variable_registry.type_reg(opt_val_reg->v);
-        state.assign_type(stack.store_type(context.cells(), state.types, addr, width, must_be_num), val_type);
+        state.assign_type(stack.store_type(state.types, addr, width, must_be_num), val_type);
 
         if (exact_width == 8) {
-            stack.havoc(context.cells(), state.values, DataKind::svalues, addr, width, big_endian);
-            stack.havoc(context.cells(), state.values, DataKind::uvalues, addr, width, big_endian);
-            state.values.assign(stack.store(context.cells(), state.values, DataKind::svalues, addr, width, big_endian),
-                                val_svalue);
-            state.values.assign(stack.store(context.cells(), state.values, DataKind::uvalues, addr, width, big_endian),
-                                val_uvalue);
+            stack.havoc(state.values, DataKind::svalues, addr, width, big_endian);
+            stack.havoc(state.values, DataKind::uvalues, addr, width, big_endian);
+            state.values.assign(stack.store(state.values, DataKind::svalues, addr, width, big_endian), val_svalue);
+            state.values.assign(stack.store(state.values, DataKind::uvalues, addr, width, big_endian), val_uvalue);
 
             if (!must_be_num) {
                 for (TypeEncoding type : state.iterate_types(*opt_val_reg)) {
                     for (const DataKind kind : type_to_kinds.at(type)) {
                         const Variable src_var = variable_registry.reg(kind, opt_val_reg->v);
-                        state.values.assign(stack.store(context.cells(), state.values, kind, addr, width, big_endian),
-                                            src_var);
+                        state.values.assign(stack.store(state.values, kind, addr, width, big_endian), src_var);
                     }
                 }
             }
         } else if ((exact_width == 1 || exact_width == 2 || exact_width == 4) && must_be_num) {
             // Keep track of numbers on the stack that might be used as array indices.
-            if (const auto stack_svalue =
-                    stack.store(context.cells(), state.values, DataKind::svalues, addr, width, big_endian)) {
+            if (const auto stack_svalue = stack.store(state.values, DataKind::svalues, addr, width, big_endian)) {
                 state.values.assign(stack_svalue, val_svalue);
                 state.values->overflow_bounds(*stack_svalue, exact_width * 8, true);
             } else {
-                stack.havoc(context.cells(), state.values, DataKind::svalues, addr, width, big_endian);
+                stack.havoc(state.values, DataKind::svalues, addr, width, big_endian);
             }
-            if (const auto stack_uvalue =
-                    stack.store(context.cells(), state.values, DataKind::uvalues, addr, width, big_endian)) {
+            if (const auto stack_uvalue = stack.store(state.values, DataKind::uvalues, addr, width, big_endian)) {
                 state.values.assign(stack_uvalue, val_uvalue);
                 state.values->overflow_bounds(*stack_uvalue, exact_width * 8, false);
             } else {
-                stack.havoc(context.cells(), state.values, DataKind::uvalues, addr, width, big_endian);
+                stack.havoc(state.values, DataKind::uvalues, addr, width, big_endian);
             }
         } else {
-            stack.havoc(context.cells(), state.values, DataKind::svalues, addr, width, big_endian);
-            stack.havoc(context.cells(), state.values, DataKind::uvalues, addr, width, big_endian);
+            stack.havoc(state.values, DataKind::svalues, addr, width, big_endian);
+            stack.havoc(state.values, DataKind::uvalues, addr, width, big_endian);
         }
     }
 
@@ -875,7 +869,7 @@ void EbpfTransformer::operator()(const Call& call) {
                     }
                     const Interval addr = state.values.eval_interval(*offset);
                     for (const DataKind kind : iterate_kinds()) {
-                        stack.havoc(context.cells(), state.values, kind, addr, w, context.runtime().big_endian);
+                        stack.havoc(state.values, kind, addr, w, context.runtime().big_endian);
                     }
                     // Keep this scoped to stack-typed pointers only.
                     stack.store_numbers(addr, w);
@@ -906,7 +900,7 @@ void EbpfTransformer::operator()(const Call& call) {
                     // Pointer to a memory region that the called function may change,
                     // so we must havoc.
                     for (const DataKind kind : iterate_kinds()) {
-                        stack.havoc(context.cells(), state.values, kind, addr, width, context.runtime().big_endian);
+                        stack.havoc(state.values, kind, addr, width, context.runtime().big_endian);
                     }
                 } else {
                     store_numbers = false;

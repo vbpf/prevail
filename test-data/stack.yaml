@@ -875,6 +875,8 @@ post:
   - r10.type=stack
   - r10.stack_offset=512
   - s[504...507].type=number
+  - s[504...507].svalue=r3.svalue
+  - s[504...507].uvalue=r3.uvalue
 ---
 # Regression test for backward scan early-break bug in get_overlap_cells.
 # See REGRESSION.md for details.

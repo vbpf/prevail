@@ -13,37 +13,26 @@
 
 namespace prevail {
 
-/// Bundle of per-analysis inputs: the `Program` being analysed and the
-/// options controlling it. Owned by value so the context is
-/// self-contained -- the Program cannot be moved out from under the
-/// analysis, and a context cannot outlive its Program.
+/// Bundle of analysis inputs: the `Program` being analysed and the options
+/// controlling it. Pure inputs — reusable across multiple `analyze()` calls,
+/// shareable by const ref, no mutable state. Owned by value so the context
+/// is self-contained and cannot outlive its Program.
 ///
 /// `program_info()` and `platform()` are accessors, not fields: both are
 /// reachable from `program`, so storing them as parallel references would
 /// let `context.program_info` disagree with `context.program.info()`.
 ///
-/// `VariableRegistry` is intentionally not here. The registry is a global
-/// name-interning service (like `malloc`), not per-analysis state: the
-/// same name always maps to the same id, so analyses can freely share one
-/// instance. Domain code reaches for the global `variable_registry`
-/// directly.
-///
-/// `cell_registry` IS per-analysis state: it tracks which symbolic stack
-/// cells the analysis is currently maintaining for ArrayDomain operations.
-/// It is mutated by load/store/havoc on the stack array, hence held by
-/// unique_ptr so that `const AnalysisContext&` still permits mutation of
-/// the pointee.
+/// Variable interning is handled by the global `variable_registry`: names
+/// are stable across processes and analyses, so there's no per-analysis
+/// registry to thread through here. Stack cells are owned per-`ArrayDomain`,
+/// keeping each `EbpfDomain` a self-contained value.
 struct AnalysisContext {
     Program program;
     VerifierOptions options;
-    StackCellRegistryPtr cell_registry;
 
-    AnalysisContext(Program p, VerifierOptions o)
-        : program(std::move(p)), options(std::move(o)), cell_registry(make_stack_cell_registry()) {}
+    AnalysisContext(Program p, VerifierOptions o) : program(std::move(p)), options(std::move(o)) {}
 
     const RuntimeConfig& runtime() const { return options.runtime; }
-
-    StackCellRegistry& cells() const { return *cell_registry; }
 
     const ProgramInfo& program_info() const { return program.info(); }
     const ebpf_platform_t& platform() const {
