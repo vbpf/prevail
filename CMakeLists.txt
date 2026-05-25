@@ -111,6 +111,7 @@ set(prevail_LIB_SRC
   src/crab/var_registry.cpp
   src/crab/zone_domain.cpp
   src/crab_utils/debug.cpp
+  src/crab/extrapolator.cpp
   src/fwd_analyzer.cpp
   src/io/elf_core_reloc.cpp
   src/io/elf_extern_resolve.cpp
