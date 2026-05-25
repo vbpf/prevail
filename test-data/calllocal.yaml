@@ -348,3 +348,104 @@ post:
   - s[1535].type=number
   - s[1535].svalue=1
   - s[1535].uvalue=1
+---
+test-case: call local inside bounded loop with callee-saved counter
+options: ["termination"]
+
+pre: []
+
+code:
+  <start>: |
+    r6 = 0
+  <loop>: |
+    call <helper>
+    r6 += 1
+    if r6 < 4 goto <loop>
+    r0 = r6
+    exit
+  <helper>: |
+    r0 = 42
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=4
+  - r0.uvalue=4
+  - r6.type=number
+  - r6.svalue=pc[1]
+  - r6.uvalue=pc[1]
+  - pc[1]=4
+
+messages: []
+---
+test-case: callee reads caller r6
+pre: []
+
+code:
+  <start>: |
+    r6 = 5
+    call <helper>
+    exit
+  <helper>: |
+    r0 = r6
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=5
+  - r0.uvalue=5
+  - r6.type=number
+  - r6.svalue=5
+  - r6.uvalue=5
+---
+test-case: call local preserves callee-saved values across call
+pre: [r6.type=number, r6.svalue=5, r6.uvalue=5, r7.type=number, r7.svalue=10, r7.uvalue=10]
+
+code:
+  <start>: |
+    call <helper>
+    r0 = r6
+    r0 += r7
+    exit
+  <helper>: |
+    r0 = 0
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=15
+  - r0.uvalue=15
+  - r6.type=number
+  - r6.svalue=5
+  - r6.uvalue=5
+  - r7.type=number
+  - r7.svalue=10
+  - r7.uvalue=10
+---
+test-case: call local preserves relational constraint on top-interval registers
+pre: [r6.type=number, r7.type=number]
+
+code:
+  <start>: |
+    assume r7 > r6
+    call <helper>
+    if r6 < r7 goto <ok>
+    exit
+  <ok>: |
+    r0 = 0
+    exit
+  <helper>: |
+    r0 = 0
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0
+  - r6.type=number
+  - r6.uvalue-r7.uvalue<=-1
+  - r7.type=number
+  - r7.uvalue=[0, +oo]
+
+messages:
+  - "2:3: Code becomes unreachable (assume r6 >= r7)"

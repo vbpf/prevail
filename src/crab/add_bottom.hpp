@@ -164,6 +164,12 @@ class AddBottom final {
         }
     }
 
+    void rename(const std::vector<std::pair<Variable, Variable>>& renaming) {
+        if (dom) {
+            dom->rename(renaming);
+        }
+    }
+
     void add_constraint(const LinearConstraint& cst) {
         if (dom) {
             if (!dom->add_constraint(cst)) {

@@ -672,6 +672,30 @@ void ZoneDomain::forget(const VariableVector& variables) {
     normalize();
 }
 
+void ZoneDomain::rename(const std::vector<std::pair<Variable, Variable>>& renaming) {
+    assert(std::ranges::none_of(renaming, [&](const auto& pair) {
+        return std::ranges::any_of(renaming, [&](const auto& other) { return other.first == pair.second; });
+    }));
+    bool forgot_destination = false;
+    for (const auto& [from, to] : renaming) {
+        if (const auto it = vert_map_.find(from); it != vert_map_.end()) {
+            const auto vert = it->second;
+            vert_map_.erase(it);
+            if (const auto dest = vert_map_.find(to); dest != vert_map_.end()) {
+                core_->forget(dest->second);
+                rev_map_[dest->second] = std::nullopt;
+                vert_map_.erase(dest);
+                forgot_destination = true;
+            }
+            vert_map_.emplace(to, vert);
+            rev_map_[vert] = to;
+        }
+    }
+    if (forgot_destination) {
+        normalize();
+    }
+}
+
 static std::string to_string(const Variable vd, const Variable vs, const Weight& w, const bool eq) {
     std::stringstream elem;
     if (eq) {

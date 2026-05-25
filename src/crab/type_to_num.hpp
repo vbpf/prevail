@@ -251,6 +251,11 @@ struct TypeToNumDomain {
 
     void havoc_register(const Reg& reg);
 
+    void rename(const std::vector<std::pair<Variable, Variable>>& renaming) {
+        types.rename(renaming);
+        values.rename(renaming);
+    }
+
     [[nodiscard]]
     TypeToNumDomain widen(const TypeToNumDomain& other) const;
 

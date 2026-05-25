@@ -842,6 +842,12 @@ void TypeDomain::havoc_type(const Variable& v) {
     }
 }
 
+void TypeDomain::rename(const std::vector<std::pair<Variable, Variable>>& renaming) {
+    if (auto* s = state_.get()) {
+        s->var_ids.rename(renaming);
+    }
+}
+
 std::vector<Variable> TypeDomain::variables() const {
     if (!state_) {
         return {};

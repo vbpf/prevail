@@ -99,6 +99,8 @@ class TypeDomain {
     void havoc_type(const Reg& r);
     void havoc_type(const Variable& v);
 
+    void rename(const std::vector<std::pair<Variable, Variable>>& renaming);
+
     // Query methods
     [[nodiscard]]
     std::vector<TypeEncoding> iterate_types(const Reg& reg) const;

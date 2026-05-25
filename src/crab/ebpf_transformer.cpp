@@ -142,11 +142,18 @@ void EbpfTransformer::scratch_caller_saved_registers() {
     }
 }
 
-/// Create variables specific to the new call stack frame that store
-/// copies of the states of r6 through r9.
+static std::vector<std::pair<Variable, Variable>> callee_saved_renaming(const std::string& prefix) {
+    std::vector<std::pair<Variable, Variable>> pairs;
+    for (const uint8_t r : {R6, R7, R8, R9}) {
+        for (const DataKind kind : iterate_kinds(KIND_MIN, KIND_MAX)) {
+            pairs.emplace_back(kind == DataKind::types ? variable_registry.type_reg(r) : variable_registry.reg(kind, r),
+                               variable_registry.stack_frame_var(kind, r, prefix));
+        }
+    }
+    return pairs;
+}
+
 void EbpfTransformer::save_callee_saved_registers(const std::string& prefix) {
-    // TODO: define location `stack_frame_var`, and pass to dom.state.assign().
-    //       Similarly in restore_callee_saved_registers
     for (const Reg r : {Reg{R6}, Reg{R7}, Reg{R8}, Reg{R9}}) {
         if (dom.state.is_initialized(r)) {
             const Variable type_var = variable_registry.type_reg(r.v);
@@ -158,9 +165,7 @@ void EbpfTransformer::save_callee_saved_registers(const std::string& prefix) {
                 for (const DataKind kind : kinds) {
                     const Variable src_var = variable_registry.reg(kind, r.v);
                     const Variable dst_var = variable_registry.stack_frame_var(kind, r.v, prefix);
-                    if (!dom.state.values.eval_interval(src_var).is_top()) {
-                        dom.state.values.assign(dst_var, src_var);
-                    }
+                    dom.state.values.assign(dst_var, src_var);
                 }
             }
         }
@@ -168,29 +173,17 @@ void EbpfTransformer::save_callee_saved_registers(const std::string& prefix) {
 }
 
 void EbpfTransformer::restore_callee_saved_registers(const std::string& prefix) {
-    for (uint8_t r = R6; r <= R9; r++) {
-        Reg reg{r};
-        const Variable type_var = variable_registry.stack_frame_var(DataKind::types, r, prefix);
-        if (dom.state.is_initialized(type_var)) {
-            dom.state.assign_type(reg, type_var);
-            for (const TypeEncoding type : dom.state.iterate_types(reg)) {
-                auto kinds = type_to_kinds.at(type);
-                kinds.push_back(DataKind::uvalues);
-                kinds.push_back(DataKind::svalues);
-                for (const DataKind kind : kinds) {
-                    const Variable src_var = variable_registry.stack_frame_var(kind, r, prefix);
-                    const Variable dst_var = variable_registry.reg(kind, r);
-                    if (!dom.state.values.eval_interval(src_var).is_top()) {
-                        dom.state.values.assign(dst_var, src_var);
-                    } else {
-                        dom.state.values.havoc(dst_var);
-                    }
-                    dom.state.values.havoc(src_var);
-                }
-            }
-        }
-        dom.state.havoc_type(type_var);
+    // Havoc any callee-created r6-r9 variables before restoring the saved ones.
+    for (const uint8_t r : {R6, R7, R8, R9}) {
+        dom.state.havoc_register(Reg{r});
     }
+    const auto pairs = callee_saved_renaming(prefix);
+    std::vector<std::pair<Variable, Variable>> reverse_pairs;
+    reverse_pairs.reserve(pairs.size());
+    for (const auto& [reg_var, frame_var] : pairs) {
+        reverse_pairs.emplace_back(frame_var, reg_var);
+    }
+    dom.state.rename(reverse_pairs);
 }
 
 void EbpfTransformer::havoc_subprogram_stack(const std::string& prefix) {
