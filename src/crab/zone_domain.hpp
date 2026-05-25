@@ -200,6 +200,8 @@ class ZoneDomain final {
 
     void forget(const VariableVector& variables);
 
+    void rename(const std::vector<std::pair<Variable, Variable>>& renaming);
+
     // return number of vertices and edges
     [[nodiscard]]
     std::pair<std::size_t, std::size_t> size() const;

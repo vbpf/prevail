@@ -82,6 +82,25 @@ class VarIdMap {
         return id_to_var_.size();
     }
 
+    /// Rename variables in-place. The underlying IDs and their relationships
+    /// are unchanged — only the Variable labels are swapped.
+    /// Precondition: no destination is also a source in the same batch.
+    void rename(const std::vector<std::pair<Variable, Variable>>& renaming) {
+        for (const auto& [from, to] : renaming) {
+            if (const auto it = var_to_id_.find(from); it != var_to_id_.end()) {
+                const size_t id = it->second;
+                var_to_id_.erase(it);
+                // Orphan any existing mapping for `to` to preserve the bijection.
+                if (const auto dest = var_to_id_.find(to); dest != var_to_id_.end()) {
+                    id_to_var_[dest->second] = std::nullopt;
+                    var_to_id_.erase(dest);
+                }
+                var_to_id_[to] = id;
+                id_to_var_[id] = to;
+            }
+        }
+    }
+
     /// Iterate over all live (Variable, ID) pairs.
     [[nodiscard]]
     const std::map<Variable, size_t>& vars() const {

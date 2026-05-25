@@ -162,6 +162,8 @@ class FiniteDomain {
     /// Forget everything we know about the value of a variable.
     void havoc(const Variable v) { dom.havoc(v); }
 
+    void rename(const std::vector<std::pair<Variable, Variable>>& renaming) { dom.rename(renaming); }
+
     [[nodiscard]]
     std::pair<std::size_t, std::size_t> size() const {
         return dom.size();
