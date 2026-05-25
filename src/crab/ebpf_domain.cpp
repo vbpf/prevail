@@ -186,22 +186,14 @@ EbpfDomain EbpfDomain::calculate_constant_limits(const AnalysisContext& context,
     return inv;
 }
 
-EbpfDomain EbpfDomain::widen(const EbpfDomain& other, const bool to_constants, const AnalysisContext& context,
-                             const std::span<const Variable> loop_counters) const {
+EbpfDomain EbpfDomain::widen(const EbpfDomain& other) const {
     if (is_bottom()) {
         return other;
     }
     if (other.is_bottom()) {
         return *this;
     }
-    EbpfDomain res{this->state.widen(other.state), stack->widen(*other.stack)};
-
-    if (to_constants) {
-        // Clamping via intersection is sound because it only tightens
-        // constraints element-wise, preserving the over-approximation.
-        return res & calculate_constant_limits(context, loop_counters);
-    }
-    return res;
+    return EbpfDomain{this->state.widen(other.state), stack->widen(*other.stack)};
 }
 
 EbpfDomain EbpfDomain::narrow(const EbpfDomain& other) const {

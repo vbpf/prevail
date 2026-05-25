@@ -10,6 +10,7 @@
 #include "cfg/wto.hpp"
 #include "config.hpp"
 #include "crab/ebpf_domain.hpp"
+#include "crab/extrapolator.hpp"
 #include "ir/program.hpp"
 #include "result.hpp"
 #include "verifier.hpp"
@@ -26,17 +27,7 @@ class InterleavedFwdFixpointIterator final {
     const Cfg& _cfg;
     const Wto _wto;
     AnalysisResult& result;
-    /// Counter Variables for *this* program's loop heads, computed once
-    /// from `_wto`. The set is analysis-specific, not derivable from the
-    /// global `variable_registry`.
-    std::vector<Variable> _loop_counters;
-
-    /// number of narrowing iterations. If the narrowing operator is
-    /// indeed a narrowing operator this parameter is not
-    /// needed. However, there are abstract domains for which an actual
-    /// narrowing operation is not available so we must enforce
-    /// termination.
-    static constexpr unsigned int _descending_iterations = 2000000;
+    Extrapolator _extrapolator;
 
     /// Used to skip the analysis until _entry is found
     bool _skip{true};
@@ -67,13 +58,6 @@ class InterleavedFwdFixpointIterator final {
     void transform_to_post(const Label& label, EbpfDomain pre) {
         const auto& ins = _prog.instruction_at(label);
 
-        // Dependency extraction intentionally runs on the pre-state *before*
-        // ebpf_domain_transform mutates it, because extract_instruction_deps
-        // needs the unmodified domain to resolve stack offsets.  We use .at()
-        // (result.invariants.at(label).deps) because the entry was already
-        // created during initialization.  This must also run before assertion
-        // checks so that failing instructions still have deps recorded —
-        // compute_failure_slices seeds its backward worklist from them.
         if (context.options.verbosity_opts.collect_instruction_deps) {
             result.invariants.at(label).deps = extract_instruction_deps(ins, pre, context.runtime().total_stack_size());
         }
@@ -83,7 +67,6 @@ class InterleavedFwdFixpointIterator final {
                 return;
             }
             for (const auto& assertion : _prog.assertions_at(label)) {
-                // Avoid redundant errors.
                 if (auto error = ebpf_domain_check(pre, assertion, label, context)) {
                     set_error(label, std::move(*error));
                     return;
@@ -106,16 +89,20 @@ class InterleavedFwdFixpointIterator final {
         return res;
     }
 
+    static std::vector<Variable> collect_loop_counters(const Wto& wto, bool check_for_termination) {
+        std::vector<Variable> counters;
+        if (check_for_termination) {
+            wto.for_each_loop_head(
+                [&](const Label& label) { counters.push_back(variable_registry.loop_counter(to_string(label))); });
+        }
+        return counters;
+    }
+
     explicit InterleavedFwdFixpointIterator(const AnalysisContext& context, AnalysisResult& result)
         : context(context), _prog(context.program), _cfg(context.program.cfg()), _wto(context.program.cfg()),
-          result(result) {
+          result(result), _extrapolator(context, collect_loop_counters(_wto, context.runtime().check_for_termination)) {
         for (const auto& label : _cfg.labels()) {
             result.invariants.emplace(label, InvariantMapPair{EbpfDomain::bottom(), {}, EbpfDomain::bottom()});
-        }
-        if (context.runtime().check_for_termination) {
-            _wto.for_each_loop_head([&](const Label& label) {
-                _loop_counters.push_back(variable_registry.loop_counter(to_string(label)));
-            });
         }
     }
 
@@ -145,9 +132,8 @@ class InterleavedFwdFixpointIterator final {
 
     int max_loop_count() const {
         ExtendedNumber loop_count{0};
-        // Gather the upper bound of loop counts from post-invariants.
         for (const auto& inv_pair : std::views::values(result.invariants)) {
-            loop_count = std::max(loop_count, inv_pair.post.get_loop_count_upper_bound(_loop_counters));
+            loop_count = std::max(loop_count, inv_pair.post.get_loop_count_upper_bound(_extrapolator.loop_counters()));
         }
         const auto m = loop_count.number();
         if (m && m->fits<int32_t>()) {
@@ -169,9 +155,6 @@ AnalysisResult analyze(const Program& prog, const VerifierOptions& options) {
 }
 
 AnalysisResult analyze(const AnalysisContext& context) {
-    // Initialise r1 to the program's context pointer iff the program type
-    // declares a non-empty context descriptor. The verifier's `setup_constraints`
-    // option no longer gates this — it's a property of the program, not the run.
     const auto* ctx = context.program_info().type.ctx_descriptor;
     const bool init_r1 = ctx != nullptr && ctx->size > 0;
     return InterleavedFwdFixpointIterator::run(context, EbpfDomain::setup_entry(init_r1, context));
@@ -181,27 +164,7 @@ AnalysisResult analyze(const EbpfDomain& entry_invariant, const AnalysisContext&
     return InterleavedFwdFixpointIterator::run(context, entry_invariant);
 }
 
-static EbpfDomain extrapolate(const EbpfDomain& before, const EbpfDomain& after, const unsigned int iteration,
-                              const AnalysisContext& context, const std::span<const Variable> loop_counters) {
-    /// number of iterations until triggering widening
-    constexpr auto _widening_delay = 2;
-
-    if (iteration < _widening_delay) {
-        return before | after;
-    }
-    return before.widen(after, iteration == _widening_delay, context, loop_counters);
-}
-
-static EbpfDomain refine(const EbpfDomain& before, const EbpfDomain& after, const unsigned int iteration) {
-    if (iteration == 1) {
-        return before & after;
-    } else {
-        return before.narrow(after);
-    }
-}
-
 void InterleavedFwdFixpointIterator::operator()(const Label& node) {
-    /** decide whether skip vertex or not **/
     if (_skip && node == _cfg.entry_label()) {
         _skip = false;
     }
@@ -218,11 +181,8 @@ void InterleavedFwdFixpointIterator::operator()(const Label& node) {
 void InterleavedFwdFixpointIterator::operator()(const std::shared_ptr<WtoCycle>& cycle) {
     const Label head = cycle->head();
 
-    /** decide whether to skip cycle or not **/
     bool entry_in_this_cycle = false;
     if (_skip) {
-        // We only skip the analysis of cycle if entry_label is not a
-        // component of it, included nested components.
         entry_in_this_cycle = is_component_member(_cfg.entry_label(), cycle);
         _skip = !entry_in_this_cycle;
         if (_skip) {
@@ -230,20 +190,21 @@ void InterleavedFwdFixpointIterator::operator()(const std::shared_ptr<WtoCycle>&
         }
     }
 
-    EbpfDomain invariant = EbpfDomain::bottom();
-    if (entry_in_this_cycle) {
-        invariant = get_pre(_cfg.entry_label());
-    } else {
+    const auto initial_head_state = [&]() -> EbpfDomain {
+        if (entry_in_this_cycle) {
+            return get_pre(_cfg.entry_label());
+        }
         const WtoNesting cycle_nesting = _wto.nesting(head);
+        EbpfDomain inv = EbpfDomain::bottom();
         for (const Label& prev : _cfg.parents_of(head)) {
             if (!(_wto.nesting(prev) > cycle_nesting)) {
-                invariant |= get_post(prev);
+                inv |= get_post(prev);
             }
         }
-    }
+        return inv;
+    };
 
-    for (unsigned int iteration = 1;; ++iteration) {
-        // Increasing iteration sequence with widening
+    const Extrapolator::Step propagate = [this, &head, &cycle](const EbpfDomain& invariant) {
         set_pre(head, invariant);
         transform_to_post(head, invariant);
         for (const auto& component : *cycle) {
@@ -252,52 +213,17 @@ void InterleavedFwdFixpointIterator::operator()(const std::shared_ptr<WtoCycle>&
                 std::visit(*this, component);
             }
         }
-        EbpfDomain new_pre = join_all_prevs(head);
-        if (new_pre <= invariant) {
-            // Post-fixpoint reached
-            set_pre(head, new_pre);
-            invariant = std::move(new_pre);
-            break;
-        } else {
-            invariant = extrapolate(invariant, new_pre, iteration, context, _loop_counters);
-        }
-    }
+        return join_all_prevs(head);
+    };
 
-    for (unsigned int iteration = 1;; ++iteration) {
-        // Decreasing iteration sequence with narrowing
-        transform_to_post(head, invariant);
-
-        for (const auto& component : *cycle) {
-            const auto plabel = std::get_if<Label>(&component);
-            if (!plabel || *plabel != head) {
-                std::visit(*this, component);
-            }
-        }
-        EbpfDomain new_pre = join_all_prevs(head);
-        if (invariant <= new_pre) {
-            // No more refinement possible(pre == new_pre)
-            break;
-        } else {
-            if (iteration > _descending_iterations) {
-                break;
-            }
-            invariant = refine(invariant, std::move(new_pre), iteration);
-            // Copy (not move): next iteration reads `invariant` again.
-            // Consider aliasing `invariant` to the map slot to elide this sync.
-            set_pre(head, invariant);
-        }
-    }
+    set_pre(head, _extrapolator.compute_fixpoint(initial_head_state(), propagate));
 }
+
 AnalysisResult InterleavedFwdFixpointIterator::run(const AnalysisContext& context, EbpfDomain entry_inv) {
-    // Go over the CFG in weak topological order (accounting for loops).
     const Program& prog = context.program;
     AnalysisResult result;
     InterleavedFwdFixpointIterator analyzer(context, result);
     if (context.runtime().check_for_termination) {
-        // Initialize loop counters for potential loop headers.
-        // This enables enforcement of upper bounds on loop iterations
-        // during program verification.
-        // TODO: Consider making this an instruction instead of an explicit call.
         analyzer._wto.for_each_loop_head(
             [&](const Label& label) { ebpf_domain_initialize_loop_counter(entry_inv, label, context); });
     }

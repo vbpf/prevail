@@ -75,16 +75,12 @@ class EbpfDomain final {
     EbpfDomain operator|(const EbpfDomain& other) const&;
     EbpfDomain operator|(const EbpfDomain& other) &&;
     EbpfDomain operator&(const EbpfDomain& other) const;
-    EbpfDomain widen(const EbpfDomain& other, bool to_constants, const AnalysisContext& context,
-                     std::span<const Variable> loop_counters) const;
+    EbpfDomain widen(const EbpfDomain& other) const;
     EbpfDomain narrow(const EbpfDomain& other) const;
 
-    /// Per-register clamping domain used by widen(to_constants=true) to bound
-    /// signed/unsigned values to int32 range, stack offsets to total_stack_size,
-    /// and so on. Inexpensive to compute (~100 constraints); not cached.
-    /// `loop_counters` is the set of counter Variables for *this* program's
-    /// loop heads — passed in rather than queried from variable_registry,
-    /// because the registry has no notion of "this analysis."
+    /// Per-register clamping domain: bounds signed/unsigned values to int32
+    /// range, stack offsets to total_stack_size, and loop counters to register
+    /// values. Inexpensive to compute (~100 constraints); not cached.
     static EbpfDomain calculate_constant_limits(const AnalysisContext& context,
                                                 std::span<const Variable> loop_counters);
     /// Maximum upper bound across the given loop counter variables in this
