@@ -45,6 +45,7 @@ class EbpfChecker final {
     void operator()(const ValidAccess&) const;
     void operator()(const ValidCallbackTarget&) const;
     void operator()(const ValidMapKeyValue&) const;
+    void operator()(const ValidMapType&) const;
     void operator()(const ValidSize&) const;
     void operator()(const ValidArgZero&) const;
     void operator()(const ValidStore&) const;
@@ -286,6 +287,19 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
         }
         default: throw_fail("Only stack, packet, or shared can be used as a parameter");
         }
+    }
+}
+
+void EbpfChecker::operator()(const ValidMapType& s) const {
+    if (dom.state.is_bottom()) {
+        return;
+    }
+    const auto map_type = dom.get_map_type(s.map_fd_reg, context);
+    if (!map_type.has_value() || *map_type == 0) {
+        return;
+    }
+    if ((s.allowed_map_types & (uint64_t{1} << *map_type)) == 0) {
+        throw_fail("map type " + std::to_string(*map_type) + " is not allowed for " + s.helper_name);
     }
 }
 

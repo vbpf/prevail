@@ -368,6 +368,8 @@ std::set<Reg> extract_assertion_registers(const Assertion& assertion) {
                 return {};
             } else if constexpr (std::is_same_v<T, ValidArgZero>) {
                 return {a.reg};
+            } else if constexpr (std::is_same_v<T, ValidMapType>) {
+                return {a.map_fd_reg};
             } else {
                 static_assert(always_false_v<T>, "Unhandled Assertion type in extract_assertion_registers");
             }

@@ -4,6 +4,38 @@
 #include <string_view>
 
 namespace prevail {
+
+// Map-type bitmask constants for EbpfHelperPrototype::allowed_map_types.
+// Values match the BPF_MAP_TYPE_* enum in the kernel UAPI.
+namespace {
+constexpr uint64_t MT_PERF_EVENT_ARRAY = map_type_bit(4);
+constexpr uint64_t MT_STACK_TRACE = map_type_bit(7);
+constexpr uint64_t MT_CGROUP_ARRAY = map_type_bit(8);
+constexpr uint64_t MT_ARRAY_OF_MAPS = map_type_bit(12);
+constexpr uint64_t MT_HASH_OF_MAPS = map_type_bit(13);
+constexpr uint64_t MT_DEVMAP = map_type_bit(14);
+constexpr uint64_t MT_SOCKMAP = map_type_bit(15);
+constexpr uint64_t MT_CPUMAP = map_type_bit(16);
+constexpr uint64_t MT_XSKMAP = map_type_bit(17);
+constexpr uint64_t MT_SOCKHASH = map_type_bit(18);
+constexpr uint64_t MT_CGROUP_STORAGE = map_type_bit(19);
+constexpr uint64_t MT_REUSEPORT_SOCKARRAY = map_type_bit(20);
+constexpr uint64_t MT_PERCPU_CGROUP_STORAGE = map_type_bit(21);
+constexpr uint64_t MT_QUEUE = map_type_bit(22);
+constexpr uint64_t MT_STACK = map_type_bit(23);
+constexpr uint64_t MT_SK_STORAGE = map_type_bit(24);
+constexpr uint64_t MT_DEVMAP_HASH = map_type_bit(25);
+constexpr uint64_t MT_RINGBUF = map_type_bit(27);
+constexpr uint64_t MT_INODE_STORAGE = map_type_bit(28);
+constexpr uint64_t MT_TASK_STORAGE = map_type_bit(29);
+constexpr uint64_t MT_BLOOM_FILTER = map_type_bit(30);
+constexpr uint64_t MT_USER_RINGBUF = map_type_bit(31);
+constexpr uint64_t MT_CGRP_STORAGE = map_type_bit(32);
+constexpr uint64_t MT_PERCPU_ARRAY = map_type_bit(6);
+constexpr uint64_t MT_PERCPU_HASH = map_type_bit(5);
+constexpr uint64_t MT_LRU_PERCPU_HASH = map_type_bit(10);
+} // namespace
+
 // Most ABI return/argument type constants used below are first-class enum
 // members in spec/ebpf_base.h. Keep only compatibility aliases used by this
 // static prototype table.
@@ -116,6 +148,7 @@ static constexpr EbpfHelperPrototype bpf_perf_event_read_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_MAP,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    .allowed_map_types = MT_PERF_EVENT_ARRAY,
 };
 
 static constexpr EbpfHelperPrototype bpf_perf_event_read_value_proto = {
@@ -128,6 +161,7 @@ static constexpr EbpfHelperPrototype bpf_perf_event_read_value_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
         },
+    .allowed_map_types = MT_PERF_EVENT_ARRAY,
 };
 
 static constexpr EbpfHelperPrototype bpf_perf_event_output_proto = {
@@ -141,6 +175,7 @@ static constexpr EbpfHelperPrototype bpf_perf_event_output_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO,
         },
+    .allowed_map_types = MT_PERF_EVENT_ARRAY,
 };
 
 static constexpr EbpfHelperPrototype bpf_get_current_task_proto = {
@@ -156,6 +191,7 @@ static constexpr EbpfHelperPrototype bpf_current_task_under_cgroup_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_MAP,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    .allowed_map_types = MT_CGROUP_ARRAY,
 };
 
 static constexpr EbpfHelperPrototype bpf_perf_prog_read_value_proto = {
@@ -266,6 +302,7 @@ static constexpr EbpfHelperPrototype bpf_sock_map_update_proto = {
             EBPF_ARGUMENT_TYPE_DONTCARE,
         },
     .ctx_descriptor = &g_sock_ops_descr,
+    .allowed_map_types = MT_SOCKMAP,
 };
 
 static constexpr EbpfHelperPrototype bpf_sock_hash_update_proto = {
@@ -280,6 +317,7 @@ static constexpr EbpfHelperPrototype bpf_sock_hash_update_proto = {
             EBPF_ARGUMENT_TYPE_DONTCARE,
         },
     .ctx_descriptor = &g_sock_ops_descr,
+    .allowed_map_types = MT_SOCKHASH,
 };
 
 static constexpr EbpfHelperPrototype bpf_get_stackid_proto = {
@@ -291,6 +329,7 @@ static constexpr EbpfHelperPrototype bpf_get_stackid_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_MAP,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    .allowed_map_types = MT_STACK_TRACE,
 };
 
 static constexpr EbpfHelperPrototype bpf_get_stack_proto = {
@@ -447,6 +486,7 @@ static constexpr EbpfHelperPrototype bpf_sk_redirect_hash_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
     .ctx_descriptor = &g_sk_buff,
+    .allowed_map_types = MT_SOCKHASH,
 };
 
 static constexpr EbpfHelperPrototype bpf_sk_redirect_map_proto = {
@@ -460,6 +500,7 @@ static constexpr EbpfHelperPrototype bpf_sk_redirect_map_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
     .ctx_descriptor = &g_sk_buff,
+    .allowed_map_types = MT_SOCKMAP,
 };
 
 static constexpr EbpfHelperPrototype bpf_msg_redirect_hash_proto = {
@@ -473,6 +514,7 @@ static constexpr EbpfHelperPrototype bpf_msg_redirect_hash_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
     .ctx_descriptor = &g_sk_msg_md,
+    .allowed_map_types = MT_SOCKHASH,
 };
 
 static constexpr EbpfHelperPrototype bpf_msg_redirect_map_proto = {
@@ -486,6 +528,7 @@ static constexpr EbpfHelperPrototype bpf_msg_redirect_map_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
     .ctx_descriptor = &g_sk_msg_md,
+    .allowed_map_types = MT_SOCKMAP,
 };
 
 static constexpr EbpfHelperPrototype bpf_msg_apply_bytes_proto = {
@@ -766,6 +809,7 @@ static constexpr EbpfHelperPrototype bpf_skb_under_cgroup_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
     .ctx_descriptor = &g_sk_buff,
+    .allowed_map_types = MT_CGROUP_ARRAY,
 };
 
 static constexpr EbpfHelperPrototype bpf_skb_cgroup_id_proto = {
@@ -957,6 +1001,7 @@ static constexpr EbpfHelperPrototype bpf_get_local_storage_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
     .zero_args_mask = 1 << 1,
+    .allowed_map_types = MT_CGROUP_STORAGE | MT_PERCPU_CGROUP_STORAGE,
 };
 
 static constexpr EbpfHelperPrototype bpf_redirect_map_proto = {
@@ -968,6 +1013,7 @@ static constexpr EbpfHelperPrototype bpf_redirect_map_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    .allowed_map_types = MT_DEVMAP | MT_DEVMAP_HASH | MT_CPUMAP | MT_XSKMAP,
 };
 
 static constexpr EbpfHelperPrototype bpf_sk_select_reuseport_proto = {
@@ -979,6 +1025,7 @@ static constexpr EbpfHelperPrototype bpf_sk_select_reuseport_proto = {
         EBPF_ARGUMENT_TYPE_PTR_TO_MAP_KEY,
         EBPF_ARGUMENT_TYPE_ANYTHING,
     },
+    .allowed_map_types = MT_REUSEPORT_SOCKARRAY | MT_SOCKMAP | MT_SOCKHASH,
 };
 
 static constexpr EbpfHelperPrototype bpf_get_current_ancestor_cgroup_id_proto = {
@@ -1030,6 +1077,7 @@ static constexpr EbpfHelperPrototype bpf_map_push_elem_proto = {
         EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE,
         EBPF_ARGUMENT_TYPE_ANYTHING,
     },
+    .allowed_map_types = MT_QUEUE | MT_STACK | MT_BLOOM_FILTER,
 };
 
 static constexpr EbpfHelperPrototype bpf_map_pop_elem_proto = {
@@ -1039,6 +1087,7 @@ static constexpr EbpfHelperPrototype bpf_map_pop_elem_proto = {
         EBPF_ARGUMENT_TYPE_PTR_TO_MAP,
         EBPF_ARGUMENT_TYPE_PTR_TO_UNINIT_MAP_VALUE,
     },
+    .allowed_map_types = MT_QUEUE | MT_STACK,
 };
 
 static constexpr EbpfHelperPrototype bpf_map_peek_elem_proto = {
@@ -1048,6 +1097,7 @@ static constexpr EbpfHelperPrototype bpf_map_peek_elem_proto = {
         EBPF_ARGUMENT_TYPE_CONST_PTR_TO_MAP,
         EBPF_ARGUMENT_TYPE_PTR_TO_UNINIT_MAP_VALUE,
     },
+    .allowed_map_types = MT_QUEUE | MT_STACK | MT_BLOOM_FILTER,
 };
 
 static constexpr EbpfHelperPrototype bpf_msg_push_data_proto = {
@@ -1261,6 +1311,7 @@ static constexpr EbpfHelperPrototype bpf_sk_storage_get_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE_OR_NULL,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    .allowed_map_types = MT_SK_STORAGE,
 };
 
 static constexpr EbpfHelperPrototype bpf_sk_storage_delete_proto = {
@@ -1271,6 +1322,7 @@ static constexpr EbpfHelperPrototype bpf_sk_storage_delete_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_MAP,
             EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID_SOCK_COMMON,
         },
+    .allowed_map_types = MT_SK_STORAGE,
 };
 
 static constexpr EbpfHelperPrototype bpf_send_signal_proto = {
@@ -1316,6 +1368,7 @@ static constexpr EbpfHelperPrototype bpf_skb_output_proto = {
             EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO,
         },
     //.arg1_btf_id = &bpf_skb_output_btf_ids[0],
+    .allowed_map_types = MT_PERF_EVENT_ARRAY,
 };
 
 static constexpr EbpfHelperPrototype bpf_probe_read_user_proto = {
@@ -1409,6 +1462,7 @@ static constexpr EbpfHelperPrototype bpf_xdp_output_proto = {
             EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO,
         },
     // .arg1_btf_id = &bpf_xdp_output_btf_ids[0],
+    .allowed_map_types = MT_PERF_EVENT_ARRAY,
 };
 
 static constexpr EbpfHelperPrototype bpf_sk_assign_proto = {
@@ -1480,6 +1534,7 @@ static constexpr EbpfHelperPrototype bpf_ringbuf_reserve_proto = {
             EBPF_ARGUMENT_TYPE_CONST_ALLOC_SIZE_OR_ZERO,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    .allowed_map_types = MT_RINGBUF,
 };
 
 static constexpr EbpfHelperPrototype bpf_ringbuf_submit_proto = {
@@ -1512,6 +1567,7 @@ static constexpr EbpfHelperPrototype bpf_ringbuf_output_proto = {
             EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    .allowed_map_types = MT_RINGBUF,
 };
 
 constexpr EbpfHelperPrototype bpf_ringbuf_query_proto = {
@@ -1522,6 +1578,7 @@ constexpr EbpfHelperPrototype bpf_ringbuf_query_proto = {
             EBPF_ARGUMENT_TYPE_CONST_PTR_TO_MAP,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    .allowed_map_types = MT_RINGBUF,
 };
 
 static constexpr EbpfHelperPrototype bpf_csum_level_proto = {
@@ -1619,6 +1676,7 @@ static constexpr EbpfHelperPrototype bpf_inode_storage_get_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
     //.arg2_btf_id = &bpf_inode_storage_btf_ids[0],
+    .allowed_map_types = MT_INODE_STORAGE,
 };
 
 static constexpr EbpfHelperPrototype bpf_inode_storage_delete_proto = {
@@ -1630,6 +1688,7 @@ static constexpr EbpfHelperPrototype bpf_inode_storage_delete_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID,
         },
     //.arg2_btf_id = &bpf_inode_storage_btf_ids[0],
+    .allowed_map_types = MT_INODE_STORAGE,
 };
 
 static constexpr EbpfHelperPrototype bpf_d_path_proto = {
@@ -1745,6 +1804,7 @@ static constexpr EbpfHelperPrototype bpf_task_storage_get_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
     // .arg2_btf_id = &bpf_task_storage_btf_ids[0],
+    .allowed_map_types = MT_TASK_STORAGE,
 };
 
 static constexpr EbpfHelperPrototype bpf_task_storage_delete_proto = {
@@ -1756,6 +1816,7 @@ static constexpr EbpfHelperPrototype bpf_task_storage_delete_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID,
         },
     // .arg2_btf_id = &bpf_task_storage_btf_ids[0],
+    .allowed_map_types = MT_TASK_STORAGE,
 };
 
 static constexpr EbpfHelperPrototype bpf_get_current_task_btf_proto = {
@@ -2047,6 +2108,7 @@ static constexpr EbpfHelperPrototype bpf_map_lookup_percpu_elem_proto = {
             EBPF_ARGUMENT_TYPE_DONTCARE,
             EBPF_ARGUMENT_TYPE_DONTCARE,
         },
+    .allowed_map_types = MT_PERCPU_ARRAY | MT_PERCPU_HASH | MT_LRU_PERCPU_HASH,
 };
 
 // Time operations
@@ -2066,6 +2128,7 @@ static constexpr EbpfHelperPrototype bpf_ringbuf_reserve_dynptr_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    .allowed_map_types = MT_RINGBUF,
     .unsupported = true,
 };
 
@@ -2143,6 +2206,7 @@ static constexpr EbpfHelperPrototype bpf_user_ringbuf_drain_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_STACK_OR_NULL,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    .allowed_map_types = MT_USER_RINGBUF,
     .unsupported = true,
 };
 
@@ -2157,6 +2221,7 @@ static constexpr EbpfHelperPrototype bpf_cgrp_storage_get_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    .allowed_map_types = MT_CGRP_STORAGE,
 };
 
 static constexpr EbpfHelperPrototype bpf_cgrp_storage_delete_proto = {
@@ -2167,6 +2232,7 @@ static constexpr EbpfHelperPrototype bpf_cgrp_storage_delete_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_MAP,
             EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID,
         },
+    .allowed_map_types = MT_CGRP_STORAGE,
 };
 // Helper 83 - skb_ancestor_cgroup_id
 static constexpr EbpfHelperPrototype bpf_skb_ancestor_cgroup_id_proto = {
