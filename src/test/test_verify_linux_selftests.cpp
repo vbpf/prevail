@@ -30,6 +30,7 @@ TEST_SECTION("linux-selftests", "fexit_sleep.o", "fexit/__x64_sys_nanosleep")
 TEST_SECTION("linux-selftests", "get_cgroup_id_kern.o", "tracepoint/syscalls/sys_enter_nanosleep")
 TEST_SECTION("linux-selftests", "loop1.o", "raw_tracepoint/kfree_skb")
 TEST_SECTION("linux-selftests", "loop2.o", "raw_tracepoint/consume_skb")
+TEST_SECTION("linux-selftests", "loop3.o", "raw_tracepoint/consume_skb")
 TEST_SECTION("linux-selftests", "loop4.o", "socket")
 TEST_SECTION("linux-selftests", "loop5.o", "socket")
 TEST_SECTION_REJECT("linux-selftests", "map_ptr_kern.o", "cgroup_skb/egress")
@@ -71,7 +72,6 @@ TEST_PROGRAM_FAIL("linux-selftests", "bloom_filter_map.o", "fentry/__x64_sys_get
 // register type refinement is too imprecise in this control-flow pattern
 TEST_SECTION_FAIL("linux-selftests", "freplace_get_constant.o", "freplace/get_constant",
                   verify_test::VerifyIssueKind::VerifierTypeTracking)
-TEST_SECTION("linux-selftests", "loop3.o", "raw_tracepoint/consume_skb")
 // register type refinement is too imprecise in this control-flow pattern
 TEST_PROGRAM_FAIL("linux-selftests", "map_ptr_kern.o", ".text", "check", 19,
                   verify_test::VerifyIssueKind::VerifierTypeTracking)

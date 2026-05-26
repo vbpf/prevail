@@ -187,7 +187,7 @@ void EbpfChecker::operator()(const ValidSize& s) const {
 }
 
 void EbpfChecker::operator()(const ValidCallbackTarget& s) const {
-    const auto callback_interval = dom.state.values.eval_interval(reg_pack(s.reg).svalue);
+    const auto callback_interval = dom.state.values.eval_interval(reg_pack(s.reg).uvalue);
     const auto callback_target = callback_interval.singleton();
     if (!callback_target.has_value() || !callback_target->fits<int32_t>()) {
         throw_fail("callback function pointer must be a singleton code address");
@@ -273,7 +273,7 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
             require_lower_bound(lb, LinearExpression{0}, "Lower bound must be at least 0");
             require_upper_bound(ub, access_reg.shared_region_size,
                                 "Upper bound must be at most " + variable_registry.name(access_reg.shared_region_size));
-            require_value(dom.state, access_reg.svalue > 0, "Possible null access");
+            require_value(dom.state, access_reg.uvalue > 0, "Possible null access");
             // Shared memory is zero-initialized when created so is safe to read and write.
             break;
         }
@@ -349,7 +349,7 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             require_upper_bound(ub, reg.shared_region_size,
                                 "Upper bound must be at most " + variable_registry.name(reg.shared_region_size));
             if (!is_comparison_check && !s.or_null) {
-                require_value(dom.state, reg.svalue > 0, "Possible null access");
+                require_value(dom.state, reg.uvalue > 0, "Possible null access");
             }
             break;
         }
@@ -359,7 +359,7 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             require_upper_bound(ub, reg.alloc_mem_size,
                                 "Upper bound must be at most " + variable_registry.name(reg.alloc_mem_size));
             if (!is_comparison_check && !s.or_null) {
-                require_value(dom.state, reg.svalue > 0, "Possible null access");
+                require_value(dom.state, reg.uvalue > 0, "Possible null access");
             }
             break;
         }

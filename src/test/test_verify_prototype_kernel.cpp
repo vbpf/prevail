@@ -11,6 +11,7 @@ TEST_SECTION("prototype-kernel", "napi_monitor_kern.o", "tracepoint/napi/napi_po
 TEST_SECTION("prototype-kernel", "tc_bench01_redirect_kern.o", "ingress_redirect")
 TEST_SECTION("prototype-kernel", "xdp_bench01_mem_access_cost_kern.o", "xdp_bench01")
 TEST_SECTION("prototype-kernel", "xdp_bench02_drop_pattern_kern.o", "xdp_bench02")
+TEST_SECTION("prototype-kernel", "xdp_ddos01_blacklist_kern.o", "xdp_prog")
 TEST_SECTION("prototype-kernel", "xdp_monitor_kern.o", "tracepoint/xdp/xdp_redirect")
 TEST_SECTION("prototype-kernel", "xdp_monitor_kern.o", "tracepoint/xdp/xdp_redirect_err")
 TEST_SECTION("prototype-kernel", "xdp_monitor_kern.o", "tracepoint/xdp/xdp_redirect_map")
@@ -40,7 +41,4 @@ TEST_SECTION("prototype-kernel", "xdp_vlan01_kern.o", "xdp_vlan_remove_outer2")
 // VerifierTypeTracking:
 // register type refinement is too imprecise in this control-flow pattern
 TEST_SECTION_FAIL("prototype-kernel", "xdp_ddos01_blacklist_kern.o", ".text",
-                  verify_test::VerifyIssueKind::VerifierTypeTracking)
-// register type refinement is too imprecise in this control-flow pattern
-TEST_SECTION_FAIL("prototype-kernel", "xdp_ddos01_blacklist_kern.o", "xdp_prog",
                   verify_test::VerifyIssueKind::VerifierTypeTracking)

@@ -161,7 +161,6 @@ void EbpfTransformer::save_callee_saved_registers(const std::string& prefix) {
             for (const TypeEncoding type : dom.state.iterate_types(r)) {
                 auto kinds = type_to_kinds.at(type);
                 kinds.push_back(DataKind::uvalues);
-                kinds.push_back(DataKind::svalues);
                 for (const DataKind kind : kinds) {
                     const Variable src_var = variable_registry.reg(kind, r.v);
                     const Variable dst_var = variable_registry.stack_frame_var(kind, r.v, prefix);
@@ -295,7 +294,6 @@ void EbpfTransformer::operator()(const LoadPseudo& pseudo) {
     case PseudoAddress::Kind::CODE_ADDR: {
         const auto dst = reg_pack(pseudo.dst);
         const uint64_t imm64 = merge_imm32_to_u64(pseudo.addr.imm, pseudo.addr.next_imm);
-        dom.state.values.assign(dst.svalue, to_signed(imm64));
         dom.state.values.assign(dst.uvalue, imm64);
         dom.state.values->overflow_bounds(dst.uvalue, 64, false);
         dom.state.assign_type(pseudo.dst, T_FUNC);
@@ -542,8 +540,8 @@ static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, 
     }
     if (width == offset_width) {
         state.assign_type(target_reg, T_PACKET);
-        state.values.add_constraint(4098 <= target.svalue);
-        state.values.add_constraint(target.svalue <= ptr_max(context.runtime().max_packet_size));
+        state.values.add_constraint(4098 <= target.uvalue);
+        state.values.add_constraint(target.uvalue <= ptr_max(context.runtime().max_packet_size));
     }
 }
 
@@ -1051,15 +1049,13 @@ void EbpfTransformer::operator()(const LoadMapAddress& ins) {
 void EbpfTransformer::assign_valid_ptr(const Reg& dst_reg, const bool maybe_null) {
     using namespace dsl_syntax;
     const RegPack& reg = reg_pack(dst_reg);
-    dom.state.values.havoc(reg.svalue);
     dom.state.values.havoc(reg.uvalue);
     if (maybe_null) {
-        dom.state.values.add_constraint(0 <= reg.svalue);
+        dom.state.values.add_constraint(0 <= reg.uvalue);
     } else {
-        dom.state.values.add_constraint(0 < reg.svalue);
+        dom.state.values.add_constraint(0 < reg.uvalue);
     }
-    dom.state.values.add_constraint(reg.svalue <= ptr_max(context.runtime().max_packet_size));
-    dom.state.values.assign(reg.uvalue, reg.svalue);
+    dom.state.values.add_constraint(reg.uvalue <= ptr_max(context.runtime().max_packet_size));
 }
 
 // If nothing is known of the stack_numeric_size,
@@ -1083,12 +1079,16 @@ void EbpfTransformer::recompute_stack_numeric_size(TypeToNumDomain& state, const
 
 void EbpfTransformer::add(const Reg& dst_reg, const int imm, const int finite_width) {
     const auto dst = reg_pack(dst_reg);
-    dom.state.values->add_overflow(dst.svalue, dst.uvalue, imm, finite_width);
-    if (const auto offset = dom.state.primary_kind_variable_for_type(dst_reg)) {
-        dom.state.values->add(*offset, imm);
+    if (dom.state.may_have_type(dst_reg, T_NUM)) {
+        dom.state.values->add_overflow(dst.svalue, dst.uvalue, imm, finite_width);
+    } else {
+        if (const auto kind = dom.state.primary_kind_variable_for_type(dst_reg)) {
+            dom.state.values->add(*kind, imm);
+        }
+        dom.state.values->apply_unsigned(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.uvalue, imm, finite_width);
+    }
+    if (dom.state.may_have_type(dst_reg, T_STACK)) {
         if (imm > 0) {
-            // Since the start offset is increasing but
-            // the end offset is not, the numeric size decreases.
             dom.state.values->sub(dst.stack_numeric_size, imm);
         } else if (imm < 0) {
             dom.state.values.havoc(dst.stack_numeric_size);
@@ -1269,13 +1269,12 @@ void EbpfTransformer::operator()(const Bin& bin) {
                                 if (dst_type == T_NUM && src_type != T_NUM) {
                                     // num += ptr
                                     state.assign_type(bin.dst, src_type);
-                                    // Note: primary_kind_variable_for_type's presence is purely
-                                    // type-indexed, so if dst_offset has a value then the src call
-                                    // for the same type also has one -- safe to unwrap.
                                     if (const auto dst_offset = primary_kind_variable_for_type(bin.dst, src_type)) {
                                         state.values->apply(ArithBinOp::ADD, dst_offset.value(), dst.svalue,
                                                             primary_kind_variable_for_type(src_reg, src_type).value());
                                     }
+                                    state.values->apply_unsigned(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.uvalue,
+                                                                 src.uvalue, finite_width);
                                     if (src_type == T_SHARED) {
                                         state.values.assign(dst.shared_region_size, src.shared_region_size);
                                     }
@@ -1298,22 +1297,16 @@ void EbpfTransformer::operator()(const Bin& bin) {
                                             }
                                         }
                                     }
+                                    state.values->apply_unsigned(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.uvalue,
+                                                                 src.uvalue, finite_width);
                                 } else if (dst_type == T_NUM && src_type == T_NUM) {
-                                    // dst and src don't necessarily have the same type, but among the possibilities
-                                    // enumerated is the case where they are both numbers.
                                     state.values->apply_signed(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.svalue,
                                                                src.svalue, finite_width);
                                 } else {
-                                    // We ignore the cases here that do not match the assumption described
-                                    // above.  Joining bottom with another result will leave the other
-                                    // results unchanged.
                                     state.values.set_to_bottom();
                                 }
                             });
                     });
-                // careful: change dst.value only after dealing with offset
-                dom.state.values->apply_signed(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.svalue, src.svalue,
-                                               finite_width);
             }
             break;
         }
@@ -1348,19 +1341,23 @@ void EbpfTransformer::operator()(const Bin& bin) {
                 // We're not sure that lhs and rhs are the same type.
                 // Either they're different, or at least one is not a singleton.
                 if (dom.state.is_in_group(std::get<Reg>(bin.v), TS_NUM)) {
-                    dom.state.values->sub_overflow(dst.svalue, dst.uvalue, src.svalue, finite_width);
-                    if (auto dst_offset = dom.state.primary_kind_variable_for_type(bin.dst)) {
-                        dom.state.values->sub(dst_offset.value(), src.svalue);
-                        if (dom.state.may_have_type(bin.dst, T_STACK)) {
-                            // Reduce the numeric size.
-                            using namespace dsl_syntax;
-                            if (dom.state.values.intersect(src.svalue > 0)) {
-                                dom.state.values.havoc(dst.stack_numeric_size);
-                                recompute_stack_numeric_size(dom.state, bin.dst);
-                            } else {
-                                dom.state.values->apply(ArithBinOp::ADD, dst.stack_numeric_size, dst.stack_numeric_size,
-                                                        src.svalue);
-                            }
+                    if (dom.state.may_have_type(bin.dst, T_NUM)) {
+                        dom.state.values->sub_overflow(dst.svalue, dst.uvalue, src.svalue, finite_width);
+                    } else {
+                        if (const auto kind = dom.state.primary_kind_variable_for_type(bin.dst)) {
+                            dom.state.values->sub(*kind, src.svalue);
+                        }
+                        dom.state.values->apply_unsigned(ArithBinOp::SUB, dst.svalue, dst.uvalue, dst.uvalue,
+                                                         src.uvalue, finite_width);
+                    }
+                    if (dom.state.may_have_type(bin.dst, T_STACK)) {
+                        using namespace dsl_syntax;
+                        if (dom.state.values.intersect(src.svalue > 0)) {
+                            dom.state.values.havoc(dst.stack_numeric_size);
+                            recompute_stack_numeric_size(dom.state, bin.dst);
+                        } else {
+                            dom.state.values->apply(ArithBinOp::ADD, dst.stack_numeric_size, dst.stack_numeric_size,
+                                                    src.svalue);
                         }
                     }
                 } else {

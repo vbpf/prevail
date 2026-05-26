@@ -93,9 +93,8 @@ get_program_name_and_size(const ELFIO::section& sec, const ELFIO::Elf_Xword star
             }
             const auto relocation_offset = symbol_details.value;
             if (relocation_offset % sizeof(EbpfInst) != 0) {
-                throw UnmarshalError("Non-instruction-aligned FUNC symbol '" + symbol_details.name +
-                                     "' at offset " + std::to_string(relocation_offset) + " in section " +
-                                     sec.get_name());
+                throw UnmarshalError("Non-instruction-aligned FUNC symbol '" + symbol_details.name + "' at offset " +
+                                     std::to_string(relocation_offset) + " in section " + sec.get_name());
             }
             if (relocation_offset == start) {
                 program_name = symbol_details.name;

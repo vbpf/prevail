@@ -743,15 +743,6 @@
                 "reject_load": false
               }
             ]
-          },
-          "test_overrides": {
-            "sections": {
-              "xdp": {
-                "kind": "VerifierTypeTracking",
-                "reason": "register type refinement is too imprecise in this control-flow pattern",
-                "status": "expected_failure"
-              }
-            }
           }
         },
         "correlated_branch2.o": {
@@ -2684,17 +2675,7 @@
                 }
               },
               "tc/tail": {
-                "tail_handle_ipv4_cont_from_host": {
-                  "kind": "VerifierTypeTracking",
-                  "reason": "register type refinement is too imprecise in this control-flow pattern",
-                  "status": "expected_failure"
-                },
                 "tail_handle_ipv4_cont_from_netdev": {
-                  "kind": "VerifierTypeTracking",
-                  "reason": "register type refinement is too imprecise in this control-flow pattern",
-                  "status": "expected_failure"
-                },
-                "tail_handle_ipv6_cont_from_host": {
                   "kind": "VerifierTypeTracking",
                   "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
@@ -2722,16 +2703,6 @@
                 "tail_handle_snat_fwd_ipv6": {
                   "kind": "VerifierNullability",
                   "reason": "nullability tracking is too conservative on this path",
-                  "status": "expected_failure"
-                },
-                "tail_ipv4_host_policy_ingress": {
-                  "kind": "VerifierTypeTracking",
-                  "reason": "register type refinement is too imprecise in this control-flow pattern",
-                  "status": "expected_failure"
-                },
-                "tail_ipv6_host_policy_ingress": {
-                  "kind": "VerifierTypeTracking",
-                  "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
                 "tail_nodeport_nat_egress_ipv4": {
@@ -2924,27 +2895,7 @@
                   "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
-                "tail_handle_ipv6_cont": {
-                  "kind": "VerifierTypeTracking",
-                  "reason": "register type refinement is too imprecise in this control-flow pattern",
-                  "status": "expected_failure"
-                },
-                "tail_ipv4_policy": {
-                  "kind": "VerifierTypeTracking",
-                  "reason": "register type refinement is too imprecise in this control-flow pattern",
-                  "status": "expected_failure"
-                },
-                "tail_ipv4_to_endpoint": {
-                  "kind": "VerifierTypeTracking",
-                  "reason": "register type refinement is too imprecise in this control-flow pattern",
-                  "status": "expected_failure"
-                },
                 "tail_ipv6_policy": {
-                  "kind": "VerifierTypeTracking",
-                  "reason": "register type refinement is too imprecise in this control-flow pattern",
-                  "status": "expected_failure"
-                },
-                "tail_ipv6_to_endpoint": {
                   "kind": "VerifierTypeTracking",
                   "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
@@ -3121,11 +3072,6 @@
                   "status": "expected_failure"
                 },
                 "tail_handle_snat_fwd_ipv4": {
-                  "kind": "VerifierTypeTracking",
-                  "reason": "register type refinement is too imprecise in this control-flow pattern",
-                  "status": "expected_failure"
-                },
-                "tail_handle_snat_fwd_ipv6": {
                   "kind": "VerifierTypeTracking",
                   "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
@@ -9194,11 +9140,6 @@
           "test_overrides": {
             "sections": {
               ".text": {
-                "kind": "VerifierTypeTracking",
-                "reason": "register type refinement is too imprecise in this control-flow pattern",
-                "status": "expected_failure"
-              },
-              "xdp_prog": {
                 "kind": "VerifierTypeTracking",
                 "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"

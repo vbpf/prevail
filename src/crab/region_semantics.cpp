@@ -17,6 +17,7 @@ std::optional<Variable> primary_kind_variable_for_type(const Reg& reg, const Typ
     case T_SOCKET: return r.socket_offset;
     case T_BTF_ID: return r.btf_id_offset;
     case T_ALLOC_MEM: return r.alloc_mem_offset;
+    case T_NUM: return r.svalue;
     default: return {};
     }
 }

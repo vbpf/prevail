@@ -10,6 +10,7 @@ TEST_PROGRAM("build", "bpf2bpf.o", ".text", "add1", 2)
 TEST_PROGRAM("build", "bpf2bpf.o", ".text", "add2", 2)
 TEST_SECTION("build", "bpf2bpf.o", "test")
 TEST_SECTION("build", "byteswap.o", ".text")
+TEST_SECTION("build", "correlated_branch.o", "xdp")
 TEST_SECTION("build", "cpumap.o", "xdp")
 TEST_SECTION("build", "devmap.o", "xdp")
 TEST_SECTION("build", "divzero.o", "test")
@@ -52,8 +53,6 @@ TEST_SECTION_REJECT("build", "wronghelper.o", "xdp")
 TEST_SECTION_FAIL("build", "badmapptr.o", "test", verify_test::VerifyIssueKind::VerifierTypeTracking)
 // register type refinement is too imprecise in this control-flow pattern
 TEST_SECTION_FAIL("build", "bpf_loop_helper.o", "xdp", verify_test::VerifyIssueKind::VerifierTypeTracking)
-// register type refinement is too imprecise in this control-flow pattern
-TEST_SECTION_FAIL("build", "correlated_branch.o", "xdp", verify_test::VerifyIssueKind::VerifierTypeTracking)
 // register type refinement is too imprecise in this control-flow pattern
 TEST_PROGRAM_FAIL("build", "global_func.o", ".text", "add_and_store", 2,
                   verify_test::VerifyIssueKind::VerifierTypeTracking)

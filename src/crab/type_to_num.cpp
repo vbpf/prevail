@@ -199,7 +199,6 @@ void TypeToNumDomain::havoc_all_locations_having_type(const TypeEncoding type) {
     assert(!is_bottom());
     for (const Variable type_variable : types.variables_with_type(type)) {
         types.havoc_type(type_variable);
-        values.havoc(variable_registry.kind_var(DataKind::svalues, type_variable));
         values.havoc(variable_registry.kind_var(DataKind::uvalues, type_variable));
         for (const DataKind kind : type_to_kinds.at(type)) {
             values.havoc(variable_registry.kind_var(kind, type_variable));
@@ -213,7 +212,6 @@ void TypeToNumDomain::assign(const Reg& lhs, const Reg& rhs) {
     }
     types.assign_type(lhs, rhs);
 
-    values.assign(reg_pack(lhs).svalue, reg_pack(rhs).svalue);
     values.assign(reg_pack(lhs).uvalue, reg_pack(rhs).uvalue);
 
     for (const auto& type : types.iterate_types(lhs)) {
@@ -246,10 +244,9 @@ void TypeToNumDomain::havoc_offsets(const Reg& reg) {
 }
 
 void TypeToNumDomain::havoc_register_except_type(const Reg& reg) {
-    const RegPack r = reg_pack(reg);
-    havoc_offsets(reg);
-    values.havoc(r.svalue);
-    values.havoc(r.uvalue);
+    for (const DataKind kind : iterate_kinds()) {
+        values.havoc(variable_registry.reg(kind, reg.v));
+    }
 }
 
 void TypeToNumDomain::havoc_register(const Reg& reg) {
