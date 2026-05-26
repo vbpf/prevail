@@ -366,6 +366,8 @@ std::set<Reg> extract_assertion_registers(const Assertion& assertion) {
             } else if constexpr (std::is_same_v<T, BoundedLoopCount>) {
                 // Loop counter, not a register
                 return {};
+            } else if constexpr (std::is_same_v<T, ValidArgZero>) {
+                return {a.reg};
             } else {
                 static_assert(always_false_v<T>, "Unhandled Assertion type in extract_assertion_registers");
             }

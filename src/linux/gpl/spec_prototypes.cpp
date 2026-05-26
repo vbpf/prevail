@@ -949,6 +949,7 @@ static constexpr EbpfHelperPrototype bpf_get_local_storage_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_MAP,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    .zero_args_mask = 1 << 1,
 };
 
 static constexpr EbpfHelperPrototype bpf_redirect_map_proto = {

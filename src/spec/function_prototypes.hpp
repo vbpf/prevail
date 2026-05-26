@@ -21,6 +21,9 @@ struct EbpfHelperPrototype {
     // If R1 holds a context, then this holds a pointer to the context descriptor.
     const ebpf_ctx_descriptor_t* ctx_descriptor{};
 
+    // Bitmask of argument positions (0-4 for R1-R5) that must be provably zero.
+    uint8_t zero_args_mask{};
+
     bool unsupported = false;
 };
 } // namespace prevail

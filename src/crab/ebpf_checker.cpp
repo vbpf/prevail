@@ -46,6 +46,7 @@ class EbpfChecker final {
     void operator()(const ValidCallbackTarget&) const;
     void operator()(const ValidMapKeyValue&) const;
     void operator()(const ValidSize&) const;
+    void operator()(const ValidArgZero&) const;
     void operator()(const ValidStore&) const;
     void operator()(const ZeroCtxOffset&) const;
 
@@ -184,6 +185,12 @@ void EbpfChecker::operator()(const ValidSize& s) const {
     using namespace dsl_syntax;
     const auto r = reg_pack(s.reg);
     require_value(dom.state, s.can_be_zero ? r.svalue >= 0 : r.svalue > 0, "Invalid size");
+}
+
+void EbpfChecker::operator()(const ValidArgZero& s) const {
+    using namespace dsl_syntax;
+    const auto r = reg_pack(s.reg);
+    require_value(dom.state, r.svalue == 0, "Argument must be zero");
 }
 
 void EbpfChecker::operator()(const ValidCallbackTarget& s) const {
