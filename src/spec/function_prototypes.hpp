@@ -8,7 +8,7 @@
 
 namespace prevail {
 
-constexpr uint64_t map_type_bit(uint32_t type) { return uint64_t{1} << type; }
+constexpr uint64_t map_type_bit(uint32_t type) { return type < 64 ? uint64_t{1} << type : 0; }
 // A helper function's prototype is expressed by this struct.
 struct EbpfHelperPrototype {
     const char* name{};

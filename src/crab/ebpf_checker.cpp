@@ -295,7 +295,7 @@ void EbpfChecker::operator()(const ValidMapType& s) const {
         return;
     }
     const auto map_type = dom.get_map_type(s.map_fd_reg, context);
-    if (!map_type.has_value() || *map_type == 0) {
+    if (!map_type.has_value() || *map_type == 0 || *map_type >= 64) {
         return;
     }
     if ((s.allowed_map_types & (uint64_t{1} << *map_type)) == 0) {
