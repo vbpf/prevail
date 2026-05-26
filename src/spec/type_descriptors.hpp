@@ -39,6 +39,7 @@ struct EbpfProgramType {
     uint64_t platform_specific_data{}; // E.g., integer program type.
     std::vector<std::string> section_prefixes{};
     bool is_privileged{};
+    bool is_sleepable{};
 };
 
 // Represents the key characteristics that determine equivalence between eBPF maps.

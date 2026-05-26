@@ -1643,6 +1643,7 @@ static constexpr EbpfHelperPrototype bpf_d_path_proto = {
         },
     // .allowed = bpf_d_path_allowed,
     // .arg1_btf_id = &bpf_d_path_btf_ids[0],
+    .might_sleep = true,
 };
 
 static constexpr EbpfHelperPrototype bpf_copy_from_user_proto = {
@@ -1654,6 +1655,7 @@ static constexpr EbpfHelperPrototype bpf_copy_from_user_proto = {
             EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    .might_sleep = true,
 };
 
 static constexpr EbpfHelperPrototype bpf_per_cpu_ptr_proto = {
@@ -1784,6 +1786,7 @@ static constexpr EbpfHelperPrototype bpf_ima_inode_hash_proto = {
         },
     //    .allowed	= bpf_ima_inode_hash_allowed,
     //    .arg1_btf_id	= &bpf_ima_inode_hash_btf_ids[0],
+    .might_sleep = true,
 };
 
 static constexpr EbpfHelperPrototype bpf_ktime_get_coarse_ns_proto = {
@@ -2111,6 +2114,7 @@ static constexpr EbpfHelperPrototype bpf_copy_from_user_task_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    .might_sleep = true,
 };
 
 // Return value operations
@@ -2290,6 +2294,7 @@ static constexpr EbpfHelperPrototype bpf_ima_file_hash_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM, // dst
             EBPF_ARGUMENT_TYPE_CONST_SIZE,          // size
         },
+    .might_sleep = true,
 };
 
 // Helper 194 - kptr_xchg
@@ -2659,6 +2664,11 @@ bool is_helper_usable_linux(const int32_t n, const EbpfProgramType& program_type
         if (!socket_cookie_types.contains(program_type.name)) {
             return false;
         }
+    }
+
+    // Sleepable helpers are only usable in sleepable programs.
+    if (prototypes[n].might_sleep && !program_type.is_sleepable) {
+        return false;
     }
 
     // If the helper has a ctx_descriptor, it must match the hook's ctx_descriptor.

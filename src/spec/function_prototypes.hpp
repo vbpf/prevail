@@ -24,6 +24,9 @@ struct EbpfHelperPrototype {
     // Bitmask of argument positions (0-4 for R1-R5) that must be provably zero.
     uint8_t zero_args_mask{};
 
+    // Whether this helper may sleep (forbidden in non-sleepable programs).
+    bool might_sleep{};
+
     bool unsupported = false;
 };
 } // namespace prevail
