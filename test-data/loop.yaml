@@ -182,7 +182,7 @@ options: ["termination"]
 pre: [
   "meta_offset=[-4098, 0]",
   "packet_size=[0, 65534]",
-  "r1.ctx_offset=0", "r1.svalue=[1, 2147418112]", "r1.type=ctx",
+  "r1.ctx_offset=0", "r1.type=ctx",
 ]
 
 code:
@@ -221,7 +221,7 @@ post:
   - r0.type=number
   - r1.packet_offset=0
   - r1.packet_offset-packet_size<=-1  # unclear if this should be here
-  - r1.svalue=[4098, 2147418112]
+  - r1.uvalue=[4098, 2147418112]
   - r1.type=packet
   - r2.type=number
   - r3.type=number

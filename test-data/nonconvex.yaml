@@ -36,7 +36,6 @@ post:
   - r2.type in {map_fd, ctx}
   - r3.ctx_offset=0
   - r3.map_fd=1
-  - r3.svalue=r2.svalue
   - r3.type=r2.type
   - r3.uvalue=r2.uvalue
   - r8.map_fd=1
@@ -81,7 +80,6 @@ post:
   - r2.type=r1.type
   - r3.ctx_offset=0
   - r3.map_fd=2
-  - r3.svalue=r2.svalue
   - r3.type=r1.type
   - r3.uvalue=r2.uvalue
   - r6.map_fd=1
@@ -118,10 +116,11 @@ post:
   - r0.uvalue=[0, +oo]
   - r2.shared_offset=0
   - r2.shared_region_size=64
+  - r2.svalue=4
   - r2.type in {number, shared}
   - r3.shared_offset=0
   - r3.shared_region_size=r2.shared_region_size
-  - r3.svalue=r2.svalue
+  - r3.svalue=4
   - r3.type=r2.type
   - r3.uvalue=r2.uvalue
   - r8.svalue=4
@@ -162,7 +161,6 @@ post:
   - r3.map_fd=1
   - r3.shared_offset=0
   - r3.shared_region_size=r2.shared_region_size
-  - r3.svalue=r2.svalue
   - r3.type=r2.type
   - r3.uvalue=r2.uvalue
   - r8.map_fd=1
@@ -200,6 +198,7 @@ post:
   - r0.type=number
   - r0.uvalue=[0, +oo]
   - r1.ctx_offset=4
+  - r1.svalue=1
   - r1.type in {number, ctx}
   - r2.type=r1.type
   - r2.ctx_offset=0

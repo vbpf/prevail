@@ -299,6 +299,7 @@ post:
   - r0.type=number
   - r0.uvalue=[0, +oo]
   - r1.ctx_offset=4
+  - r1.svalue=1
   - r1.type in {number, ctx}
   - r2.type=r1.type
   - r2.ctx_offset=0
@@ -606,7 +607,8 @@ code:
   <start>: |
     assume r1 != r2
 
-post: []
+post:
+  - "_|_"
 messages:
   - "0: Code becomes unreachable (assume r1 != r2)"
 ---

@@ -622,10 +622,10 @@ TEST_CASE("ELF loader rejects non-instruction-aligned FUNC symbol", "[elf][harde
     // Add two FUNC symbols: one at offset 0 (the default) and one at UNALIGNED offset 7.
     // The non-aligned FUNC symbol is rejected by get_program_name_and_size before
     // it can produce a non-aligned program boundary.
-    sym_writer.add_symbol(str_writer, "prog_a", 0 /* aligned */, 7 /* size */,
-                          ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0, text_sec->get_index());
-    sym_writer.add_symbol(str_writer, "prog_b", 7 /* NOT 8-aligned */, 256 - 7,
-                          ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0, text_sec->get_index());
+    sym_writer.add_symbol(str_writer, "prog_a", 0 /* aligned */, 7 /* size */, ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0,
+                          text_sec->get_index());
+    sym_writer.add_symbol(str_writer, "prog_b", 7 /* NOT 8-aligned */, 256 - 7, ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0,
+                          text_sec->get_index());
 
     // Serialize to an in-memory stream.
     std::ostringstream out_stream;

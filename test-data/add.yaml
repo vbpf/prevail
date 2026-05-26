@@ -114,7 +114,7 @@ post:
 ---
 test-case: add interval number register to constant register pointer
 
-pre: ["r2.type=packet", "r2.packet_offset=0", "r2.svalue=[7, 11]", "r2.uvalue=[7, 11]",
+pre: ["r2.type=packet", "r2.packet_offset=0", "r2.uvalue=[7, 11]",
       "r7.type=number", "r7.svalue=[3, 5]", "r7.uvalue=[3, 5]"]
 
 code:
@@ -128,14 +128,14 @@ post:
   - r2.uvalue=r2.svalue
   - r7.type=number
   - r7.uvalue=[3, 5]
-  - r2.packet_offset-r2.svalue<=-7
-  - r2.svalue-r2.packet_offset<=11
+  - r2.svalue-r7.uvalue<=11
+  - r7.uvalue-r2.svalue<=-7
   - r7.svalue=r2.packet_offset
 
 ---
 test-case: add constant register pointer to interval number
 
-pre: ["r2.type=packet", "r2.packet_offset=0", "r2.svalue=[7, 11]", "r2.uvalue=[7, 11]",
+pre: ["r2.type=packet", "r2.packet_offset=0", "r2.uvalue=[7, 11]",
       "r7.type=number", "r7.svalue=[3, 5]", "r7.uvalue=[3, 5]"]
 
 code:
@@ -149,11 +149,8 @@ post:
   - r7.uvalue=r7.svalue
   - r2.type=packet
   - r2.packet_offset=0
-  - r2.svalue=[7, 11]
   - r2.uvalue=[7, 11]
-  - r2.svalue-r7.svalue<=-3
-  - r7.svalue-r2.svalue<=5
+  - r2.uvalue-r7.svalue<=-3
+  - r7.svalue-r2.uvalue<=5
   - r2.packet_offset-r7.packet_offset<=-3
   - r7.packet_offset-r2.packet_offset<=5
-  - r7.packet_offset-r7.svalue<=-7
-  - r7.svalue-r7.packet_offset<=11
