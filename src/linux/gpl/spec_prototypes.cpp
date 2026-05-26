@@ -370,6 +370,7 @@ static constexpr EbpfHelperPrototype bpf_l3_csum_replace_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    .reallocate_packet = true,
     .ctx_descriptor = &g_sk_buff,
 };
 
@@ -384,6 +385,7 @@ static constexpr EbpfHelperPrototype bpf_l4_csum_replace_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    .reallocate_packet = true,
     .ctx_descriptor = &g_sk_buff,
 };
 
@@ -420,6 +422,7 @@ static constexpr EbpfHelperPrototype bpf_clone_redirect_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    .reallocate_packet = true,
     .ctx_descriptor = &g_sk_buff,
 };
 
@@ -517,6 +520,7 @@ static constexpr EbpfHelperPrototype bpf_msg_pull_data_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    .reallocate_packet = true,
     .ctx_descriptor = &g_sk_msg_md,
 };
 static constexpr EbpfHelperPrototype bpf_get_cgroup_classid_proto = {
@@ -878,6 +882,7 @@ static constexpr EbpfHelperPrototype bpf_lwt_push_encap_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
         },
+    .reallocate_packet = true,
     .ctx_descriptor = &g_sk_buff,
 };
 
@@ -891,6 +896,7 @@ static constexpr EbpfHelperPrototype bpf_lwt_seg6_store_bytes_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
         },
+    .reallocate_packet = true,
     .ctx_descriptor = &g_sk_buff,
 };
 
@@ -904,6 +910,7 @@ static constexpr EbpfHelperPrototype bpf_lwt_seg6_action_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
         },
+    .reallocate_packet = true,
     .ctx_descriptor = &g_sk_buff,
 };
 
@@ -2203,6 +2210,7 @@ static constexpr EbpfHelperPrototype bpf_store_hdr_opt_proto = {
             EBPF_ARGUMENT_TYPE_CONST_SIZE,          // len
             EBPF_ARGUMENT_TYPE_ANYTHING,            // flags
         },
+    .reallocate_packet = true,
     .ctx_descriptor = &g_sock_ops_descr,
 };
 
