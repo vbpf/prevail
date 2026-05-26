@@ -295,8 +295,11 @@ void EbpfChecker::operator()(const ValidMapType& s) const {
         return;
     }
     const auto map_type = dom.get_map_type(s.map_fd_reg, context);
-    if (!map_type.has_value() || *map_type == 0 || *map_type >= 64) {
+    if (!map_type.has_value() || *map_type == 0) {
         return;
+    }
+    if (*map_type >= 64) {
+        throw_fail("map type " + std::to_string(*map_type) + " is out of supported range for " + s.helper_name);
     }
     if ((s.allowed_map_types & (uint64_t{1} << *map_type)) == 0) {
         throw_fail("map type " + std::to_string(*map_type) + " is not allowed for " + s.helper_name);
