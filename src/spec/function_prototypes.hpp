@@ -2,9 +2,13 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <cstdint>
+
 #include "spec/ebpf_base.h"
 
 namespace prevail {
+
+constexpr uint64_t map_type_bit(uint32_t type) { return type < 64 ? uint64_t{1} << type : 0; }
 // A helper function's prototype is expressed by this struct.
 struct EbpfHelperPrototype {
     const char* name{};
@@ -26,6 +30,10 @@ struct EbpfHelperPrototype {
 
     // Whether this helper may sleep (forbidden in non-sleepable programs).
     bool might_sleep{};
+
+    // Bitmask of platform-specific map types that may be passed to this helper.
+    // Zero means any map type is accepted; bit N set means map type N is allowed.
+    uint64_t allowed_map_types{};
 
     bool unsupported = false;
 };

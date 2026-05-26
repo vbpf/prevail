@@ -225,6 +225,7 @@ struct CallContract {
     bool reallocate_packet{};
     std::optional<Reg> alloc_size_reg{}; ///< Register holding allocation size (for T_ALLOC_MEM returns).
     uint8_t zero_args_mask{};            ///< Bitmask of arg positions (0-4 for R1-R5) that must be zero.
+    uint64_t allowed_map_types{};        ///< Bitmask of allowed map types for the MAP_FD argument (0 = any).
 };
 
 /// Resolved form of a Call: the key (via `call`) plus everything derivable
@@ -470,9 +471,18 @@ struct ValidArgZero {
     constexpr bool operator==(const ValidArgZero&) const = default;
 };
 
+/// Checks that the map type passed to a helper is in its allowed set.
+struct ValidMapType {
+    Reg map_fd_reg;
+    uint64_t allowed_map_types{};
+    std::string helper_name;
+    bool operator==(const ValidMapType&) const = default;
+};
+
 using Assertion =
     std::variant<Comparable, Addable, ValidDivisor, ValidAccess, ValidStore, ValidSize, ValidMapKeyValue,
-                 ValidCallbackTarget, TypeConstraint, FuncConstraint, ZeroCtxOffset, BoundedLoopCount, ValidArgZero>;
+                 ValidCallbackTarget, TypeConstraint, FuncConstraint, ZeroCtxOffset, BoundedLoopCount, ValidArgZero,
+                 ValidMapType>;
 
 std::ostream& operator<<(std::ostream& os, Instruction const& ins);
 std::string to_string(Instruction const& ins);

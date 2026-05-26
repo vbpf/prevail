@@ -137,6 +137,9 @@ class AssertExtractor {
                 break;
             }
         }
+        if (map_fd_reg && resolved.contract.allowed_map_types != 0) {
+            res.emplace_back(ValidMapType{*map_fd_reg, resolved.contract.allowed_map_types, resolved.name});
+        }
         for (ArgPair arg : resolved.contract.pairs) {
             const auto group = arg.or_null ? TypeGroup::mem_or_num : TypeGroup::mem;
             const auto access_type =

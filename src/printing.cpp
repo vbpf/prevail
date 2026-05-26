@@ -420,6 +420,8 @@ struct AssertionPrinterVisitor {
 
     void operator()(ValidCallbackTarget const& a) { _os << "valid_callback_target(" << a.reg << ")"; }
 
+    void operator()(ValidMapType const& a) { _os << "valid_map_type(" << a.map_fd_reg << ", " << a.helper_name << ")"; }
+
     void operator()(ZeroCtxOffset const& a) { _os << variable_registry.reg(DataKind::ctx_offsets, a.reg.v) << " == 0"; }
 
     void operator()(Comparable const& a) {
