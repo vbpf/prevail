@@ -224,6 +224,7 @@ struct CallContract {
     bool is_map_lookup{};
     bool reallocate_packet{};
     std::optional<Reg> alloc_size_reg{}; ///< Register holding allocation size (for T_ALLOC_MEM returns).
+    uint8_t zero_args_mask{};            ///< Bitmask of arg positions (0-4 for R1-R5) that must be zero.
 };
 
 /// Resolved form of a Call: the key (via `call`) plus everything derivable
@@ -463,8 +464,15 @@ struct BoundedLoopCount {
     static constexpr int limit = 100000;
 };
 
-using Assertion = std::variant<Comparable, Addable, ValidDivisor, ValidAccess, ValidStore, ValidSize, ValidMapKeyValue,
-                               ValidCallbackTarget, TypeConstraint, FuncConstraint, ZeroCtxOffset, BoundedLoopCount>;
+/// Checks that a register value is provably zero.
+struct ValidArgZero {
+    Reg reg;
+    constexpr bool operator==(const ValidArgZero&) const = default;
+};
+
+using Assertion =
+    std::variant<Comparable, Addable, ValidDivisor, ValidAccess, ValidStore, ValidSize, ValidMapKeyValue,
+                 ValidCallbackTarget, TypeConstraint, FuncConstraint, ZeroCtxOffset, BoundedLoopCount, ValidArgZero>;
 
 std::ostream& operator<<(std::ostream& os, Instruction const& ins);
 std::string to_string(Instruction const& ins);

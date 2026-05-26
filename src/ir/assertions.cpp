@@ -147,6 +147,13 @@ class AssertExtractor {
             res.emplace_back(make_valid_access(arg.mem, 0, arg.size, arg.or_null, access_type));
             // TODO: reg is constant (or maybe it's not important)
         }
+        for (uint8_t i = 0; i < 5; ++i) {
+            if (resolved.contract.zero_args_mask & (1 << i)) {
+                const Reg arg_reg{static_cast<uint8_t>(i + 1)};
+                res.emplace_back(TypeConstraint{arg_reg, TypeGroup::number});
+                res.emplace_back(ValidArgZero{arg_reg});
+            }
+        }
         return res;
     }
 

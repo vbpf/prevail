@@ -49,6 +49,7 @@ ResolvedCall resolve_helper(const Call& call, const ProgramInfo& info) {
     res.contract.return_nullable = return_info->pointer_nullable;
     res.contract.reallocate_packet = proto.reallocate_packet;
     res.contract.is_map_lookup = proto.return_type == EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL;
+    res.contract.zero_args_mask = proto.zero_args_mask;
 
     const std::array<ebpf_argument_type_t, 7> args = {
         {EBPF_ARGUMENT_TYPE_DONTCARE, proto.argument_type[0], proto.argument_type[1], proto.argument_type[2],

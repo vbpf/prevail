@@ -442,6 +442,8 @@ struct AssertionPrinterVisitor {
     }
 
     void operator()(FuncConstraint const& fc) { _os << variable_registry.type_reg(fc.reg.v) << " is helper"; }
+
+    void operator()(ValidArgZero const& a) { _os << a.reg << " == 0"; }
 };
 
 // ReSharper disable CppMemberFunctionMayBeConst
