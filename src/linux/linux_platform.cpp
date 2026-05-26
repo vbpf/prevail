@@ -189,7 +189,7 @@ static EbpfProgramType get_program_type_linux(const std::string& section, const 
         for (const std::string& prefix : t.section_prefixes) {
             if (section.find(prefix) == 0) {
                 EbpfProgramType result = t;
-                result.is_sleepable = prefix.find(".s/") != std::string::npos;
+                result.is_sleepable = prefix.find(".s/") != std::string::npos || result.name == "syscall";
                 return result;
             }
         }
