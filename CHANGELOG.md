@@ -1,5 +1,73 @@
 # Changelog
 
+## v0.2.3 (2026-05-28)
+
+Soundness fixes, helper/kfunc validation, sleepable program support, and a
+broad internal restructuring that removes thread-local globals and untangles
+runtime semantics from presentation.
+39 commits since v0.2.2.
+
+### Soundness fixes
+
+- Fix heap-buffer-overflow from non-instruction-aligned FUNC symbols (#1106).
+- Add 8 missing `reallocate_packet` flags on packet-modifying helpers
+  (`clone_redirect`, `l3_csum_replace`, `l4_csum_replace`, `lwt_push_encap`,
+  `lwt_seg6_action`, `lwt_seg6_store_bytes`, `msg_pull_data`,
+  `store_hdr_opt`); without the flag, stale packet pointers could be reused
+  after the call (#1125).
+- Tighten `ValidMapKeyValue` packet bound; inline bounds checks (#1100).
+- Restore callee-saved registers via rename to preserve zone edges across
+  subprogram returns.
+- Fix `EbpfDomain::to_set()` returning top instead of bottom for unreachable
+  states.
+- Fix `get_map_inner_map_fd` comparing map type instead of `inner_map_fd`.
+- Fix failure-slice filter losing `total_stack_size` (#1094).
+
+### Platform modeling
+
+- Add sleepable program support and `might_sleep` helper gating (#1136).
+- Enforce map-function compatibility checks (#1127).
+- Enforce `get_local_storage` flags argument must be zero (#1129).
+- Mark inner map template descriptors in `EbpfMapDescriptor` (#1069).
+
+### API
+
+- Add `--version` flag (#1108).
+- Classify errors as bugs vs runtime input errors (#1104).
+- Split `PlatformSpec` from `ProgramEnvironment` (#1096).
+- Remove `thread_local_options` and `thread_local_program_info`; pass options
+  explicitly and make `Program` self-contained (#1091, #1092).
+- Pass explicit `AnalysisContext`; treat `VariableRegistry` as a global
+  service (#1088).
+- Thread stack-cell registry through `AnalysisContext` (#1116), then move it
+  into `ArrayDomain`.
+- Thread `CallBtf::module` through kfunc resolution (#1114).
+- Untangle test-helper string parsing from the production verifier API
+  (#1115).
+- Rename `ElfProgramInfo::invalid` to `reject_load` (#1043).
+- Refactor printing API alongside the failure-slice fix (#1094).
+
+### Internals
+
+- Split runtime semantics from presentation/orchestration (#1101).
+- Make `Call` composition explicit; centralize region semantics (#1097).
+- Decompose `Program::from_sequence` into named preparation passes (#1081).
+- Share helper/kfunc arg resolution; compact kfunc prototype table (#1102).
+- Extract `Extrapolator` to own the fixpoint iteration policy.
+- Use COW `shared_ptr` for per-domain cell registry.
+- Make `svalue` a T_NUM-specific kind variable.
+- Drive `setup_entry` `init_r1` from program metadata; decouple from
+  `from_constraints`.
+- Extract `compute_slice_from_label` from `compute_failure_slices` (#1061).
+- C++23: use `std::unreachable()` instead of `assert(false)` (#1075).
+
+### Infrastructure
+
+- Document Ubuntu and compiler version requirements in README (#630).
+- CMake: list library and test sources explicitly (#144).
+- Coverage: exclude `src/test` from lcov report (#344).
+- Bump `softprops/action-gh-release` from 2 to 3.
+
 ## v0.2.2 (2026-04-15)
 
 ### Bug fixes
