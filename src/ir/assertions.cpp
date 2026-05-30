@@ -276,11 +276,14 @@ class AssertExtractor {
 
     vector<Assertion> operator()(const Atomic& ins) const {
 
+        // An atomic is a read-modify-write: model it as a write so that, like a plain
+        // store, it is rejected against read-only context pointer fields (a non-write
+        // access_type would let an atomic corrupt e.g. ctx->data unchecked).
         return {
             Assertion{TypeConstraint{ins.valreg, TypeGroup::number}},
             Assertion{TypeConstraint{ins.access.basereg, TypeGroup::pointer}},
             Assertion{make_valid_access(ins.access.basereg, ins.access.offset,
-                                        Imm{static_cast<uint32_t>(ins.access.width)}, false)},
+                                        Imm{static_cast<uint32_t>(ins.access.width)}, false, AccessType::write)},
         };
     }
 

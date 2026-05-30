@@ -21,6 +21,7 @@
 
 YAML_CASE("test-data/add.yaml")
 YAML_CASE("test-data/assign.yaml")
+YAML_CASE("test-data/ctx.yaml")
 YAML_CASE("test-data/atomic.yaml")
 YAML_CASE("test-data/bitop.yaml")
 YAML_CASE("test-data/observe.yaml")

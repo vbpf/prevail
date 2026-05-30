@@ -1,0 +1,124 @@
+# Copyright (c) Prevail Verifier contributors.
+# SPDX-License-Identifier: MIT
+#
+# Regression tests for writes through a context pointer.
+#
+# The context descriptor used by the YAML test harness is {size=64, data=0,
+# end=4, meta=-1}: the data and data_end pointer slots occupy bytes [0,4) and
+# [4,8). A *load* of those slots synthesizes a typed packet pointer
+# (do_load_ctx), but writes are not tracked by the abstract transformer. A write
+# to e.g. ctx->data that is accepted as a silent no-op, followed by a reload,
+# would hand the program a fresh "valid" packet pointer for a field it corrupted
+# at runtime -- a false PASS for an out-of-bounds dereference. Writes that may
+# overlap a pointer slot must therefore be rejected, regardless of the stored
+# value. Writes to other (scalar) context fields remain allowed.
+---
+test-case: store number to ctx data pointer slot is rejected
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r2.type=number", "r2.svalue=0", "r2.uvalue=0"]
+
+code:
+  <start>: |
+    *(u32 *)(r1 + 0) = r2
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Cannot write to context pointer field (valid_access(r1.offset, width=4) for write)"
+
+---
+test-case: store number to ctx data_end pointer slot is rejected
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r2.type=number", "r2.svalue=0", "r2.uvalue=0"]
+
+code:
+  <start>: |
+    *(u32 *)(r1 + 4) = r2
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Cannot write to context pointer field (valid_access(r1.offset+4, width=4) for write)"
+
+---
+# A wide store starting before a pointer slot still overlaps it and must be rejected.
+test-case: store overlapping ctx data pointer slot is rejected
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r2.type=number", "r2.svalue=0", "r2.uvalue=0"]
+
+code:
+  <start>: |
+    *(u64 *)(r1 + 0) = r2
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Cannot write to context pointer field (valid_access(r1.offset, width=8) for write)"
+
+---
+# Full exploit shape: overwrite ctx->data, reload it as a packet pointer, then
+# dereference. Verification must stop at the write rather than reporting PASS.
+test-case: overwrite ctx data then reload and deref is rejected
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r2.type=number", "r2.svalue=0", "r2.uvalue=0"]
+
+code:
+  <start>: |
+    *(u32 *)(r1 + 0) = r2
+    r3 = *(u32 *)(r1 + 0)
+    r4 = *(u8 *)(r3 + 0)
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Cannot write to context pointer field (valid_access(r1.offset, width=4) for write)"
+
+---
+# An atomic read-modify-write also modifies the field and must be rejected on a
+# pointer slot, even with a number value register (the value-type check alone
+# would let it through).
+test-case: atomic to ctx data pointer slot is rejected
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r5.type=number", "r5.svalue=1", "r5.uvalue=1"]
+
+code:
+  <start>: |
+    lock *(u64 *)(r1 + 0) += r5
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Cannot write to context pointer field (valid_access(r1.offset, width=8) for write)"
+
+---
+# Writes to scalar context fields (outside any pointer slot) remain allowed.
+test-case: store number to ctx scalar field is allowed
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r2.type=number", "r2.svalue=0", "r2.uvalue=0"]
+
+code:
+  <start>: |
+    *(u32 *)(r1 + 8) = r2
+    r0 = 0
+    exit
+
+post:
+  - r0.svalue=0
+  - r0.type=number
+  - r0.uvalue=0
+  - r1.ctx_offset=0
+  - r1.type=ctx
+  - r2.svalue=0
+  - r2.type=number
+  - r2.uvalue=0

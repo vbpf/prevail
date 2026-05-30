@@ -302,6 +302,10 @@ code:
 
 post: []
 
+# These stores target a scalar context field (offset 8), not a data/data_end/meta
+# pointer slot, so they reach the value-type check that rejects storing a
+# non-number to an externally-visible region. (Writes that overlap a pointer slot
+# are rejected earlier regardless of value; see test-data/ctx.yaml.)
 ---
 test-case: Store uninitialized register to context - 8 bytes
 
@@ -311,7 +315,7 @@ pre:
 
 code:
   <start>: |
-    *(u64 *)(r1 + 0) = r0
+    *(u64 *)(r1 + 8) = r0
 
 post:
   - "_|_"
@@ -328,7 +332,7 @@ pre:
 
 code:
   <start>: |
-    *(u32 *)(r1 + 0) = r0
+    *(u32 *)(r1 + 8) = r0
 
 post:
   - "_|_"
@@ -345,7 +349,7 @@ pre:
 
 code:
   <start>: |
-    *(u16 *)(r1 + 0) = r0
+    *(u16 *)(r1 + 8) = r0
 
 post:
   - "_|_"
@@ -362,7 +366,7 @@ pre:
 
 code:
   <start>: |
-    *(u8 *)(r1 + 0) = r0
+    *(u8 *)(r1 + 8) = r0
 
 post:
   - "_|_"
@@ -379,7 +383,7 @@ pre:
 
 code:
   <start>: |
-    lock *(u64 *)(r1 + 0) += r5
+    lock *(u64 *)(r1 + 8) += r5
 
 post:
   - "_|_"
@@ -396,7 +400,7 @@ pre:
 
 code:
   <start>: |
-    lock *(u64 *)(r1 + 0) &= r5
+    lock *(u64 *)(r1 + 8) &= r5
 
 post:
   - "_|_"
@@ -413,7 +417,7 @@ pre:
 
 code:
   <start>: |
-    lock *(u64 *)(r1 + 0) |= r5
+    lock *(u64 *)(r1 + 8) |= r5
 
 post:
   - "_|_"
@@ -430,7 +434,7 @@ pre:
 
 code:
   <start>: |
-    lock *(u64 *)(r1 + 0) |= r5
+    lock *(u64 *)(r1 + 8) ^= r5
 
 post:
   - "_|_"
@@ -447,7 +451,7 @@ pre:
 
 code:
   <start>: |
-    lock *(u64 *)(r1 + 0) x= r5
+    lock *(u64 *)(r1 + 8) x= r5
 
 post:
   - "_|_"
@@ -464,7 +468,7 @@ pre:
 
 code:
   <start>: |
-    lock *(u64 *)(r1 + 0) x= r5
+    lock *(u64 *)(r1 + 8) x= r5
 
 post:
   - "_|_"
