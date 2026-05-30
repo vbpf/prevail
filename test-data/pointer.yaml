@@ -442,3 +442,85 @@ post:
   - r1.svalue=8
   - r1.type in {ctx, shared}
   - r1.uvalue=8
+
+---
+# Regression test: 32-bit (ALU32) ADD/SUB on a pointer register. ALU32
+# zero-extends its 32-bit result, destroying the upper half of a live pointer,
+# so the result cannot be a usable pointer. The immediate forms above were
+# already caught, but the register-register form kept the pointer type: r1
+# stayed ctx and the following load synthesized a fresh valid packet pointer.
+# The result is now retyped as the scalar it is, so the dereference is rejected.
+test-case: 32-bit pointer truncation - register addition
+
+pre:
+  - "r1.ctx_offset=0"
+  - "r1.svalue=[0, 4294967295]"
+  - "r1.uvalue=r1.svalue"
+  - "r1.type=ctx"
+  - "r1.uvalue=[0, 4294967295]"
+  - "r2.type=number"
+  - "r2.svalue=0"
+  - "r2.uvalue=0"
+
+code:
+  <start>: |
+    w1 += w2
+    r3 = *(u32 *)(r1 + 0)
+
+post:
+  - "_|_"
+
+messages:
+  - "1: Invalid type (r1.type in {ctx, stack, packet, shared})"
+
+---
+test-case: 32-bit pointer truncation - register subtraction
+
+pre:
+  - "r1.ctx_offset=0"
+  - "r1.svalue=[0, 4294967295]"
+  - "r1.uvalue=r1.svalue"
+  - "r1.type=ctx"
+  - "r1.uvalue=[0, 4294967295]"
+  - "r2.type=number"
+  - "r2.svalue=0"
+  - "r2.uvalue=0"
+
+code:
+  <start>: |
+    w1 -= w2
+    r3 = *(u32 *)(r1 + 0)
+
+post:
+  - "_|_"
+
+messages:
+  - "1: Invalid type (r1.type in {ctx, stack, packet, shared})"
+
+---
+# The low 32 bits of a pointer produced by a 32-bit op must not be usable as a
+# scalar: doing so would launder a (possibly kernel) address into a number that
+# can be returned or stored, leaking it. The forgotten result is not provably a
+# number, so returning it is rejected -- the pointer cannot be leaked this way.
+test-case: 32-bit pointer truncation - result is not leakable
+
+pre:
+  - "r1.type=ctx"
+  - "r1.ctx_offset=0"
+  - "r1.svalue=8"
+  - "r1.uvalue=8"
+  - "r2.type=number"
+  - "r2.svalue=0"
+  - "r2.uvalue=0"
+
+code:
+  <start>: |
+    w1 += w2
+    r0 = r1
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "2: Invalid type (r0.type == number)"

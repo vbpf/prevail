@@ -1496,7 +1496,22 @@ void EbpfTransformer::operator()(const Bin& bin) {
         }
     }
     if (!bin.is64) {
-        dom.state.values->bitwise_and(dst.svalue, dst.uvalue, std::numeric_limits<uint32_t>::max());
+        if (dom.state.is_in_group(bin.dst, TS_NUM)) {
+            // A genuine scalar: the 32-bit result is zero-extended, so masking off the upper
+            // half models it precisely.
+            dom.state.values->bitwise_and(dst.svalue, dst.uvalue, std::numeric_limits<uint32_t>::max());
+        } else {
+            // The input may be a pointer, so a 32-bit op yields the low 32 bits of a (possibly
+            // kernel) address. That value is neither a usable pointer (the upper half is gone)
+            // nor a safe-to-leak scalar (it carries pointer bits), and this type model has no
+            // "tainted scalar". Retyping it as T_NUM would launder the address into a number
+            // that could be stored or returned, leaking kernel addresses; keeping it a pointer
+            // would let a later dereference pass. So forget it entirely (unknown type): a later
+            // dereference then fails as a non-pointer and a later leak fails as a non-number,
+            // matching the kernel, which forbids the operation outright. Mirrors the immediate
+            // ADD/SUB and MOV paths.
+            dom.state.havoc_register(bin.dst);
+        }
     }
 }
 
