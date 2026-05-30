@@ -355,3 +355,90 @@ post:
 
 messages:
   - "0: Invalid type (r1.type == number)"
+
+---
+# Regression test: when a register carries a
+# non-singleton typeset (here {ctx, shared}), add() cannot pick a single
+# offset variable to update. It must invalidate all offset variables rather
+# than leaving them stale; otherwise the post-add bounds check uses the
+# pre-add offset and accepts an out-of-bounds access. After advancing the
+# pointer past both regions, the dereference must be rejected.
+test-case: non-singleton typeset pointer add invalidates offsets
+
+pre: ["r1.type in {ctx, shared}",
+      "r1.ctx_offset=8",
+      "r1.shared_offset=8", "r1.shared_region_size=16",
+      "r1.svalue=8", "r1.uvalue=8"]
+
+code:
+  <start>: |
+    r1 += 56
+    r2 = *(u64 *)(r1 + 0)
+
+post:
+  - "_|_"
+
+messages:
+  - "1: Lower bound must be at least 0 (valid_access(r1.offset, width=8) for read)"
+
+---
+# Symmetric regression on the register-register
+# subtract path (ptr -= num with a non-singleton destination typeset).
+test-case: non-singleton typeset pointer sub invalidates offsets
+
+pre: ["r1.type in {ctx, shared}",
+      "r1.ctx_offset=8",
+      "r1.shared_offset=8", "r1.shared_region_size=16",
+      "r1.svalue=8", "r1.uvalue=8",
+      "r2.type=number", "r2.svalue=16", "r2.uvalue=16"]
+
+code:
+  <start>: |
+    r1 -= r2
+    r3 = *(u64 *)(r1 + 0)
+
+post:
+  - "_|_"
+
+messages:
+  - "1: Lower bound must be at least 0 (valid_access(r1.offset, width=8) for read)"
+
+---
+# Regression test for the {number, pointer} union case: a register that may be a
+# number or a pointer takes the numeric add/sub fast-path, which advances
+# svalue/uvalue but not any pointer offset. The pointer offset must be
+# invalidated rather than left stale; here ctx_offset must not survive the add.
+test-case: mixed number-pointer add invalidates pointer offset
+
+pre: ["r1.type in {number, ctx}", "r1.ctx_offset=8", "r1.svalue=8", "r1.uvalue=8"]
+
+code:
+  <start>: |
+    r1 += 56
+
+post:
+  - r1.svalue=64
+  - r1.type in {number, ctx}
+  - r1.uvalue=64
+
+---
+# Companion showing the conservative havoc only affects offsets *after*
+# arithmetic: a non-singleton {ctx, shared} register dereferenced directly,
+# in bounds and without prior arithmetic, still passes.
+test-case: non-singleton typeset in-bounds access still passes
+
+pre: ["r1.type in {ctx, shared}",
+      "r1.ctx_offset=0", "r1.shared_offset=0", "r1.shared_region_size=16",
+      "r1.svalue=8", "r1.uvalue=8"]
+
+code:
+  <start>: |
+    r2 = *(u64 *)(r1 + 0)
+
+post:
+  - r1.ctx_offset=0
+  - r1.shared_offset=0
+  - r1.shared_region_size=16
+  - r1.svalue=8
+  - r1.type in {ctx, shared}
+  - r1.uvalue=8

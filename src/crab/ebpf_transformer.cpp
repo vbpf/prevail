@@ -1081,9 +1081,21 @@ void EbpfTransformer::add(const Reg& dst_reg, const int imm, const int finite_wi
     const auto dst = reg_pack(dst_reg);
     if (dom.state.may_have_type(dst_reg, T_NUM)) {
         dom.state.values->add_overflow(dst.svalue, dst.uvalue, imm, finite_width);
+        if (!dom.state.is_in_group(dst_reg, TS_NUM)) {
+            // The destination may also be a pointer (a {number, pointer} union). The numeric
+            // path above does not advance any pointer offset, so invalidate them rather than
+            // leaving a stale offset that a later bounds check would reason from.
+            dom.state.havoc_offsets(dst_reg);
+        }
     } else {
         if (const auto kind = dom.state.primary_kind_variable_for_type(dst_reg)) {
             dom.state.values->add(*kind, imm);
+        } else {
+            // The register's typeset is non-singleton, so we cannot pick a single offset
+            // variable to update. Conservatively invalidate all offset variables rather than
+            // leaving them stale, which would make subsequent bounds checks use a pre-add
+            // offset and accept out-of-bounds accesses. Mirrors shl()/lshr()/ashr().
+            dom.state.havoc_offsets(dst_reg);
         }
         dom.state.values->apply_unsigned(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.uvalue, imm, finite_width);
     }
@@ -1343,9 +1355,19 @@ void EbpfTransformer::operator()(const Bin& bin) {
                 if (dom.state.is_in_group(std::get<Reg>(bin.v), TS_NUM)) {
                     if (dom.state.may_have_type(bin.dst, T_NUM)) {
                         dom.state.values->sub_overflow(dst.svalue, dst.uvalue, src.svalue, finite_width);
+                        if (!dom.state.is_in_group(bin.dst, TS_NUM)) {
+                            // {number, pointer} union: the numeric path does not advance any
+                            // pointer offset, so invalidate them rather than leaving a stale
+                            // offset (see add()).
+                            dom.state.havoc_offsets(bin.dst);
+                        }
                     } else {
                         if (const auto kind = dom.state.primary_kind_variable_for_type(bin.dst)) {
                             dom.state.values->sub(*kind, src.svalue);
+                        } else {
+                            // Non-singleton typeset: no single offset variable to update.
+                            // Invalidate all offsets rather than leaving them stale (see add()).
+                            dom.state.havoc_offsets(bin.dst);
                         }
                         dom.state.values->apply_unsigned(ArithBinOp::SUB, dst.svalue, dst.uvalue, dst.uvalue,
                                                          src.uvalue, finite_width);
