@@ -344,8 +344,41 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             break;
         }
         case T_CTX: {
-            const auto ctx_size = context.program_info().type.ctx_descriptor->size;
+            const auto* desc = context.program_info().type.ctx_descriptor;
             const auto [lb, ub] = lb_ub_access_pair(s, reg.ctx_offset);
+            if (s.access_type == AccessType::write && desc->end >= 0) {
+                // The data/data_end/meta fields are read-only pointer slots: a *load* of those
+                // offsets synthesizes a typed packet pointer (see do_load_ctx). Writes are not
+                // tracked by the abstract transformer (do_mem_store models only stack stores),
+                // so an accepted write to e.g. ctx->data followed by a reload would hand out a
+                // fresh "valid" packet pointer for a field the program corrupted at runtime,
+                // a false PASS for an out-of-bounds dereference. Writes to other (scalar)
+                // context fields are sound, since their loads are havoced to numbers, and real
+                // programs do write them; so reject only writes that may overlap a pointer
+                // slot. A write of [lb, ub) overlaps slot [f, f + field_width) unless we can
+                // prove it lies entirely before (ub <= f) or entirely after (lb >= f + width).
+                //
+                // field_width is the size of a pointer slot, taken as end - data: this is the
+                // data/data_end adjacency that do_load_ctx also relies on. If a descriptor ever
+                // violated it (non-positive width), the overlap math would be meaningless, so
+                // fall back to rejecting the write outright rather than reasoning from a bogus
+                // slot width.
+                const int field_width = desc->end - desc->data;
+                if (field_width <= 0) {
+                    throw_fail("Cannot write to context with unexpected pointer-field layout");
+                }
+                const auto may_overlap = [&](const int field_offset) {
+                    if (field_offset < 0) {
+                        return false;
+                    }
+                    return dom.state.values.intersect(ub > LinearExpression{field_offset}) &&
+                           dom.state.values.intersect(lb < LinearExpression{field_offset + field_width});
+                };
+                if (may_overlap(desc->data) || may_overlap(desc->end) || may_overlap(desc->meta)) {
+                    throw_fail("Cannot write to context pointer field");
+                }
+            }
+            const auto ctx_size = desc->size;
             require_lower_bound(lb, LinearExpression{0}, "Lower bound must be at least 0");
             require_upper_bound(ub, LinearExpression{ctx_size},
                                 "Upper bound must be at most " + std::to_string(ctx_size));
