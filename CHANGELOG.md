@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.2.4 (2026-06-01)
+
+Soundness fixes for pointer arithmetic and context writes.
+3 commits since v0.2.3.
+
+### Soundness fixes
+
+- Reject writes through a `T_CTX` pointer whose byte range may overlap a
+  data/data_end/meta pointer slot. Such a store was modeled as a silent no-op,
+  so a program could overwrite `ctx->data`, reload it as a packet pointer, and
+  dereference an attacker-controlled address while the verifier reported PASS.
+  Scalar context-field writes (e.g. `__sk_buff` fields) are still allowed.
+  Atomic RMW operations on context now assert a `write` access, closing the
+  same hole on the atomic path.
+- Havoc offsets on `add`/`sub` when the destination register carries a
+  non-singleton typeset (or a `{number, pointer}` union). The offset update was
+  silently skipped while `svalue`/`uvalue` advanced, leaving offset variables
+  stale and letting subsequent bounds checks accept out-of-bounds accesses.
+- Forget the destination register of a 32-bit (ALU32) `add`/`sub` whose result
+  is not provably a number. The zero-extended result holds only the low half of
+  a pointer address; it must be neither followable as a pointer nor leakable as
+  a scalar.
+
 ## v0.2.3 (2026-05-28)
 
 Soundness fixes, helper/kfunc validation, sleepable program support, and a
