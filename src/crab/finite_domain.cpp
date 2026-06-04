@@ -1,5 +1,6 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
+#include <cassert>
 #include <optional>
 #include <utility>
 
@@ -1001,6 +1002,11 @@ void FiniteDomain::shl_overflow(const Variable lhss, const Variable lhsu, const 
 }
 
 void FiniteDomain::shl(const Variable svalue, const Variable uvalue, const int imm, const int finite_width) {
+    // eBPF masks shift counts before this transfer function. Large operand
+    // values are valid; only the C++ shift count must be strictly below width.
+    assert((finite_width == 32 || finite_width == 64) && "unexpected finite-width shift domain");
+    assert(0 <= imm && imm < finite_width && "left shift count must be masked before FiniteDomain::shl");
+
     const auto uinterval = eval_interval(uvalue);
     if (!uinterval.finite_size()) {
         shl_overflow(svalue, uvalue, imm);
@@ -1009,7 +1015,10 @@ void FiniteDomain::shl(const Variable svalue, const Variable uvalue, const int i
     auto [lb_n, ub_n] = uinterval.pair<uint64_t>();
     const uint64_t uint_max = finite_width == 64 ? uint64_t{std::numeric_limits<uint64_t>::max()}
                                                  : uint64_t{std::numeric_limits<uint32_t>::max()};
-    if (lb_n >> (finite_width - imm) != ub_n >> (finite_width - imm)) {
+    const int unpreserved_bit_count = finite_width - imm;
+    const bool unpreserved_bits_differ =
+        unpreserved_bit_count < 64 && (lb_n >> unpreserved_bit_count) != (ub_n >> unpreserved_bit_count);
+    if (unpreserved_bits_differ) {
         // The bits that will be shifted out to the left are different,
         // which means all combinations of remaining bits are possible.
         lb_n = 0;
