@@ -198,7 +198,7 @@ class ProgramReader {
     bool try_reloc(const std::string& symbol_name, ELFIO::Elf_Half symbol_section_index, unsigned char symbol_type,
                    unsigned char symbol_bind, std::vector<EbpfInst>& instructions, size_t location,
                    ELFIO::Elf_Word index, ELFIO::Elf_Sxword addend);
-    void process_relocations(std::vector<EbpfInst>& instructions, const ELFIO::const_relocation_section_accessor& reloc,
+    void process_relocations(std::vector<EbpfInst>& instructions, const ELFIO::section& reloc,
                              const std::string& section_name, ELFIO::Elf_Xword program_offset, size_t program_size);
     [[nodiscard]]
     const ELFIO::section* get_relocation_section(const std::string& name) const;

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <catch2/catch_all.hpp>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -150,11 +151,8 @@ SectionHeaderInfo get_section_header_info(const std::filesystem::path& path, con
 
 void patch_machine(const std::filesystem::path& path, const uint16_t machine) {
     auto bytes = read_file_bytes(path);
-    if (bytes.size() < 20) {
-        throw std::runtime_error("ELF header is truncated");
-    }
     // e_machine field in ELF header (both 32-bit and 64-bit).
-    write_u16_le(bytes, 18, machine);
+    write_u16_le(bytes, offsetof(ELFIO::Elf32_Ehdr, e_machine), machine);
     write_file_bytes(path, bytes);
 }
 
@@ -162,9 +160,10 @@ void patch_section_offset(const std::filesystem::path& path, const std::string& 
     const auto info = get_section_header_info(path, section_name);
     auto bytes = read_file_bytes(path);
     if (info.elf_class == ELFIO::ELFCLASS32) {
-        write_u32_le(bytes, info.section_header_offset + 16, static_cast<uint32_t>(offset));
+        write_u32_le(bytes, info.section_header_offset + offsetof(ELFIO::Elf32_Shdr, sh_offset),
+                     static_cast<uint32_t>(offset));
     } else if (info.elf_class == ELFIO::ELFCLASS64) {
-        write_u64_le(bytes, info.section_header_offset + 24, offset);
+        write_u64_le(bytes, info.section_header_offset + offsetof(ELFIO::Elf64_Shdr, sh_offset), offset);
     } else {
         throw std::runtime_error("Unexpected ELF class");
     }
@@ -175,9 +174,25 @@ void patch_section_size(const std::filesystem::path& path, const std::string& se
     const auto info = get_section_header_info(path, section_name);
     auto bytes = read_file_bytes(path);
     if (info.elf_class == ELFIO::ELFCLASS32) {
-        write_u32_le(bytes, info.section_header_offset + 20, static_cast<uint32_t>(size));
+        write_u32_le(bytes, info.section_header_offset + offsetof(ELFIO::Elf32_Shdr, sh_size),
+                     static_cast<uint32_t>(size));
     } else if (info.elf_class == ELFIO::ELFCLASS64) {
-        write_u64_le(bytes, info.section_header_offset + 32, size);
+        write_u64_le(bytes, info.section_header_offset + offsetof(ELFIO::Elf64_Shdr, sh_size), size);
+    } else {
+        throw std::runtime_error("Unexpected ELF class");
+    }
+    write_file_bytes(path, bytes);
+}
+
+void patch_section_entry_size(const std::filesystem::path& path, const std::string& section_name,
+                              const uint64_t entry_size) {
+    const auto info = get_section_header_info(path, section_name);
+    auto bytes = read_file_bytes(path);
+    if (info.elf_class == ELFIO::ELFCLASS32) {
+        write_u32_le(bytes, info.section_header_offset + offsetof(ELFIO::Elf32_Shdr, sh_entsize),
+                     static_cast<uint32_t>(entry_size));
+    } else if (info.elf_class == ELFIO::ELFCLASS64) {
+        write_u64_le(bytes, info.section_header_offset + offsetof(ELFIO::Elf64_Shdr, sh_entsize), entry_size);
     } else {
         throw std::runtime_error("Unexpected ELF class");
     }
@@ -287,12 +302,12 @@ void patch_first_relocation_symbol_index(const std::filesystem::path& path, cons
     }
 
     if (info.elf_class == ELFIO::ELFCLASS64) {
-        constexpr size_t r_info_offset = 8;
+        constexpr size_t r_info_offset = offsetof(ELFIO::Elf64_Rel, r_info);
         const auto old_info = read_u64_le(bytes, entry_offset + r_info_offset);
         const uint64_t new_info = (static_cast<uint64_t>(new_symbol_index) << 32U) | (old_info & 0xffffffffULL);
         write_u64_le(bytes, entry_offset + r_info_offset, new_info);
     } else if (info.elf_class == ELFIO::ELFCLASS32) {
-        constexpr size_t r_info_offset = 4;
+        constexpr size_t r_info_offset = offsetof(ELFIO::Elf32_Rel, r_info);
         const auto old_info = read_u32_le(bytes, entry_offset + r_info_offset);
         const uint32_t new_info = (new_symbol_index << 8U) | (old_info & 0xffU);
         write_u32_le(bytes, entry_offset + r_info_offset, new_info);
@@ -313,12 +328,12 @@ void patch_first_relocation_type(const std::filesystem::path& path, const std::s
     }
 
     if (info.elf_class == ELFIO::ELFCLASS64) {
-        constexpr size_t r_info_offset = 8;
+        constexpr size_t r_info_offset = offsetof(ELFIO::Elf64_Rel, r_info);
         const auto old_info = read_u64_le(bytes, entry_offset + r_info_offset);
         const uint64_t new_info = (old_info & 0xffffffff00000000ULL) | static_cast<uint64_t>(new_relocation_type);
         write_u64_le(bytes, entry_offset + r_info_offset, new_info);
     } else if (info.elf_class == ELFIO::ELFCLASS32) {
-        constexpr size_t r_info_offset = 4;
+        constexpr size_t r_info_offset = offsetof(ELFIO::Elf32_Rel, r_info);
         const auto old_info = read_u32_le(bytes, entry_offset + r_info_offset);
         const uint32_t new_info = (old_info & 0xffffff00U) | (new_relocation_type & 0xffU);
         write_u32_le(bytes, entry_offset + r_info_offset, new_info);
@@ -420,6 +435,15 @@ TEST_CASE("ELF loader rejects relocation sections with out-of-bounds file offset
 
     REQUIRE_THROWS_WITH((ElfObject{elf.path().string(), {}, &g_ebpf_platform_linux}.get_programs(".text")),
                         Catch::Matchers::ContainsSubstring("out-of-bounds file range"));
+}
+
+TEST_CASE("ELF loader rejects relocation sections with invalid entry size", "[elf][hardening]") {
+
+    TempElfFile elf{"ebpf-samples/build/twomaps.o", "bad-reloc-entry-size"};
+    patch_section_entry_size(elf.path(), ".rel.text", sizeof(ELFIO::Elf64_Rel) + 1);
+
+    REQUIRE_THROWS_WITH((ElfObject{elf.path().string(), {}, &g_ebpf_platform_linux}.get_programs(".text")),
+                        Catch::Matchers::ContainsSubstring("Malformed relocation section"));
 }
 
 TEST_CASE("ELF loader rejects malformed legacy maps section record size", "[elf][hardening]") {
