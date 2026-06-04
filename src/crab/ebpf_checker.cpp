@@ -216,19 +216,25 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
     const auto fd_type = dom.get_map_type(s.map_fd_reg, context);
 
     const auto access_reg = reg_pack(s.access_reg);
-    int width;
+    Number width;
     if (s.key) {
         const auto key_size = dom.get_map_key_size(s.map_fd_reg, context).singleton();
         if (!key_size.has_value()) {
             throw_fail("Map key size is not singleton");
         }
-        width = key_size->narrow<int>();
+        if (!key_size->fits<uint32_t>()) {
+            throw_fail("Map key size is out of supported range");
+        }
+        width = *key_size;
     } else {
         const auto value_size = dom.get_map_value_size(s.map_fd_reg, context).singleton();
         if (!value_size.has_value()) {
             throw_fail("Map value size is not singleton");
         }
-        width = value_size->narrow<int>();
+        if (!value_size->fits<uint32_t>()) {
+            throw_fail("Map value size is out of supported range");
+        }
+        width = *value_size;
     }
 
     for (const auto access_reg_type : dom.state.enumerate_types(s.access_reg)) {
@@ -269,7 +275,7 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
         }
         case T_PACKET: {
             Variable lb = access_reg.packet_offset;
-            LinearExpression ub = lb + width;
+            LinearExpression ub = LinearExpression{lb} + LinearExpression{width};
             require_lower_bound(lb, variable_registry.meta_offset(), "Lower bound must be at least meta_offset");
             require_upper_bound(ub, variable_registry.packet_size(), "Upper bound must be at most packet_size");
             // Packet memory is both readable and writable.
@@ -277,7 +283,7 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
         }
         case T_SHARED: {
             Variable lb = access_reg.shared_offset;
-            LinearExpression ub = lb + width;
+            LinearExpression ub = LinearExpression{lb} + LinearExpression{width};
             require_lower_bound(lb, LinearExpression{0}, "Lower bound must be at least 0");
             require_upper_bound(ub, access_reg.shared_region_size,
                                 "Upper bound must be at most " + variable_registry.name(access_reg.shared_region_size));
