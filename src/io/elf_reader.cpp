@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: MIT
 #include <algorithm>
 #include <cerrno>
+#include <concepts>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <deque>
 #include <filesystem>
@@ -14,6 +16,7 @@
 #include <set>
 #include <string>
 #include <sys/stat.h>
+#include <type_traits>
 #include <variant>
 #include <vector>
 
@@ -67,6 +70,99 @@ std::string bad_reloc_value(const size_t reloc_value) {
 
 bool is_supported_bpf_relocation_type(const unsigned type) {
     return type == R_BPF_NONE_TYPE || type == R_BPF_64_64_TYPE || type == R_BPF_64_32_TYPE;
+}
+
+template <std::unsigned_integral T>
+T read_reloc_uint(const char* data, const size_t offset, const bool little_endian) {
+    T value = 0;
+    for (size_t i = 0; i < sizeof(T); ++i) {
+        const size_t byte_index = little_endian ? i : sizeof(T) - 1U - i;
+        value |= static_cast<T>(static_cast<unsigned char>(data[offset + byte_index])) << (8U * i);
+    }
+    return value;
+}
+
+template <std::signed_integral T>
+T read_reloc_int(const char* data, const size_t offset, const bool little_endian) {
+    const auto raw = read_reloc_uint<std::make_unsigned_t<T>>(data, offset, little_endian);
+    T value{};
+    std::memcpy(&value, &raw, sizeof(value));
+    return value;
+}
+
+struct RelocationEntry {
+    ELFIO::Elf64_Addr offset;
+    ELFIO::Elf_Word symbol_index;
+    unsigned type;
+    ELFIO::Elf_Sxword addend;
+};
+
+struct RelocationSectionLayout {
+    unsigned char elf_class;
+    ELFIO::Elf_Word section_type;
+    size_t entry_size;
+    ELFIO::Elf_Xword entries_num;
+    bool little_endian;
+};
+
+size_t expected_relocation_entry_size(const unsigned char elf_class, const ELFIO::Elf_Word section_type) {
+    if (elf_class == ELFIO::ELFCLASS64) {
+        return section_type == ELFIO::SHT_RELA ? sizeof(ELFIO::Elf64_Rela) : sizeof(ELFIO::Elf64_Rel);
+    }
+    return section_type == ELFIO::SHT_RELA ? sizeof(ELFIO::Elf32_Rela) : sizeof(ELFIO::Elf32_Rel);
+}
+
+RelocationSectionLayout relocation_section_layout(const ELFIO::elfio& reader, const ELFIO::section& section,
+                                                  const std::string& section_name) {
+    const auto elf_class = reader.get_class();
+    const auto section_type = section.get_type();
+    if (section_type != ELFIO::SHT_REL && section_type != ELFIO::SHT_RELA) {
+        throw UnmarshalError("Malformed relocation section " + section_name);
+    }
+
+    const size_t expected_entry_size = expected_relocation_entry_size(elf_class, section_type);
+    const size_t entry_size = section.get_entry_size();
+    if (entry_size != expected_entry_size || section.get_data() == nullptr || section.get_size() % entry_size != 0) {
+        throw UnmarshalError("Malformed relocation section " + section_name);
+    }
+    return {
+        .elf_class = elf_class,
+        .section_type = section_type,
+        .entry_size = entry_size,
+        .entries_num = section.get_size() / entry_size,
+        .little_endian = reader.get_encoding() == ELFIO::ELFDATA2LSB,
+    };
+}
+
+RelocationEntry read_relocation_entry(const ELFIO::section& section, const ELFIO::Elf_Xword index,
+                                      const RelocationSectionLayout& layout) {
+    const char* data = section.get_data() + index * layout.entry_size;
+    if (layout.elf_class == ELFIO::ELFCLASS64) {
+        const uint64_t info =
+            read_reloc_uint<ELFIO::Elf_Xword>(data, offsetof(ELFIO::Elf64_Rel, r_info), layout.little_endian);
+        return {
+            .offset =
+                read_reloc_uint<ELFIO::Elf64_Addr>(data, offsetof(ELFIO::Elf64_Rel, r_offset), layout.little_endian),
+            .symbol_index = static_cast<ELFIO::Elf_Word>(info >> 32U),
+            .type = static_cast<unsigned>(info & 0xffffffffULL),
+            .addend = layout.section_type == ELFIO::SHT_RELA
+                          ? read_reloc_int<ELFIO::Elf_Sxword>(data, offsetof(ELFIO::Elf64_Rela, r_addend),
+                                                              layout.little_endian)
+                          : 0,
+        };
+    }
+
+    const uint32_t info =
+        read_reloc_uint<ELFIO::Elf_Word>(data, offsetof(ELFIO::Elf32_Rel, r_info), layout.little_endian);
+    return {
+        .offset = read_reloc_uint<ELFIO::Elf32_Addr>(data, offsetof(ELFIO::Elf32_Rel, r_offset), layout.little_endian),
+        .symbol_index = static_cast<ELFIO::Elf_Word>(info >> 8U),
+        .type = static_cast<unsigned>(info & 0xffU),
+        .addend =
+            layout.section_type == ELFIO::SHT_RELA
+                ? read_reloc_int<ELFIO::Elf_Sword>(data, offsetof(ELFIO::Elf32_Rela, r_addend), layout.little_endian)
+                : 0,
+    };
 }
 
 symbol_details_t get_symbol_details(const ELFIO::const_symbol_section_accessor& symbols, const ELFIO::Elf_Xword index) {
@@ -619,19 +715,16 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
     return false;
 }
 
-void ProgramReader::process_relocations(std::vector<EbpfInst>& instructions,
-                                        const ELFIO::const_relocation_section_accessor& reloc,
+void ProgramReader::process_relocations(std::vector<EbpfInst>& instructions, const ELFIO::section& reloc,
                                         const std::string& section_name, const ELFIO::Elf_Xword program_offset,
                                         const size_t program_size) {
-    for (ELFIO::Elf_Xword i = 0; i < reloc.get_entries_num(); i++) {
-        ELFIO::Elf64_Addr o{};
-        ELFIO::Elf_Word idx{};
-        unsigned type{};
-        ELFIO::Elf_Sxword addend{};
-        if (!reloc.get_entry(i, o, idx, type, addend)) {
-            throw UnmarshalError("Malformed relocation entry in section " + section_name + " at index " +
-                                 std::to_string(i));
-        }
+    const auto layout = relocation_section_layout(reader, reloc, section_name);
+    for (ELFIO::Elf_Xword i = 0; i < layout.entries_num; i++) {
+        const auto entry = read_relocation_entry(reloc, i, layout);
+        ELFIO::Elf64_Addr o = entry.offset;
+        const ELFIO::Elf_Word idx = entry.symbol_index;
+        const unsigned type = entry.type;
+        const ELFIO::Elf_Sxword addend = entry.addend;
         if (!is_supported_bpf_relocation_type(type)) {
             throw UnmarshalError("Unsupported relocation type " + std::to_string(type) + " in section " + section_name);
         }
@@ -700,8 +793,7 @@ void ProgramReader::read_programs() {
             }
             auto instructions = vector_of<EbpfInst>(sec->get_data() + offset, extracted_size);
             if (const auto reloc_sec = get_relocation_section(sec_name)) {
-                process_relocations(instructions, ELFIO::const_relocation_section_accessor{reader, reloc_sec}, sec_name,
-                                    offset, extracted_size);
+                process_relocations(instructions, *reloc_sec, sec_name, offset, extracted_size);
             }
             enqueue_synthetic_local_calls(instructions, sec->get_index(), offset);
             ProgramInfo program_info{
