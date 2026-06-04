@@ -358,21 +358,42 @@ static std::optional<std::pair<offset_t, unsigned>> kill_and_find_var(StackCellR
     }
     return res;
 }
-static std::tuple<int, int> as_numbytes_range(const Interval& index, const Interval& width, const int stack_size) {
-    return (index | (index + width)).bound(0, stack_size);
+static std::optional<std::tuple<int, int>> as_numbytes_range(const Interval& range, const int stack_size) {
+    const Interval bounded_range = Interval{0, stack_size} & range;
+    if (bounded_range.is_bottom()) {
+        return {};
+    }
+    const auto bounds = bounded_range.pair<int>();
+    const auto [lb, ub] = bounds;
+    if (lb >= ub) {
+        return {};
+    }
+    return bounds;
+}
+
+static std::optional<std::tuple<int, int>> as_numbytes_range(const Interval& index, const Interval& width,
+                                                             const int stack_size) {
+    const Interval range = index | (index + width);
+    return as_numbytes_range(range, stack_size);
 }
 
 bool ArrayDomain::all_num_lb_ub(const Interval& lb, const Interval& ub) const {
-    const auto [min_lb, max_ub] = (lb | ub).bound(0, total_stack_size());
-    if (min_lb > max_ub) {
+    const auto range = as_numbytes_range(lb | ub, total_stack_size());
+    if (!range.has_value()) {
         return false;
     }
+    const auto [min_lb, max_ub] = *range;
+    assert(min_lb < max_ub);
     return this->num_bytes.all_num(min_lb, max_ub);
 }
 
 bool ArrayDomain::all_num_width(const Interval& index, const Interval& width) const {
-    const auto [min_lb, max_ub] = as_numbytes_range(index, width, total_stack_size());
-    assert(min_lb <= max_ub);
+    const auto range = as_numbytes_range(index, width, total_stack_size());
+    if (!range.has_value()) {
+        return false;
+    }
+    const auto [min_lb, max_ub] = *range;
+    assert(min_lb < max_ub);
     return this->num_bytes.all_num(min_lb, max_ub);
 }
 
@@ -610,8 +631,9 @@ std::optional<Variable> ArrayDomain::store_type(TypeDomain& inv, const Interval&
         using namespace dsl_syntax;
         // Weak update: cannot perform a strong update because the index is
         // not a singleton. Havoc the type cells in the range.
-        const auto [lb, ub] = as_numbytes_range(idx, width, total_stack_size());
-        if (!is_num) {
+        const auto range = as_numbytes_range(idx, width, total_stack_size());
+        if (!is_num && range.has_value()) {
+            const auto [lb, ub] = *range;
             // A non-numeric value may overwrite previously numeric bytes,
             // so conservatively mark the range as non-numeric.
             num_bytes.havoc(lb, ub);
