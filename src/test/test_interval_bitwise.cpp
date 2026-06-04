@@ -23,6 +23,13 @@ TEST_CASE("bitwise_and with non-singleton containing all-ones includes zero", "[
     REQUIRE(left.bitwise_and(anomalous_right) == Interval{0, 100});
 }
 
+TEST_CASE("signed division by a negative singleton preserves interval order", "[interval][arithmetic]") {
+    REQUIRE(Interval{-8, -4}.sdiv(Interval{-1}) == Interval{4, 8});
+    REQUIRE(Interval{4, 8}.sdiv(Interval{-2}) == Interval{-4, -2});
+    REQUIRE(Interval::top().sdiv(Interval{-1}) == Interval::top());
+    REQUIRE((Interval::top() / Interval{-1}) == Interval::top());
+}
+
 TEST_CASE("finite domain left shift by zero preserves 64-bit interval", "[finite_domain][bitwise]") {
     FiniteDomain::clear_thread_local_state();
     const auto r1 = reg_pack(1);

@@ -17,6 +17,11 @@ static Interval make_dividend_when_both_nonzero(const Interval& dividend, const 
     return dividend + Interval{1} - divisor;
 }
 
+static ExtendedNumber divide_bound_by_negative_singleton(const ExtendedNumber& bound, const Number& divisor) {
+    assert(divisor < 0);
+    return bound.is_infinite() ? -bound : bound / divisor;
+}
+
 Interval Interval::operator*(const Interval& x) const {
     if (is_bottom() || x.is_bottom()) {
         return bottom();
@@ -45,7 +50,7 @@ Interval Interval::operator/(const Interval& x) const {
         } else if (c > 0) {
             return Interval{_lb / c, _ub / c};
         } else if (c < 0) {
-            return Interval{_ub / c, _lb / c};
+            return Interval{divide_bound_by_negative_singleton(_ub, c), divide_bound_by_negative_singleton(_lb, c)};
         } else {
             // The eBPF ISA defines division by 0 as resulting in 0.
             return Interval{0};
@@ -87,8 +92,10 @@ Interval Interval::sdiv(const Interval& x) const {
             const Number c{n->cast_to<int64_t>()};
             if (c == 1) {
                 return *this;
-            } else if (c != 0) {
+            } else if (c > 0) {
                 return Interval{_lb / c, _ub / c};
+            } else if (c < 0) {
+                return Interval{divide_bound_by_negative_singleton(_ub, c), divide_bound_by_negative_singleton(_lb, c)};
             } else {
                 // The eBPF ISA defines division by 0 as resulting in 0.
                 return Interval{0};
