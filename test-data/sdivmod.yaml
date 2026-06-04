@@ -29,6 +29,21 @@ post:
   - r1.svalue=0
   - r1.uvalue=0
 ---
+test-case: non-singleton interval divided by negative singleton immediate
+
+pre:
+  - "r1.type=number"
+  - "r1.svalue=[-8, -4]"
+
+code:
+  <start>: |
+    r1 s/= -1
+
+post:
+  - r1.type=number
+  - r1.svalue=[4, 8]
+  - r1.uvalue=r1.svalue
+---
 test-case: zero divided by zero immediate
 
 pre: ["r1.type=number", "r1.svalue=0", "r1.uvalue=0"]
