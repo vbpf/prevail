@@ -2,11 +2,14 @@
 // SPDX-License-Identifier: MIT
 
 #include <catch2/catch_all.hpp>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <random>
 #include <sstream>
 #include <stdexcept>
@@ -14,7 +17,9 @@
 #include <string_view>
 #include <vector>
 
+#include <boost/endian/conversion.hpp>
 #include <elfio/elfio.hpp>
+#include <gsl/narrow>
 
 #include "config.hpp"
 #include "io/elf_loader.hpp"
@@ -44,52 +49,88 @@ void write_file_bytes(const std::filesystem::path& path, const std::vector<uint8
     }
 }
 
-uint32_t read_u32_le(const std::vector<uint8_t>& bytes, const size_t offset) {
-    if (offset + sizeof(uint32_t) > bytes.size()) {
-        throw std::runtime_error("u32 read out of bounds");
+template <std::unsigned_integral T>
+T read_uint(const std::vector<uint8_t>& bytes, const size_t offset, const bool little_endian) {
+    if (offset + sizeof(T) > bytes.size()) {
+        throw std::runtime_error("integer read out of bounds");
     }
-    return static_cast<uint32_t>(bytes[offset] | (static_cast<uint32_t>(bytes[offset + 1]) << 8U) |
-                                 (static_cast<uint32_t>(bytes[offset + 2]) << 16U) |
-                                 (static_cast<uint32_t>(bytes[offset + 3]) << 24U));
+
+    T encoded{};
+    std::memcpy(&encoded, bytes.data() + offset, sizeof(encoded));
+    return little_endian ? boost::endian::little_to_native(encoded) : boost::endian::big_to_native(encoded);
+}
+
+template <std::unsigned_integral T>
+void write_uint(std::vector<uint8_t>& bytes, const size_t offset, const T value, const bool little_endian) {
+    if (offset + sizeof(T) > bytes.size()) {
+        throw std::runtime_error("integer write out of bounds");
+    }
+
+    const T encoded = little_endian ? boost::endian::native_to_little(value) : boost::endian::native_to_big(value);
+    std::memcpy(bytes.data() + offset, &encoded, sizeof(encoded));
+}
+
+uint32_t read_u32_le(const std::vector<uint8_t>& bytes, const size_t offset) {
+    return read_uint<uint32_t>(bytes, offset, true);
 }
 
 uint64_t read_u64_le(const std::vector<uint8_t>& bytes, const size_t offset) {
-    if (offset + sizeof(uint64_t) > bytes.size()) {
-        throw std::runtime_error("u64 read out of bounds");
-    }
-
-    uint64_t value = 0;
-    for (size_t i = 0; i < sizeof(uint64_t); ++i) {
-        value |= static_cast<uint64_t>(bytes[offset + i]) << (8U * i);
-    }
-    return value;
+    return read_uint<uint64_t>(bytes, offset, true);
 }
 
 void write_u16_le(std::vector<uint8_t>& bytes, const size_t offset, const uint16_t value) {
-    if (offset + sizeof(uint16_t) > bytes.size()) {
-        throw std::runtime_error("u16 write out of bounds");
-    }
-    bytes[offset] = static_cast<uint8_t>(value & 0xffU);
-    bytes[offset + 1] = static_cast<uint8_t>((value >> 8U) & 0xffU);
+    write_uint<uint16_t>(bytes, offset, value, true);
 }
 
 void write_u32_le(std::vector<uint8_t>& bytes, const size_t offset, const uint32_t value) {
-    if (offset + sizeof(uint32_t) > bytes.size()) {
-        throw std::runtime_error("u32 write out of bounds");
-    }
-    bytes[offset] = static_cast<uint8_t>(value & 0xffU);
-    bytes[offset + 1] = static_cast<uint8_t>((value >> 8U) & 0xffU);
-    bytes[offset + 2] = static_cast<uint8_t>((value >> 16U) & 0xffU);
-    bytes[offset + 3] = static_cast<uint8_t>((value >> 24U) & 0xffU);
+    write_uint<uint32_t>(bytes, offset, value, true);
 }
 
 void write_u64_le(std::vector<uint8_t>& bytes, const size_t offset, const uint64_t value) {
-    if (offset + sizeof(uint64_t) > bytes.size()) {
-        throw std::runtime_error("u64 write out of bounds");
+    write_uint<uint64_t>(bytes, offset, value, true);
+}
+
+unsigned char get_elf_class(const std::vector<uint8_t>& bytes) {
+    if (bytes.size() <= ELFIO::EI_CLASS) {
+        throw std::runtime_error("ELF header is truncated");
     }
-    for (size_t i = 0; i < sizeof(uint64_t); ++i) {
-        bytes[offset + i] = static_cast<uint8_t>((value >> (8U * i)) & 0xffU);
+    if (bytes[ELFIO::EI_CLASS] != ELFIO::ELFCLASS32 && bytes[ELFIO::EI_CLASS] != ELFIO::ELFCLASS64) {
+        throw std::runtime_error("Unexpected ELF class");
     }
+    return bytes[ELFIO::EI_CLASS];
+}
+
+bool is_little_endian_elf(const std::vector<uint8_t>& bytes) {
+    if (bytes.size() <= ELFIO::EI_DATA) {
+        throw std::runtime_error("ELF header is truncated");
+    }
+    if (bytes[ELFIO::EI_DATA] == ELFIO::ELFDATA2LSB) {
+        return true;
+    }
+    if (bytes[ELFIO::EI_DATA] == ELFIO::ELFDATA2MSB) {
+        return false;
+    }
+    throw std::runtime_error("Unexpected ELF data encoding");
+}
+
+uint32_t read_elf_u32(const std::vector<uint8_t>& bytes, const size_t offset) {
+    return read_uint<uint32_t>(bytes, offset, is_little_endian_elf(bytes));
+}
+
+uint64_t read_elf_u64(const std::vector<uint8_t>& bytes, const size_t offset) {
+    return read_uint<uint64_t>(bytes, offset, is_little_endian_elf(bytes));
+}
+
+void write_elf_u16(std::vector<uint8_t>& bytes, const size_t offset, const uint16_t value) {
+    write_uint<uint16_t>(bytes, offset, value, is_little_endian_elf(bytes));
+}
+
+void write_elf_u32(std::vector<uint8_t>& bytes, const size_t offset, const uint32_t value) {
+    write_uint<uint32_t>(bytes, offset, value, is_little_endian_elf(bytes));
+}
+
+void write_elf_u64(std::vector<uint8_t>& bytes, const size_t offset, const uint64_t value) {
+    write_uint<uint64_t>(bytes, offset, value, is_little_endian_elf(bytes));
 }
 
 class TempElfFile {
@@ -151,8 +192,87 @@ SectionHeaderInfo get_section_header_info(const std::filesystem::path& path, con
 
 void patch_machine(const std::filesystem::path& path, const uint16_t machine) {
     auto bytes = read_file_bytes(path);
+    if (bytes.size() < offsetof(ELFIO::Elf32_Ehdr, e_machine) + sizeof(machine)) {
+        throw std::runtime_error("ELF header is truncated");
+    }
     // e_machine field in ELF header (both 32-bit and 64-bit).
     write_u16_le(bytes, offsetof(ELFIO::Elf32_Ehdr, e_machine), machine);
+    write_file_bytes(path, bytes);
+}
+
+void patch_elf_data_encoding(const std::filesystem::path& path, const unsigned char encoding) {
+    auto bytes = read_file_bytes(path);
+    if (bytes.size() <= ELFIO::EI_DATA) {
+        throw std::runtime_error("ELF header is truncated");
+    }
+    if (encoding != ELFIO::ELFDATA2LSB && encoding != ELFIO::ELFDATA2MSB) {
+        throw std::runtime_error("Unexpected ELF data encoding");
+    }
+    bytes[ELFIO::EI_DATA] = encoding;
+    write_file_bytes(path, bytes);
+}
+
+void patch_section_table_offset(const std::filesystem::path& path, const uint64_t offset) {
+    auto bytes = read_file_bytes(path);
+    const unsigned char elf_class = get_elf_class(bytes);
+    if (elf_class == ELFIO::ELFCLASS32) {
+        write_elf_u32(bytes, offsetof(ELFIO::Elf32_Ehdr, e_shoff), gsl::narrow<uint32_t>(offset));
+    } else if (elf_class == ELFIO::ELFCLASS64) {
+        write_elf_u64(bytes, offsetof(ELFIO::Elf64_Ehdr, e_shoff), offset);
+    } else {
+        throw std::runtime_error("Unexpected ELF class");
+    }
+    write_file_bytes(path, bytes);
+}
+
+void patch_section_table_entry_size(const std::filesystem::path& path, const uint16_t entry_size) {
+    auto bytes = read_file_bytes(path);
+    const unsigned char elf_class = get_elf_class(bytes);
+    if (elf_class == ELFIO::ELFCLASS32) {
+        write_elf_u16(bytes, offsetof(ELFIO::Elf32_Ehdr, e_shentsize), entry_size);
+    } else if (elf_class == ELFIO::ELFCLASS64) {
+        write_elf_u16(bytes, offsetof(ELFIO::Elf64_Ehdr, e_shentsize), entry_size);
+    } else {
+        throw std::runtime_error("Unexpected ELF class");
+    }
+    write_file_bytes(path, bytes);
+}
+
+void patch_section_table_count(const std::filesystem::path& path, const uint16_t count) {
+    auto bytes = read_file_bytes(path);
+    const unsigned char elf_class = get_elf_class(bytes);
+    if (elf_class == ELFIO::ELFCLASS32) {
+        write_elf_u16(bytes, offsetof(ELFIO::Elf32_Ehdr, e_shnum), count);
+    } else if (elf_class == ELFIO::ELFCLASS64) {
+        write_elf_u16(bytes, offsetof(ELFIO::Elf64_Ehdr, e_shnum), count);
+    } else {
+        throw std::runtime_error("Unexpected ELF class");
+    }
+    write_file_bytes(path, bytes);
+}
+
+size_t get_section_table_offset_from_header(const std::vector<uint8_t>& bytes) {
+    const unsigned char elf_class = get_elf_class(bytes);
+    if (elf_class == ELFIO::ELFCLASS32) {
+        return read_elf_u32(bytes, offsetof(ELFIO::Elf32_Ehdr, e_shoff));
+    }
+    if (elf_class == ELFIO::ELFCLASS64) {
+        return gsl::narrow<size_t>(read_elf_u64(bytes, offsetof(ELFIO::Elf64_Ehdr, e_shoff)));
+    }
+    throw std::runtime_error("Unexpected ELF class");
+}
+
+void patch_null_section_size(const std::filesystem::path& path, const uint64_t size) {
+    auto bytes = read_file_bytes(path);
+    const size_t section_table_offset = get_section_table_offset_from_header(bytes);
+    const unsigned char elf_class = get_elf_class(bytes);
+    if (elf_class == ELFIO::ELFCLASS32) {
+        write_elf_u32(bytes, section_table_offset + offsetof(ELFIO::Elf32_Shdr, sh_size), gsl::narrow<uint32_t>(size));
+    } else if (elf_class == ELFIO::ELFCLASS64) {
+        write_elf_u64(bytes, section_table_offset + offsetof(ELFIO::Elf64_Shdr, sh_size), size);
+    } else {
+        throw std::runtime_error("Unexpected ELF class");
+    }
     write_file_bytes(path, bytes);
 }
 
@@ -161,7 +281,7 @@ void patch_section_offset(const std::filesystem::path& path, const std::string& 
     auto bytes = read_file_bytes(path);
     if (info.elf_class == ELFIO::ELFCLASS32) {
         write_u32_le(bytes, info.section_header_offset + offsetof(ELFIO::Elf32_Shdr, sh_offset),
-                     static_cast<uint32_t>(offset));
+                     gsl::narrow<uint32_t>(offset));
     } else if (info.elf_class == ELFIO::ELFCLASS64) {
         write_u64_le(bytes, info.section_header_offset + offsetof(ELFIO::Elf64_Shdr, sh_offset), offset);
     } else {
@@ -175,7 +295,7 @@ void patch_section_size(const std::filesystem::path& path, const std::string& se
     auto bytes = read_file_bytes(path);
     if (info.elf_class == ELFIO::ELFCLASS32) {
         write_u32_le(bytes, info.section_header_offset + offsetof(ELFIO::Elf32_Shdr, sh_size),
-                     static_cast<uint32_t>(size));
+                     gsl::narrow<uint32_t>(size));
     } else if (info.elf_class == ELFIO::ELFCLASS64) {
         write_u64_le(bytes, info.section_header_offset + offsetof(ELFIO::Elf64_Shdr, sh_size), size);
     } else {
@@ -190,7 +310,7 @@ void patch_section_entry_size(const std::filesystem::path& path, const std::stri
     auto bytes = read_file_bytes(path);
     if (info.elf_class == ELFIO::ELFCLASS32) {
         write_u32_le(bytes, info.section_header_offset + offsetof(ELFIO::Elf32_Shdr, sh_entsize),
-                     static_cast<uint32_t>(entry_size));
+                     gsl::narrow<uint32_t>(entry_size));
     } else if (info.elf_class == ELFIO::ELFCLASS64) {
         write_u64_le(bytes, info.section_header_offset + offsetof(ELFIO::Elf64_Shdr, sh_entsize), entry_size);
     } else {
@@ -425,6 +545,53 @@ TEST_CASE("ELF loader rejects non-BPF e_machine", "[elf][hardening]") {
 
     REQUIRE_THROWS_WITH((ElfObject{elf.path().string(), {}, &g_ebpf_platform_linux}.get_programs(".text")),
                         Catch::Matchers::ContainsSubstring("Unsupported ELF machine"));
+}
+
+TEST_CASE("ELF loader accepts valid section header table metadata", "[elf][hardening]") {
+
+    TempElfFile elf{"ebpf-samples/build/twomaps.o", "good-section-table"};
+
+    const auto programs = ElfObject{elf.path().string(), {}, &g_ebpf_platform_linux}.get_programs(".text");
+    REQUIRE_FALSE(programs.empty());
+}
+
+TEST_CASE("ELF loader rejects out-of-range section header table", "[elf][hardening]") {
+
+    TempElfFile elf{"ebpf-samples/build/twomaps.o", "bad-section-table"};
+    patch_section_table_offset(elf.path(), std::numeric_limits<uint64_t>::max());
+
+    REQUIRE_THROWS_WITH((ElfObject{elf.path().string(), {}, &g_ebpf_platform_linux}.get_programs(".text")),
+                        Catch::Matchers::ContainsSubstring("section header table"));
+}
+
+TEST_CASE("ELF loader rejects undersized section header entries", "[elf][hardening]") {
+
+    TempElfFile elf{"ebpf-samples/build/twomaps.o", "bad-section-entry-size"};
+    patch_section_table_entry_size(elf.path(), 1);
+
+    REQUIRE_THROWS_WITH((ElfObject{elf.path().string(), {}, &g_ebpf_platform_linux}.get_programs(".text")),
+                        Catch::Matchers::ContainsSubstring("invalid entry size"));
+}
+
+TEST_CASE("ELF loader honors big-endian section header metadata", "[elf][hardening]") {
+
+    TempElfFile elf{"ebpf-samples/build/twomaps.o", "bad-big-endian-section-entry-size"};
+    patch_elf_data_encoding(elf.path(), ELFIO::ELFDATA2MSB);
+    patch_section_table_entry_size(elf.path(), 1);
+
+    REQUIRE_THROWS_WITH((ElfObject{elf.path().string(), {}, &g_ebpf_platform_linux}.get_programs(".text")),
+                        Catch::Matchers::ContainsSubstring("invalid entry size"));
+}
+
+TEST_CASE("ELF loader validates extended section header counts", "[elf][hardening]") {
+
+    TempElfFile elf{"ebpf-samples/build/twomaps.o", "bad-extended-section-count"};
+    const auto file_size = std::filesystem::file_size(elf.path());
+    patch_section_table_count(elf.path(), 0);
+    patch_null_section_size(elf.path(), file_size + 1);
+
+    REQUIRE_THROWS_WITH((ElfObject{elf.path().string(), {}, &g_ebpf_platform_linux}.get_programs(".text")),
+                        Catch::Matchers::ContainsSubstring("section header table"));
 }
 
 TEST_CASE("ELF loader rejects relocation sections with out-of-bounds file offsets", "[elf][hardening]") {

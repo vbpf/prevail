@@ -1,6 +1,7 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
 #include <algorithm>
+#include <array>
 #include <cerrno>
 #include <concepts>
 #include <cstddef>
@@ -30,6 +31,29 @@ namespace prevail {
 // ---------------------------------------------------------------------------
 // Utility functions
 // ---------------------------------------------------------------------------
+
+static_assert(sizeof(ELFIO::Elf32_Ehdr) == 52);
+static_assert(offsetof(ELFIO::Elf32_Ehdr, e_shoff) == 32);
+static_assert(offsetof(ELFIO::Elf32_Ehdr, e_shentsize) == 46);
+static_assert(offsetof(ELFIO::Elf32_Ehdr, e_shnum) == 48);
+static_assert(sizeof(ELFIO::Elf64_Ehdr) == 64);
+static_assert(offsetof(ELFIO::Elf64_Ehdr, e_shoff) == 40);
+static_assert(offsetof(ELFIO::Elf64_Ehdr, e_shentsize) == 58);
+static_assert(offsetof(ELFIO::Elf64_Ehdr, e_shnum) == 60);
+static_assert(sizeof(ELFIO::Elf32_Shdr) == 40);
+static_assert(offsetof(ELFIO::Elf32_Shdr, sh_size) == 20);
+static_assert(sizeof(ELFIO::Elf64_Shdr) == 64);
+static_assert(offsetof(ELFIO::Elf64_Shdr, sh_size) == 32);
+static_assert(sizeof(ELFIO::Elf32_Rel) == 8);
+static_assert(offsetof(ELFIO::Elf32_Rel, r_offset) == 0);
+static_assert(offsetof(ELFIO::Elf32_Rel, r_info) == 4);
+static_assert(sizeof(ELFIO::Elf32_Rela) == 12);
+static_assert(offsetof(ELFIO::Elf32_Rela, r_addend) == 8);
+static_assert(sizeof(ELFIO::Elf64_Rel) == 16);
+static_assert(offsetof(ELFIO::Elf64_Rel, r_offset) == 0);
+static_assert(offsetof(ELFIO::Elf64_Rel, r_info) == 8);
+static_assert(sizeof(ELFIO::Elf64_Rela) == 24);
+static_assert(offsetof(ELFIO::Elf64_Rela, r_addend) == 16);
 
 std::pair<std::reference_wrapper<EbpfInst>, std::reference_wrapper<EbpfInst>>
 validate_and_get_lddw_pair(std::vector<EbpfInst>& instructions, const size_t location, const std::string& context) {
@@ -122,6 +146,9 @@ RelocationSectionLayout relocation_section_layout(const ELFIO::elfio& reader, co
 
     const size_t expected_entry_size = expected_relocation_entry_size(elf_class, section_type);
     const size_t entry_size = section.get_entry_size();
+    // ELFIO's relocation accessor silently treats zero entry size as no
+    // entries and then uses typed loads for non-zero entries. Validate the raw
+    // table first so every indexed byte read below is inside one complete entry.
     if (entry_size != expected_entry_size || section.get_data() == nullptr || section.get_size() % entry_size != 0) {
         throw UnmarshalError("Malformed relocation section " + section_name);
     }
@@ -337,7 +364,138 @@ static std::uintmax_t get_data_size(std::istream& input_stream, const std::strin
     return end_pos;
 }
 
+template <std::unsigned_integral T>
+static T read_uint(const unsigned char* bytes, const bool little_endian) {
+    T value = 0;
+    for (size_t i = 0; i < sizeof(T); ++i) {
+        const size_t byte_index = little_endian ? i : sizeof(T) - 1U - i;
+        value |= static_cast<T>(bytes[byte_index]) << (8U * i);
+    }
+    return value;
+}
+
+static std::streamsize read_stream_bytes_at(std::istream& input_stream, const std::uintmax_t offset,
+                                            unsigned char* output, const size_t size) {
+    input_stream.clear();
+    input_stream.seekg(gsl::narrow<std::streamoff>(offset));
+    input_stream.read(reinterpret_cast<char*>(output), gsl::narrow<std::streamsize>(size));
+    const auto bytes_read = input_stream.gcount();
+    input_stream.clear();
+    input_stream.seekg(0);
+    return bytes_read;
+}
+
+struct SectionHeaderTableLayout {
+    uint64_t offset{};
+    uint16_t entry_size{};
+    uint16_t count{};
+    size_t min_entry_size{};
+    size_t section_size_offset{};
+};
+
+static std::optional<SectionHeaderTableLayout>
+read_section_header_table_layout(const std::array<unsigned char, sizeof(ELFIO::Elf64_Ehdr)>& header,
+                                 const std::streamsize bytes_read, const unsigned char elf_class,
+                                 const bool little_endian) {
+    constexpr size_t elf64_header_size = sizeof(ELFIO::Elf64_Ehdr);
+    constexpr size_t elf32_section_header_size = sizeof(ELFIO::Elf32_Shdr);
+    constexpr size_t elf64_section_header_size = sizeof(ELFIO::Elf64_Shdr);
+    constexpr size_t elf32_section_size_offset = offsetof(ELFIO::Elf32_Shdr, sh_size);
+    constexpr size_t elf64_section_size_offset = offsetof(ELFIO::Elf64_Shdr, sh_size);
+
+    if (elf_class == ELFIO::ELFCLASS32) {
+        return SectionHeaderTableLayout{
+            .offset = read_uint<ELFIO::Elf32_Off>(header.data() + offsetof(ELFIO::Elf32_Ehdr, e_shoff), little_endian),
+            .entry_size =
+                read_uint<ELFIO::Elf_Half>(header.data() + offsetof(ELFIO::Elf32_Ehdr, e_shentsize), little_endian),
+            .count = read_uint<ELFIO::Elf_Half>(header.data() + offsetof(ELFIO::Elf32_Ehdr, e_shnum), little_endian),
+            .min_entry_size = elf32_section_header_size,
+            .section_size_offset = elf32_section_size_offset,
+        };
+    }
+
+    if (elf_class == ELFIO::ELFCLASS64 && bytes_read >= gsl::narrow<std::streamsize>(elf64_header_size)) {
+        return SectionHeaderTableLayout{
+            .offset = read_uint<ELFIO::Elf64_Off>(header.data() + offsetof(ELFIO::Elf64_Ehdr, e_shoff), little_endian),
+            .entry_size =
+                read_uint<ELFIO::Elf_Half>(header.data() + offsetof(ELFIO::Elf64_Ehdr, e_shentsize), little_endian),
+            .count = read_uint<ELFIO::Elf_Half>(header.data() + offsetof(ELFIO::Elf64_Ehdr, e_shnum), little_endian),
+            .min_entry_size = elf64_section_header_size,
+            .section_size_offset = elf64_section_size_offset,
+        };
+    }
+
+    return std::nullopt;
+}
+
+static void validate_section_header_table_bounds(std::istream& input_stream, const std::string& path,
+                                                 const std::uintmax_t data_size) {
+    // This pre-load check validates only the section header table extent.
+    // Individual section payload ranges are checked after ELFIO loads metadata.
+    constexpr size_t min_elf_header_size = sizeof(ELFIO::Elf32_Ehdr);
+    constexpr size_t elf64_header_size = sizeof(ELFIO::Elf64_Ehdr);
+    constexpr unsigned char elf_magic[] = {0x7f, 'E', 'L', 'F'};
+
+    std::array<unsigned char, elf64_header_size> header{};
+    const auto bytes_read = read_stream_bytes_at(input_stream, 0, header.data(), header.size());
+
+    if (bytes_read < gsl::narrow<std::streamsize>(min_elf_header_size) ||
+        !std::equal(std::begin(elf_magic), std::end(elf_magic), header.begin())) {
+        return;
+    }
+
+    const unsigned char elf_class = header[ELFIO::EI_CLASS];
+    const unsigned char elf_data = header[ELFIO::EI_DATA];
+    const bool little_endian = elf_data == ELFIO::ELFDATA2LSB;
+    if (elf_data != ELFIO::ELFDATA2LSB && elf_data != ELFIO::ELFDATA2MSB) {
+        return;
+    }
+
+    const std::optional<SectionHeaderTableLayout> layout =
+        read_section_header_table_layout(header, bytes_read, elf_class, little_endian);
+    if (!layout) {
+        return;
+    }
+    const SectionHeaderTableLayout table = *layout;
+
+    if (table.offset == 0 && table.count == 0) {
+        return;
+    }
+    if (table.entry_size < table.min_entry_size) {
+        throw UnmarshalError("ELF section header table in " + path + " has invalid entry size");
+    }
+    if (table.offset > data_size) {
+        throw UnmarshalError("ELF section header table in " + path + " is out of bounds");
+    }
+
+    const std::uintmax_t available = data_size - table.offset;
+    std::uintmax_t required_entries = table.count;
+    if (table.count == 0) {
+        if (available < table.min_entry_size) {
+            throw UnmarshalError("ELF section header table in " + path + " is out of bounds");
+        }
+
+        std::array<unsigned char, sizeof(ELFIO::Elf64_Shdr)> null_section_header{};
+        const auto null_section_bytes_read =
+            read_stream_bytes_at(input_stream, table.offset, null_section_header.data(), table.min_entry_size);
+        if (null_section_bytes_read < gsl::narrow<std::streamsize>(table.min_entry_size)) {
+            throw UnmarshalError("ELF section header table in " + path + " is out of bounds");
+        }
+
+        required_entries =
+            elf_class == ELFIO::ELFCLASS32
+                ? read_uint<ELFIO::Elf_Word>(null_section_header.data() + table.section_size_offset, little_endian)
+                : read_uint<ELFIO::Elf_Xword>(null_section_header.data() + table.section_size_offset, little_endian);
+    }
+    if (required_entries > available / table.entry_size) {
+        throw UnmarshalError("ELF section header table in " + path + " is out of bounds");
+    }
+}
+
 ELFIO::elfio load_elf(std::istream& input_stream, const std::string& path) {
+    const std::uintmax_t data_size = get_data_size(input_stream, path);
+    validate_section_header_table_bounds(input_stream, path, data_size);
+
     ELFIO::elfio reader;
     if (!reader.load(input_stream)) {
         throw UnmarshalError("Can't process ELF file " + path);
@@ -347,7 +505,6 @@ ELFIO::elfio load_elf(std::istream& input_stream, const std::string& path) {
         throw UnmarshalError("Unsupported ELF machine in file " + path + ": expected EM_BPF");
     }
 
-    const std::uintmax_t data_size = get_data_size(input_stream, path);
     for (const auto& section : reader.sections) {
         if (!section || section->get_type() == ELFIO::SHT_NOBITS) {
             continue;
