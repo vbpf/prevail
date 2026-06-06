@@ -327,6 +327,11 @@ void operator()(const Call& call) {
 
 Different helpers have different postconditions:
 
+Helper prototypes that declare a writable memory output, such as `PTR_TO_WRITABLE_MEM` and
+`PTR_TO_WRITABLE_MEM_OR_NULL`, must initialize the entire writable region described by the paired size argument
+unconditionally before returning. This includes failure returns. The verifier treats the declared region as initialized
+after the helper call, so a platform helper that only conditionally writes the region must use a different contract.
+
 ```cpp
 void apply_helper_contract(int func) {
     switch (func) {

@@ -39,10 +39,12 @@ typedef enum _ebpf_argument_type {
     EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE = 8,
     EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM = 9, // Memory must have been initialized.
     EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL = 10,
+    // Helper must initialize the full writable region described by the paired size argument on every return path.
     EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM = 11,
     EBPF_ARGUMENT_TYPE_PTR_TO_STACK = 12,
     EBPF_ARGUMENT_TYPE_PTR_TO_STACK_OR_NULL = 13,
     EBPF_ARGUMENT_TYPE_PTR_TO_CTX_OR_NULL = 14,
+    // Same as PTR_TO_WRITABLE_MEM, except the pointer may be null when the paired size is zero.
     EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL = 15,
     EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID_SOCK_COMMON = 17,
     EBPF_ARGUMENT_TYPE_PTR_TO_SPIN_LOCK = 18,
