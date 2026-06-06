@@ -330,6 +330,267 @@ post:
   - r10.type=stack
   - r10.stack_offset=512
 ---
+test-case: bpf_probe_read output cannot be used as readable memory before checking success
+
+pre: ["r1.type=stack", "r1.stack_offset=504",
+      "r2.type=number", "r2.svalue=8", "r2.uvalue=8",
+      "r3.type=number", "r3.svalue=1", "r3.uvalue=1",
+      "r5.type=number", "r5.svalue=[0, 1]", "r5.uvalue=[0, 1]",
+      "r6.type=map_fd", "r6.map_fd=1",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    call 4; bpf_probe_read
+    r1 = r6
+    r2 = r10
+    r2 += -8
+    r3 = 8
+    r4 = 0
+    call 130; bpf_ringbuf_output
+
+post:
+  - "_|_"
+
+messages:
+  - "6: Stack content is not numeric (valid_access(r2.offset, width=r3) for read)"
+---
+test-case: bpf_probe_read output can be used as readable memory after checking success
+
+pre: ["r1.type=stack", "r1.stack_offset=504",
+      "r2.type=number", "r2.svalue=8", "r2.uvalue=8",
+      "r3.type=number", "r3.svalue=1", "r3.uvalue=1",
+      "r6.type=map_fd", "r6.map_fd=1",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    call 4; bpf_probe_read
+    if r0 != 0 goto <out>
+    r1 = r6
+    r2 = r10
+    r2 += -8
+    r3 = 8
+    r4 = 0
+    call 130; bpf_ringbuf_output
+  <out>: |
+    exit
+
+post:
+  - r0.type=number
+  - r10.type=stack
+  - r10.stack_offset=512
+  - r6.type=map_fd
+  - r6.map_fd=1
+  - s[504...511].type.initialized=[-2147483648, 0]
+---
+test-case: bpf_probe_read output can be loaded after checking success
+
+pre: ["r1.type=stack", "r1.stack_offset=504",
+      "r2.type=number", "r2.svalue=8", "r2.uvalue=8",
+      "r3.type=number", "r3.svalue=1", "r3.uvalue=1",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    call 4; bpf_probe_read
+    if r0 != 0 goto <out>
+    r4 = *(u64 *)(r10 - 8)
+    r4 += 1
+  <out>: |
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=[-2147483648, 0]
+  - r0.uvalue=[0, +oo]
+  - r10.type=stack
+  - r10.stack_offset=512
+  - s[504...511].type.initialized=r0.svalue
+---
+test-case: bpf_probe_read output can be used after excluding negative error
+
+pre: ["r1.type=stack", "r1.stack_offset=504",
+      "r2.type=number", "r2.svalue=8", "r2.uvalue=8",
+      "r3.type=number", "r3.svalue=1", "r3.uvalue=1",
+      "r6.type=map_fd", "r6.map_fd=1",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    call 4; bpf_probe_read
+    if r0 s< 0 goto <out>
+    r1 = r6
+    r2 = r10
+    r2 += -8
+    r3 = 8
+    r4 = 0
+    call 130; bpf_ringbuf_output
+  <out>: |
+    exit
+
+post:
+  - r0.type=number
+  - r10.type=stack
+  - r10.stack_offset=512
+  - r6.type=map_fd
+  - r6.map_fd=1
+  - s[504...511].type.initialized=[-2147483648, 0]
+---
+test-case: bpf_probe_read output can be used after checking copied 32-bit status
+
+pre: ["r1.type=stack", "r1.stack_offset=504",
+      "r2.type=number", "r2.svalue=8", "r2.uvalue=8",
+      "r3.type=number", "r3.svalue=1", "r3.uvalue=1",
+      "r6.type=map_fd", "r6.map_fd=1",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    call 4; bpf_probe_read
+    w1 = w0
+    if w1 s< 0 goto <out>
+    r1 = r6
+    r2 = r10
+    r2 += -8
+    r3 = 8
+    r4 = 0
+    call 130; bpf_ringbuf_output
+  <out>: |
+    exit
+
+post:
+  - r0.type=number
+  - r10.type=stack
+  - r10.stack_offset=512
+  - r6.type=map_fd
+  - r6.map_fd=1
+  - s[504...511].type.initialized=[-2147483648, 0]
+---
+test-case: bpf_probe_read conditional initialization composes with numeric bytes
+
+pre: ["r1.type=stack", "r1.stack_offset=508",
+      "r2.type=number", "r2.svalue=4", "r2.uvalue=4",
+      "r3.type=number", "r3.svalue=1", "r3.uvalue=1",
+      "r6.type=map_fd", "r6.map_fd=1",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    *(u32 *)(r10 - 8) = 0
+    call 4; bpf_probe_read
+    if r0 != 0 goto <out>
+    r1 = r6
+    r2 = r10
+    r2 += -8
+    r3 = 8
+    r4 = 0
+    call 130; bpf_ringbuf_output
+  <out>: |
+    exit
+
+post:
+  - r0.type=number
+  - r10.type=stack
+  - r10.stack_offset=512
+  - r6.type=map_fd
+  - r6.map_fd=1
+  - s[504...507].svalue=0
+  - s[504...507].type=number
+  - s[504...507].uvalue=0
+  - s[508...511].type.initialized=[-2147483648, 0]
+---
+test-case: bpf_probe_read clobbered return value does not prove initialization
+
+pre: ["r1.type=stack", "r1.stack_offset=504",
+      "r2.type=number", "r2.svalue=8", "r2.uvalue=8",
+      "r3.type=number", "r3.svalue=1", "r3.uvalue=1",
+      "r6.type=map_fd", "r6.map_fd=1",
+      "r7.type=number", "r7.svalue=[0, 1]", "r7.uvalue=[0, 1]",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    call 4; bpf_probe_read
+    r0 = r7
+    if r0 != 0 goto <out>
+    r1 = r6
+    r2 = r10
+    r2 += -8
+    r3 = 8
+    r4 = 0
+    call 130; bpf_ringbuf_output
+  <out>: |
+    exit
+
+post:
+  - r0.svalue=1
+  - r0.type=number
+  - r0.uvalue=1
+  - r10.stack_offset=512
+  - r10.type=stack
+  - r6.map_fd=1
+  - r6.type=map_fd
+  - r7.svalue=r0.svalue
+  - r7.type=number
+  - r7.uvalue=r0.uvalue
+  - s[504...511].type.initialized=[-2147483648, 0]
+
+messages:
+  - "8: Stack content is not numeric (valid_access(r2.offset, width=r3) for read)"
+---
+test-case: bpf_probe_read conditional initialization is killed by stack overwrite
+
+pre: ["r1.type=stack", "r1.stack_offset=504",
+      "r2.type=number", "r2.svalue=8", "r2.uvalue=8",
+      "r3.type=number", "r3.svalue=1", "r3.uvalue=1",
+      "r6.type=map_fd", "r6.map_fd=1",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    call 4; bpf_probe_read
+    *(u64 *)(r10 - 8) = r0
+    if r0 != 0 goto <out>
+    r1 = r6
+    r2 = r10
+    r2 += -8
+    r3 = 8
+    r4 = 0
+    call 130; bpf_ringbuf_output
+  <out>: |
+    exit
+
+post:
+  - r0.type=number
+  - r10.type=stack
+  - r10.stack_offset=512
+  - r6.type=map_fd
+  - r6.map_fd=1
+  - s[504...511].svalue=[-2147483648, 0]
+  - s[504...511].type=number
+  - s[504...511].uvalue=[0, +oo]
+---
+test-case: bpf_sysctl_get_current_value positive result initializes output
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r2.type=stack", "r2.stack_offset=504",
+      "r3.type=number", "r3.svalue=8", "r3.uvalue=8",
+      "r6.type=map_fd", "r6.map_fd=1",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    call 102; bpf_sysctl_get_current_value
+
+post:
+  - r0.type=number
+  - r10.stack_offset=512
+  - r10.type=stack
+  - r6.map_fd=1
+  - r6.type=map_fd
+  - s[504...511].type=number
+---
 test-case: bpf_get_stack overwriting ctx
 
 pre: ["r1.type=ctx", "r1.ctx_offset=0",

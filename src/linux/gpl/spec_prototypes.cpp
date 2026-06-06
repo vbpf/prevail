@@ -102,7 +102,7 @@ static constexpr EbpfHelperPrototype bpf_probe_read_proto = {
     .return_type = EBPF_RETURN_TYPE_INTEGER,
     .argument_type =
         {
-            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM,
+            EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
@@ -158,7 +158,7 @@ static constexpr EbpfHelperPrototype bpf_perf_event_read_value_proto = {
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_MAP,
             EBPF_ARGUMENT_TYPE_ANYTHING,
-            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM,
+            EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
         },
     .allowed_map_types = MT_PERF_EVENT_ARRAY,
@@ -200,7 +200,7 @@ static constexpr EbpfHelperPrototype bpf_perf_prog_read_value_proto = {
     .argument_type =
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
-            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM,
+            EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
         },
     .ctx_descriptor = &g_perf_event_descr,
@@ -280,7 +280,7 @@ static constexpr EbpfHelperPrototype bpf_get_current_comm_proto = {
     .return_type = EBPF_RETURN_TYPE_INTEGER,
     .argument_type =
         {
-            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM,
+            EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
         },
 };
@@ -366,7 +366,7 @@ static constexpr EbpfHelperPrototype bpf_skb_load_bytes_proto = {
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
             EBPF_ARGUMENT_TYPE_ANYTHING,
-            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM,
+            EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
         },
     .ctx_descriptor = &g_sk_buff,
@@ -379,7 +379,7 @@ static constexpr EbpfHelperPrototype bpf_skb_load_bytes_relative_proto = {
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
             EBPF_ARGUMENT_TYPE_ANYTHING,
-            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM,
+            EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
@@ -747,7 +747,7 @@ static constexpr EbpfHelperPrototype bpf_skb_get_tunnel_key_proto = {
     .argument_type =
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
-            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM,
+            EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
@@ -897,7 +897,7 @@ static constexpr EbpfHelperPrototype bpf_skb_get_xfrm_state_proto = {
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
             EBPF_ARGUMENT_TYPE_ANYTHING,
-            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM,
+            EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
@@ -1376,7 +1376,7 @@ static constexpr EbpfHelperPrototype bpf_probe_read_user_proto = {
     .return_type = EBPF_RETURN_TYPE_INTEGER,
     .argument_type =
         {
-            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM,
+            EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
@@ -1398,7 +1398,7 @@ static constexpr EbpfHelperPrototype bpf_probe_read_kernel_proto = {
     .return_type = EBPF_RETURN_TYPE_INTEGER,
     .argument_type =
         {
-            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM,
+            EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
@@ -1445,7 +1445,7 @@ static constexpr EbpfHelperPrototype bpf_get_ns_current_pid_tgid_proto = {
         {
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_ANYTHING,
-            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL, // TODO: or null
+            EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM_OR_NULL, // TODO: or null
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
         },
 };
@@ -1710,7 +1710,7 @@ static constexpr EbpfHelperPrototype bpf_copy_from_user_proto = {
     .return_type = EBPF_RETURN_TYPE_INTEGER,
     .argument_type =
         {
-            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM,
+            EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
@@ -1820,8 +1820,7 @@ static constexpr EbpfHelperPrototype bpf_task_storage_delete_proto = {
 };
 
 static constexpr EbpfHelperPrototype bpf_get_current_task_btf_proto = {
-    .name = "get_current_task_btf",
-    .return_type = EBPF_RETURN_TYPE_PTR_TO_BTF_ID,
+    .name = "get_current_task_btf", .return_type = EBPF_RETURN_TYPE_PTR_TO_BTF_ID,
     // .ret_btf_id = &bpf_get_current_btf_ids[0],
 };
 
@@ -2171,7 +2170,7 @@ static constexpr EbpfHelperPrototype bpf_copy_from_user_task_proto = {
     .return_type = EBPF_RETURN_TYPE_INTEGER,
     .argument_type =
         {
-            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM,
+            EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO,
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID,
@@ -2316,9 +2315,9 @@ static constexpr EbpfHelperPrototype bpf_xdp_load_bytes_proto = {
     .argument_type =
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
-            EBPF_ARGUMENT_TYPE_ANYTHING,            // offset
-            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM, // buf
-            EBPF_ARGUMENT_TYPE_CONST_SIZE,          // len
+            EBPF_ARGUMENT_TYPE_ANYTHING,                          // offset
+            EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM, // buf
+            EBPF_ARGUMENT_TYPE_CONST_SIZE,                        // len
         },
     .ctx_descriptor = &g_xdp_md,
 };
@@ -2394,11 +2393,11 @@ static constexpr EbpfHelperPrototype bpf_dynptr_read_proto = {
     .return_type = EBPF_RETURN_TYPE_INTEGER, // Returns 0 on success, negative error on failure
     .argument_type =
         {
-            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM, // dst
-            EBPF_ARGUMENT_TYPE_CONST_SIZE,          // len
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM, // src (dynptr)
-            EBPF_ARGUMENT_TYPE_ANYTHING,            // offset
-            EBPF_ARGUMENT_TYPE_ANYTHING,            // flags
+            EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM, // dst
+            EBPF_ARGUMENT_TYPE_CONST_SIZE,                        // len
+            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM,               // src (dynptr)
+            EBPF_ARGUMENT_TYPE_ANYTHING,                          // offset
+            EBPF_ARGUMENT_TYPE_ANYTHING,                          // flags
         },
     .unsupported = true,
 };

@@ -13,6 +13,7 @@ VALID_KINDS = {
     "VerifierTypeTracking",
     "VerifierBoundsTracking",
     "VerifierStackInitialization",
+    "StrictMemoryInitialization",
     "VerifierPointerArithmetic",
     "VerifierMapTyping",
     "VerifierNullability",
@@ -26,6 +27,7 @@ KIND_ORDER = [
     "VerifierTypeTracking",
     "VerifierBoundsTracking",
     "VerifierStackInitialization",
+    "StrictMemoryInitialization",
     "VerifierPointerArithmetic",
     "VerifierMapTyping",
     "VerifierNullability",
@@ -128,7 +130,10 @@ def render_test(
     if status == "pass":
         return [wrap_macro("TEST_SECTION", [f'"{p}"', f'"{o}"', f'"{s}"'])]
     if status == "reject":
-        return [wrap_macro("TEST_SECTION_REJECT", [f'"{p}"', f'"{o}"', f'"{s}"'])]
+        return [
+            *render_reason_comment(reason),
+            wrap_macro("TEST_SECTION_REJECT", [f'"{p}"', f'"{o}"', f'"{s}"']),
+        ]
     if status == "reject_load":
         return [wrap_macro("TEST_SECTION_REJECT_LOAD", [f'"{p}"', f'"{o}"', f'"{s}"'])]
     if status == "expected_failure":
@@ -163,7 +168,10 @@ def render_program_test(
     if status == "pass":
         return [wrap_macro("TEST_PROGRAM", [*args_base, str(section_program_count)])]
     if status == "reject":
-        return [wrap_macro("TEST_PROGRAM_REJECT", [*args_base, str(section_program_count)])]
+        return [
+            *render_reason_comment(reason),
+            wrap_macro("TEST_PROGRAM_REJECT", [*args_base, str(section_program_count)]),
+        ]
     if status == "reject_load":
         raise ValueError(
             f"Program-level reject_load is not supported for {project}/{object_name} {section_name}::{function_name}"

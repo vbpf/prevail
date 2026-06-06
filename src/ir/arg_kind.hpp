@@ -48,7 +48,9 @@ inline std::optional<ArgPair::Kind> to_arg_pair_kind(const ebpf_argument_type_t 
     case EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM:
     case EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM_OR_NULL: return ArgPair::Kind::PTR_TO_READABLE_MEM;
     case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM:
-    case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL: return ArgPair::Kind::PTR_TO_WRITABLE_MEM;
+    case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL:
+    case EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM:
+    case EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM_OR_NULL: return ArgPair::Kind::PTR_TO_WRITABLE_MEM;
     default: return std::nullopt;
     }
 }
@@ -117,7 +119,9 @@ inline ArgOutcome process_arg(CallContract& contract, const std::array<ebpf_argu
     case EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM:
     case EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM_OR_NULL:
     case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM:
-    case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL: {
+    case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL:
+    case EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM:
+    case EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM_OR_NULL: {
         if (args[i + 1] != EBPF_ARGUMENT_TYPE_CONST_SIZE && args[i + 1] != EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO) {
             return ArgOutcome::MismatchedSize;
         }
@@ -128,8 +132,17 @@ inline ArgOutcome process_arg(CallContract& contract, const std::array<ebpf_argu
         const bool can_be_zero = (args[i + 1] == EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO);
         const bool or_null = args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL ||
                              args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM_OR_NULL ||
-                             args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL;
-        contract.pairs.push_back({*pair_kind, or_null, reg, Reg{gsl::narrow<uint8_t>(i + 1)}, can_be_zero});
+                             args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL ||
+                             args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM_OR_NULL;
+        const Reg size_reg{gsl::narrow<uint8_t>(i + 1)};
+        contract.pairs.push_back({*pair_kind, or_null, reg, size_reg, can_be_zero});
+        if (args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM ||
+            args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM_OR_NULL) {
+            contract.initialized_memory.push_back({reg, size_reg});
+        } else if (args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM ||
+                   args[i] == EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL) {
+            contract.always_initialized_memory.push_back({reg, size_reg});
+        }
         return ArgOutcome::Pair;
     }
     default:

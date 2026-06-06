@@ -241,7 +241,7 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
         switch (access_reg_type) {
         case T_STACK: {
             Interval offset = dom.state.values.eval_interval(access_reg.stack_offset);
-            if (!dom.stack->all_num_width(offset, Interval{width})) {
+            if (!dom.stack->is_initialized_width(dom.state.values, offset, Interval{width})) {
                 auto lb_is = offset.lb().number();
                 std::string lb_s = lb_is && lb_is->fits<int32_t>() ? std::to_string(lb_is->narrow<int32_t>()) : "-oo";
                 Interval ub = offset + Interval{width};
@@ -337,7 +337,8 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
                                 "Upper bound must be at most total_stack_size");
             // Stack reads must hit known-numeric bytes.
             if (s.access_type == AccessType::read &&
-                !dom.stack->all_num_lb_ub(dom.state.values.eval_interval(lb), dom.state.values.eval_interval(ub))) {
+                !dom.stack->is_initialized_lb_ub(dom.state.values, dom.state.values.eval_interval(lb),
+                                                 dom.state.values.eval_interval(ub))) {
                 if (s.offset < 0) {
                     throw_fail("Stack content is not numeric");
                 } else {

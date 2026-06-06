@@ -210,10 +210,98 @@ std::vector<Cell> offset_map_t::get_overlap_cells(const offset_t o, const unsign
 // Per-domain registry of the stack cells `ArrayDomain` is currently tracking,
 // keyed by DataKind. Owned by `ArrayDomain`; copied/merged alongside the domain.
 class StackCellRegistry final {
+  public:
+    enum class InitSourceKind { Exact, ZeroExtended32 };
+
+  private:
+    struct InitSource {
+        Variable source;
+        InitSourceKind kind;
+
+        bool operator==(const InitSource&) const = default;
+    };
+
     std::unordered_map<DataKind, offset_map_t> _maps;
+    offset_map_t _init_map;
+    std::map<Cell, std::vector<InitSource>> _init_sources;
 
   public:
     offset_map_t& get(const DataKind kind) { return _maps[kind]; }
+    offset_map_t& init() { return _init_map; }
+
+    void add_init_source(const Cell& cell, const Variable source, const InitSourceKind kind) {
+        auto& sources = _init_sources[cell];
+        const InitSource candidate{source, kind};
+        if (std::ranges::find(sources, candidate) == sources.end()) {
+            sources.push_back(candidate);
+        }
+    }
+
+    void erase_init_sources(const std::vector<Cell>& cells) {
+        for (const Cell& cell : cells) {
+            _init_sources.erase(cell);
+        }
+    }
+
+    void erase_init_sources_sourced_from(const Variable source) {
+        for (auto it = _init_sources.begin(); it != _init_sources.end();) {
+            auto& sources = it->second;
+            std::erase_if(sources, [source](const InitSource& init_source) { return init_source.source == source; });
+            if (sources.empty()) {
+                it = _init_sources.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
+    void copy_init_sources(const Variable from, const Variable to, const bool zero_extend_32) {
+        std::vector<std::pair<Cell, InitSource>> sources_to_add;
+        for (const auto& [cell, sources] : _init_sources) {
+            for (const InitSource& source : sources) {
+                if (source.source != from) {
+                    continue;
+                }
+                const auto copied_kind = zero_extend_32 ? InitSourceKind::ZeroExtended32 : source.kind;
+                sources_to_add.push_back({cell, {to, copied_kind}});
+            }
+        }
+        for (const auto& [cell, source] : sources_to_add) {
+            add_init_source(cell, source.source, source.kind);
+        }
+    }
+
+    [[nodiscard]]
+    std::vector<Cell> init_cells_sourced_from(const Variable source, const InitSourceKind kind) const {
+        std::vector<Cell> result;
+        for (const auto& [cell, cell_sources] : _init_sources) {
+            for (const InitSource& cell_source : cell_sources) {
+                if (cell_source.source == source && cell_source.kind == kind) {
+                    result.push_back(cell);
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+
+    [[nodiscard]]
+    std::optional<Cell> get_init_cell(const offset_t offset, const unsigned size) {
+        return _init_map.get_cell(offset, size);
+    }
+
+    [[nodiscard]]
+    std::vector<Cell> init_cells_containing(const offset_t offset, const unsigned size) const {
+        std::vector<Cell> result;
+        for (const auto& cell_set : _init_map._map | std::views::values) {
+            for (const Cell& cell : cell_set) {
+                if (cell.offset <= offset && offset + size <= cell.offset + cell.size) {
+                    result.push_back(cell);
+                }
+            }
+        }
+        return result;
+    }
 
     void merge_from(const StackCellRegistry& other) {
         if (this == &other) {
@@ -224,6 +312,36 @@ class StackCellRegistry final {
             for (const auto& [_off, cell_set] : omap._map) {
                 for (const Cell& c : cell_set) {
                     dst.insert_cell(c);
+                }
+            }
+        }
+        for (const auto& [_off, cell_set] : other._init_map._map) {
+            for (const Cell& c : cell_set) {
+                _init_map.insert_cell(c);
+            }
+        }
+        for (const auto& [cell, sources] : other._init_sources) {
+            for (const InitSource& source : sources) {
+                add_init_source(cell, source.source, source.kind);
+            }
+        }
+    }
+
+    void join_from(const StackCellRegistry& other) {
+        if (this == &other) {
+            return;
+        }
+        const auto original_sources = _init_sources;
+        merge_from(other);
+        _init_sources.clear();
+        for (const auto& [cell, sources] : original_sources) {
+            const auto other_source = other._init_sources.find(cell);
+            if (other_source == other._init_sources.end()) {
+                continue;
+            }
+            for (const InitSource& source : sources) {
+                if (std::ranges::find(other_source->second, source) != other_source->second.end()) {
+                    add_init_source(cell, source.source, source.kind);
                 }
             }
         }
@@ -377,6 +495,94 @@ static std::optional<std::tuple<int, int>> as_numbytes_range(const Interval& ind
     return as_numbytes_range(range, stack_size);
 }
 
+static std::optional<std::pair<offset_t, unsigned>> exact_stack_range(const Interval& idx, const Interval& width,
+                                                                      const int stack_size) {
+    const std::optional<Number> idx_n = idx.singleton();
+    const std::optional<Number> width_n = width.singleton();
+    if (!idx_n || !width_n || !idx_n->fits<int>() || !width_n->fits<unsigned>()) {
+        return {};
+    }
+    const int offset = idx_n->narrow<int>();
+    const unsigned size = width_n->narrow<unsigned>();
+    if (offset < 0 || size == 0 || gsl::narrow<uint64_t>(offset) + size > gsl::narrow<uint64_t>(stack_size)) {
+        return {};
+    }
+    return std::make_pair(offset_t{gsl::narrow_cast<Index>(offset)}, size);
+}
+
+static Variable init_var(const Cell& c) { return variable_registry.stack_init_var(c.offset, c.size); }
+
+static bool init_return_is_success(const NumAbsDomain& inv, const Variable witness) {
+    using namespace dsl_syntax;
+    return inv.entail(LinearExpression{witness} == 0);
+}
+
+static void kill_init_cells(StackCellRegistry& cells, NumAbsDomain& inv, const Interval& idx, const Interval& width,
+                            const int stack_size, const bool kill_exact) {
+    offset_map_t& init_map = cells.init();
+    std::vector<Cell> overlaps;
+    if (const auto exact = exact_stack_range(idx, width, stack_size)) {
+        const auto [offset, size] = *exact;
+        overlaps = init_map.get_overlap_cells(offset, size);
+        if (kill_exact) {
+            if (const auto exact_cell = cells.get_init_cell(offset, size)) {
+                overlaps.push_back(*exact_cell);
+            }
+        }
+    } else {
+        overlaps = init_map.get_overlap_cells_symbolic_offset(idx | (idx + width));
+    }
+
+    for (const Cell& cell : overlaps) {
+        inv.havoc(init_var(cell));
+    }
+    init_map -= overlaps;
+    cells.erase_init_sources(overlaps);
+}
+
+static LinearConstraint substitute_variable(const LinearConstraint& constraint, const Variable from,
+                                            const Variable to) {
+    const LinearExpression& expression = constraint.expression();
+    auto terms = expression.variable_terms();
+    const auto from_term = terms.find(from);
+    if (from_term == terms.end()) {
+        return constraint;
+    }
+
+    terms[to] += from_term->second;
+    if (terms[to] == 0) {
+        terms.erase(to);
+    }
+    terms.erase(from_term);
+    return {LinearExpression{terms, expression.constant_term()}, constraint.kind()};
+}
+
+static bool initialized_range(const StackCellRegistry& cells, const NumAbsDomain& inv, const BitsetDomain& num_bytes,
+                              const int lb, const int ub) {
+    int cursor = lb;
+    while (cursor < ub) {
+        const int num_width = std::min(num_bytes.all_num_width(cursor), ub - cursor);
+        if (num_width > 0) {
+            cursor += num_width;
+            continue;
+        }
+
+        bool covered = false;
+        const offset_t offset{gsl::narrow_cast<Index>(cursor)};
+        for (const Cell& cell : cells.init_cells_containing(offset, 1)) {
+            if (init_return_is_success(inv, init_var(cell))) {
+                cursor = std::min(ub, gsl::narrow<int>(cell.offset + cell.size));
+                covered = true;
+                break;
+            }
+        }
+        if (!covered) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool ArrayDomain::all_num_lb_ub(const Interval& lb, const Interval& ub) const {
     const auto range = as_numbytes_range(lb | ub, total_stack_size());
     if (!range.has_value()) {
@@ -395,6 +601,26 @@ bool ArrayDomain::all_num_width(const Interval& index, const Interval& width) co
     const auto [min_lb, max_ub] = *range;
     assert(min_lb < max_ub);
     return this->num_bytes.all_num(min_lb, max_ub);
+}
+
+bool ArrayDomain::is_initialized_lb_ub(const NumAbsDomain& inv, const Interval& lb, const Interval& ub) const {
+    const auto range = as_numbytes_range(lb | ub, total_stack_size());
+    if (!range.has_value()) {
+        return false;
+    }
+    const auto [min_lb, max_ub] = *range;
+    assert(min_lb < max_ub);
+    return initialized_range(*cells_, inv, this->num_bytes, min_lb, max_ub);
+}
+
+bool ArrayDomain::is_initialized_width(const NumAbsDomain& inv, const Interval& index, const Interval& width) const {
+    const auto range = as_numbytes_range(index, width, total_stack_size());
+    if (!range.has_value()) {
+        return false;
+    }
+    const auto [min_lb, max_ub] = *range;
+    assert(min_lb < max_ub);
+    return initialized_range(*cells_, inv, this->num_bytes, min_lb, max_ub);
 }
 
 // Get the number of bytes, starting at offset, that are known to be numbers.
@@ -540,12 +766,14 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, const
     return {};
 }
 
-std::optional<LinearExpression> ArrayDomain::load_type(const Interval& i, const int width) {
+std::optional<LinearExpression> ArrayDomain::load_type(const NumAbsDomain& inv, const Interval& i, const int width) {
     if (const std::optional<Number> n = i.singleton()) {
         offset_map_t& offset_map = cells_.get_mutable().get(DataKind::types);
         const int64_t k = n->narrow<int64_t>();
         auto [only_num, only_non_num] = num_bytes.uniformity(k, width);
-        if (only_num) {
+        if (only_num ||
+            (0 <= k && width > 0 && k + width <= total_stack_size() &&
+             initialized_range(*cells_, inv, this->num_bytes, gsl::narrow<int>(k), gsl::narrow<int>(k + width)))) {
             return T_NUM;
         }
         if (!only_non_num || width != 8) {
@@ -636,7 +864,7 @@ std::optional<Variable> ArrayDomain::store_type(TypeDomain& inv, const Interval&
             const auto [lb, ub] = *range;
             // A non-numeric value may overwrite previously numeric bytes,
             // so conservatively mark the range as non-numeric.
-            num_bytes.havoc(lb, ub);
+            num_bytes.havoc(lb, ub - lb);
         }
         // When is_num is true, the value being stored is numeric. Any byte
         // that gets written will still be numeric, and bytes not written
@@ -680,6 +908,85 @@ void ArrayDomain::store_numbers(const Interval& _idx, const Interval& _width) {
     num_bytes.reset(idx_n->narrow<int>(), width->narrow<int>());
 }
 
+void ArrayDomain::store_return_value(NumAbsDomain& inv, const Interval& idx, const Interval& width,
+                                     const LinearExpression& value) {
+    const auto exact = exact_stack_range(idx, width, total_stack_size());
+    if (!exact) {
+        CRAB_WARN("array expansion conditional initialization ignored because range is not constant");
+        return;
+    }
+
+    kill_init_cells(cells_.get_mutable(), inv, idx, width, total_stack_size(), false);
+    const auto [offset, size] = *exact;
+    const Cell cell = cells_.get_mutable().init().mk_cell(offset, size);
+    inv.assign(init_var(cell), value);
+    if (value.variable_terms().size() == 1 && value.constant_term() == 0) {
+        const auto [source, coefficient] = *value.variable_terms().begin();
+        if (coefficient == 1) {
+            cells_.get_mutable().add_init_source(cell, source, StackCellRegistry::InitSourceKind::Exact);
+        }
+    }
+}
+
+void ArrayDomain::forget_return_value_sources(const Variable source) {
+    cells_.get_mutable().erase_init_sources_sourced_from(source);
+}
+
+void ArrayDomain::copy_return_value_sources(const Variable from, const Variable to, const bool zero_extend_32) {
+    cells_.get_mutable().copy_init_sources(from, to, zero_extend_32);
+}
+
+void ArrayDomain::assume_return_value(NumAbsDomain& inv, const Variable source,
+                                      const std::vector<LinearConstraint>& constraints) {
+    for (const Cell& cell : cells_->init_cells_sourced_from(source, StackCellRegistry::InitSourceKind::Exact)) {
+        const Variable witness = init_var(cell);
+        using namespace dsl_syntax;
+        if (!inv.entail(LinearExpression{witness} == LinearExpression{source})) {
+            continue;
+        }
+        for (const LinearConstraint& constraint : constraints) {
+            inv.add_constraint(substitute_variable(constraint, source, witness));
+        }
+    }
+}
+
+void ArrayDomain::assume_return_value_32(NumAbsDomain& inv, const Variable source, const Condition::Op op) {
+    using namespace dsl_syntax;
+    using Op = Condition::Op;
+    for (const Cell& cell :
+         cells_->init_cells_sourced_from(source, StackCellRegistry::InitSourceKind::ZeroExtended32)) {
+        const Variable witness = init_var(cell);
+        switch (op) {
+        case Op::EQ:
+        case Op::SGE:
+        case Op::LE: inv.add_constraint(witness == 0); break;
+        case Op::SLT:
+        case Op::NE:
+        case Op::GT: inv.add_constraint(witness <= -1); break;
+        case Op::SGT:
+        case Op::LT: inv.add_constraint(witness > 0); break;
+        case Op::SLE:
+        case Op::GE:
+        case Op::SET:
+        case Op::NSET: break;
+        }
+    }
+}
+
+void ArrayDomain::havoc_return_values(NumAbsDomain& inv, const Interval& idx, const Interval& width) {
+    kill_init_cells(cells_.get_mutable(), inv, idx, width, total_stack_size(), true);
+}
+
+void ArrayDomain::havoc_numbers(NumAbsDomain& inv, const Interval& idx, const Interval& width) {
+    const auto range = as_numbytes_range(idx, width, total_stack_size());
+    if (!range.has_value()) {
+        return;
+    }
+    kill_init_cells(cells_.get_mutable(), inv, idx, width, total_stack_size(), true);
+    const auto [lb, ub] = *range;
+    num_bytes.havoc(lb, ub - lb);
+}
+
 void ArrayDomain::set_to_top() { num_bytes.set_to_top(); }
 
 bool ArrayDomain::is_top() const { return num_bytes.is_top(); }
@@ -692,12 +999,12 @@ bool ArrayDomain::operator==(const ArrayDomain& other) const { return num_bytes 
 
 void ArrayDomain::operator|=(const ArrayDomain& other) {
     num_bytes |= other.num_bytes;
-    cells_.get_mutable().merge_from(*other.cells_);
+    cells_.get_mutable().join_from(*other.cells_);
 }
 
 void ArrayDomain::operator|=(ArrayDomain&& other) {
     num_bytes |= std::move(other.num_bytes);
-    cells_.get_mutable().merge_from(*other.cells_);
+    cells_.get_mutable().join_from(*other.cells_);
 }
 
 // Lattice combinators build a fresh ArrayDomain whose cells map is the union of
@@ -708,28 +1015,28 @@ void ArrayDomain::operator|=(ArrayDomain&& other) {
 ArrayDomain ArrayDomain::operator|(const ArrayDomain& other) const {
     ArrayDomain res{num_bytes | other.num_bytes};
     res.cells_.get_mutable().merge_from(*cells_);
-    res.cells_.get_mutable().merge_from(*other.cells_);
+    res.cells_.get_mutable().join_from(*other.cells_);
     return res;
 }
 
 ArrayDomain ArrayDomain::operator&(const ArrayDomain& other) const {
     ArrayDomain res{num_bytes & other.num_bytes};
     res.cells_.get_mutable().merge_from(*cells_);
-    res.cells_.get_mutable().merge_from(*other.cells_);
+    res.cells_.get_mutable().join_from(*other.cells_);
     return res;
 }
 
 ArrayDomain ArrayDomain::widen(const ArrayDomain& other) const {
     ArrayDomain res{num_bytes | other.num_bytes};
     res.cells_.get_mutable().merge_from(*cells_);
-    res.cells_.get_mutable().merge_from(*other.cells_);
+    res.cells_.get_mutable().join_from(*other.cells_);
     return res;
 }
 
 ArrayDomain ArrayDomain::narrow(const ArrayDomain& other) const {
     ArrayDomain res{num_bytes & other.num_bytes};
     res.cells_.get_mutable().merge_from(*cells_);
-    res.cells_.get_mutable().merge_from(*other.cells_);
+    res.cells_.get_mutable().join_from(*other.cells_);
     return res;
 }
 

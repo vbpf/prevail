@@ -178,6 +178,13 @@ Variable VariableRegistry::cell_var(const DataKind array, const Number& offset, 
     return intern(mk_scalar_name(array, offset.cast_to<uint64_t>(), size));
 }
 
+Variable VariableRegistry::stack_init_var(const Number& offset, const Number& size) const {
+    // Initializedness is a property of the stack type byte range, not of the
+    // signed/unsigned value cells. Reuse the stable type-cell spelling and add
+    // a suffix so it cannot collide with existing stack content variables.
+    return intern(mk_scalar_name(DataKind::types, offset.cast_to<uint64_t>(), size) + ".initialized");
+}
+
 // Given a type variable, get the associated variable of a given kind.
 Variable VariableRegistry::kind_var(const DataKind kind, const Variable type_variable) const {
     const std::string name = VariableRegistry::name(type_variable);

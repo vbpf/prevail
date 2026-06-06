@@ -15,8 +15,9 @@
 
 namespace verify_test {
 
-// Why the verifier rejects a program that the kernel verifier would accept.
-// Each value represents a category of imprecision in our abstract domain or modeling.
+// Why a generated sample test does not use a plain acceptance expectation.
+// Most values represent known verifier imprecision. StrictMemoryInitialization
+// is different: it is an intentional stricter-than-kernel rejection.
 enum class VerifyIssueKind {
     // State refinement loses precise register type information across control-flow merges,
     // so a pointer or scalar register is later treated as an incompatible type.
@@ -27,6 +28,10 @@ enum class VerifyIssueKind {
     // Stack byte initialization tracking misses writes or invalidates facts too
     // aggressively, so reads are reported as non-numeric or uninitialized.
     VerifierStackInitialization,
+    // Intentional strict mode: every byte read from stack memory or passed as a
+    // helper/map argument must be proven initialized, including helper outputs
+    // that are initialized only after a successful return.
+    StrictMemoryInitialization,
     // Pointer arithmetic constraints are lost or over-approximated, causing safe
     // offset computations to be rejected.
     VerifierPointerArithmetic,
@@ -53,6 +58,7 @@ inline const char* to_string(const VerifyIssueKind kind) noexcept {
     case VerifyIssueKind::VerifierTypeTracking: return "VerifierTypeTracking";
     case VerifyIssueKind::VerifierBoundsTracking: return "VerifierBoundsTracking";
     case VerifyIssueKind::VerifierStackInitialization: return "VerifierStackInitialization";
+    case VerifyIssueKind::StrictMemoryInitialization: return "StrictMemoryInitialization";
     case VerifyIssueKind::VerifierPointerArithmetic: return "VerifierPointerArithmetic";
     case VerifyIssueKind::VerifierMapTyping: return "VerifierMapTyping";
     case VerifyIssueKind::VerifierNullability: return "VerifierNullability";

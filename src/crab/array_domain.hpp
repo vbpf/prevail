@@ -25,12 +25,15 @@
 
 #include <memory>
 #include <optional>
+#include <vector>
 
+#include "arith/linear_constraint.hpp"
 #include "arith/variable.hpp"
 #include "crab/add_bottom.hpp"
 #include "crab/bitset_domain.hpp"
 #include "crab/cow.hpp"
 #include "crab/type_domain.hpp"
+#include "ir/syntax.hpp"
 
 namespace prevail {
 
@@ -87,12 +90,16 @@ class ArrayDomain final {
     [[nodiscard]]
     bool all_num_lb_ub(const Interval& lb, const Interval& ub) const;
     [[nodiscard]]
+    bool is_initialized_width(const NumAbsDomain& inv, const Interval& index, const Interval& width) const;
+    [[nodiscard]]
+    bool is_initialized_lb_ub(const NumAbsDomain& inv, const Interval& lb, const Interval& ub) const;
+    [[nodiscard]]
     int min_all_num_size(const NumAbsDomain& inv, Variable offset) const;
 
     [[nodiscard]]
     std::optional<LinearExpression> load(const NumAbsDomain& inv, DataKind kind, const Interval& i, int width,
                                          bool big_endian);
-    std::optional<LinearExpression> load_type(const Interval& i, int width);
+    std::optional<LinearExpression> load_type(const NumAbsDomain& inv, const Interval& i, int width);
     std::optional<Variable> store(NumAbsDomain& inv, DataKind kind, const Interval& idx, const Interval& elem_size,
                                   bool big_endian);
     std::optional<Variable> store_type(TypeDomain& inv, const Interval& idx, const Interval& width, bool is_num);
@@ -101,6 +108,16 @@ class ArrayDomain final {
 
     // Perform array stores over an array segment
     void store_numbers(const Interval& _idx, const Interval& _width);
+    void store_return_value(NumAbsDomain& inv, const Interval& idx, const Interval& width,
+                            const LinearExpression& value);
+    void forget_return_value_sources(Variable source);
+    void copy_return_value_sources(Variable from, Variable to, bool zero_extend_32);
+    // Mirrors assume_cst_* register constraints onto init witnesses only while the
+    // domain still proves that the compared register value is the stored witness.
+    void assume_return_value(NumAbsDomain& inv, Variable source, const std::vector<LinearConstraint>& constraints);
+    void assume_return_value_32(NumAbsDomain& inv, Variable source, Condition::Op op);
+    void havoc_return_values(NumAbsDomain& inv, const Interval& idx, const Interval& width);
+    void havoc_numbers(NumAbsDomain& inv, const Interval& idx, const Interval& width);
 
     void split_number_var(NumAbsDomain& inv, DataKind kind, const Interval& ii, const Interval& elem_size,
                           bool big_endian);

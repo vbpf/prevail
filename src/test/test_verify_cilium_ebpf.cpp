@@ -77,36 +77,96 @@ TEST_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "socket/2")
 TEST_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "socket/3")
 TEST_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "socket/4")
 TEST_SECTION("cilium-ebpf", "loader_nobtf-el.elf", "xdp")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea0")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea1")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea10")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea11")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea12")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea13")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea14")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea15")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea16")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea17")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea18")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea19")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea2")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea20")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea21")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea22")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea23")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea24")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea25")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea26")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea27")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea28")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea29")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea3")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea4")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea5")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea6")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea7")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea8")
-TEST_SECTION("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea9")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea0")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea1")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea10")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea11")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea12")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea13")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea14")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea15")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea16")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea17")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea18")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea19")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea2")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea20")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea21")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea22")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea23")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea24")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea25")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea26")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea27")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea28")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea29")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea3")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea4")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea5")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea6")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea7")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea8")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium-ebpf", "manyprogs-el.elf", "kprobe/sys_execvea9")
 TEST_SECTION("cilium-ebpf", "raw_tracepoint-el.elf", "raw_tracepoint/sched_process_exec")
 TEST_SECTION("cilium-ebpf", "strings-el.elf", "xdp")
 TEST_SECTION("cilium-ebpf", "struct_ops-el.elf", "struct_ops/test_1")

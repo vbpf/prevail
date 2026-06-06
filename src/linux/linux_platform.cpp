@@ -445,21 +445,24 @@ static std::optional<ResolvedCall> get_builtin_call_linux(const int32_t id) {
             .call = key,
             .name = "memset",
             .contract = {.singles = {{ArgSingle::Kind::ANYTHING, false, Reg{2}}},
-                         .pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false}}},
+                         .pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false}},
+                         .always_initialized_memory = {{Reg{1}, Reg{3}}}},
         };
     case LINUX_BUILTIN_CALL_MEMCPY:
         return ResolvedCall{
             .call = key,
             .name = "memcpy",
             .contract = {.pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false},
-                                   {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}}},
+                                   {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}},
+                         .always_initialized_memory = {{Reg{1}, Reg{3}}}},
         };
     case LINUX_BUILTIN_CALL_MEMMOVE:
         return ResolvedCall{
             .call = key,
             .name = "memmove",
             .contract = {.pairs = {{ArgPair::Kind::PTR_TO_WRITABLE_MEM, false, Reg{1}, Reg{3}, false},
-                                   {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}}},
+                                   {ArgPair::Kind::PTR_TO_READABLE_MEM, false, Reg{2}, Reg{3}, false}},
+                         .always_initialized_memory = {{Reg{1}, Reg{3}}}},
         };
     case LINUX_BUILTIN_CALL_MEMCMP:
         return ResolvedCall{

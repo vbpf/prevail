@@ -8,16 +8,28 @@ TEST_SECTION("cilium", "bpf_lb.o", "2/1")
 TEST_SECTION("cilium", "bpf_lb.o", "from-netdev")
 TEST_SECTION("cilium", "bpf_lxc.o", "1/0x1010")
 TEST_SECTION("cilium", "bpf_lxc.o", "2/1")
-TEST_SECTION("cilium", "bpf_lxc.o", "2/10")
-TEST_SECTION("cilium", "bpf_lxc.o", "2/11")
-TEST_SECTION("cilium", "bpf_lxc.o", "2/12")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium", "bpf_lxc.o", "2/10")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium", "bpf_lxc.o", "2/11")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium", "bpf_lxc.o", "2/12")
 TEST_SECTION("cilium", "bpf_lxc.o", "2/3")
 TEST_SECTION("cilium", "bpf_lxc.o", "2/4")
 TEST_SECTION("cilium", "bpf_lxc.o", "2/5")
 TEST_SECTION("cilium", "bpf_lxc.o", "2/6")
-TEST_SECTION("cilium", "bpf_lxc.o", "2/7")
-TEST_SECTION("cilium", "bpf_lxc.o", "2/8")
-TEST_SECTION("cilium", "bpf_lxc.o", "2/9")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium", "bpf_lxc.o", "2/7")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium", "bpf_lxc.o", "2/8")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("cilium", "bpf_lxc.o", "2/9")
 TEST_SECTION("cilium", "bpf_lxc.o", "from-container")
 TEST_SECTION("cilium", "bpf_netdev.o", "2/1")
 TEST_SECTION("cilium", "bpf_netdev.o", "2/3")

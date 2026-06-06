@@ -31,6 +31,12 @@ def explain(kind: str, diagnostic: str) -> str:
             "Known verifier limitation: stack initialization tracking is too coarse for this access path. "
             f"Diagnostic: {diagnostic}"
         )
+    if kind == "StrictMemoryInitialization":
+        return (
+            "Intentional stricter memory-initialization policy: every byte read from stack memory or passed as "
+            "a helper/map argument must be proven initialized. "
+            f"Diagnostic: {diagnostic}"
+        )
     if kind == "VerifierPointerArithmetic":
         return (
             "Known verifier limitation: pointer-arithmetic typing is too restrictive in this pattern. "
@@ -106,6 +112,16 @@ def preserve_reason(current_reason: str | None) -> bool:
     if not current_reason:
         return False
     return current_reason.startswith(MANUAL_BCC_REASON_PREFIX)
+
+
+def preserve_intentional_reject(current: dict | None, status: str) -> bool:
+    if not current:
+        return False
+    return (
+        current.get("status") == "reject"
+        and current.get("kind") == "StrictMemoryInitialization"
+        and status in ("expected_failure", "skip")
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -276,6 +292,9 @@ def refresh_expectations(
                 elif status == "reject_load":
                     section_overrides[section] = {"status": "reject_load"}
                 else:
+                    if preserve_intentional_reject(current, status):
+                        section_overrides[section] = current
+                        continue
                     current_reason = current.get("reason") if current else None
                     current_kind = current.get("kind") if current else None
                     if current_kind is None:
@@ -305,6 +324,9 @@ def refresh_expectations(
                     if not section_program_overrides:
                         program_overrides.pop(section, None)
                 else:
+                    if preserve_intentional_reject(current, status):
+                        section_program_overrides[function_name] = current
+                        continue
                     current_reason = current.get("reason") if current else None
                     current_kind = current.get("kind") if current else None
                     if current_kind is None:

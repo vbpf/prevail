@@ -61,6 +61,8 @@ typedef enum _ebpf_argument_type {
     EBPF_ARGUMENT_TYPE_PTR_TO_UNINIT_MAP_VALUE = 31,
     EBPF_ARGUMENT_TYPE_CONST_PTR_TO_MAP = 32,
     EBPF_ARGUMENT_TYPE_UNSUPPORTED = 33,
+    EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM = 34,
+    EBPF_ARGUMENT_TYPE_PTR_TO_CONDITIONALLY_WRITABLE_MEM_OR_NULL = 35,
 } ebpf_argument_type_t;
 
 // The following struct describes how to access the layout in

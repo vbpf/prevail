@@ -44,6 +44,15 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "kretprobe/cap_capable": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              }
+            }
           }
         },
         "exitsnoop.bpf.o": {
@@ -58,6 +67,15 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "tracepoint/sched/sched_process_exit": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              }
+            }
           }
         },
         "filelife.bpf.o": {
@@ -220,6 +238,15 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "from-netdev": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              }
+            }
           }
         },
         "bpf_lb-DLB_L4.o": {
@@ -246,6 +273,15 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "from-netdev": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              }
+            }
           }
         },
         "bpf_lb-DUNKNOWN.o": {
@@ -334,6 +370,20 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "1/0x1010": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "2/7": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              }
+            }
           }
         },
         "bpf_lxc-DUNKNOWN.o": {
@@ -396,6 +446,25 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "1/0x1010": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "2/7": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "from-container": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              }
+            }
           }
         },
         "bpf_lxc_jit.o": {
@@ -458,6 +527,25 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "1/0xdc06": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "2/10": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "2/7": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              }
+            }
           }
         },
         "bpf_netdev.o": {
@@ -1727,6 +1815,40 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "2/10": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "2/11": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "2/12": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "2/7": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "2/8": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "2/9": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              }
+            }
           }
         },
         "bpf_netdev.o": {
@@ -2680,6 +2802,16 @@
                   "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
+                "tail_handle_ipv4_from_host": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
+                "tail_handle_ipv4_from_netdev": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
                 "tail_handle_ipv6_cont_from_netdev": {
                   "kind": "VerifierTypeTracking",
                   "reason": "register type refinement is too imprecise in this control-flow pattern",
@@ -2695,6 +2827,11 @@
                   "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
+                "tail_handle_nat_fwd_ipv4": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
                 "tail_handle_snat_fwd_ipv4": {
                   "kind": "VerifierTypeTracking",
                   "reason": "register type refinement is too imprecise in this control-flow pattern",
@@ -2705,10 +2842,35 @@
                   "reason": "nullability tracking is too conservative on this path",
                   "status": "expected_failure"
                 },
+                "tail_ipv4_host_policy_ingress": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
+                "tail_ipv6_host_policy_ingress": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
+                "tail_nodeport_ipv4_dsr": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
+                "tail_nodeport_ipv6_dsr": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
                 "tail_nodeport_nat_egress_ipv4": {
                   "kind": "VerifierStackInitialization",
                   "reason": "stack initialization tracking is too coarse for this access path",
                   "status": "expected_failure"
+                },
+                "tail_nodeport_nat_egress_ipv6": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
                 },
                 "tail_nodeport_nat_ingress_ipv4": {
                   "kind": "VerifierTypeTracking",
@@ -2719,6 +2881,21 @@
                   "kind": "VerifierTypeTracking",
                   "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
+                },
+                "tail_nodeport_rev_dnat_egress_ipv6": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
+                "tail_nodeport_rev_dnat_ingress_ipv6": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
+                "tail_nodeport_rev_dnat_ipv4": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
                 },
                 "tail_srv6_encap": {
                   "kind": "VerifierBoundsTracking",
@@ -2885,6 +3062,11 @@
           "test_overrides": {
             "programs": {
               "tc/tail": {
+                "tail_handle_ipv4": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
                 "tail_handle_ipv4_cont": {
                   "kind": "VerifierTypeTracking",
                   "reason": "register type refinement is too imprecise in this control-flow pattern",
@@ -2895,15 +3077,60 @@
                   "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
+                "tail_ipv4_ct_egress": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
+                "tail_ipv4_ct_ingress": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
+                "tail_ipv4_ct_ingress_policy_only": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
+                "tail_ipv6_ct_egress": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
+                "tail_ipv6_ct_ingress": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
+                "tail_ipv6_ct_ingress_policy_only": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
                 "tail_ipv6_policy": {
                   "kind": "VerifierTypeTracking",
                   "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
+                "tail_nodeport_ipv4_dsr": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
+                "tail_nodeport_ipv6_dsr": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
                 "tail_nodeport_nat_egress_ipv4": {
                   "kind": "VerifierStackInitialization",
                   "reason": "stack initialization tracking is too coarse for this access path",
                   "status": "expected_failure"
+                },
+                "tail_nodeport_nat_egress_ipv6": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
                 },
                 "tail_nodeport_nat_ingress_ipv4": {
                   "kind": "VerifierTypeTracking",
@@ -2914,6 +3141,21 @@
                   "kind": "VerifierTypeTracking",
                   "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
+                },
+                "tail_nodeport_rev_dnat_egress_ipv6": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
+                "tail_nodeport_rev_dnat_ingress_ipv6": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
+                "tail_nodeport_rev_dnat_ipv4": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
                 }
               }
             },
@@ -3066,25 +3308,55 @@
                 }
               },
               "tc/tail": {
+                "tail_handle_ipv4": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
                 "tail_handle_ipv6": {
                   "kind": "VerifierTypeTracking",
                   "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
+                },
+                "tail_handle_nat_fwd_ipv4": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
                 },
                 "tail_handle_snat_fwd_ipv4": {
                   "kind": "VerifierTypeTracking",
                   "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
+                "tail_handle_snat_fwd_ipv6": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
                 "tail_mcast_ep_delivery": {
                   "kind": "VerifierTypeTracking",
                   "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
+                "tail_nodeport_ipv4_dsr": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
+                "tail_nodeport_ipv6_dsr": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
                 "tail_nodeport_nat_egress_ipv4": {
                   "kind": "VerifierStackInitialization",
                   "reason": "stack initialization tracking is too coarse for this access path",
                   "status": "expected_failure"
+                },
+                "tail_nodeport_nat_egress_ipv6": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
                 },
                 "tail_nodeport_nat_ingress_ipv4": {
                   "kind": "VerifierTypeTracking",
@@ -3095,6 +3367,21 @@
                   "kind": "VerifierTypeTracking",
                   "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
+                },
+                "tail_nodeport_rev_dnat_egress_ipv6": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
+                "tail_nodeport_rev_dnat_ingress_ipv6": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
+                "tail_nodeport_rev_dnat_ipv4": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
                 }
               }
             }
@@ -3267,15 +3554,40 @@
           "test_overrides": {
             "programs": {
               "tc/tail": {
+                "tail_handle_ipv4": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
                 "tail_handle_ipv6": {
                   "kind": "VerifierTypeTracking",
                   "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
+                "tail_handle_nat_fwd_ipv4": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
+                "tail_nodeport_ipv4_dsr": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
+                "tail_nodeport_ipv6_dsr": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
                 "tail_nodeport_nat_egress_ipv4": {
                   "kind": "VerifierStackInitialization",
                   "reason": "stack initialization tracking is too coarse for this access path",
                   "status": "expected_failure"
+                },
+                "tail_nodeport_nat_egress_ipv6": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
                 },
                 "tail_nodeport_nat_ingress_ipv4": {
                   "kind": "VerifierTypeTracking",
@@ -3286,6 +3598,21 @@
                   "kind": "VerifierTypeTracking",
                   "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
+                },
+                "tail_nodeport_rev_dnat_egress_ipv6": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
+                "tail_nodeport_rev_dnat_ingress_ipv6": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
+                },
+                "tail_nodeport_rev_dnat_ipv4": {
+                  "kind": "StrictMemoryInitialization",
+                  "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                  "status": "reject"
                 }
               }
             },
@@ -4616,6 +4943,160 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "kprobe/sys_execvea0": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea1": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea10": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea11": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea12": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea13": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea14": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea15": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea16": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea17": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea18": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea19": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea2": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea20": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea21": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea22": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea23": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea24": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea25": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea26": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea27": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea28": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea29": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea3": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea4": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea5": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea6": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea7": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea8": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_execvea9": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              }
+            }
           }
         },
         "map_spin_lock-el.elf": {
@@ -5547,25 +6028,115 @@
           },
           "test_overrides": {
             "sections": {
+              "raw_tracepoint/filler/proc_startupdate": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/proc_startupdate_2": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/proc_startupdate_3": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sched_switch_e": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
               "raw_tracepoint/filler/sys_accept_x": {
                 "kind": "VerifierBoundsTracking",
                 "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
+              },
+              "raw_tracepoint/filler/sys_access_e": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
               },
               "raw_tracepoint/filler/sys_connect_x": {
                 "kind": "VerifierBoundsTracking",
                 "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
+              "raw_tracepoint/filler/sys_creat_x": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_fchmodat_x": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_flock_e": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_futex_e": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_generic": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
               "raw_tracepoint/filler/sys_getsockopt_x": {
                 "kind": "VerifierBoundsTracking",
                 "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
+              "raw_tracepoint/filler/sys_linkat_x": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_llseek_e": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_mkdirat_x": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_mmap_e": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_mount_e": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
               "raw_tracepoint/filler/sys_nanosleep_e": {
                 "kind": "VerifierBoundsTracking",
                 "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
+              },
+              "raw_tracepoint/filler/sys_open_x": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_openat_x": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_pipe_x": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
               },
               "raw_tracepoint/filler/sys_poll_e": {
                 "kind": "VerifierBoundsTracking",
@@ -5581,6 +6152,26 @@
                 "kind": "VerifierBoundsTracking",
                 "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
+              },
+              "raw_tracepoint/filler/sys_procexit_e": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_pwritev_e": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_quotactl_e": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_quotactl_x": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
               },
               "raw_tracepoint/filler/sys_read_x": {
                 "kind": "VerifierBoundsTracking",
@@ -5612,6 +6203,36 @@
                 "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
+              "raw_tracepoint/filler/sys_renameat2_x": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_renameat_x": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_semctl_e": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_semget_e": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_semop_x": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_send_e": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
               "raw_tracepoint/filler/sys_send_x": {
                 "kind": "VerifierBoundsTracking",
                 "reason": "interval/bounds refinement loses precision for this memory-access proof",
@@ -5632,20 +6253,85 @@
                 "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
+              "raw_tracepoint/filler/sys_setns_e": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_setsockopt_x": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_shutdown_e": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_signaldeliver_e": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
               "raw_tracepoint/filler/sys_socket_bind_x": {
                 "kind": "VerifierBoundsTracking",
                 "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
+              },
+              "raw_tracepoint/filler/sys_socket_x": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_socketpair_x": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_symlinkat_x": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_unlinkat_x": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/filler/sys_unshare_e": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
               },
               "raw_tracepoint/filler/sys_write_x": {
                 "kind": "VerifierBoundsTracking",
                 "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
               },
+              "raw_tracepoint/filler/sys_writev_e": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
               "raw_tracepoint/filler/sys_writev_pwritev_x": {
                 "kind": "VerifierBoundsTracking",
                 "reason": "interval/bounds refinement loses precision for this memory-access proof",
                 "status": "expected_failure"
+              },
+              "raw_tracepoint/sched_process_exit": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/sys_enter": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "raw_tracepoint/sys_exit": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
               }
             }
           }
@@ -6312,6 +6998,11 @@
                 "kind": "VerifierTypeTracking",
                 "reason": "register type refinement is too imprecise in this control-flow pattern",
                 "status": "expected_failure"
+              },
+              "tp/sched/sched_process_exit": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
               }
             }
           }
@@ -6458,6 +7149,15 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "tp/syscalls/sys_enter_write": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              }
+            }
           }
         },
         "profile.bpf.o": {
@@ -6745,6 +7445,15 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "kprobe/sys_connect": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              }
+            }
           }
         },
         "offwaketime_kern.o": {
@@ -6765,6 +7474,20 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "kprobe/try_to_wake_up": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "tracepoint/sched/sched_switch": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              }
+            }
           }
         },
         "sampleip_kern.o": {
@@ -7308,6 +8031,15 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "kprobe/sys_connect": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              }
+            }
           }
         },
         "trace_event_kern.o": {
@@ -7322,6 +8054,15 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "perf_event": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              }
+            }
           }
         },
         "trace_output_kern.o": {
@@ -7370,6 +8111,20 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "kprobe/kfree_skb": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/sys_write": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              }
+            }
           }
         },
         "tracex3_kern.o": {
@@ -7442,6 +8197,15 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "kprobe/0": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              }
+            }
           }
         },
         "tracex6_kern.o": {
@@ -7462,6 +8226,15 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "kprobe/htab_map_lookup_elem": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              }
+            }
           }
         },
         "tracex7_kern.o": {
@@ -8816,6 +9589,15 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "kprobe/__netif_receive_skb_core": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              }
+            }
           }
         },
         "tracex2_kern.o": {
@@ -8836,6 +9618,20 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "kprobe/__x64_sys_write": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "kprobe/kfree_skb": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              }
+            }
           }
         },
         "tracex3_kern.o": {
@@ -8896,6 +9692,15 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "kprobe/htab_map_lookup_elem": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              }
+            }
           }
         },
         "tracex7_kern.o": {
@@ -9037,6 +9842,20 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "downcall": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              },
+              "tail-32": {
+                "kind": "StrictMemoryInitialization",
+                "reason": "Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven initialized; helper output success or stack padding is not treated as initialized by default.",
+                "status": "reject"
+              }
+            }
           }
         }
       }

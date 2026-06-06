@@ -9,7 +9,9 @@ TEST_SECTION("linux", "cpustat_kern.o", "tracepoint/power/cpu_idle")
 TEST_SECTION("linux", "lathist_kern.o", "kprobe/trace_preempt_off")
 TEST_SECTION("linux", "lathist_kern.o", "kprobe/trace_preempt_on")
 TEST_SECTION("linux", "lwt_len_hist_kern.o", "len_hist")
-TEST_SECTION("linux", "map_perf_test_kern.o", "kprobe/sys_connect")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("linux", "map_perf_test_kern.o", "kprobe/sys_connect")
 TEST_SECTION("linux", "map_perf_test_kern.o", "kprobe/sys_getegid")
 TEST_SECTION("linux", "map_perf_test_kern.o", "kprobe/sys_geteuid")
 TEST_SECTION("linux", "map_perf_test_kern.o", "kprobe/sys_getgid")
@@ -17,8 +19,12 @@ TEST_SECTION("linux", "map_perf_test_kern.o", "kprobe/sys_getpgid")
 TEST_SECTION("linux", "map_perf_test_kern.o", "kprobe/sys_getppid")
 TEST_SECTION("linux", "map_perf_test_kern.o", "kprobe/sys_gettid")
 TEST_SECTION("linux", "map_perf_test_kern.o", "kprobe/sys_getuid")
-TEST_SECTION("linux", "offwaketime_kern.o", "kprobe/try_to_wake_up")
-TEST_SECTION("linux", "offwaketime_kern.o", "tracepoint/sched/sched_switch")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("linux", "offwaketime_kern.o", "kprobe/try_to_wake_up")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("linux", "offwaketime_kern.o", "tracepoint/sched/sched_switch")
 TEST_SECTION("linux", "sampleip_kern.o", "perf_event")
 TEST_SECTION("linux", "sock_flags_kern.o", "cgroup/sock1")
 TEST_SECTION("linux", "sock_flags_kern.o", "cgroup/sock2")
@@ -74,22 +80,34 @@ TEST_SECTION("linux", "test_overhead_raw_tp_kern.o", "raw_tracepoint/task_rename
 TEST_SECTION("linux", "test_overhead_raw_tp_kern.o", "raw_tracepoint/urandom_read")
 TEST_SECTION("linux", "test_overhead_tp_kern.o", "tracepoint/random/urandom_read")
 TEST_SECTION("linux", "test_overhead_tp_kern.o", "tracepoint/task/task_rename")
-TEST_SECTION("linux", "test_probe_write_user_kern.o", "kprobe/sys_connect")
-TEST_SECTION("linux", "trace_event_kern.o", "perf_event")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("linux", "test_probe_write_user_kern.o", "kprobe/sys_connect")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("linux", "trace_event_kern.o", "perf_event")
 TEST_SECTION("linux", "trace_output_kern.o", "kprobe/sys_write")
 TEST_SECTION("linux", "tracex1_kern.o", "kprobe/__netif_receive_skb_core")
-TEST_SECTION("linux", "tracex2_kern.o", "kprobe/kfree_skb")
-TEST_SECTION("linux", "tracex2_kern.o", "kprobe/sys_write")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("linux", "tracex2_kern.o", "kprobe/kfree_skb")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("linux", "tracex2_kern.o", "kprobe/sys_write")
 TEST_SECTION("linux", "tracex3_kern.o", "kprobe/blk_account_io_completion")
 TEST_SECTION("linux", "tracex3_kern.o", "kprobe/blk_start_request")
 TEST_SECTION("linux", "tracex4_kern.o", "kprobe/kmem_cache_free")
 TEST_SECTION("linux", "tracex4_kern.o", "kretprobe/kmem_cache_alloc_node")
-TEST_SECTION("linux", "tracex5_kern.o", "kprobe/0")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("linux", "tracex5_kern.o", "kprobe/0")
 TEST_SECTION("linux", "tracex5_kern.o", "kprobe/1")
 TEST_SECTION("linux", "tracex5_kern.o", "kprobe/9")
 TEST_SECTION("linux", "tracex5_kern.o", "kprobe/__seccomp_filter")
 TEST_SECTION("linux", "tracex6_kern.o", "kprobe/htab_map_get_next_key")
-TEST_SECTION("linux", "tracex6_kern.o", "kprobe/htab_map_lookup_elem")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("linux", "tracex6_kern.o", "kprobe/htab_map_lookup_elem")
 TEST_SECTION("linux", "tracex7_kern.o", "kprobe/open_ctree")
 TEST_SECTION("linux", "xdp1_kern.o", "xdp1")
 TEST_SECTION("linux", "xdp2_kern.o", "xdp1")

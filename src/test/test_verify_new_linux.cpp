@@ -14,13 +14,21 @@ TEST_SECTION("new_linux", "sockex3_kern.o", "socket/2")
 TEST_SECTION("new_linux", "sockex3_kern.o", "socket/3")
 TEST_SECTION("new_linux", "sockex3_kern.o", "socket/4")
 TEST_SECTION("new_linux", "trace_output_kern.o", "kprobe/__x64_sys_write")
-TEST_SECTION("new_linux", "tracex1_kern.o", "kprobe/__netif_receive_skb_core")
-TEST_SECTION("new_linux", "tracex2_kern.o", "kprobe/__x64_sys_write")
-TEST_SECTION("new_linux", "tracex2_kern.o", "kprobe/kfree_skb")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("new_linux", "tracex1_kern.o", "kprobe/__netif_receive_skb_core")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("new_linux", "tracex2_kern.o", "kprobe/__x64_sys_write")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("new_linux", "tracex2_kern.o", "kprobe/kfree_skb")
 TEST_SECTION("new_linux", "tracex3_kern.o", "kprobe/blk_account_io_done")
 TEST_SECTION("new_linux", "tracex3_kern.o", "kprobe/blk_mq_start_request")
 TEST_SECTION("new_linux", "tracex4_kern.o", "kprobe/kmem_cache_free")
 TEST_SECTION("new_linux", "tracex4_kern.o", "kretprobe/kmem_cache_alloc_node")
 TEST_SECTION("new_linux", "tracex6_kern.o", "kprobe/htab_map_get_next_key")
-TEST_SECTION("new_linux", "tracex6_kern.o", "kprobe/htab_map_lookup_elem")
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_SECTION_REJECT("new_linux", "tracex6_kern.o", "kprobe/htab_map_lookup_elem")
 TEST_SECTION("new_linux", "tracex7_kern.o", "kprobe/open_ctree")

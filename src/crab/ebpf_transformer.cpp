@@ -5,6 +5,8 @@
 
 #include <bitset>
 #include <cassert>
+#include <cstdint>
+#include <limits>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -83,6 +85,10 @@ class EbpfTransformer final {
 
     void forget_packet_pointers();
 
+    void forget_return_value_sources(const Reg& reg);
+
+    void copy_return_value_sources(const Reg& from, const Reg& to, bool zero_extend_32);
+
     void do_load_mapfd(const Reg& dst_reg, int mapfd, bool maybe_null);
 
     void do_load_map_address(const Reg& dst_reg, int mapfd, int32_t offset);
@@ -138,6 +144,7 @@ void ebpf_domain_transform(EbpfDomain& inv, const Instruction& ins, const Analys
 
 void EbpfTransformer::scratch_caller_saved_registers() {
     for (uint8_t i = R1_ARG; i <= R5_ARG; i++) {
+        forget_return_value_sources(Reg{i});
         dom.state.havoc_register(Reg{i});
     }
 }
@@ -174,6 +181,7 @@ void EbpfTransformer::save_callee_saved_registers(const std::string& prefix) {
 void EbpfTransformer::restore_callee_saved_registers(const std::string& prefix) {
     // Havoc any callee-created r6-r9 variables before restoring the saved ones.
     for (const uint8_t r : {R6, R7, R8, R9}) {
+        forget_return_value_sources(Reg{r});
         dom.state.havoc_register(Reg{r});
     }
     const auto pairs = callee_saved_renaming(prefix);
@@ -193,6 +201,7 @@ void EbpfTransformer::havoc_subprogram_stack(const std::string& prefix) {
     }
     const auto frame_size = context.runtime().subprogram_stack_size;
     const int64_t stack_start = intv.singleton()->cast_to<int64_t>() - frame_size;
+    stack.havoc_numbers(dom.state.values, Interval{stack_start}, Interval{frame_size});
     stack.havoc_type(dom.state.types, Interval{stack_start}, Interval{frame_size});
     for (const DataKind kind : iterate_kinds()) {
         stack.havoc(dom.state.values, kind, Interval{stack_start}, Interval{frame_size}, context.runtime().big_endian);
@@ -202,6 +211,21 @@ void EbpfTransformer::havoc_subprogram_stack(const std::string& prefix) {
 void EbpfTransformer::forget_packet_pointers() {
     dom.state.havoc_all_locations_having_type(T_PACKET);
     dom.initialize_packet(context);
+}
+
+void EbpfTransformer::forget_return_value_sources(const Reg& reg) {
+    const RegPack pack = reg_pack(reg);
+    stack.forget_return_value_sources(pack.svalue);
+    stack.forget_return_value_sources(pack.uvalue);
+}
+
+void EbpfTransformer::copy_return_value_sources(const Reg& from, const Reg& to, const bool zero_extend_32) {
+    const RegPack src = reg_pack(from);
+    const RegPack dst = reg_pack(to);
+    stack.copy_return_value_sources(src.svalue, dst.svalue, zero_extend_32);
+    stack.copy_return_value_sources(src.svalue, dst.uvalue, zero_extend_32);
+    stack.copy_return_value_sources(src.uvalue, dst.svalue, zero_extend_32);
+    stack.copy_return_value_sources(src.uvalue, dst.uvalue, zero_extend_32);
 }
 
 /** Linear constraint for a pointer comparison.
@@ -232,16 +256,29 @@ void EbpfTransformer::operator()(const Assume& s) {
     }
     const Condition cond = s.cond;
     const auto dst = reg_pack(cond.left);
+    auto assume_return_values = [&](NumAbsDomain& values, const std::vector<LinearConstraint>& constraints,
+                                    const std::vector<Variable>& sources) {
+        for (const Variable source : sources) {
+            stack.assume_return_value(values, source, constraints);
+        }
+    };
+    auto assume_copied_return_value_against_zero = [&](NumAbsDomain& values, const Variable source, const int64_t imm) {
+        if (!cond.is64 && imm == 0) {
+            stack.assume_return_value_32(values, source, cond.op);
+        }
+    };
     if (const auto psrc_reg = std::get_if<Reg>(&cond.right)) {
         const auto src_reg = *psrc_reg;
         const auto src = reg_pack(src_reg);
         if (dom.state.same_type(cond.left, src_reg)) {
             dom.state = dom.state.join_over_types(cond.left, [&](TypeToNumDomain& state, const TypeEncoding type) {
                 if (type == T_NUM) {
-                    for (const LinearConstraint& cst : state.values->assume_cst_reg(
-                             cond.op, cond.is64, dst.svalue, dst.uvalue, src.svalue, src.uvalue)) {
+                    const auto constraints = state.values->assume_cst_reg(cond.op, cond.is64, dst.svalue, dst.uvalue,
+                                                                          src.svalue, src.uvalue);
+                    for (const LinearConstraint& cst : constraints) {
                         state.values.add_constraint(cst);
                     }
+                    assume_return_values(state.values, constraints, {dst.svalue, dst.uvalue, src.svalue, src.uvalue});
                 } else {
                     // Either pointers to a singleton region,
                     // or an equality comparison on map descriptors/pointers to non-singleton locations
@@ -259,10 +296,12 @@ void EbpfTransformer::operator()(const Assume& s) {
             // constraints are applied to the global state across all type possibilities.
             // This is sound (pointer registers carry meaningful svalue/uvalue bounds)
             // but less precise than a type-split approach for non-numeric type paths.
-            for (const LinearConstraint& cst :
-                 dom.state.values->assume_cst_reg(cond.op, cond.is64, dst.svalue, dst.uvalue, src.svalue, src.uvalue)) {
+            const auto constraints =
+                dom.state.values->assume_cst_reg(cond.op, cond.is64, dst.svalue, dst.uvalue, src.svalue, src.uvalue);
+            for (const LinearConstraint& cst : constraints) {
                 dom.state.values.add_constraint(cst);
             }
+            assume_return_values(dom.state.values, constraints, {dst.svalue, dst.uvalue, src.svalue, src.uvalue});
         } else {
             // Different types and src is not a number.
             // The checker may not have seen this Assume (e.g., implicit Assume or CFG-split edge),
@@ -271,10 +310,13 @@ void EbpfTransformer::operator()(const Assume& s) {
         }
     } else {
         const int64_t imm = gsl::narrow_cast<int64_t>(std::get<Imm>(cond.right).v);
-        for (const LinearConstraint& cst :
-             dom.state.values->assume_cst_imm(cond.op, cond.is64, dst.svalue, dst.uvalue, imm)) {
+        const auto constraints = dom.state.values->assume_cst_imm(cond.op, cond.is64, dst.svalue, dst.uvalue, imm);
+        for (const LinearConstraint& cst : constraints) {
             dom.state.values.add_constraint(cst);
         }
+        assume_return_values(dom.state.values, constraints, {dst.svalue, dst.uvalue});
+        assume_copied_return_value_against_zero(dom.state.values, dst.svalue, imm);
+        assume_copied_return_value_against_zero(dom.state.values, dst.uvalue, imm);
     }
 }
 
@@ -292,6 +334,7 @@ static uint64_t merge_imm32_to_u64(const int32_t lo, const int32_t hi) {
 void EbpfTransformer::operator()(const LoadPseudo& pseudo) {
     switch (pseudo.addr.kind) {
     case PseudoAddress::Kind::CODE_ADDR: {
+        forget_return_value_sources(pseudo.dst);
         const auto dst = reg_pack(pseudo.dst);
         const uint64_t imm64 = merge_imm32_to_u64(pseudo.addr.imm, pseudo.addr.next_imm);
         dom.state.values.assign(dst.uvalue, imm64);
@@ -318,6 +361,7 @@ void EbpfTransformer::operator()(const Un& stmt) {
     if (dom.is_bottom()) {
         return;
     }
+    forget_return_value_sources(stmt.dst);
     const auto dst = reg_pack(stmt.dst);
     auto swap_endianness = [&](const Variable v, auto be_or_le) {
         if (dom.state.is_in_group(stmt.dst, TS_NUM)) {
@@ -431,6 +475,7 @@ void EbpfTransformer::operator()(const Packet& a) {
         return;
     }
     constexpr Reg r0_reg{R0_RETURN_VALUE};
+    forget_return_value_sources(r0_reg);
     dom.state.havoc_register_except_type(r0_reg);
     dom.state.assign_type(r0_reg, T_NUM);
     scratch_caller_saved_registers();
@@ -443,7 +488,7 @@ void EbpfTransformer::do_load_stack(TypeToNumDomain& state, const Reg& target_re
     if (state.values.entail(width <= reg_pack(src_reg).stack_numeric_size)) {
         state.assign_type(target_reg, T_NUM);
     } else {
-        state.assign_type(target_reg, stack.load_type(addr, width));
+        state.assign_type(target_reg, stack.load_type(state.values, addr, width));
         if (!state.is_initialized(target_reg)) {
             // We don't know what we loaded, so just havoc the destination register.
             state.havoc_register(target_reg);
@@ -569,6 +614,7 @@ static void do_load_packet_or_shared(TypeToNumDomain& state, const Reg& target_r
 void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
     using namespace dsl_syntax;
 
+    forget_return_value_sources(target_reg);
     const auto mem_reg = reg_pack(b.access.basereg);
     const int width = b.access.width;
     const int offset = b.access.offset;
@@ -619,6 +665,7 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& state, const LinearExpress
     const Interval width{exact_width};
     const bool big_endian = context.runtime().big_endian;
     // no aliasing of val - we don't move from stack to stack, so we can just havoc first
+    stack.havoc_return_values(state.values, addr, width);
     stack.havoc_type(state.types, addr, width);
     for (const DataKind kind : iterate_kinds()) {
         if (kind == DataKind::svalues || kind == DataKind::uvalues) {
@@ -775,8 +822,10 @@ void EbpfTransformer::operator()(const Atomic& a) {
         // Shared memory regions are volatile so we can just havoc
         // any register that will be updated.
         if (a.op == Atomic::Op::CMPXCHG) {
+            forget_return_value_sources(Reg{R0_RETURN_VALUE});
             dom.state.havoc_register_except_type(Reg{R0_RETURN_VALUE});
         } else if (a.fetch) {
+            forget_return_value_sources(a.valreg);
             dom.state.havoc_register_except_type(a.valreg);
         }
         return;
@@ -810,6 +859,7 @@ void EbpfTransformer::operator()(const Atomic& a) {
     (*this)(Mem{.access = a.access, .value = r11, .is_load = false});
 
     // Clear the R11 pseudo-register.
+    forget_return_value_sources(r11);
     dom.state.havoc_register(r11);
 }
 
@@ -859,6 +909,7 @@ void EbpfTransformer::operator()(const Call& call) {
                         return;
                     }
                     const Interval addr = state.values.eval_interval(*offset);
+                    stack.havoc_numbers(state.values, addr, w);
                     for (const DataKind kind : iterate_kinds()) {
                         stack.havoc(state.values, kind, addr, w, context.runtime().big_endian);
                     }
@@ -877,36 +928,28 @@ void EbpfTransformer::operator()(const Call& call) {
             break;
 
         case ArgPair::Kind::PTR_TO_WRITABLE_MEM: {
-            bool store_numbers = true;
-            auto variable = dom.state.primary_kind_variable_for_type(param.mem);
-            if (!variable.has_value()) {
-                // checked by the checker
-                break;
-            }
-            Interval addr = dom.state.values.eval_interval(variable.value());
-            Interval width = dom.state.values.eval_interval(reg_pack(param.size).svalue);
-
             dom.state = dom.state.join_over_types(param.mem, [&](TypeToNumDomain& state, const TypeEncoding type) {
                 if (type == T_STACK) {
+                    const auto variable = primary_kind_variable_for_type(param.mem, type);
+                    if (!variable.has_value()) {
+                        return;
+                    }
+                    const Interval addr = state.values.eval_interval(variable.value());
+                    const Interval width = state.values.eval_interval(reg_pack(param.size).svalue);
                     // Pointer to a memory region that the called function may change,
                     // so we must havoc.
+                    stack.havoc_numbers(state.values, addr, width);
                     for (const DataKind kind : iterate_kinds()) {
                         stack.havoc(state.values, kind, addr, width, context.runtime().big_endian);
                     }
-                } else {
-                    store_numbers = false;
                 }
             });
-            if (store_numbers) {
-                // Functions are not allowed to write sensitive data,
-                // and initialization is guaranteed
-                stack.store_numbers(addr, width);
-            }
         }
         }
     }
 
     constexpr Reg r0_reg{R0_RETURN_VALUE};
+    forget_return_value_sources(r0_reg);
     const auto r0_pack = reg_pack(r0_reg);
     dom.state.values.havoc(r0_pack.stack_numeric_size);
     // Set r0 as a nullable T_SHARED pointer at offset 0.
@@ -959,8 +1002,41 @@ void EbpfTransformer::operator()(const Call& call) {
         }
     } else {
         dom.state.havoc_register_except_type(r0_reg);
+        dom.state.values.set(r0_pack.svalue, Interval::top());
+        dom.state.values.set(r0_pack.uvalue, Interval::top());
         dom.state.assign_type(r0_reg, T_NUM);
         // dom.state.values.add_constraint(r0_pack.value < 0); for INTEGER_OR_NO_RETURN_IF_SUCCEED.
+    }
+    if (!resolved.contract.initialized_memory.empty()) {
+        assert(!resolved.contract.return_ptr_type.has_value());
+        using namespace dsl_syntax;
+        // CONDITIONALLY_WRITABLE_MEM is reserved for helpers with 0 success and negative errno failure.
+        dom.state.values.add_constraint(r0_pack.svalue >= std::numeric_limits<int32_t>::min());
+        dom.state.values.add_constraint(r0_pack.svalue <= 0);
+    }
+    auto apply_initialized_memory = [&](const InitializedMemory& initialized, const bool unconditional) {
+        dom.state = dom.state.join_over_types(initialized.mem, [&](TypeToNumDomain& state, const TypeEncoding type) {
+            if (type != T_STACK) {
+                return;
+            }
+            const auto variable = primary_kind_variable_for_type(initialized.mem, type);
+            if (!variable.has_value()) {
+                return;
+            }
+            const Interval addr = state.values.eval_interval(variable.value());
+            const Interval width = state.values.eval_interval(reg_pack(initialized.size).svalue);
+            if (unconditional) {
+                stack.store_numbers(addr, width);
+            } else {
+                stack.store_return_value(state.values, addr, width, r0_pack.svalue);
+            }
+        });
+    };
+    for (const InitializedMemory& initialized : resolved.contract.initialized_memory) {
+        apply_initialized_memory(initialized, false);
+    }
+    for (const InitializedMemory& initialized : resolved.contract.always_initialized_memory) {
+        apply_initialized_memory(initialized, true);
     }
     scratch_caller_saved_registers();
     if (resolved.contract.reallocate_packet) {
@@ -1048,6 +1124,7 @@ void EbpfTransformer::operator()(const LoadMapAddress& ins) {
 
 void EbpfTransformer::assign_valid_ptr(const Reg& dst_reg, const bool maybe_null) {
     using namespace dsl_syntax;
+    forget_return_value_sources(dst_reg);
     const RegPack& reg = reg_pack(dst_reg);
     dom.state.values.havoc(reg.uvalue);
     if (maybe_null) {
@@ -1166,6 +1243,13 @@ void EbpfTransformer::operator()(const Bin& bin) {
 
     auto dst = reg_pack(bin.dst);
     int finite_width = bin.is64 ? 64 : 32;
+    const auto copy_source_reg = std::get_if<Reg>(&bin.v);
+    const bool copies_return_value_sources = bin.op == Bin::Op::MOV && copy_source_reg != nullptr &&
+                                             (bin.is64 || dom.state.is_in_group(*copy_source_reg, TS_NUM));
+    const bool mov_self = copies_return_value_sources && *copy_source_reg == bin.dst;
+    if (!mov_self) {
+        forget_return_value_sources(bin.dst);
+    }
 
     // TODO: Unusable states and values should be better handled.
     //       Probably by propagating an error state.
@@ -1512,6 +1596,9 @@ void EbpfTransformer::operator()(const Bin& bin) {
             // ADD/SUB and MOV paths.
             dom.state.havoc_register(bin.dst);
         }
+    }
+    if (copies_return_value_sources && !dom.is_bottom() && dom.state.is_in_group(bin.dst, TS_NUM)) {
+        copy_return_value_sources(*copy_source_reg, bin.dst, !bin.is64);
     }
 }
 

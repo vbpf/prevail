@@ -187,6 +187,12 @@ struct ArgPair {
     constexpr bool operator==(const ArgPair&) const = default;
 };
 
+struct InitializedMemory {
+    Reg mem;
+    Reg size;
+    constexpr bool operator==(const InitializedMemory&) const = default;
+};
+
 enum class CallKind {
     helper,  ///< Resolved via platform.get_helper_prototype(func, program_type).
     kfunc,   ///< Resolved via platform.resolve_kfunc_call(btf_id, module, program_type).
@@ -219,6 +225,13 @@ struct Call {
 struct CallContract {
     std::vector<ArgSingle> singles;
     std::vector<ArgPair> pairs;
+    /// Full output regions initialized exactly when the modeled scalar return is zero.
+    /// This is intentionally stricter than the kernel verifier's ARG_PTR_TO_UNINIT_MEM
+    /// initializedness: Prevail models the helper contract, so unchecked failure paths
+    /// cannot read output bytes that the helper only promises on success.
+    std::vector<InitializedMemory> initialized_memory;
+    /// Full output regions initialized unconditionally, e.g. compiler builtins.
+    std::vector<InitializedMemory> always_initialized_memory;
     std::optional<TypeEncoding> return_ptr_type{}; ///< Non-integer return pointer type, if any.
     bool return_nullable{};                        ///< Whether the return pointer may be null.
     bool is_map_lookup{};
@@ -479,10 +492,9 @@ struct ValidMapType {
     bool operator==(const ValidMapType&) const = default;
 };
 
-using Assertion =
-    std::variant<Comparable, Addable, ValidDivisor, ValidAccess, ValidStore, ValidSize, ValidMapKeyValue,
-                 ValidCallbackTarget, TypeConstraint, FuncConstraint, ZeroCtxOffset, BoundedLoopCount, ValidArgZero,
-                 ValidMapType>;
+using Assertion = std::variant<Comparable, Addable, ValidDivisor, ValidAccess, ValidStore, ValidSize, ValidMapKeyValue,
+                               ValidCallbackTarget, TypeConstraint, FuncConstraint, ZeroCtxOffset, BoundedLoopCount,
+                               ValidArgZero, ValidMapType>;
 
 std::ostream& operator<<(std::ostream& os, Instruction const& ins);
 std::string to_string(Instruction const& ins);

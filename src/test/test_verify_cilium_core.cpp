@@ -8,21 +8,43 @@ TEST_PROGRAM("cilium-core", "bpf_alignchecker.o", "tc/tail", "tail_icmp6_handle_
 TEST_PROGRAM("cilium-core", "bpf_alignchecker.o", "tc/tail", "tail_icmp6_send_time_exceeded", 2)
 TEST_PROGRAM("cilium-core", "bpf_host.o", "tc/tail", "tail_drop_notify", 28)
 TEST_PROGRAM("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_ipv4_cont_from_host", 28)
-TEST_PROGRAM("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_ipv4_from_host", 28)
-TEST_PROGRAM("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_ipv4_from_netdev", 28)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_ipv4_from_host", 28)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_ipv4_from_netdev", 28)
 TEST_PROGRAM("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_ipv6_cont_from_host", 28)
-TEST_PROGRAM("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_nat_fwd_ipv4", 28)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_nat_fwd_ipv4", 28)
 TEST_PROGRAM("cilium-core", "bpf_host.o", "tc/tail", "tail_handle_nat_fwd_ipv6", 28)
 TEST_PROGRAM("cilium-core", "bpf_host.o", "tc/tail", "tail_icmp6_handle_ns", 28)
 TEST_PROGRAM("cilium-core", "bpf_host.o", "tc/tail", "tail_icmp6_send_time_exceeded", 28)
-TEST_PROGRAM("cilium-core", "bpf_host.o", "tc/tail", "tail_ipv4_host_policy_ingress", 28)
-TEST_PROGRAM("cilium-core", "bpf_host.o", "tc/tail", "tail_ipv6_host_policy_ingress", 28)
-TEST_PROGRAM("cilium-core", "bpf_host.o", "tc/tail", "tail_nodeport_ipv4_dsr", 28)
-TEST_PROGRAM("cilium-core", "bpf_host.o", "tc/tail", "tail_nodeport_ipv6_dsr", 28)
-TEST_PROGRAM("cilium-core", "bpf_host.o", "tc/tail", "tail_nodeport_nat_egress_ipv6", 28)
-TEST_PROGRAM("cilium-core", "bpf_host.o", "tc/tail", "tail_nodeport_rev_dnat_egress_ipv6", 28)
-TEST_PROGRAM("cilium-core", "bpf_host.o", "tc/tail", "tail_nodeport_rev_dnat_ingress_ipv6", 28)
-TEST_PROGRAM("cilium-core", "bpf_host.o", "tc/tail", "tail_nodeport_rev_dnat_ipv4", 28)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_host.o", "tc/tail", "tail_ipv4_host_policy_ingress", 28)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_host.o", "tc/tail", "tail_ipv6_host_policy_ingress", 28)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_host.o", "tc/tail", "tail_nodeport_ipv4_dsr", 28)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_host.o", "tc/tail", "tail_nodeport_ipv6_dsr", 28)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_host.o", "tc/tail", "tail_nodeport_nat_egress_ipv6", 28)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_host.o", "tc/tail", "tail_nodeport_rev_dnat_egress_ipv6", 28)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_host.o", "tc/tail", "tail_nodeport_rev_dnat_ingress_ipv6", 28)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_host.o", "tc/tail", "tail_nodeport_rev_dnat_ipv4", 28)
 TEST_PROGRAM("cilium-core", "bpf_host.o", "tc/tail", "tail_srv6_decap", 28)
 TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/entry", "cil_from_container", 4)
 TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/entry", "cil_lxc_policy", 4)
@@ -30,25 +52,51 @@ TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/entry", "cil_lxc_policy_egress", 4)
 TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/entry", "cil_to_container", 4)
 TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_drop_notify", 30)
 TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_handle_arp", 30)
-TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_handle_ipv4", 30)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_lxc.o", "tc/tail", "tail_handle_ipv4", 30)
 TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_handle_ipv6_cont", 30)
 TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_icmp6_handle_ns", 30)
 TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_icmp6_send_time_exceeded", 30)
-TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv4_ct_egress", 30)
-TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv4_ct_ingress", 30)
-TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv4_ct_ingress_policy_only", 30)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv4_ct_egress", 30)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv4_ct_ingress", 30)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv4_ct_ingress_policy_only", 30)
 TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv4_policy", 30)
 TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv4_to_endpoint", 30)
-TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv6_ct_egress", 30)
-TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv6_ct_ingress", 30)
-TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv6_ct_ingress_policy_only", 30)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv6_ct_egress", 30)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv6_ct_ingress", 30)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv6_ct_ingress_policy_only", 30)
 TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv6_to_endpoint", 30)
-TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_nodeport_ipv4_dsr", 30)
-TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_nodeport_ipv6_dsr", 30)
-TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_nodeport_nat_egress_ipv6", 30)
-TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_nodeport_rev_dnat_egress_ipv6", 30)
-TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_nodeport_rev_dnat_ingress_ipv6", 30)
-TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_nodeport_rev_dnat_ipv4", 30)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_lxc.o", "tc/tail", "tail_nodeport_ipv4_dsr", 30)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_lxc.o", "tc/tail", "tail_nodeport_ipv6_dsr", 30)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_lxc.o", "tc/tail", "tail_nodeport_nat_egress_ipv6", 30)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_lxc.o", "tc/tail", "tail_nodeport_rev_dnat_egress_ipv6", 30)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_lxc.o", "tc/tail", "tail_nodeport_rev_dnat_ingress_ipv6", 30)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_lxc.o", "tc/tail", "tail_nodeport_rev_dnat_ipv4", 30)
 TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_policy_denied_ipv4", 30)
 TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_srv6_decap", 30)
 TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_srv6_encap", 30)
@@ -58,17 +106,35 @@ TEST_PROGRAM("cilium-core", "bpf_overlay.o", "tc/entry", "cil_from_overlay", 2)
 TEST_PROGRAM("cilium-core", "bpf_overlay.o", "tc/entry", "cil_to_overlay", 2)
 TEST_PROGRAM("cilium-core", "bpf_overlay.o", "tc/tail", "tail_drop_notify", 19)
 TEST_PROGRAM("cilium-core", "bpf_overlay.o", "tc/tail", "tail_handle_arp", 19)
-TEST_PROGRAM("cilium-core", "bpf_overlay.o", "tc/tail", "tail_handle_ipv4", 19)
-TEST_PROGRAM("cilium-core", "bpf_overlay.o", "tc/tail", "tail_handle_nat_fwd_ipv4", 19)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_overlay.o", "tc/tail", "tail_handle_ipv4", 19)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_overlay.o", "tc/tail", "tail_handle_nat_fwd_ipv4", 19)
 TEST_PROGRAM("cilium-core", "bpf_overlay.o", "tc/tail", "tail_handle_nat_fwd_ipv6", 19)
-TEST_PROGRAM("cilium-core", "bpf_overlay.o", "tc/tail", "tail_handle_snat_fwd_ipv6", 19)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_overlay.o", "tc/tail", "tail_handle_snat_fwd_ipv6", 19)
 TEST_PROGRAM("cilium-core", "bpf_overlay.o", "tc/tail", "tail_icmp6_send_time_exceeded", 19)
-TEST_PROGRAM("cilium-core", "bpf_overlay.o", "tc/tail", "tail_nodeport_ipv4_dsr", 19)
-TEST_PROGRAM("cilium-core", "bpf_overlay.o", "tc/tail", "tail_nodeport_ipv6_dsr", 19)
-TEST_PROGRAM("cilium-core", "bpf_overlay.o", "tc/tail", "tail_nodeport_nat_egress_ipv6", 19)
-TEST_PROGRAM("cilium-core", "bpf_overlay.o", "tc/tail", "tail_nodeport_rev_dnat_egress_ipv6", 19)
-TEST_PROGRAM("cilium-core", "bpf_overlay.o", "tc/tail", "tail_nodeport_rev_dnat_ingress_ipv6", 19)
-TEST_PROGRAM("cilium-core", "bpf_overlay.o", "tc/tail", "tail_nodeport_rev_dnat_ipv4", 19)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_overlay.o", "tc/tail", "tail_nodeport_ipv4_dsr", 19)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_overlay.o", "tc/tail", "tail_nodeport_ipv6_dsr", 19)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_overlay.o", "tc/tail", "tail_nodeport_nat_egress_ipv6", 19)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_overlay.o", "tc/tail", "tail_nodeport_rev_dnat_egress_ipv6", 19)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_overlay.o", "tc/tail", "tail_nodeport_rev_dnat_ingress_ipv6", 19)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_overlay.o", "tc/tail", "tail_nodeport_rev_dnat_ipv4", 19)
 TEST_SECTION("cilium-core", "bpf_sock.o", "cgroup/connect4")
 TEST_SECTION("cilium-core", "bpf_sock.o", "cgroup/connect6")
 TEST_SECTION("cilium-core", "bpf_sock.o", "cgroup/post_bind4")
@@ -80,18 +146,34 @@ TEST_SECTION("cilium-core", "bpf_sock.o", "cgroup/sock_release")
 TEST_PROGRAM("cilium-core", "bpf_wireguard.o", "tc/entry", "cil_from_wireguard", 2)
 TEST_PROGRAM("cilium-core", "bpf_wireguard.o", "tc/entry", "cil_to_wireguard", 2)
 TEST_PROGRAM("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_drop_notify", 17)
-TEST_PROGRAM("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_handle_ipv4", 17)
-TEST_PROGRAM("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_handle_nat_fwd_ipv4", 17)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_handle_ipv4", 17)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_handle_nat_fwd_ipv4", 17)
 TEST_PROGRAM("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_handle_nat_fwd_ipv6", 17)
 TEST_PROGRAM("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_handle_snat_fwd_ipv4", 17)
 TEST_PROGRAM("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_handle_snat_fwd_ipv6", 17)
 TEST_PROGRAM("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_icmp6_send_time_exceeded", 17)
-TEST_PROGRAM("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_nodeport_ipv4_dsr", 17)
-TEST_PROGRAM("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_nodeport_ipv6_dsr", 17)
-TEST_PROGRAM("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_nodeport_nat_egress_ipv6", 17)
-TEST_PROGRAM("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_nodeport_rev_dnat_egress_ipv6", 17)
-TEST_PROGRAM("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_nodeport_rev_dnat_ingress_ipv6", 17)
-TEST_PROGRAM("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_nodeport_rev_dnat_ipv4", 17)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_nodeport_ipv4_dsr", 17)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_nodeport_ipv6_dsr", 17)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_nodeport_nat_egress_ipv6", 17)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_nodeport_rev_dnat_egress_ipv6", 17)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_nodeport_rev_dnat_ingress_ipv6", 17)
+// Intentional stricter memory-initialization policy: this sample reads or passes stack bytes that are not proven
+// initialized; helper output success or stack padding is not treated as initialized by default.
+TEST_PROGRAM_REJECT("cilium-core", "bpf_wireguard.o", "tc/tail", "tail_nodeport_rev_dnat_ipv4", 17)
 TEST_PROGRAM("cilium-core", "bpf_xdp.o", "xdp/tail", "tail_drop_notify", 12)
 
 // VerifierTypeTracking:

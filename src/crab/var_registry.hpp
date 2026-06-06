@@ -71,6 +71,7 @@ class VariableRegistry final {
     Variable type_reg(int) const;
     Variable stack_frame_var(DataKind kind, int i, const std::string& prefix) const;
     Variable cell_var(DataKind array, const Number& offset, const Number& size) const;
+    Variable stack_init_var(const Number& offset, const Number& size) const;
     Variable kind_var(DataKind kind, Variable type_variable) const;
     Variable meta_offset() const;
     Variable packet_size() const;
