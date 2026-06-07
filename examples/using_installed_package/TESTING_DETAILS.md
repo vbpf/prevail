@@ -13,7 +13,7 @@ installation mechanism (not API stability).
     - Proper permissions are set
 
 2. **CMake Package Discovery**
-    - `find_package(prevail 0.2.4 REQUIRED)` succeeds
+    - `find_package(prevail 0.2.5 REQUIRED)` succeeds
     - Version checking works correctly
     - Package config files are valid
 

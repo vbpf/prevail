@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.2.5 (2026-06-07)
+
+ELF loader hardening and numeric-domain soundness fixes.
+7 commits since v0.2.4.
+
+### Soundness fixes
+
+- Fix signed division by a negative singleton so non-singleton dividend
+  intervals retain the correct sign-flipped bounds.
+- Treat stack numeric-byte queries outside the stack window as fail-closed,
+  and keep weak type stores outside that window from corrupting tracked numeric
+  byte state.
+- Reject map key/value access widths that do not fit the verifier's supported
+  range before constructing access-bound constraints.
+- Avoid undefined behavior in finite-domain left shifts by zero while
+  preserving the existing masked-shift invariant.
+
+### ELF hardening
+
+- Read relocation records from validated raw bytes instead of typed ELFIO
+  accessors, preserving explicit bounds and entry-size checks.
+- Reject ELF files whose section header table is out of range, has undersized
+  entries, or uses an invalid extended section count.
+
+### Documentation
+
+- Document that writable helper output arguments must be initialized before
+  helper calls.
+
 ## v0.2.4 (2026-06-01)
 
 Soundness fixes for pointer arithmetic and context writes.
