@@ -19,7 +19,7 @@ if (NOT TARGET yaml-cpp::yaml-cpp)
 
     FetchContent_Declare(yaml-cpp
       GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
-      GIT_TAG 0.8.0
+      GIT_TAG yaml-cpp-0.9.0
       GIT_SHALLOW TRUE
       FIND_PACKAGE_ARGS NAMES yaml-cpp
     )
