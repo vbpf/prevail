@@ -63,11 +63,11 @@ jobs:
         configurations: [Debug, Release]
         target: [tests, library]
       fail-fast: false
-    runs-on: windows-2025
+    runs-on: windows-latest
     env:
       MATRIX_TARGET: ${{ matrix.target }}
       BUILD_CONFIGURATION: ${{ matrix.configurations }}
-      CMAKE_GENERATOR: "Visual Studio 17 2022"
+      CMAKE_GENERATOR: "Visual Studio 18 2026"
     steps:
       - uses: actions/checkout@v6
         with:
