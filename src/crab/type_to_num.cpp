@@ -212,6 +212,10 @@ void TypeToNumDomain::assign(const Reg& lhs, const Reg& rhs) {
     }
     types.assign_type(lhs, rhs);
 
+    // svalue is only meaningful for T_NUM. After retagging lhs to a non-numeric
+    // type, leaving its previous signed lane behind can make later assumes
+    // refine against an unrelated stale value.
+    values.havoc(reg_pack(lhs).svalue);
     values.assign(reg_pack(lhs).uvalue, reg_pack(rhs).uvalue);
 
     for (const auto& type : types.iterate_types(lhs)) {

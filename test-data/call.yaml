@@ -112,6 +112,31 @@ post:
 messages:
   - "0: Illegal map update with a non-numerical value [-oo-oo) (within(r2:key_size(r1)))"
 ---
+test-case: bpf_map_lookup_elem copied null check discards stale svalue
+
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=stack", "r2.stack_offset=504",
+      "r6.type=stack", "r6.stack_offset=504",
+      "r7.type=number", "r7.svalue=-1",
+      "s[504...511].type=number"]
+
+code:
+  <start>: |
+    call 1; bpf_map_lookup_elem
+    r7 = r0
+    if r7 == 0 goto <exit>
+    r1 = r7
+    r2 = r6
+    call 1; bpf_map_lookup_elem
+  <exit>: |
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "5: Invalid type (r1.type == map_fd)"
+---
 test-case: bpf_map_update_elem with numeric stack value
 
 pre: ["r1.type=map_fd", "r1.map_fd=1",
