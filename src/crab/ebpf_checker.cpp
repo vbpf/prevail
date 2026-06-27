@@ -132,6 +132,30 @@ class EbpfChecker final {
         require_value(dom.state, access_ub <= ceiling, msg);
     }
 
+    // Region upper-bound check that falls back to ptr-sum substitution when the
+    // direct query fails (see PtrSumBinding in type_to_num.hpp). s_offset is the
+    // access's static byte offset and is folded back in, since substitution only
+    // replaces the variable part of the sum.
+    void require_region_upper_bound(const Reg& access_reg, const Value& width, const int32_t s_offset,
+                                    const TypeEncoding region, const LinearExpression& access_ub,
+                                    const LinearExpression& ceiling, const std::string& msg) const {
+        using namespace dsl_syntax;
+        if (dom.state.values.entail(access_ub <= ceiling)) {
+            return;
+        }
+        if (std::holds_alternative<Reg>(width) && !dom.state.ptr_sum_bindings.empty()) {
+            const Reg width_reg = std::get<Reg>(width);
+            if (const auto intermediate_offset =
+                    dom.state.lookup_ptr_sum_intermediate_offset(access_reg, width_reg, region)) {
+                const LinearExpression substituted = LinearExpression{*intermediate_offset} + s_offset;
+                if (dom.state.values.entail(substituted <= ceiling)) {
+                    return;
+                }
+            }
+        }
+        throw_fail(msg);
+    }
+
     const Assertion assertion;
 
     const EbpfDomain& dom;
@@ -388,8 +412,9 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             const auto [lb, ub] = lb_ub_access_pair(s, reg.stack_offset);
             require_lower_bound(lb, reg_pack(R10_STACK_POINTER).stack_offset - context.runtime().subprogram_stack_size,
                                 "Lower bound must be at least r10.stack_offset - subprogram_stack_size");
-            require_upper_bound(ub, LinearExpression{context.runtime().total_stack_size()},
-                                "Upper bound must be at most total_stack_size");
+            require_region_upper_bound(s.reg, s.width, s.offset, T_STACK, ub,
+                                       LinearExpression{context.runtime().total_stack_size()},
+                                       "Upper bound must be at most total_stack_size");
             // Stack reads must hit known-numeric bytes.
             if (s.access_type == AccessType::read &&
                 !dom.stack->all_num_lb_ub(dom.state.values.eval_interval(lb), dom.state.values.eval_interval(ub))) {
@@ -448,15 +473,17 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
                 const auto max = context.runtime().max_packet_size;
                 require_upper_bound(ub, LinearExpression{max}, "Upper bound must be at most " + std::to_string(max));
             } else {
-                require_upper_bound(ub, variable_registry.packet_size(), "Upper bound must be at most packet_size");
+                require_region_upper_bound(s.reg, s.width, s.offset, T_PACKET, ub, variable_registry.packet_size(),
+                                           "Upper bound must be at most packet_size");
             }
             break;
         }
         case T_SHARED: {
             const auto [lb, ub] = lb_ub_access_pair(s, reg.shared_offset);
             require_lower_bound(lb, LinearExpression{0}, "Lower bound must be at least 0");
-            require_upper_bound(ub, reg.shared_region_size,
-                                "Upper bound must be at most " + variable_registry.name(reg.shared_region_size));
+            require_region_upper_bound(s.reg, s.width, s.offset, T_SHARED, ub, reg.shared_region_size,
+                                       "Upper bound must be at most " +
+                                           variable_registry.name(reg.shared_region_size));
             if (!is_comparison_check && !s.or_null) {
                 require_value(dom.state, reg.uvalue > 0, "Possible null access");
             }
