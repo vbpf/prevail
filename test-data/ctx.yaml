@@ -122,3 +122,118 @@ post:
   - r2.svalue=0
   - r2.type=number
   - r2.uvalue=0
+
+---
+# A load of an inline ctx field (outside the data/data_end/meta slots) is a
+# scalar load, narrowed to the range implied by the load width.
+test-case: load u8 from ctx inline field narrows to byte range
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0"]
+
+code:
+  <start>: |
+    r2 = *(u8 *)(r1 + 8)
+
+post:
+  - r1.ctx_offset=0
+  - r1.type=ctx
+  - r2.type=number
+  - r2.svalue=[0, 255]
+  - r2.uvalue=[0, 255]
+
+---
+test-case: load u16 from ctx inline field narrows to half-word range
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0"]
+
+code:
+  <start>: |
+    r2 = *(u16 *)(r1 + 8)
+
+post:
+  - r1.ctx_offset=0
+  - r1.type=ctx
+  - r2.type=number
+  - r2.svalue=[0, 65535]
+  - r2.uvalue=[0, 65535]
+
+---
+# Width-4 zero-extending loads are intentionally not narrowed, matching
+# do_load_packet_or_shared which only narrows zero-extended loads of width 1 or 2.
+test-case: load u32 from ctx inline field leaves value unconstrained
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0"]
+
+code:
+  <start>: |
+    r2 = *(u32 *)(r1 + 8)
+
+post:
+  - r1.ctx_offset=0
+  - r1.type=ctx
+  - r2.type=number
+
+---
+# A full 8-byte load is also not narrowed (it would be a no-op tautology).
+test-case: load u64 from ctx inline field leaves value unconstrained
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0"]
+
+code:
+  <start>: |
+    r2 = *(u64 *)(r1 + 8)
+
+post:
+  - r1.ctx_offset=0
+  - r1.type=ctx
+  - r2.type=number
+
+---
+# Sign-extending load: svalue narrows to the signed-byte range, but uvalue is
+# havoced (left absent below) since a negative result's unsigned 64-bit view is
+# not a single interval.
+test-case: load s8 from ctx inline field narrows svalue to signed-byte range
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0"]
+
+code:
+  <start>: |
+    r2 = *(s8 *)(r1 + 8)
+
+post:
+  - r1.ctx_offset=0
+  - r1.type=ctx
+  - r2.type=number
+  - r2.svalue=[-128, 127]
+
+---
+test-case: load s16 from ctx inline field narrows svalue to signed-half-word range
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0"]
+
+code:
+  <start>: |
+    r2 = *(s16 *)(r1 + 8)
+
+post:
+  - r1.ctx_offset=0
+  - r1.type=ctx
+  - r2.type=number
+  - r2.svalue=[-32768, 32767]
+
+---
+# Sign-extending 32-bit load: svalue narrowed to [INT32_MIN, INT32_MAX].
+# uvalue unconstrained for the same reason as the s8 case.
+test-case: load s32 from ctx inline field narrows svalue to signed-word range
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0"]
+
+code:
+  <start>: |
+    r2 = *(s32 *)(r1 + 8)
+
+post:
+  - r1.ctx_offset=0
+  - r1.type=ctx
+  - r2.type=number
+  - r2.svalue=[-2147483648, 2147483647]
