@@ -477,8 +477,24 @@ void EbpfTransformer::do_load_stack(TypeToNumDomain& state, const Reg& target_re
     }
 }
 
+// Narrow the destination of a width-N load to the range implied by that width.
+// Zero-extending loads constrain both svalue and uvalue. Signed loads havoc
+// uvalue: a negative sign-extended value's unsigned 64-bit view is not a single
+// interval, so it cannot be represented. The caller must ensure the type is T_NUM.
+static void narrow_num_by_load_width(TypeToNumDomain& state, const RegPack& target, const int width,
+                                     const bool is_signed) {
+    if (is_signed && (width == 1 || width == 2 || width == 4)) {
+        state.values.set(target.svalue, Interval::signed_int(width * 8));
+        state.values.havoc(target.uvalue);
+    } else if (width == 1 || width == 2) {
+        const Interval full = Interval::unsigned_int(width * 8);
+        state.values.set(target.svalue, full);
+        state.values.set(target.uvalue, full);
+    }
+}
+
 static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, const Reg& target_reg,
-                        const LinearExpression& addr_vague, const int width) {
+                        const LinearExpression& addr_vague, const int width, const bool is_signed) {
     using namespace dsl_syntax;
     if (state.values.is_bottom()) {
         return;
@@ -491,6 +507,7 @@ static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, 
     if (desc->end < 0) {
         state.havoc_register(target_reg);
         state.assign_type(target_reg, T_NUM);
+        narrow_num_by_load_width(state, target, width, is_signed);
         return;
     }
 
@@ -506,6 +523,7 @@ static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, 
             state.havoc_type(target_reg);
         } else {
             state.assign_type(target_reg, T_NUM);
+            narrow_num_by_load_width(state, target, width, is_signed);
         }
         return;
     }
@@ -537,7 +555,9 @@ static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, 
         if (may_touch_ptr) {
             state.havoc_type(target_reg);
         } else {
+            // Inline ctx field (not data/data_end/meta): a plain scalar.
             state.assign_type(target_reg, T_NUM);
+            narrow_num_by_load_width(state, target, width, is_signed);
         }
         return;
     }
@@ -559,14 +579,7 @@ static void do_load_packet_or_shared(TypeToNumDomain& state, const Reg& target_r
     state.assign_type(target_reg, T_NUM);
 
     // Small copies can be range-limited and useful for later arithmetic.
-    if (is_signed && (width == 1 || width == 2 || width == 4)) {
-        state.values.set(target.svalue, Interval::signed_int(width * 8));
-        state.values.set(target.uvalue, Interval::unsigned_int(width * 8));
-    } else if (width == 1 || width == 2) {
-        const Interval full = Interval::unsigned_int(width * 8);
-        state.values.set(target.svalue, full);
-        state.values.set(target.uvalue, full);
-    }
+    narrow_num_by_load_width(state, target, width, is_signed);
 }
 
 void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
@@ -583,7 +596,7 @@ void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
     }
     dom.state = dom.state.join_over_types(b.access.basereg, [&](TypeToNumDomain& state, const TypeEncoding type) {
         switch (type) {
-        case T_CTX: do_load_ctx(state, context, target_reg, mem_reg.ctx_offset + offset, width); break;
+        case T_CTX: do_load_ctx(state, context, target_reg, mem_reg.ctx_offset + offset, width, b.is_signed); break;
         case T_STACK: do_load_stack(state, target_reg, mem_reg.stack_offset + offset, width, b.access.basereg); break;
         case T_PACKET:
         case T_SHARED:
