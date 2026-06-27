@@ -1,0 +1,578 @@
+# Copyright (c) Prevail Verifier contributors.
+# SPDX-License-Identifier: MIT
+#
+# Tests for the ptr-sum binding side-table (PtrSumBinding in type_to_num.hpp).
+# The positive test exercises the substitution at a helper-call upper-bound
+# check; the negatives exercise each invalidation path.
+
+---
+test-case: ptr-sum binding lets helper-call check pass for packet region
+
+# r6's packet_offset is non-singleton, so the DBM cannot prove the
+# helper-call upper bound from interval reasoning alone; the binding
+# plus the assume on r3 carries it through.
+pre: ["meta_offset=0",
+      "r1.type=map_fd", "r1.map_fd=1",
+      "r6.type=packet", "r6.packet_offset=[0, 200]", "r6.svalue=[4098, 2147418112]", "r6.uvalue=[4098, 2147418112]",
+      "r7.type=packet", "r7.packet_offset=packet_size", "r7.packet_offset=[0, 65534]",
+      "r7.svalue=[4098, 2147418112]", "r7.uvalue=[4098, 2147418112]",
+      "packet_size=[0, 65534]",
+      "r4.type=number", "r4.svalue=[1, 100]", "r4.uvalue=[1, 100]"]
+
+code:
+  <start>: |
+    r8 = r6
+    r8 += r4
+    if r8 > r7 goto <out>
+    r2 = r6
+    r3 = r4
+    call 130; bpf_ringbuf_output
+  <out>: |
+    r0 = 0
+
+post:
+  - meta_offset=0
+  - packet_size=0
+  - packet_size-r6.packet_offset<=65534
+  - packet_size-r8.packet_offset<=65533
+  - r0.svalue=0
+  - r0.type=number
+  - r0.uvalue=0
+  - r6.packet_offset-packet_size<=200
+  - r6.packet_offset-r8.packet_offset<=-1
+  - r6.packet_offset=[0, 200]
+  - r6.svalue=[4098, 2147418112]
+  - r6.type=packet
+  - r6.uvalue-r8.svalue<=-1
+  - r6.uvalue=[4098, 2147418112]
+  - r7.packet_offset=packet_size
+  - r7.svalue=[4098, 2147418112]
+  - r7.type=packet
+  - r7.uvalue=[4098, 2147418112]
+  - r8.packet_offset-packet_size<=300
+  - r8.packet_offset-r6.packet_offset<=100
+  - r8.packet_offset=[1, 300]
+  - r8.svalue-r6.uvalue<=100
+  - r8.svalue=[4099, 2147418212]
+  - r8.type=packet
+  - r8.uvalue=r8.svalue
+
+# Stack and shared regions also use the mechanism, but realistic bytecode
+# only exposes the 3-variable gap for the packet ceiling (the others are a
+# compile-time constant or have no `end` register).
+
+---
+# Negative: only r6+r4 was bound-checked; passing r9 to the helper must
+# not propagate the bound across distinct packet pointers.
+test-case: ptr-sum binding does not propagate across distinct pointers
+
+pre: ["meta_offset=0",
+      "r1.type=map_fd", "r1.map_fd=1",
+      "r6.type=packet", "r6.packet_offset=[0, 200]", "r6.svalue=[4098, 2147418112]", "r6.uvalue=[4098, 2147418112]",
+      "r7.type=packet", "r7.packet_offset=packet_size", "r7.packet_offset=[0, 65534]",
+      "r7.svalue=[4098, 2147418112]", "r7.uvalue=[4098, 2147418112]",
+      "r9.type=packet", "r9.packet_offset=[0, 200]", "r9.svalue=[4098, 2147418112]", "r9.uvalue=[4098, 2147418112]",
+      "packet_size=[0, 65534]",
+      "r4.type=number", "r4.svalue=[1, 100]", "r4.uvalue=[1, 100]"]
+
+code:
+  <start>: |
+    r8 = r6
+    r8 += r4
+    if r8 > r7 goto <out>
+    r2 = r9
+    r3 = r4
+    call 130; bpf_ringbuf_output
+  <out>: |
+    r0 = 0
+
+post:
+  - meta_offset=0
+  - packet_size-r4.svalue<=199
+  - packet_size-r6.packet_offset<=99
+  - packet_size=0
+  - r0.svalue=0
+  - r0.type=number
+  - r0.uvalue=0
+  - r1.map_fd=1
+  - r1.type=map_fd
+  - r4.svalue=[1, 100]
+  - r4.type=number
+  - r4.uvalue-r8.svalue<=-4098
+  - r4.uvalue=[1, 100]
+  - r6.packet_offset=[0, 200]
+  - r6.svalue=[4098, 2147418112]
+  - r6.type=packet
+  - r6.uvalue-r8.svalue<=-1
+  - r6.uvalue=[4098, 2147418112]
+  - r7.packet_offset=packet_size
+  - r7.svalue=[4098, 2147418112]
+  - r7.type=packet
+  - r7.uvalue=[4098, 2147418112]
+  - r8.packet_offset=r4.svalue
+  - r8.svalue-r4.uvalue<=2147418112
+  - r8.svalue-r6.uvalue<=100
+  - r8.svalue=[4099, 2147418212]
+  - r8.type=packet
+  - r8.uvalue=r8.svalue
+  - r9.packet_offset=[0, 200]
+  - r9.svalue=[4098, 2147418112]
+  - r9.type=packet
+  - r9.uvalue=[4098, 2147418112]
+
+messages:
+  - "5: Upper bound must be at most packet_size (valid_access(r2.offset, width=r3) for read)"
+
+---
+# Negative: `r4 = 200` between the bound check and the call invalidates
+# the binding (its recorded num_src no longer matches the live r4).
+test-case: ptr-sum binding is invalidated when the length register is overwritten
+
+pre: ["meta_offset=0",
+      "r1.type=map_fd", "r1.map_fd=1",
+      "r6.type=packet", "r6.packet_offset=[0, 200]", "r6.svalue=[4098, 2147418112]", "r6.uvalue=[4098, 2147418112]",
+      "r7.type=packet", "r7.packet_offset=packet_size", "r7.packet_offset=[0, 65534]",
+      "r7.svalue=[4098, 2147418112]", "r7.uvalue=[4098, 2147418112]",
+      "packet_size=[0, 65534]",
+      "r4.type=number", "r4.svalue=[1, 100]", "r4.uvalue=[1, 100]"]
+
+code:
+  <start>: |
+    r8 = r6
+    r8 += r4
+    if r8 > r7 goto <out>
+    r4 = 200
+    r2 = r6
+    r3 = r4
+    call 130; bpf_ringbuf_output
+  <out>: |
+    r0 = 0
+
+post:
+  - meta_offset=0
+  - packet_size-r4.svalue<=199
+  - packet_size-r6.packet_offset<=99
+  - packet_size=0
+  - r0.svalue=0
+  - r0.type=number
+  - r0.uvalue=0
+  - r1.map_fd=1
+  - r1.type=map_fd
+  - r4.svalue=[1, 100]
+  - r4.type=number
+  - r4.uvalue-r8.svalue<=-4098
+  - r4.uvalue=[1, 100]
+  - r6.packet_offset=[0, 200]
+  - r6.svalue=[4098, 2147418112]
+  - r6.type=packet
+  - r6.uvalue-r8.svalue<=-1
+  - r6.uvalue=[4098, 2147418112]
+  - r7.packet_offset=packet_size
+  - r7.svalue=[4098, 2147418112]
+  - r7.type=packet
+  - r7.uvalue=[4098, 2147418112]
+  - r8.packet_offset=r4.svalue
+  - r8.svalue-r4.uvalue<=2147418112
+  - r8.svalue-r6.uvalue<=100
+  - r8.svalue=[4099, 2147418212]
+  - r8.type=packet
+  - r8.uvalue=r8.svalue
+
+messages:
+  - "6: Upper bound must be at most packet_size (valid_access(r2.offset, width=r3) for read)"
+
+---
+# Negative: same as above but with `r4 += 1` (a T_NUM register write that
+# bypasses havoc_offsets and so requires the top-of-Bin invalidation).
+test-case: ptr-sum binding is invalidated when the length register is modified by Bin
+
+pre: ["meta_offset=0",
+      "r1.type=map_fd", "r1.map_fd=1",
+      "r6.type=packet", "r6.packet_offset=[0, 200]", "r6.svalue=[4098, 2147418112]", "r6.uvalue=[4098, 2147418112]",
+      "r7.type=packet", "r7.packet_offset=packet_size", "r7.packet_offset=[0, 65534]",
+      "r7.svalue=[4098, 2147418112]", "r7.uvalue=[4098, 2147418112]",
+      "packet_size=[0, 65534]",
+      "r4.type=number", "r4.svalue=[1, 100]", "r4.uvalue=[1, 100]"]
+
+code:
+  <start>: |
+    r8 = r6
+    r8 += r4
+    if r8 > r7 goto <out>
+    r4 += 1
+    r2 = r6
+    r3 = r4
+    call 130; bpf_ringbuf_output
+  <out>: |
+    r0 = 0
+
+post:
+  - meta_offset=0
+  - packet_size-r4.svalue<=199
+  - packet_size-r6.packet_offset<=99
+  - packet_size=0
+  - r0.svalue=0
+  - r0.type=number
+  - r0.uvalue=0
+  - r1.map_fd=1
+  - r1.type=map_fd
+  - r4.svalue=[1, 100]
+  - r4.type=number
+  - r4.uvalue-r8.svalue<=-4098
+  - r4.uvalue=[1, 100]
+  - r6.packet_offset=[0, 200]
+  - r6.svalue=[4098, 2147418112]
+  - r6.type=packet
+  - r6.uvalue-r8.svalue<=-1
+  - r6.uvalue=[4098, 2147418112]
+  - r7.packet_offset=packet_size
+  - r7.svalue=[4098, 2147418112]
+  - r7.type=packet
+  - r7.uvalue=[4098, 2147418112]
+  - r8.packet_offset=r4.svalue
+  - r8.svalue-r4.uvalue<=2147418112
+  - r8.svalue-r6.uvalue<=100
+  - r8.svalue=[4099, 2147418212]
+  - r8.type=packet
+  - r8.uvalue=r8.svalue
+
+messages:
+  - "6: Upper bound must be at most packet_size (valid_access(r2.offset, width=r3) for read)"
+
+---
+# Negative: `r6 = r9` clobbers the binding's recorded ptr_src.
+test-case: ptr-sum binding is invalidated when the pointer register is overwritten
+
+pre: ["meta_offset=0",
+      "r1.type=map_fd", "r1.map_fd=1",
+      "r6.type=packet", "r6.packet_offset=[0, 200]", "r6.svalue=[4098, 2147418112]", "r6.uvalue=[4098, 2147418112]",
+      "r7.type=packet", "r7.packet_offset=packet_size", "r7.packet_offset=[0, 65534]",
+      "r7.svalue=[4098, 2147418112]", "r7.uvalue=[4098, 2147418112]",
+      "r9.type=packet", "r9.packet_offset=[0, 200]", "r9.svalue=[4098, 2147418112]", "r9.uvalue=[4098, 2147418112]",
+      "packet_size=[0, 65534]",
+      "r4.type=number", "r4.svalue=[1, 100]", "r4.uvalue=[1, 100]"]
+
+code:
+  <start>: |
+    r8 = r6
+    r8 += r4
+    if r8 > r7 goto <out>
+    r6 = r9
+    r2 = r6
+    r3 = r4
+    call 130; bpf_ringbuf_output
+  <out>: |
+    r0 = 0
+
+post:
+  - meta_offset=0
+  - packet_size-r4.svalue<=199
+  - packet_size-r6.packet_offset<=99
+  - packet_size=0
+  - r0.svalue=0
+  - r0.type=number
+  - r0.uvalue=0
+  - r1.map_fd=1
+  - r1.type=map_fd
+  - r4.svalue=[1, 100]
+  - r4.type=number
+  - r4.uvalue-r8.svalue<=-4098
+  - r4.uvalue=[1, 100]
+  - r6.packet_offset=[0, 200]
+  - r6.svalue=[4098, 2147418112]
+  - r6.type=packet
+  - r6.uvalue-r8.svalue<=-1
+  - r6.uvalue=[4098, 2147418112]
+  - r7.packet_offset=packet_size
+  - r7.svalue=[4098, 2147418112]
+  - r7.type=packet
+  - r7.uvalue=[4098, 2147418112]
+  - r8.packet_offset=r4.svalue
+  - r8.svalue-r4.uvalue<=2147418112
+  - r8.svalue-r6.uvalue<=100
+  - r8.svalue=[4099, 2147418212]
+  - r8.type=packet
+  - r8.uvalue=r8.svalue
+  - r9.packet_offset=[0, 200]
+  - r9.svalue=[4098, 2147418112]
+  - r9.type=packet
+  - r9.uvalue=[4098, 2147418112]
+
+messages:
+  - "6: Upper bound must be at most packet_size (valid_access(r2.offset, width=r3) for read)"
+
+---
+# A binding established identically on both arms survives the merge, even though
+# the numeric join loses the 3-variable equality. On every concrete path r8 was
+# computed as r6 + r4, so the substitution stays sound and the read is accepted.
+test-case: ptr-sum binding survives a join and soundly carries the bound
+
+pre: ["meta_offset=0",
+      "r0.type=number", "r0.svalue=[0, 1]", "r0.uvalue=[0, 1]",
+      "r1.type=map_fd", "r1.map_fd=1",
+      "r6.type=packet", "r6.packet_offset=0", "r6.svalue=[4098, 2147418112]", "r6.uvalue=[4098, 2147418112]",
+      "r7.type=packet", "r7.packet_offset=packet_size", "r7.packet_offset=[0, 65534]",
+      "r7.svalue=[4098, 2147418112]", "r7.uvalue=[4098, 2147418112]",
+      "packet_size=[0, 65534]",
+      "r4.type=number", "r4.svalue=[0, 100]", "r4.uvalue=[0, 100]"]
+
+code:
+  <start>: |
+    if r0 == 0 goto <arm2>
+  <arm1>: |
+    r4 = 10
+    r8 = r6
+    r8 += r4
+    goto <merge>
+  <arm2>: |
+    r6 += 6
+    r4 = 4
+    r8 = r6
+    r8 += r4
+  <merge>: |
+    if r8 > r7 goto <out>
+    r2 = r6
+    r3 = r4
+    call 130; bpf_ringbuf_output
+  <out>: |
+    r0 = 0
+
+post:
+  - meta_offset=0
+  - packet_size-r8.packet_offset<=65524
+  - packet_size=0
+  - r0.svalue=0
+  - r0.type=number
+  - r0.uvalue=0
+  - r6.packet_offset-r6.svalue<=-4098
+  - r6.packet_offset-r6.uvalue<=-4098
+  - r6.packet_offset=[0, 6]
+  - r6.svalue-r6.packet_offset<=2147418112
+  - r6.svalue-r6.uvalue<=2147414014
+  - r6.svalue-r8.svalue<=2147414004
+  - r6.svalue=[4098, 2147418118]
+  - r6.type=packet
+  - r6.uvalue-r6.packet_offset<=2147418112
+  - r6.uvalue-r6.svalue<=2147414014
+  - r6.uvalue-r8.svalue<=-4
+  - r6.uvalue=[4098, 2147418118]
+  - r7.packet_offset=packet_size
+  - r7.svalue=[4098, 2147418112]
+  - r7.type=packet
+  - r7.uvalue=[4098, 2147418112]
+  - r8.packet_offset-packet_size<=10
+  - r8.packet_offset=10
+  - r8.svalue-r6.svalue<=2147414024
+  - r8.svalue-r6.uvalue<=10
+  - r8.svalue=[4108, 2147418122]
+  - r8.type=packet
+  - r8.uvalue=r8.svalue
+
+messages: []
+
+---
+# Control for the case above: the arms bind r8 to different length registers
+# (r4 vs r5), so no single binding holds on both edges and the merge drops it.
+# With no binding the read is rejected via the normal packet_size check.
+test-case: ptr-sum binding differing across arms is dropped by the join
+
+pre: ["meta_offset=0",
+      "r0.type=number", "r0.svalue=[0, 1]", "r0.uvalue=[0, 1]",
+      "r1.type=map_fd", "r1.map_fd=1",
+      "r6.type=packet", "r6.packet_offset=0", "r6.svalue=[4098, 2147418112]", "r6.uvalue=[4098, 2147418112]",
+      "r7.type=packet", "r7.packet_offset=packet_size", "r7.packet_offset=[0, 65534]",
+      "r7.svalue=[4098, 2147418112]", "r7.uvalue=[4098, 2147418112]",
+      "packet_size=[0, 65534]",
+      "r4.type=number", "r4.svalue=[0, 100]", "r4.uvalue=[0, 100]",
+      "r5.type=number", "r5.svalue=[0, 100]", "r5.uvalue=[0, 100]"]
+
+code:
+  <start>: |
+    if r0 == 0 goto <arm2>
+  <arm1>: |
+    r4 = 10
+    r8 = r6
+    r8 += r4
+    r3 = r4
+    goto <merge>
+  <arm2>: |
+    r6 += 6
+    r5 = 4
+    r8 = r6
+    r8 += r5
+    r3 = r5
+  <merge>: |
+    if r8 > r7 goto <out>
+    r2 = r6
+    call 130; bpf_ringbuf_output
+  <out>: |
+    r0 = 0
+
+post:
+  - meta_offset=0
+  - packet_size-r8.packet_offset<=-1
+  - packet_size=0
+  - r0.svalue=0
+  - r0.type=number
+  - r0.uvalue=0
+  - r1.map_fd=1
+  - r1.type=map_fd
+  - r3.svalue-r4.svalue<=4
+  - r3.svalue-r4.uvalue<=4
+  - r3.svalue=[4, 10]
+  - r3.type=number
+  - r3.uvalue=r3.svalue
+  - r4.svalue-r4.uvalue<=2147414114
+  - r4.svalue-r5.svalue<=96
+  - r4.svalue-r5.uvalue<=96
+  - r4.svalue-r6.packet_offset<=94
+  - r4.svalue-r6.svalue<=-4004
+  - r4.svalue-r6.uvalue<=-4004
+  - r4.svalue=[0, 100]
+  - r4.type=number
+  - r4.uvalue-r5.svalue<=96
+  - r4.uvalue-r5.uvalue<=96
+  - r4.uvalue-r6.packet_offset<=94
+  - r4.uvalue-r6.svalue<=-4004
+  - r4.uvalue-r6.uvalue<=-4004
+  - r4.uvalue-r8.svalue<=-4008
+  - r4.uvalue=[0, 100]
+  - r5.svalue-r3.svalue<=90
+  - r5.svalue-r4.svalue<=90
+  - r5.svalue-r4.uvalue<=90
+  - r5.svalue=[0, 100]
+  - r5.type=number
+  - r5.uvalue-r3.svalue<=90
+  - r5.uvalue-r4.svalue<=90
+  - r5.uvalue-r4.uvalue<=90
+  - r5.uvalue-r8.svalue<=-4008
+  - r5.uvalue=[0, 100]
+  - r6.packet_offset-r4.uvalue<=2147414020
+  - r6.packet_offset-r5.svalue<=2
+  - r6.packet_offset-r5.uvalue<=2
+  - r6.packet_offset-r6.svalue<=-4098
+  - r6.packet_offset-r6.uvalue<=-4098
+  - r6.packet_offset=[0, 6]
+  - r6.svalue-r4.uvalue<=2147418118
+  - r6.svalue-r5.svalue<=2147418114
+  - r6.svalue-r5.uvalue<=2147418114
+  - r6.svalue-r6.packet_offset<=2147418112
+  - r6.svalue-r6.uvalue<=2147414014
+  - r6.svalue-r8.svalue<=2147414004
+  - r6.svalue=[4098, 2147418118]
+  - r6.type=packet
+  - r6.uvalue-r4.uvalue<=4294832132
+  - r6.uvalue-r5.svalue<=2147418114
+  - r6.uvalue-r5.uvalue<=2147418114
+  - r6.uvalue-r6.packet_offset<=2147418112
+  - r6.uvalue-r6.svalue<=2147414014
+  - r6.uvalue-r8.svalue<=-4
+  - r6.uvalue=[4098, 2147418118]
+  - r7.packet_offset=packet_size
+  - r7.svalue=[4098, 2147418112]
+  - r7.type=packet
+  - r7.uvalue=[4098, 2147418112]
+  - r8.packet_offset=10
+  - r8.svalue-r4.uvalue<=2147418122
+  - r8.svalue-r5.uvalue<=2147418122
+  - r8.svalue-r6.svalue<=2147414024
+  - r8.svalue-r6.uvalue<=10
+  - r8.svalue=[4108, 2147418122]
+  - r8.type=packet
+  - r8.uvalue=r8.svalue
+
+messages:
+  - "13: Upper bound must be at most packet_size (valid_access(r2.offset, width=r3) for read)"
+
+---
+# A binding carried through a loop must not destabilise the fixpoint. It is
+# re-derived on every back-edge and holds on the entry edge, so it survives the
+# loop-head join and analysis terminates. A regression in the meet/<= handling
+# would time out here.
+test-case: ptr-sum binding carried through a loop terminates
+
+options: ["termination"]
+pre: ["meta_offset=0",
+      "r6.type=packet", "r6.packet_offset=[0, 200]", "r6.svalue=[4098, 2147418112]", "r6.uvalue=[4098, 2147418112]",
+      "packet_size=[0, 65534]",
+      "r4.type=number", "r4.svalue=[1, 100]", "r4.uvalue=[1, 100]"]
+
+code:
+  <start>: |
+    r9 = 0
+    r8 = r6
+    r8 += r4
+  <loop>: |
+    if r9 >= 100 goto <out>
+    r9 += 1
+    r8 = r6
+    r8 += r4
+    goto <loop>
+  <out>: |
+    r0 = 0
+    exit
+
+post:
+  - meta_offset=0
+  - pc[3]-r4.uvalue<=100
+  - pc[3]-r6.svalue<=-3997
+  - pc[3]-r6.uvalue<=-3997
+  - pc[3]-r8.svalue<=-3998
+  - pc[3]=101
+  - pc[3]=r9.svalue+1
+  - r0.svalue=0
+  - r0.type=number
+  - r0.uvalue=0
+  - r4.svalue=[1, 100]
+  - r4.type=number
+  - r4.uvalue-r8.svalue<=-4098
+  - r4.uvalue=[1, 100]
+  - r6.packet_offset-r4.svalue<=199
+  - r6.packet_offset=[0, 200]
+  - r6.svalue=[4098, 2147418112]
+  - r6.type=packet
+  - r6.uvalue-r8.svalue<=-1
+  - r6.uvalue=[4098, 2147418112]
+  - r8.packet_offset=r4.svalue
+  - r8.svalue-r4.uvalue<=2147418112
+  - r8.svalue-r6.uvalue<=100
+  - r8.svalue=[4099, 2147418212]
+  - r8.type=packet
+  - r8.uvalue=r8.svalue
+  - r9.svalue-r4.uvalue<=99
+  - r9.svalue-r6.svalue<=-3998
+  - r9.svalue-r6.uvalue<=-3998
+  - r9.svalue-r8.svalue<=-3999
+  - r9.svalue=100
+  - r9.type=number
+  - r9.uvalue=r9.svalue
+
+messages: []
+
+---
+# T_SHARED also wires the substitution fallback, but unlike packet there is no
+# `end` register to create the 3-variable gap, so the binding can never turn an
+# unsafe shared access into a safe one. This negative confirms the wired shared
+# path still rejects a genuinely out-of-bounds access (offset up to 300 into a
+# 256-byte region) even with a binding live on r8.
+test-case: ptr-sum binding does not weaken the shared-region bound check
+
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=shared", "r2.shared_offset=[0, 200]", "r2.shared_region_size=256",
+      "r2.svalue=[1, 2147418112]", "r2.uvalue=[1, 2147418112]",
+      "r4.type=number", "r4.svalue=[1, 100]", "r4.uvalue=[1, 100]"]
+
+code:
+  <start>: |
+    r8 = r2
+    r8 += r4
+    r3 = r4
+    call 130; bpf_ringbuf_output
+  <out>: |
+    r0 = 0
+
+post:
+  - "_|_"
+
+messages:
+  - "3: Upper bound must be at most r2.shared_region_size (valid_access(r2.offset, width=r3) for read)"

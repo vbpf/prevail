@@ -2,13 +2,28 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <map>
+
 #include "arith/variable.hpp"
 #include "crab/add_bottom.hpp"
 #include "crab/interval.hpp"
 #include "crab/type_domain.hpp"
 #include "crab/var_registry.hpp"
+#include "ir/syntax.hpp"
 
 namespace prevail {
+
+// Asserts `intermediate.{region}_offset == ptr_src.{region}_offset +
+// num_src.svalue`. Held outside the DBM because this 3-variable equality is
+// not difference-bound expressible. Invalidated when any of the three registers
+// is written.
+struct PtrSumBinding {
+    Reg ptr_src;
+    Reg num_src;
+    TypeEncoding region;
+
+    bool operator==(const PtrSumBinding& other) const = default;
+};
 
 // Free-function shorthand for the global registry's reg_pack.
 inline RegPack reg_pack(const int i) { return variable_registry.reg_pack(i); }
@@ -67,6 +82,8 @@ inline const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
 struct TypeToNumDomain {
     TypeDomain types{TypeDomain::top()};
     NumAbsDomain values{NumAbsDomain::top()};
+    // Side-table keyed by the intermediate register; see PtrSumBinding.
+    std::map<Reg, PtrSumBinding> ptr_sum_bindings{};
 
     TypeToNumDomain() = default;
     TypeToNumDomain(TypeDomain t, NumAbsDomain n) : types(std::move(t)), values(std::move(n)) {}
@@ -90,8 +107,12 @@ struct TypeToNumDomain {
     void set_to_top() {
         types.set_to_top();
         values.set_to_top();
+        ptr_sum_bindings.clear();
     }
-    void set_to_bottom() { values.set_to_bottom(); }
+    void set_to_bottom() {
+        values.set_to_bottom();
+        ptr_sum_bindings.clear();
+    }
 
     /**
      * @brief Determines if this abstract state is subsumed by another (*this <= other).
@@ -260,7 +281,21 @@ struct TypeToNumDomain {
     void rename(const std::vector<std::pair<Variable, Variable>>& renaming) {
         types.rename(renaming);
         values.rename(renaming);
+        // Bindings are Reg-keyed, so rename can't rewrite them; clear instead.
+        ptr_sum_bindings.clear();
     }
+
+    // Record a PtrSumBinding for `intermediate`, replacing any prior entry.
+    // Caller must ensure the equality holds at the call site.
+    void bind_ptr_sum(const Reg& intermediate, const Reg& ptr_src, const Reg& num_src, TypeEncoding region);
+
+    // Drop every binding mentioning `reg` as intermediate, ptr_src, or num_src.
+    void invalidate_ptr_sum_bindings_for(const Reg& reg);
+
+    // Return the intermediate's offset variable for a binding matching
+    // (ptr_src, num_src, region) directly or via DBM-equal aliases.
+    std::optional<Variable> lookup_ptr_sum_intermediate_offset(const Reg& ptr_src, const Reg& num_src,
+                                                               TypeEncoding region) const;
 
     [[nodiscard]]
     TypeToNumDomain widen(const TypeToNumDomain& other) const;

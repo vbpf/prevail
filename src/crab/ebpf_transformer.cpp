@@ -206,6 +206,35 @@ void EbpfTransformer::forget_packet_pointers() {
     dom.initialize_packet(context);
 }
 
+// Find a register (other than `dst`) whose region-typed offset is DBM-equal to
+// dst's pre-ADD offset, e.g. the source of a prior `r_dst = r_src` MOV. Used to
+// name the ptr_src of a ptr-sum binding before the ADD overwrites dst.
+static std::optional<Reg> find_aliased_ptr_source(const TypeToNumDomain& state, const Reg& dst,
+                                                  const TypeEncoding region) {
+    using namespace dsl_syntax;
+    const auto dst_offset = primary_kind_variable_for_type(dst, region);
+    if (!dst_offset) {
+        return {};
+    }
+    for (uint8_t i = R0_RETURN_VALUE; i <= R10_STACK_POINTER; ++i) {
+        const Reg candidate{i};
+        if (candidate == dst) {
+            continue;
+        }
+        if (!state.may_have_type(candidate, region)) {
+            continue;
+        }
+        const auto candidate_offset = primary_kind_variable_for_type(candidate, region);
+        if (!candidate_offset) {
+            continue;
+        }
+        if (state.values.entail(eq(*candidate_offset, *dst_offset))) {
+            return candidate;
+        }
+    }
+    return {};
+}
+
 /** Linear constraint for a pointer comparison.
  */
 static LinearConstraint assume_cst_offsets_reg(const Condition::Op op, const Variable dst_offset,
@@ -321,6 +350,7 @@ void EbpfTransformer::operator()(const Un& stmt) {
     if (dom.is_bottom()) {
         return;
     }
+    dom.state.invalidate_ptr_sum_bindings_for(stmt.dst);
     const auto dst = reg_pack(stmt.dst);
     auto swap_endianness = [&](const Variable v, auto be_or_le) {
         if (dom.state.is_in_group(stmt.dst, TS_NUM)) {
@@ -921,6 +951,8 @@ void EbpfTransformer::operator()(const Call& call) {
     constexpr Reg r0_reg{R0_RETURN_VALUE};
     const auto r0_pack = reg_pack(r0_reg);
     dom.state.values.havoc(r0_pack.stack_numeric_size);
+    // The caller-saved scratch below only covers r1..r5, so invalidate r0 here.
+    dom.state.invalidate_ptr_sum_bindings_for(r0_reg);
     // Set r0 as a nullable T_SHARED pointer at offset 0.
     // If region_size is known, constrain it; otherwise havoc to prevent stale values.
     auto assign_shared_map_value = [&](const std::optional<Interval>& region_size) {
@@ -1023,6 +1055,7 @@ void EbpfTransformer::do_load_mapfd(const Reg& dst_reg, const int mapfd, const b
     const EbpfMapType& type = context.platform().get_map_type(desc.type);
     const RegPack& dst = reg_pack(dst_reg);
     dom.state.forget_type_dependent_values(dst_reg);
+    dom.state.invalidate_ptr_sum_bindings_for(dst_reg);
     if (type.value_type == EbpfMapValueType::PROGRAM) {
         dom.state.assign_type(dst_reg, T_MAP_PROGRAMS);
         dom.state.values.assign(dst.map_fd_programs, mapfd);
@@ -1052,6 +1085,7 @@ void EbpfTransformer::do_load_map_address(const Reg& dst_reg, const int mapfd, c
     dom.state.forget_type_dependent_values(dst_reg);
     dom.state.assign_type(dst_reg, T_SHARED);
     const RegPack& dst = reg_pack(dst_reg);
+    dom.state.invalidate_ptr_sum_bindings_for(dst_reg);
     dom.state.values.assign(dst.shared_offset, offset);
     dom.state.values.assign(dst.shared_region_size, desc.value_size);
     assign_valid_ptr(dst_reg, false);
@@ -1096,6 +1130,9 @@ void EbpfTransformer::recompute_stack_numeric_size(TypeToNumDomain& state, const
 }
 
 void EbpfTransformer::add(const Reg& dst_reg, const int imm, const int finite_width) {
+    // Standalone callers (CallLocal's r10 advance, Exit) reach this without the
+    // Bin top-level invalidation, so invalidate here too.
+    dom.state.invalidate_ptr_sum_bindings_for(dst_reg);
     const auto dst = reg_pack(dst_reg);
     if (dom.state.may_have_type(dst_reg, T_NUM)) {
         dom.state.values->add_overflow(dst.svalue, dst.uvalue, imm, finite_width);
@@ -1181,6 +1218,12 @@ void EbpfTransformer::operator()(const Bin& bin) {
         return;
     }
     using namespace dsl_syntax;
+
+    // bin.dst is about to be rewritten, so drop any binding mentioning it. The
+    // `ptr += num` case below reinstates a binding explicitly. This is the only
+    // invalidation covering T_NUM register writes, which bypass havoc_register /
+    // havoc_offsets.
+    dom.state.invalidate_ptr_sum_bindings_for(bin.dst);
 
     auto dst = reg_pack(bin.dst);
     int finite_width = bin.is64 ? 64 : 32;
@@ -1309,7 +1352,10 @@ void EbpfTransformer::operator()(const Bin& bin) {
                                         state.values.assign(dst.shared_region_size, src.shared_region_size);
                                     }
                                 } else if (dst_type != T_NUM && src_type == T_NUM) {
-                                    // ptr += num
+                                    // ptr += num: capture the alias source before the ADD
+                                    // clobbers dst, for the ptr-sum binding recorded below.
+                                    const std::optional<Reg> aliased_ptr_src =
+                                        find_aliased_ptr_source(state, bin.dst, dst_type);
                                     state.assign_type(bin.dst, dst_type);
                                     if (const auto dst_offset = primary_kind_variable_for_type(bin.dst, dst_type)) {
                                         state.values->apply(ArithBinOp::ADD, dst_offset.value(), dst_offset.value(),
@@ -1325,6 +1371,9 @@ void EbpfTransformer::operator()(const Bin& bin) {
                                                                            dst.stack_numeric_size,
                                                                            dst.stack_numeric_size, src.svalue, 0);
                                             }
+                                        }
+                                        if (aliased_ptr_src) {
+                                            state.bind_ptr_sum(bin.dst, *aliased_ptr_src, src_reg, dst_type);
                                         }
                                     }
                                     state.values->apply_unsigned(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.uvalue,
