@@ -189,6 +189,9 @@ struct TypeToNumDomain {
 
     void havoc_all_locations_having_type(TypeEncoding type);
 
+    void forget_type_dependent_values(Variable type_variable);
+    void forget_type_dependent_values(const Reg& reg);
+
     void assign(const Reg& lhs, const Reg& rhs);
 
     void assign_type(auto&&... args) { types.assign_type(std::forward<decltype(args)>(args)...); }

@@ -18,6 +18,55 @@ post:
   - r0.uvalue=[0, 2147418112]
   - s[504...511].type=number
 ---
+test-case: bpf_map_lookup_elem null check discards stale destination kind values
+
+pre: ["r0.type=number", "r0.svalue=1", "r0.uvalue=1",
+      "r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=stack", "r2.stack_offset=504",
+      "r6.type=stack", "r6.stack_offset=504",
+      "s[504...511].type=number"]
+
+code:
+  <start>: |
+    call 1; bpf_map_lookup_elem
+    if r0 != 0 goto <exit>
+    r1 = r0
+    r2 = r6
+    call 1; bpf_map_lookup_elem
+  <exit>: |
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "4: Invalid type (r1.type == map_fd)"
+---
+test-case: bpf_map_lookup_elem copied null check discards stale destination kind values
+
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=stack", "r2.stack_offset=504",
+      "r6.type=stack", "r6.stack_offset=504",
+      "r7.type=number", "r7.svalue=-1",
+      "s[504...511].type=number"]
+
+code:
+  <start>: |
+    call 1; bpf_map_lookup_elem
+    r7 = r0
+    if r7 == 0 goto <exit>
+    r1 = r7
+    r2 = r6
+    call 1; bpf_map_lookup_elem
+  <exit>: |
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "5: Invalid type (r1.type == map_fd)"
+---
 test-case: bpf_map_lookup_elem shared key
 
 pre: ["r1.type=map_fd", "r1.map_fd=1",
