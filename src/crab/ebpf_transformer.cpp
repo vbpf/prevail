@@ -3,6 +3,7 @@
 
 // This file is eBPF-specific, not derived from CRAB.
 
+#include <algorithm>
 #include <bitset>
 #include <cassert>
 #include <optional>
@@ -1176,6 +1177,48 @@ static int _movsx_bits(const Bin::Op op) {
     }
 }
 
+static void add_live_register_uvalue_upper_bounds(std::vector<Variable>& variables, const TypeToNumDomain& state,
+                                                  const Variable value, const Variable self) {
+    using namespace dsl_syntax;
+
+    for (int reg = R0_RETURN_VALUE; reg <= R10_STACK_POINTER; reg++) {
+        const Variable candidate = reg_pack(reg).uvalue;
+        if (candidate == self) {
+            continue;
+        }
+        if (state.values.entail(value <= candidate) && std::ranges::find(variables, candidate) == variables.end()) {
+            variables.push_back(candidate);
+        }
+    }
+}
+
+static std::vector<Variable> live_register_uvalue_upper_bounds_for_unsigned_and_lhs(const TypeToNumDomain& state,
+                                                                                    const Variable svalue,
+                                                                                    const Variable uvalue) {
+    using namespace dsl_syntax;
+
+    std::vector<Variable> result;
+    if (!(state.values.eval_interval(uvalue) <= Interval{0, 1}) || !state.values.entail(eq(svalue, uvalue))) {
+        return result;
+    }
+
+    add_live_register_uvalue_upper_bounds(result, state, uvalue, uvalue);
+    add_live_register_uvalue_upper_bounds(result, state, svalue, uvalue);
+    return result;
+}
+
+static void add_unsigned_and_result_bounds(TypeToNumDomain& state, const Variable result,
+                                           const std::vector<Variable>& old_upper_bounds) {
+    using namespace dsl_syntax;
+
+    for (const Variable upper_bound : old_upper_bounds) {
+        // For a boolean unsigned lhs, x & y <= x. If another live register's
+        // uvalue was an upper bound for the old lhs, keeping result <= that
+        // uvalue preserves non-null implications through boolean masks.
+        state.values.add_constraint(result <= upper_bound);
+    }
+}
+
 void EbpfTransformer::operator()(const Bin& bin) {
     if (dom.is_bottom()) {
         return;
@@ -1430,10 +1473,14 @@ void EbpfTransformer::operator()(const Bin& bin) {
             dom.state.values->bitwise_or(dst.svalue, dst.uvalue, src.uvalue, finite_width);
             dom.state.havoc_offsets(bin.dst);
             break;
-        case Bin::Op::AND:
+        case Bin::Op::AND: {
+            const auto old_upper_bounds =
+                live_register_uvalue_upper_bounds_for_unsigned_and_lhs(dom.state, dst.svalue, dst.uvalue);
             dom.state.values->bitwise_and(dst.svalue, dst.uvalue, src.uvalue, finite_width);
+            add_unsigned_and_result_bounds(dom.state, dst.uvalue, old_upper_bounds);
             dom.state.havoc_offsets(bin.dst);
             break;
+        }
         case Bin::Op::LSH:
             if (dom.state.is_in_group(src_reg, TS_NUM)) {
                 auto src_interval = dom.state.values.eval_interval(src.uvalue);
