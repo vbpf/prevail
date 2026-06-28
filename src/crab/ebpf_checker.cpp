@@ -29,55 +29,16 @@ struct VerificationFailureSignal final : std::runtime_error {
     using std::runtime_error::runtime_error;
 };
 
-// The verifier collapses Linux's PTR_TO_SOCK_COMMON and PTR_TO_SOCKET into
-// T_SOCKET, so direct socket access must use the common safe subset. These
-// offsets mirror uapi struct bpf_sock as modeled by cgroup_sock_regions.
-constexpr int bpf_sock_size = 80;
-constexpr int bpf_sock_family_offset = 4;
-constexpr int bpf_sock_src_ip4_offset = 24;
-constexpr int bpf_sock_src_ip6_offset = 28;
-constexpr int bpf_sock_src_ip6_end = 44;
-constexpr int bpf_sock_src_port_offset = 44;
-constexpr int bpf_sock_dst_port_offset = 48;
-constexpr int bpf_sock_dst_port_end = 50;
-constexpr int bpf_sock_dst_ip4_offset = 52;
-constexpr int bpf_sock_dst_ip6_offset = 56;
-constexpr int bpf_sock_dst_ip6_end = 72;
-constexpr int bpf_sock_state_offset = 72;
-constexpr int bpf_sock_rx_queue_mapping_offset = 76;
-constexpr int bpf_sock_u32_field_size = 4;
-
-enum class StructFieldPermission { read_only, read_write };
-
-struct StructMemoryField {
-    int offset{};
-    int span{};
-    StructFieldPermission permission{StructFieldPermission::read_write};
-    int max_access_width{};
-    bool allow_narrow_access{};
-    // Some kernel struct views permit one wider read from a field start, e.g.
-    // bpf_sock.dst_port as a 32-bit read.
-    int extra_read_width_at_start{};
-};
-
 bool is_power_of_two(const int size) { return size > 0 && (size & (size - 1)) == 0; }
 
-constexpr StructMemoryField readonly_u32_field(const int offset) {
-    return StructMemoryField{.offset = offset,
-                             .span = bpf_sock_u32_field_size,
-                             .permission = StructFieldPermission::read_only,
-                             .max_access_width = bpf_sock_u32_field_size,
-                             .allow_narrow_access = true};
-}
+bool field_is_present(const EbpfStructFieldDescriptor& field) { return field.offset >= 0 && field.span > 0; }
 
-bool field_is_present(const StructMemoryField& field) { return field.offset >= 0 && field.span > 0; }
-
-bool field_allows_access(const StructMemoryField& field, const int offset, const int size,
+bool field_allows_access(const EbpfStructFieldDescriptor& field, const int offset, const int size,
                          const AccessType access_type) {
     if (!field_is_present(field)) {
         return false;
     }
-    if (access_type == AccessType::write && field.permission == StructFieldPermission::read_only) {
+    if (access_type == AccessType::write && field.permission == EbpfStructFieldPermission::read_only) {
         return false;
     }
     if (field.allow_narrow_access) {
@@ -92,14 +53,14 @@ bool field_allows_access(const StructMemoryField& field, const int offset, const
            size == field.extra_read_width_at_start && is_power_of_two(size) && offset == field.offset;
 }
 
-template <size_t N>
-bool is_valid_struct_access(const std::array<StructMemoryField, N>& fields, const int struct_size, const int offset,
-                            const int size, const AccessType access_type) {
-    if (size <= 0 || offset < 0 || offset >= struct_size || offset + size > struct_size || offset % size != 0) {
+bool is_valid_struct_access(const EbpfStructDescriptor& descriptor, const int offset, const int size,
+                            const AccessType access_type) {
+    if (!descriptor.fields || size <= 0 || offset < 0 || offset >= descriptor.size || offset + size > descriptor.size ||
+        offset % size != 0) {
         return false;
     }
-    for (const StructMemoryField& field : fields) {
-        if (field_allows_access(field, offset, size, access_type)) {
+    for (size_t i = 0; i < descriptor.field_count; ++i) {
+        if (field_allows_access(descriptor.fields[i], offset, size, access_type)) {
             return true;
         }
     }
@@ -108,10 +69,10 @@ bool is_valid_struct_access(const std::array<StructMemoryField, N>& fields, cons
 
 template <size_t N>
 bool write_may_touch_readonly_field(const NumAbsDomain& values, const LinearExpression& lb, const LinearExpression& ub,
-                                    const std::array<StructMemoryField, N>& fields) {
+                                    const std::array<EbpfStructFieldDescriptor, N>& fields) {
     using namespace dsl_syntax;
-    for (const StructMemoryField& field : fields) {
-        if (!field_is_present(field) || field.permission != StructFieldPermission::read_only) {
+    for (const EbpfStructFieldDescriptor& field : fields) {
+        if (!field_is_present(field) || field.permission != EbpfStructFieldPermission::read_only) {
             continue;
         }
         if (values.intersect(ub > LinearExpression{field.offset}) &&
@@ -120,39 +81,6 @@ bool write_may_touch_readonly_field(const NumAbsDomain& values, const LinearExpr
         }
     }
     return false;
-}
-
-bool is_valid_sock_common_access(const int offset, const int size, const AccessType access_type) {
-    constexpr std::array socket_fields{
-        StructMemoryField{.offset = 0,
-                          .span = bpf_sock_u32_field_size,
-                          .permission = StructFieldPermission::read_only,
-                          .max_access_width = bpf_sock_u32_field_size},
-        readonly_u32_field(bpf_sock_family_offset),
-        readonly_u32_field(bpf_sock_src_ip4_offset),
-        StructMemoryField{.offset = bpf_sock_src_ip6_offset,
-                          .span = bpf_sock_src_ip6_end - bpf_sock_src_ip6_offset,
-                          .permission = StructFieldPermission::read_only,
-                          .max_access_width = bpf_sock_u32_field_size,
-                          .allow_narrow_access = true},
-        readonly_u32_field(bpf_sock_src_port_offset),
-        StructMemoryField{.offset = bpf_sock_dst_port_offset,
-                          .span = bpf_sock_dst_port_end - bpf_sock_dst_port_offset,
-                          .permission = StructFieldPermission::read_only,
-                          .max_access_width = bpf_sock_dst_port_end - bpf_sock_dst_port_offset,
-                          .allow_narrow_access = true,
-                          .extra_read_width_at_start = bpf_sock_u32_field_size},
-        readonly_u32_field(bpf_sock_dst_ip4_offset),
-        StructMemoryField{.offset = bpf_sock_dst_ip6_offset,
-                          .span = bpf_sock_dst_ip6_end - bpf_sock_dst_ip6_offset,
-                          .permission = StructFieldPermission::read_only,
-                          .max_access_width = bpf_sock_u32_field_size,
-                          .allow_narrow_access = true},
-        readonly_u32_field(bpf_sock_state_offset),
-        readonly_u32_field(bpf_sock_rx_queue_mapping_offset),
-    };
-
-    return is_valid_struct_access(socket_fields, bpf_sock_size, offset, size, access_type);
 }
 } // namespace
 
@@ -485,18 +413,18 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
                     throw_fail("Cannot write to context with unexpected pointer-field layout");
                 }
                 const std::array packet_pointer_fields{
-                    StructMemoryField{.offset = desc->data,
-                                      .span = field_width,
-                                      .permission = StructFieldPermission::read_only,
-                                      .max_access_width = field_width},
-                    StructMemoryField{.offset = desc->end,
-                                      .span = field_width,
-                                      .permission = StructFieldPermission::read_only,
-                                      .max_access_width = field_width},
-                    StructMemoryField{.offset = desc->meta,
-                                      .span = field_width,
-                                      .permission = StructFieldPermission::read_only,
-                                      .max_access_width = field_width},
+                    EbpfStructFieldDescriptor{.offset = desc->data,
+                                              .span = field_width,
+                                              .permission = EbpfStructFieldPermission::read_only,
+                                              .max_access_width = field_width},
+                    EbpfStructFieldDescriptor{.offset = desc->end,
+                                              .span = field_width,
+                                              .permission = EbpfStructFieldPermission::read_only,
+                                              .max_access_width = field_width},
+                    EbpfStructFieldDescriptor{.offset = desc->meta,
+                                              .span = field_width,
+                                              .permission = EbpfStructFieldPermission::read_only,
+                                              .max_access_width = field_width},
                 };
                 if (write_may_touch_readonly_field(dom.state.values, lb, ub, packet_pointer_fields)) {
                     throw_fail("Cannot write to context pointer field");
@@ -535,10 +463,15 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             break;
         }
         case T_SOCKET: {
+            const ebpf_platform_t* platform = context.program_info().platform;
+            if (!platform || !platform->sock_common_layout) {
+                throw_fail("Socket layout is unavailable");
+            }
+            const EbpfStructDescriptor& socket_layout = *platform->sock_common_layout;
             const auto [lb, ub] = lb_ub_access_pair(s, reg.socket_offset);
             require_lower_bound(lb, LinearExpression{0}, "Lower bound must be at least 0");
-            require_upper_bound(ub, LinearExpression{bpf_sock_size},
-                                "Upper bound must be at most " + std::to_string(bpf_sock_size));
+            require_upper_bound(ub, LinearExpression{socket_layout.size},
+                                "Upper bound must be at most " + std::to_string(socket_layout.size));
             if (!is_comparison_check) {
                 if (s.access_type == AccessType::write) {
                     throw_fail("Socket memory is read-only");
@@ -552,7 +485,7 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
                     throw_fail("Socket access offset must be precise");
                 }
                 const auto width = static_cast<int>(std::get<Imm>(s.width).v);
-                if (!is_valid_sock_common_access(exact_offset->cast_to<int32_t>(), width, s.access_type)) {
+                if (!is_valid_struct_access(socket_layout, exact_offset->cast_to<int32_t>(), width, s.access_type)) {
                     throw_fail("Invalid socket access");
                 }
                 if (!s.or_null) {
