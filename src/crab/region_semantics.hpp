@@ -11,14 +11,15 @@
 namespace prevail {
 
 /// True for pointer types whose in-region accesses are bounds-checked. Other
-/// pointer types (T_SOCKET, T_BTF_ID, T_MAP, T_MAP_PROGRAMS, T_FUNC) are not
-/// directly dereferenceable in this verifier.
-inline constexpr bool is_region_access_type(const TypeEncoding type) {
+/// pointer types (T_BTF_ID, T_MAP, T_MAP_PROGRAMS, T_FUNC) are not directly
+/// dereferenceable in this verifier.
+constexpr bool is_region_access_type(const TypeEncoding type) {
     switch (type) {
     case T_STACK:
     case T_CTX:
     case T_PACKET:
     case T_SHARED:
+    case T_SOCKET:
     case T_ALLOC_MEM: return true;
     default: return false;
     }

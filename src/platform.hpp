@@ -71,6 +71,7 @@ struct ebpf_platform_t {
     ebpf_get_map_descriptor_fn get_map_descriptor;
     ebpf_get_map_type_fn get_map_type;
     ebpf_resolve_inner_map_references_fn resolve_inner_map_references;
+    const EbpfStructDescriptor* sock_common_layout;
     bpf_conformance_groups_t supported_conformance_groups;
 
     bool supports_group(const bpf_conformance_groups_t group) const {

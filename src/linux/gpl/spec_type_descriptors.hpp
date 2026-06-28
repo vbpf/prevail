@@ -1,5 +1,8 @@
 #pragma once
-#include "spec/ebpf_base.h"
+
+#include <array>
+
+#include "spec/type_descriptors.hpp"
 
 namespace prevail {
 constexpr int NMAPS = 64;
@@ -33,6 +36,66 @@ constexpr int lirc_mode2_regions = 4;
 constexpr int netfilter_regions = 2 * 8;
 // Syscall: context is user-supplied buffer, kernel allows up to U16_MAX.
 constexpr int syscall_regions = 65535;
+
+constexpr int bpf_sock_bound_dev_if_offset = 0;
+constexpr int bpf_sock_family_offset = 4;
+constexpr int bpf_sock_src_ip4_offset = 24;
+constexpr int bpf_sock_src_ip6_offset = 28;
+constexpr int bpf_sock_src_ip6_end = 44;
+constexpr int bpf_sock_src_port_offset = 44;
+constexpr int bpf_sock_dst_port_offset = 48;
+constexpr int bpf_sock_dst_port_end = 50;
+constexpr int bpf_sock_dst_ip4_offset = 52;
+constexpr int bpf_sock_dst_ip6_offset = 56;
+constexpr int bpf_sock_dst_ip6_end = 72;
+constexpr int bpf_sock_state_offset = 72;
+constexpr int bpf_sock_rx_queue_mapping_offset = 76;
+constexpr int bpf_sock_u32_field_size = 4;
+
+constexpr EbpfStructFieldDescriptor readonly_bpf_sock_u32_field(const int offset) {
+    return EbpfStructFieldDescriptor{.offset = offset,
+                                     .span = bpf_sock_u32_field_size,
+                                     .permission = EbpfStructFieldPermission::read_only,
+                                     .max_access_width = bpf_sock_u32_field_size,
+                                     .allow_narrow_access = true};
+}
+
+// Prevail currently collapses Linux's PTR_TO_SOCK_COMMON and PTR_TO_SOCKET into
+// one T_SOCKET, so direct socket access uses this common safe field subset. The
+// table intentionally excludes the type..priority range and padding bytes.
+inline constexpr std::array bpf_sock_common_fields{
+    EbpfStructFieldDescriptor{.offset = bpf_sock_bound_dev_if_offset,
+                              .span = bpf_sock_u32_field_size,
+                              .permission = EbpfStructFieldPermission::read_only,
+                              .max_access_width = bpf_sock_u32_field_size},
+    readonly_bpf_sock_u32_field(bpf_sock_family_offset),
+    readonly_bpf_sock_u32_field(bpf_sock_src_ip4_offset),
+    EbpfStructFieldDescriptor{.offset = bpf_sock_src_ip6_offset,
+                              .span = bpf_sock_src_ip6_end - bpf_sock_src_ip6_offset,
+                              .permission = EbpfStructFieldPermission::read_only,
+                              .max_access_width = bpf_sock_u32_field_size,
+                              .allow_narrow_access = true},
+    readonly_bpf_sock_u32_field(bpf_sock_src_port_offset),
+    EbpfStructFieldDescriptor{.offset = bpf_sock_dst_port_offset,
+                              .span = bpf_sock_dst_port_end - bpf_sock_dst_port_offset,
+                              .permission = EbpfStructFieldPermission::read_only,
+                              .max_access_width = bpf_sock_dst_port_end - bpf_sock_dst_port_offset,
+                              .allow_narrow_access = true,
+                              // The kernel permits a 32-bit read starting at
+                              // dst_port although the logical field is 16 bits.
+                              .extra_read_width_at_start = bpf_sock_u32_field_size},
+    readonly_bpf_sock_u32_field(bpf_sock_dst_ip4_offset),
+    EbpfStructFieldDescriptor{.offset = bpf_sock_dst_ip6_offset,
+                              .span = bpf_sock_dst_ip6_end - bpf_sock_dst_ip6_offset,
+                              .permission = EbpfStructFieldPermission::read_only,
+                              .max_access_width = bpf_sock_u32_field_size,
+                              .allow_narrow_access = true},
+    readonly_bpf_sock_u32_field(bpf_sock_state_offset),
+    readonly_bpf_sock_u32_field(bpf_sock_rx_queue_mapping_offset),
+};
+
+inline constexpr EbpfStructDescriptor bpf_sock_common_layout{
+    .size = cgroup_sock_regions, .fields = bpf_sock_common_fields.data(), .field_count = bpf_sock_common_fields.size()};
 
 constexpr ebpf_ctx_descriptor_t sk_buff = {sk_skb_regions, 76, 80, 140}; // data/data_end/data_meta
 constexpr ebpf_ctx_descriptor_t xdp_md = {xdp_regions, 0, 4, 8};         // data/data_end/data_meta

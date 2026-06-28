@@ -133,6 +133,15 @@ TEST_CASE("type query predicates", "[type_domain]") {
     REQUIRE(td.may_have_type(r0, T_NUM));
 }
 
+TEST_CASE("socket is dereferenceable but not helper memory", "[type_domain]") {
+    TypeDomain td;
+    td.assign_type(r0, T_SOCKET);
+
+    REQUIRE(td.is_in_group(r0, TS_DEREFERENCEABLE));
+    REQUIRE(!td.is_in_group(r0, TS_MEM));
+    REQUIRE(!td.is_in_group(r0, TS_POINTER));
+}
+
 // ============================================================================
 // Constraint handling
 // ============================================================================

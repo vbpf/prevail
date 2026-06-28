@@ -3,6 +3,7 @@
 
 // This file is eBPF-specific, not derived from CRAB.
 
+#include <array>
 #include <bitset>
 #include <optional>
 #include <utility>
@@ -27,6 +28,60 @@ namespace {
 struct VerificationFailureSignal final : std::runtime_error {
     using std::runtime_error::runtime_error;
 };
+
+bool is_power_of_two(const int size) { return size > 0 && (size & (size - 1)) == 0; }
+
+bool field_is_present(const EbpfStructFieldDescriptor& field) { return field.offset >= 0 && field.span > 0; }
+
+bool field_allows_access(const EbpfStructFieldDescriptor& field, const int offset, const int size,
+                         const AccessType access_type) {
+    if (!field_is_present(field)) {
+        return false;
+    }
+    if (access_type == AccessType::write && field.permission == EbpfStructFieldPermission::read_only) {
+        return false;
+    }
+    if (field.allow_narrow_access) {
+        if (size <= field.max_access_width && is_power_of_two(size) && offset >= field.offset &&
+            offset + size <= field.offset + field.span) {
+            return true;
+        }
+    } else if (offset == field.offset && size == field.max_access_width) {
+        return true;
+    }
+    return access_type == AccessType::read && field.extra_read_width_at_start > 0 &&
+           size == field.extra_read_width_at_start && is_power_of_two(size) && offset == field.offset;
+}
+
+bool is_valid_struct_access(const EbpfStructDescriptor& descriptor, const int offset, const int size,
+                            const AccessType access_type) {
+    if (!descriptor.fields || size <= 0 || offset < 0 || offset >= descriptor.size || offset + size > descriptor.size ||
+        offset % size != 0) {
+        return false;
+    }
+    for (size_t i = 0; i < descriptor.field_count; ++i) {
+        if (field_allows_access(descriptor.fields[i], offset, size, access_type)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+template <size_t N>
+bool write_may_touch_readonly_field(const NumAbsDomain& values, const LinearExpression& lb, const LinearExpression& ub,
+                                    const std::array<EbpfStructFieldDescriptor, N>& fields) {
+    using namespace dsl_syntax;
+    for (const EbpfStructFieldDescriptor& field : fields) {
+        if (!field_is_present(field) || field.permission != EbpfStructFieldPermission::read_only) {
+            continue;
+        }
+        if (values.intersect(ub > LinearExpression{field.offset}) &&
+            values.intersect(lb < LinearExpression{field.offset + field.span})) {
+            return true;
+        }
+    }
+    return false;
+}
 } // namespace
 
 class EbpfChecker final {
@@ -353,34 +408,25 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             const auto* desc = context.program_info().type.ctx_descriptor;
             const auto [lb, ub] = lb_ub_access_pair(s, reg.ctx_offset);
             if (s.access_type == AccessType::write && desc->end >= 0) {
-                // The data/data_end/meta fields are read-only pointer slots: a *load* of those
-                // offsets synthesizes a typed packet pointer (see do_load_ctx). Writes are not
-                // tracked by the abstract transformer (do_mem_store models only stack stores),
-                // so an accepted write to e.g. ctx->data followed by a reload would hand out a
-                // fresh "valid" packet pointer for a field the program corrupted at runtime,
-                // a false PASS for an out-of-bounds dereference. Writes to other (scalar)
-                // context fields are sound, since their loads are havoced to numbers, and real
-                // programs do write them; so reject only writes that may overlap a pointer
-                // slot. A write of [lb, ub) overlaps slot [f, f + field_width) unless we can
-                // prove it lies entirely before (ub <= f) or entirely after (lb >= f + width).
-                //
-                // field_width is the size of a pointer slot, taken as end - data: this is the
-                // data/data_end adjacency that do_load_ctx also relies on. If a descriptor ever
-                // violated it (non-positive width), the overlap math would be meaningless, so
-                // fall back to rejecting the write outright rather than reasoning from a bogus
-                // slot width.
                 const int field_width = desc->end - desc->data;
                 if (field_width <= 0) {
                     throw_fail("Cannot write to context with unexpected pointer-field layout");
                 }
-                const auto may_overlap = [&](const int field_offset) {
-                    if (field_offset < 0) {
-                        return false;
-                    }
-                    return dom.state.values.intersect(ub > LinearExpression{field_offset}) &&
-                           dom.state.values.intersect(lb < LinearExpression{field_offset + field_width});
+                const std::array packet_pointer_fields{
+                    EbpfStructFieldDescriptor{.offset = desc->data,
+                                              .span = field_width,
+                                              .permission = EbpfStructFieldPermission::read_only,
+                                              .max_access_width = field_width},
+                    EbpfStructFieldDescriptor{.offset = desc->end,
+                                              .span = field_width,
+                                              .permission = EbpfStructFieldPermission::read_only,
+                                              .max_access_width = field_width},
+                    EbpfStructFieldDescriptor{.offset = desc->meta,
+                                              .span = field_width,
+                                              .permission = EbpfStructFieldPermission::read_only,
+                                              .max_access_width = field_width},
                 };
-                if (may_overlap(desc->data) || may_overlap(desc->end) || may_overlap(desc->meta)) {
+                if (write_may_touch_readonly_field(dom.state.values, lb, ub, packet_pointer_fields)) {
                     throw_fail("Cannot write to context pointer field");
                 }
             }
@@ -413,6 +459,38 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
                                 "Upper bound must be at most " + variable_registry.name(reg.shared_region_size));
             if (!is_comparison_check && !s.or_null) {
                 require_value(dom.state, reg.uvalue > 0, "Possible null access");
+            }
+            break;
+        }
+        case T_SOCKET: {
+            const ebpf_platform_t* platform = context.program_info().platform;
+            if (!platform || !platform->sock_common_layout) {
+                throw_fail("Socket layout is unavailable");
+            }
+            const EbpfStructDescriptor& socket_layout = *platform->sock_common_layout;
+            const auto [lb, ub] = lb_ub_access_pair(s, reg.socket_offset);
+            require_lower_bound(lb, LinearExpression{0}, "Lower bound must be at least 0");
+            require_upper_bound(ub, LinearExpression{socket_layout.size},
+                                "Upper bound must be at most " + std::to_string(socket_layout.size));
+            if (!is_comparison_check) {
+                if (s.access_type == AccessType::write) {
+                    throw_fail("Socket memory is read-only");
+                }
+                if (!std::holds_alternative<Imm>(s.width)) {
+                    throw_fail("Socket access size must be constant");
+                }
+                const Interval offset = dom.state.values.eval_interval(lb);
+                const auto exact_offset = offset.singleton();
+                if (!exact_offset || !exact_offset->fits_cast_to<int32_t>()) {
+                    throw_fail("Socket access offset must be precise");
+                }
+                const auto width = static_cast<int>(std::get<Imm>(s.width).v);
+                if (!is_valid_struct_access(socket_layout, exact_offset->cast_to<int32_t>(), width, s.access_type)) {
+                    throw_fail("Invalid socket access");
+                }
+                if (!s.or_null) {
+                    require_value(dom.state, reg.uvalue > 0, "Possible null access");
+                }
             }
             break;
         }
@@ -450,7 +528,6 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
                 throw_fail("FDs cannot be dereferenced directly");
             }
             break;
-        case T_SOCKET: [[fallthrough]];
         case T_BTF_ID:
             // TODO: implement proper access checks for these pointer types.
             if (!is_comparison_check) {

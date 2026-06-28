@@ -50,6 +50,7 @@ const TypeSet TS_MAP{T_MAP};
 const TypeSet TS_POINTER{T_CTX, T_PACKET, T_STACK, T_SHARED};
 const TypeSet TS_SINGLETON_PTR{T_CTX, T_PACKET, T_STACK};
 const TypeSet TS_MEM{T_PACKET, T_STACK, T_SHARED};
+const TypeSet TS_DEREFERENCEABLE{T_CTX, T_PACKET, T_STACK, T_SHARED, T_SOCKET, T_ALLOC_MEM};
 const TypeSet TS_SOCKET{T_SOCKET};
 const TypeSet TS_BTF_ID{T_BTF_ID};
 const TypeSet TS_ALLOC_MEM{T_ALLOC_MEM};
@@ -232,6 +233,7 @@ TypeSet to_typeset(const TypeGroup group) {
     case TypeGroup::stack_or_num: return TypeSet{T_NUM, T_STACK};
     case TypeGroup::mem: return TS_MEM;
     case TypeGroup::mem_or_num: return TS_MEM | TS_NUM;
+    case TypeGroup::dereferenceable: return TS_DEREFERENCEABLE;
     case TypeGroup::pointer: return TS_POINTER;
     case TypeGroup::ptr_or_num: return TS_POINTER | TS_NUM;
     case TypeGroup::stack_or_packet: return TypeSet{T_STACK, T_PACKET};
@@ -279,6 +281,7 @@ std::ostream& operator<<(std::ostream& os, const TypeGroup ts) {
         {TypeGroup::alloc_mem, S_ALLOC_MEM},
         {TypeGroup::func, S_FUNC},
         {TypeGroup::mem, typeset_to_string({T_STACK, T_PACKET, T_SHARED})},
+        {TypeGroup::dereferenceable, typeset_to_string({T_CTX, T_STACK, T_PACKET, T_SHARED, T_SOCKET, T_ALLOC_MEM})},
         {TypeGroup::pointer, typeset_to_string({T_CTX, T_STACK, T_PACKET, T_SHARED})},
         {TypeGroup::ptr_or_num, typeset_to_string({T_NUM, T_CTX, T_STACK, T_PACKET, T_SHARED})},
         {TypeGroup::stack_or_packet, typeset_to_string({T_STACK, T_PACKET})},

@@ -104,6 +104,7 @@ ebpf_platform_t g_platform_test = {.get_program_type = ebpf_get_program_type,
                                    .parse_maps_section = ebpf_parse_maps_section,
                                    .get_map_descriptor = ebpf_get_map_descriptor,
                                    .get_map_type = ebpf_get_map_type,
+                                   .sock_common_layout = g_ebpf_platform_linux.sock_common_layout,
                                    .supported_conformance_groups = bpf_conformance_groups_t::default_groups |
                                                                    bpf_conformance_groups_t::packet |
                                                                    bpf_conformance_groups_t::callx};
