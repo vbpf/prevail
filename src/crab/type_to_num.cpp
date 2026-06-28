@@ -3,6 +3,7 @@
 #include <cassert>
 #include <ranges>
 
+#include "arith/dsl_syntax.hpp"
 #include "arith/variable.hpp"
 #include "crab/interval.hpp"
 #include "crab/region_semantics.hpp"
@@ -11,6 +12,20 @@
 #include "crab/var_registry.hpp"
 
 namespace prevail {
+
+// Intersect two binding tables: an entry survives iff both sides hold the same
+// key with an identical record. Shared by join, meet, and widen/narrow.
+static std::map<Reg, PtrSumBinding>
+intersect_bindings(const std::map<Reg, PtrSumBinding>& left, const std::map<Reg, PtrSumBinding>& right) {
+    std::map<Reg, PtrSumBinding> result;
+    for (const auto& [intermediate, binding] : left) {
+        const auto it = right.find(intermediate);
+        if (it != right.end() && it->second == binding) {
+            result.emplace(intermediate, binding);
+        }
+    }
+    return result;
+}
 
 std::optional<Variable> TypeToNumDomain::primary_kind_variable_for_type(const Reg& reg) const {
     const auto type = types.get_type(reg);
@@ -38,7 +53,21 @@ bool TypeToNumDomain::operator<=(const TypeToNumDomain& other) const {
     for (const Variable& v : this->get_nonexistent_kind_variables()) {
         tmp.values.havoc(v);
     }
-    return values <= tmp.values;
+    if (!(values <= tmp.values)) {
+        return false;
+    }
+    // Bindings are extra constraints, so `this <= other` requires every binding
+    // in `other` to also be in `this`.
+    if (other.ptr_sum_bindings.empty()) {
+        return true;
+    }
+    for (const auto& [intermediate, binding] : other.ptr_sum_bindings) {
+        const auto it = ptr_sum_bindings.find(intermediate);
+        if (it == ptr_sum_bindings.end() || it->second != binding) {
+            return false;
+        }
+    }
+    return true;
 }
 
 void TypeToNumDomain::join_selective(const TypeToNumDomain& right) {
@@ -66,6 +95,7 @@ void TypeToNumDomain::operator|=(const TypeToNumDomain& other) {
     if (other.is_bottom()) {
         return;
     }
+    this->ptr_sum_bindings = intersect_bindings(this->ptr_sum_bindings, other.ptr_sum_bindings);
     this->join_selective(other);
     this->types |= other.types;
 }
@@ -77,6 +107,7 @@ void TypeToNumDomain::operator|=(TypeToNumDomain&& other) {
     if (other.is_bottom()) {
         return;
     }
+    this->ptr_sum_bindings = intersect_bindings(this->ptr_sum_bindings, other.ptr_sum_bindings);
     this->join_selective(other);
     this->types |= std::move(other.types);
 }
@@ -84,7 +115,12 @@ void TypeToNumDomain::operator|=(TypeToNumDomain&& other) {
 TypeToNumDomain TypeToNumDomain::operator&(const TypeToNumDomain& other) const {
     if (auto type_inv = types.meet(other.types)) {
         // TODO: remove unuseful variables from the numeric domain
-        return TypeToNumDomain{std::move(*type_inv), values & other.values};
+        // Intersect bindings, matching join/widen/narrow. A union would be more
+        // precise but needs a soundness story we don't have; intersection just
+        // conservatively forgets facts.
+        TypeToNumDomain result{std::move(*type_inv), values & other.values};
+        result.ptr_sum_bindings = intersect_bindings(ptr_sum_bindings, other.ptr_sum_bindings);
+        return result;
     }
     return TypeToNumDomain{TypeDomain::top(), NumAbsDomain::bottom()};
 }
@@ -92,7 +128,9 @@ TypeToNumDomain TypeToNumDomain::operator&(const TypeToNumDomain& other) const {
 TypeToNumDomain TypeToNumDomain::operator&(TypeToNumDomain&& other) const {
     if (auto type_inv = types.meet(std::move(other.types))) {
         // TODO: remove unuseful variables from the numeric domain
-        return TypeToNumDomain{std::move(*type_inv), values & std::move(other.values)};
+        TypeToNumDomain result{std::move(*type_inv), values & std::move(other.values)};
+        result.ptr_sum_bindings = intersect_bindings(ptr_sum_bindings, other.ptr_sum_bindings);
+        return result;
     }
     return {TypeDomain::top(), NumAbsDomain::bottom()};
 }
@@ -204,12 +242,19 @@ void TypeToNumDomain::havoc_all_locations_having_type(const TypeEncoding type) {
             values.havoc(variable_registry.kind_var(kind, type_variable));
         }
     }
+    // Drop every binding in the region just havoced.
+    if (!ptr_sum_bindings.empty()) {
+        std::erase_if(ptr_sum_bindings,
+                      [type](const auto& kv) { return kv.second.region == type; });
+    }
 }
 
 void TypeToNumDomain::assign(const Reg& lhs, const Reg& rhs) {
     if (lhs == rhs) {
         return;
     }
+    invalidate_ptr_sum_bindings_for(lhs);
+
     types.assign_type(lhs, rhs);
 
     values.assign(reg_pack(lhs).uvalue, reg_pack(rhs).uvalue);
@@ -228,6 +273,7 @@ void TypeToNumDomain::assign(const Reg& lhs, const Reg& rhs) {
 }
 
 void TypeToNumDomain::havoc_offsets(const Reg& reg) {
+    invalidate_ptr_sum_bindings_for(reg);
     const RegPack r = reg_pack(reg);
     values.havoc(r.ctx_offset);
     values.havoc(r.map_fd);
@@ -244,12 +290,14 @@ void TypeToNumDomain::havoc_offsets(const Reg& reg) {
 }
 
 void TypeToNumDomain::havoc_register_except_type(const Reg& reg) {
+    invalidate_ptr_sum_bindings_for(reg);
     for (const DataKind kind : iterate_kinds()) {
         values.havoc(variable_registry.reg(kind, reg.v));
     }
 }
 
 void TypeToNumDomain::havoc_register(const Reg& reg) {
+    // havoc_register_except_type below invalidates bindings.
     types.havoc_type(reg);
     havoc_register_except_type(reg);
 }
@@ -257,11 +305,66 @@ void TypeToNumDomain::havoc_register(const Reg& reg) {
 TypeToNumDomain TypeToNumDomain::widen(const TypeToNumDomain& other) const {
     // Unlike join, widen must NOT re-add type-dependent constraints:
     // narrowing the widened result can defeat termination (see #960).
-    return TypeToNumDomain{types.widen(other.types), values.widen(other.values)};
+    TypeToNumDomain result{types.widen(other.types), values.widen(other.values)};
+    result.ptr_sum_bindings = intersect_bindings(ptr_sum_bindings, other.ptr_sum_bindings);
+    return result;
 }
 
 TypeToNumDomain TypeToNumDomain::narrow(const TypeToNumDomain& other) const {
-    return TypeToNumDomain{types.narrow(other.types), values.narrow(other.values)};
+    TypeToNumDomain result{types.narrow(other.types), values.narrow(other.values)};
+    result.ptr_sum_bindings = intersect_bindings(ptr_sum_bindings, other.ptr_sum_bindings);
+    return result;
+}
+
+void TypeToNumDomain::bind_ptr_sum(const Reg& intermediate, const Reg& ptr_src, const Reg& num_src,
+                                    const TypeEncoding region) {
+    ptr_sum_bindings[intermediate] = PtrSumBinding{ptr_src, num_src, region};
+}
+
+void TypeToNumDomain::invalidate_ptr_sum_bindings_for(const Reg& reg) {
+    if (ptr_sum_bindings.empty()) {
+        return;
+    }
+    std::erase_if(ptr_sum_bindings, [&reg](const auto& kv) {
+        const auto& [intermediate, binding] = kv;
+        return intermediate == reg || binding.ptr_src == reg || binding.num_src == reg;
+    });
+}
+
+std::optional<Variable>
+TypeToNumDomain::lookup_ptr_sum_intermediate_offset(const Reg& ptr_src, const Reg& num_src,
+                                                    const TypeEncoding region) const {
+    using namespace dsl_syntax;
+    const auto ptr_src_offset = prevail::primary_kind_variable_for_type(ptr_src, region);
+    const auto& num_src_svalue = reg_pack(num_src).svalue;
+    for (const auto& [intermediate, binding] : ptr_sum_bindings) {
+        if (binding.region != region) {
+            continue;
+        }
+        // Skip if the intermediate's type drifted out of the region.
+        if (!types.is_initialized(intermediate) || !types.may_have_type(intermediate, binding.region)) {
+            continue;
+        }
+        // Match ptr_src / num_src directly or via a DBM equality edge
+        // (handles clang's post-check MOV into a helper-argument slot).
+        if (binding.ptr_src != ptr_src) {
+            if (!ptr_src_offset) {
+                continue;
+            }
+            const auto binding_ptr_src_offset = prevail::primary_kind_variable_for_type(binding.ptr_src, region);
+            if (!binding_ptr_src_offset || !values.entail(eq(*binding_ptr_src_offset, *ptr_src_offset))) {
+                continue;
+            }
+        }
+        if (binding.num_src != num_src) {
+            const auto& binding_num_src_svalue = reg_pack(binding.num_src).svalue;
+            if (!values.entail(eq(binding_num_src_svalue, num_src_svalue))) {
+                continue;
+            }
+        }
+        return prevail::primary_kind_variable_for_type(intermediate, region);
+    }
+    return {};
 }
 
 StringInvariant TypeToNumDomain::to_set() const {

@@ -204,6 +204,35 @@ void EbpfTransformer::forget_packet_pointers() {
     dom.initialize_packet(context);
 }
 
+// Find a register (other than `dst`) whose region-typed offset is DBM-equal to
+// dst's pre-ADD offset, e.g. the source of a prior `r_dst = r_src` MOV. Used to
+// name the ptr_src of a ptr-sum binding before the ADD overwrites dst.
+static std::optional<Reg> find_aliased_ptr_source(const TypeToNumDomain& state, const Reg& dst,
+                                                  const TypeEncoding region) {
+    using namespace dsl_syntax;
+    const auto dst_offset = primary_kind_variable_for_type(dst, region);
+    if (!dst_offset) {
+        return {};
+    }
+    for (uint8_t i = R0_RETURN_VALUE; i <= R10_STACK_POINTER; ++i) {
+        const Reg candidate{i};
+        if (candidate == dst) {
+            continue;
+        }
+        if (!state.may_have_type(candidate, region)) {
+            continue;
+        }
+        const auto candidate_offset = primary_kind_variable_for_type(candidate, region);
+        if (!candidate_offset) {
+            continue;
+        }
+        if (state.values.entail(eq(*candidate_offset, *dst_offset))) {
+            return candidate;
+        }
+    }
+    return {};
+}
+
 /** Linear constraint for a pointer comparison.
  */
 static LinearConstraint assume_cst_offsets_reg(const Condition::Op op, const Variable dst_offset,
@@ -318,6 +347,7 @@ void EbpfTransformer::operator()(const Un& stmt) {
     if (dom.is_bottom()) {
         return;
     }
+    dom.state.invalidate_ptr_sum_bindings_for(stmt.dst);
     const auto dst = reg_pack(stmt.dst);
     auto swap_endianness = [&](const Variable v, auto be_or_le) {
         if (dom.state.is_in_group(stmt.dst, TS_NUM)) {
@@ -474,8 +504,24 @@ void EbpfTransformer::do_load_stack(TypeToNumDomain& state, const Reg& target_re
     }
 }
 
+// Narrow the destination of a width-N load to the range implied by that width.
+// Zero-extending loads constrain both svalue and uvalue. Signed loads havoc
+// uvalue: a negative sign-extended value's unsigned 64-bit view is not a single
+// interval, so it cannot be represented. The caller must ensure the type is T_NUM.
+static void narrow_num_by_load_width(TypeToNumDomain& state, const RegPack& target, const int width,
+                                     const bool is_signed) {
+    if (is_signed && (width == 1 || width == 2 || width == 4)) {
+        state.values.set(target.svalue, Interval::signed_int(width * 8));
+        state.values.havoc(target.uvalue);
+    } else if (width == 1 || width == 2) {
+        const Interval full = Interval::unsigned_int(width * 8);
+        state.values.set(target.svalue, full);
+        state.values.set(target.uvalue, full);
+    }
+}
+
 static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, const Reg& target_reg,
-                        const LinearExpression& addr_vague, const int width) {
+                        const LinearExpression& addr_vague, const int width, const bool is_signed) {
     using namespace dsl_syntax;
     if (state.values.is_bottom()) {
         return;
@@ -488,6 +534,7 @@ static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, 
     if (desc->end < 0) {
         state.havoc_register(target_reg);
         state.assign_type(target_reg, T_NUM);
+        narrow_num_by_load_width(state, target, width, is_signed);
         return;
     }
 
@@ -503,6 +550,7 @@ static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, 
             state.havoc_type(target_reg);
         } else {
             state.assign_type(target_reg, T_NUM);
+            narrow_num_by_load_width(state, target, width, is_signed);
         }
         return;
     }
@@ -534,7 +582,9 @@ static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, 
         if (may_touch_ptr) {
             state.havoc_type(target_reg);
         } else {
+            // Inline ctx field (not data/data_end/meta): a plain scalar.
             state.assign_type(target_reg, T_NUM);
+            narrow_num_by_load_width(state, target, width, is_signed);
         }
         return;
     }
@@ -556,14 +606,7 @@ static void do_load_packet_or_shared(TypeToNumDomain& state, const Reg& target_r
     state.assign_type(target_reg, T_NUM);
 
     // Small copies can be range-limited and useful for later arithmetic.
-    if (is_signed && (width == 1 || width == 2 || width == 4)) {
-        state.values.set(target.svalue, Interval::signed_int(width * 8));
-        state.values.set(target.uvalue, Interval::unsigned_int(width * 8));
-    } else if (width == 1 || width == 2) {
-        const Interval full = Interval::unsigned_int(width * 8);
-        state.values.set(target.svalue, full);
-        state.values.set(target.uvalue, full);
-    }
+    narrow_num_by_load_width(state, target, width, is_signed);
 }
 
 void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
@@ -580,7 +623,7 @@ void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
     }
     dom.state = dom.state.join_over_types(b.access.basereg, [&](TypeToNumDomain& state, const TypeEncoding type) {
         switch (type) {
-        case T_CTX: do_load_ctx(state, context, target_reg, mem_reg.ctx_offset + offset, width); break;
+        case T_CTX: do_load_ctx(state, context, target_reg, mem_reg.ctx_offset + offset, width, b.is_signed); break;
         case T_STACK: do_load_stack(state, target_reg, mem_reg.stack_offset + offset, width, b.access.basereg); break;
         case T_PACKET:
         case T_SHARED:
@@ -909,6 +952,8 @@ void EbpfTransformer::operator()(const Call& call) {
     constexpr Reg r0_reg{R0_RETURN_VALUE};
     const auto r0_pack = reg_pack(r0_reg);
     dom.state.values.havoc(r0_pack.stack_numeric_size);
+    // The caller-saved scratch below only covers r1..r5, so invalidate r0 here.
+    dom.state.invalidate_ptr_sum_bindings_for(r0_reg);
     // Set r0 as a nullable T_SHARED pointer at offset 0.
     // If region_size is known, constrain it; otherwise havoc to prevent stale values.
     auto assign_shared_map_value = [&](const std::optional<Interval>& region_size) {
@@ -1006,6 +1051,7 @@ void EbpfTransformer::do_load_mapfd(const Reg& dst_reg, const int mapfd, const b
     const auto& desc = context.map_descriptor(mapfd);
     const EbpfMapType& type = context.platform().get_map_type(desc.type);
     const RegPack& dst = reg_pack(dst_reg);
+    dom.state.invalidate_ptr_sum_bindings_for(dst_reg);
     if (type.value_type == EbpfMapValueType::PROGRAM) {
         dom.state.assign_type(dst_reg, T_MAP_PROGRAMS);
         dom.state.values.assign(dst.map_fd_programs, mapfd);
@@ -1034,6 +1080,7 @@ void EbpfTransformer::do_load_map_address(const Reg& dst_reg, const int mapfd, c
     // Set the shared region size and offset for the map.
     dom.state.assign_type(dst_reg, T_SHARED);
     const RegPack& dst = reg_pack(dst_reg);
+    dom.state.invalidate_ptr_sum_bindings_for(dst_reg);
     dom.state.values.assign(dst.shared_offset, offset);
     dom.state.values.assign(dst.shared_region_size, desc.value_size);
     assign_valid_ptr(dst_reg, false);
@@ -1078,6 +1125,9 @@ void EbpfTransformer::recompute_stack_numeric_size(TypeToNumDomain& state, const
 }
 
 void EbpfTransformer::add(const Reg& dst_reg, const int imm, const int finite_width) {
+    // Standalone callers (CallLocal's r10 advance, Exit) reach this without the
+    // Bin top-level invalidation, so invalidate here too.
+    dom.state.invalidate_ptr_sum_bindings_for(dst_reg);
     const auto dst = reg_pack(dst_reg);
     if (dom.state.may_have_type(dst_reg, T_NUM)) {
         dom.state.values->add_overflow(dst.svalue, dst.uvalue, imm, finite_width);
@@ -1163,6 +1213,12 @@ void EbpfTransformer::operator()(const Bin& bin) {
         return;
     }
     using namespace dsl_syntax;
+
+    // bin.dst is about to be rewritten, so drop any binding mentioning it. The
+    // `ptr += num` case below reinstates a binding explicitly. This is the only
+    // invalidation covering T_NUM register writes, which bypass havoc_register /
+    // havoc_offsets.
+    dom.state.invalidate_ptr_sum_bindings_for(bin.dst);
 
     auto dst = reg_pack(bin.dst);
     int finite_width = bin.is64 ? 64 : 32;
@@ -1291,7 +1347,10 @@ void EbpfTransformer::operator()(const Bin& bin) {
                                         state.values.assign(dst.shared_region_size, src.shared_region_size);
                                     }
                                 } else if (dst_type != T_NUM && src_type == T_NUM) {
-                                    // ptr += num
+                                    // ptr += num: capture the alias source before the ADD
+                                    // clobbers dst, for the ptr-sum binding recorded below.
+                                    const std::optional<Reg> aliased_ptr_src =
+                                        find_aliased_ptr_source(state, bin.dst, dst_type);
                                     state.assign_type(bin.dst, dst_type);
                                     if (const auto dst_offset = primary_kind_variable_for_type(bin.dst, dst_type)) {
                                         state.values->apply(ArithBinOp::ADD, dst_offset.value(), dst_offset.value(),
@@ -1307,6 +1366,9 @@ void EbpfTransformer::operator()(const Bin& bin) {
                                                                            dst.stack_numeric_size,
                                                                            dst.stack_numeric_size, src.svalue, 0);
                                             }
+                                        }
+                                        if (aliased_ptr_src) {
+                                            state.bind_ptr_sum(bin.dst, *aliased_ptr_src, src_reg, dst_type);
                                         }
                                     }
                                     state.values->apply_unsigned(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.uvalue,
