@@ -2915,6 +2915,11 @@
                   "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 }
+              },
+              "tail_ipv4_policy": {
+                "kind": "VerifierTypeTracking",
+                "reason": "register type refinement is too imprecise in this control-flow pattern",
+                "status": "expected_failure"
               }
             },
             "sections": {
