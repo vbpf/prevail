@@ -205,6 +205,7 @@ void TypeToNumDomain::havoc_all_locations_having_type(const TypeEncoding type) {
 }
 
 void TypeToNumDomain::forget_type_dependent_values(const Variable type_variable) {
+    assert(variable_registry.is_type(type_variable));
     for (const auto& kinds : type_to_kinds | std::views::values) {
         for (const DataKind kind : kinds) {
             values.havoc(variable_registry.kind_var(kind, type_variable));
