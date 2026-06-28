@@ -65,6 +65,9 @@ bool is_valid_sock_common_access(const int offset, const int size, const AccessT
     if (offset >= bpf_sock_type_offset && offset < bpf_sock_priority_end) {
         return false;
     }
+    // The kernel permits a 4-byte read starting at dst_port even though the
+    // logical field is 16 bits; only accesses starting in the following
+    // padding bytes are rejected.
     if (offset >= bpf_sock_dst_port_end && offset < bpf_sock_dst_ip4_offset) {
         return false;
     }

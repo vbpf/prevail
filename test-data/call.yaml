@@ -131,6 +131,57 @@ post:
   - r10.stack_offset=512
   - s[496...507].type=number
 ---
+test-case: skc_lookup_tcp checked socket can read dst_port as u32
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r10.type=stack", "r10.stack_offset=512",
+      "r2.type=stack", "r2.stack_offset=496",
+      "r3.type=number", "r3.svalue=12", "r3.uvalue=12",
+      "r4.type=number", "r4.svalue=0", "r4.uvalue=0",
+      "r5.type=number", "r5.svalue=0", "r5.uvalue=0",
+      "s[496...507].type=number"]
+
+code:
+  <start>: |
+    call 99; bpf_skc_lookup_tcp
+    assume r0 != 0
+    r1 = *(u32 *)(r0 + 48)
+    r0 = 0
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0
+  - r1.type=number
+  - r10.type=stack
+  - r10.stack_offset=512
+  - s[496...507].type=number
+---
+test-case: skc_lookup_tcp rejects socket type-priority access
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r10.type=stack", "r10.stack_offset=512",
+      "r2.type=stack", "r2.stack_offset=496",
+      "r3.type=number", "r3.svalue=12", "r3.uvalue=12",
+      "r4.type=number", "r4.svalue=0", "r4.uvalue=0",
+      "r5.type=number", "r5.svalue=0", "r5.uvalue=0",
+      "s[496...507].type=number"]
+
+code:
+  <start>: |
+    call 99; bpf_skc_lookup_tcp
+    assume r0 != 0
+    r1 = *(u32 *)(r0 + 8)
+    r0 = 0
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "2: Invalid socket access (valid_access(r0.offset+8, width=4) for read)"
+---
 test-case: skc_lookup_tcp rejects socket padding access
 
 pre: ["r1.type=ctx", "r1.ctx_offset=0",

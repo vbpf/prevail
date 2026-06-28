@@ -184,7 +184,7 @@ enum class TypeGroup {
     mem,             ///< shared | stack | packet
     mem_or_num,      ///< mem | number
     dereferenceable, ///< types whose direct load/store access is modeled
-    pointer,         ///< any pointer type (ctx | packet | stack | shared | socket | btf_id | alloc_mem)
+    pointer,         ///< region pointers with modeled arithmetic (ctx | packet | stack | shared)
     ptr_or_num,      ///< pointer | number
     stack_or_packet, ///< stack | packet
     singleton_ptr,   ///< ctx | packet | stack: uniquely identifiable regions. Unrelated to is_singleton_type.

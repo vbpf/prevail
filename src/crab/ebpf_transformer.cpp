@@ -771,12 +771,12 @@ void EbpfTransformer::operator()(const Atomic& a) {
     if (dom.is_bottom()) {
         return;
     }
-    if (!dom.state.is_in_group(a.access.basereg, TS_POINTER) || !dom.state.is_in_group(a.valreg, TS_NUM)) {
+    if (!dom.state.is_in_group(a.access.basereg, TS_DEREFERENCEABLE) || !dom.state.is_in_group(a.valreg, TS_NUM)) {
         return;
     }
     if (!dom.state.may_have_type(a.access.basereg, T_STACK)) {
-        // Shared memory regions are volatile so we can just havoc
-        // any register that will be updated.
+        // Non-stack memory contents are not tracked here. A fetch/CMPXCHG
+        // therefore reads an unknown old value into the result register.
         if (a.op == Atomic::Op::CMPXCHG) {
             dom.state.havoc_register_except_type(Reg{R0_RETURN_VALUE});
         } else if (a.fetch) {
