@@ -591,11 +591,11 @@ void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
         case T_SOCKET:
         case T_BTF_ID:
             // Loadable but contents are not tracked: havoc the destination.
-            // T_SOCKET/T_BTF_ID dereferences are rejected by the checker
-            // (see ebpf_checker.cpp ValidAccess), so reaching this branch
-            // for those types means the checker was bypassed; havoc is the
-            // sound fallback. T_ALLOC_MEM remains a TODO for proper load
-            // semantics (offset-tracked content).
+            // T_BTF_ID dereferences are rejected by the checker (see
+            // ebpf_checker.cpp ValidAccess), so reaching that type here means
+            // the checker was bypassed; havoc is the sound fallback.
+            // T_ALLOC_MEM remains a TODO for proper load semantics
+            // (offset-tracked content).
             do_load_packet_or_shared(state, target_reg, width, b.is_signed);
             break;
         case T_UNINIT:
@@ -959,6 +959,8 @@ void EbpfTransformer::operator()(const Call& call) {
             dom.state.values.assign(r0_pack.alloc_mem_offset, 0);
             const auto size_value = dom.state.values.eval_interval(reg_pack(*resolved.contract.alloc_size_reg).uvalue);
             dom.state.values.set(r0_pack.alloc_mem_size, size_value);
+        } else if (*resolved.contract.return_ptr_type == T_SOCKET) {
+            dom.state.values.assign(r0_pack.socket_offset, 0);
         } else {
             dom.state.havoc_offsets(r0_reg);
         }

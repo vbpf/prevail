@@ -27,6 +27,65 @@ namespace {
 struct VerificationFailureSignal final : std::runtime_error {
     using std::runtime_error::runtime_error;
 };
+
+// The verifier collapses Linux's PTR_TO_SOCK_COMMON and PTR_TO_SOCKET into
+// T_SOCKET, so direct socket access must use the common safe subset. These
+// offsets mirror uapi struct bpf_sock as modeled by cgroup_sock_regions.
+constexpr int bpf_sock_size = 80;
+constexpr int bpf_sock_type_offset = 8;
+constexpr int bpf_sock_priority_end = 24;
+constexpr int bpf_sock_family_offset = 4;
+constexpr int bpf_sock_src_ip4_offset = 24;
+constexpr int bpf_sock_src_ip6_offset = 28;
+constexpr int bpf_sock_src_ip6_end = 44;
+constexpr int bpf_sock_src_port_offset = 44;
+constexpr int bpf_sock_dst_port_offset = 48;
+constexpr int bpf_sock_dst_port_end = 50;
+constexpr int bpf_sock_dst_ip4_offset = 52;
+constexpr int bpf_sock_dst_ip6_offset = 56;
+constexpr int bpf_sock_dst_ip6_end = 72;
+constexpr int bpf_sock_state_offset = 72;
+constexpr int bpf_sock_rx_queue_mapping_offset = 76;
+constexpr int bpf_sock_u32_field_size = 4;
+
+bool is_power_of_two(const int size) { return size > 0 && (size & (size - 1)) == 0; }
+
+bool is_narrow_sock_field_access(const int offset, const int size, const int field_offset, const int field_size) {
+    return size <= bpf_sock_u32_field_size && is_power_of_two(size) && offset >= field_offset &&
+           offset + size <= field_offset + field_size;
+}
+
+bool is_valid_sock_common_access(const int offset, const int size, const AccessType access_type) {
+    if (access_type == AccessType::write || size <= 0) {
+        return false;
+    }
+    if (offset < 0 || offset >= bpf_sock_size || offset + size > bpf_sock_size || offset % size != 0) {
+        return false;
+    }
+    if (offset >= bpf_sock_type_offset && offset < bpf_sock_priority_end) {
+        return false;
+    }
+    if (offset >= bpf_sock_dst_port_end && offset < bpf_sock_dst_ip4_offset) {
+        return false;
+    }
+    if (size == bpf_sock_u32_field_size) {
+        return true;
+    }
+    if (offset >= bpf_sock_dst_port_offset && offset < bpf_sock_dst_port_end) {
+        return is_narrow_sock_field_access(offset, size, bpf_sock_dst_port_offset,
+                                           bpf_sock_dst_port_end - bpf_sock_dst_port_offset);
+    }
+    return is_narrow_sock_field_access(offset, size, bpf_sock_family_offset, bpf_sock_u32_field_size) ||
+           is_narrow_sock_field_access(offset, size, bpf_sock_src_ip4_offset, bpf_sock_u32_field_size) ||
+           is_narrow_sock_field_access(offset, size, bpf_sock_src_ip6_offset,
+                                       bpf_sock_src_ip6_end - bpf_sock_src_ip6_offset) ||
+           is_narrow_sock_field_access(offset, size, bpf_sock_src_port_offset, bpf_sock_u32_field_size) ||
+           is_narrow_sock_field_access(offset, size, bpf_sock_dst_ip4_offset, bpf_sock_u32_field_size) ||
+           is_narrow_sock_field_access(offset, size, bpf_sock_dst_ip6_offset,
+                                       bpf_sock_dst_ip6_end - bpf_sock_dst_ip6_offset) ||
+           is_narrow_sock_field_access(offset, size, bpf_sock_state_offset, bpf_sock_u32_field_size) ||
+           is_narrow_sock_field_access(offset, size, bpf_sock_rx_queue_mapping_offset, bpf_sock_u32_field_size);
+}
 } // namespace
 
 class EbpfChecker final {
@@ -416,6 +475,33 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             }
             break;
         }
+        case T_SOCKET: {
+            const auto [lb, ub] = lb_ub_access_pair(s, reg.socket_offset);
+            require_lower_bound(lb, LinearExpression{0}, "Lower bound must be at least 0");
+            require_upper_bound(ub, LinearExpression{bpf_sock_size},
+                                "Upper bound must be at most " + std::to_string(bpf_sock_size));
+            if (!is_comparison_check) {
+                if (s.access_type == AccessType::write) {
+                    throw_fail("Socket memory is read-only");
+                }
+                if (!std::holds_alternative<Imm>(s.width)) {
+                    throw_fail("Socket access size must be constant");
+                }
+                const Interval offset = dom.state.values.eval_interval(lb);
+                const auto exact_offset = offset.singleton();
+                if (!exact_offset || !exact_offset->fits_cast_to<int32_t>()) {
+                    throw_fail("Socket access offset must be precise");
+                }
+                const auto width = static_cast<int>(std::get<Imm>(s.width).v);
+                if (!is_valid_sock_common_access(exact_offset->cast_to<int32_t>(), width, s.access_type)) {
+                    throw_fail("Invalid socket access");
+                }
+                if (!s.or_null) {
+                    require_value(dom.state, reg.uvalue > 0, "Possible null access");
+                }
+            }
+            break;
+        }
         case T_ALLOC_MEM: {
             const auto [lb, ub] = lb_ub_access_pair(s, reg.alloc_mem_offset);
             require_lower_bound(lb, LinearExpression{0}, "Lower bound must be at least 0");
@@ -450,7 +536,6 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
                 throw_fail("FDs cannot be dereferenced directly");
             }
             break;
-        case T_SOCKET: [[fallthrough]];
         case T_BTF_ID:
             // TODO: implement proper access checks for these pointer types.
             if (!is_comparison_check) {

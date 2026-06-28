@@ -162,6 +162,7 @@ extern const TypeSet TS_MAP;
 extern const TypeSet TS_POINTER;
 extern const TypeSet TS_SINGLETON_PTR;
 extern const TypeSet TS_MEM;
+extern const TypeSet TS_DEREFERENCEABLE;
 extern const TypeSet TS_SOCKET;
 extern const TypeSet TS_BTF_ID;
 extern const TypeSet TS_ALLOC_MEM;
@@ -182,6 +183,7 @@ enum class TypeGroup {
     map_fd_programs, ///< reg == T_MAP_PROGRAMS
     mem,             ///< shared | stack | packet
     mem_or_num,      ///< mem | number
+    dereferenceable, ///< types whose direct load/store access is modeled
     pointer,         ///< any pointer type (ctx | packet | stack | shared | socket | btf_id | alloc_mem)
     ptr_or_num,      ///< pointer | number
     stack_or_packet, ///< stack | packet

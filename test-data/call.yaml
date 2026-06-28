@@ -67,6 +67,118 @@ post:
 messages:
   - "5: Invalid type (r1.type == map_fd)"
 ---
+test-case: skc_lookup_tcp checked socket can read common state field
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r10.type=stack", "r10.stack_offset=512",
+      "r2.type=stack", "r2.stack_offset=496",
+      "r3.type=number", "r3.svalue=12", "r3.uvalue=12",
+      "r4.type=number", "r4.svalue=0", "r4.uvalue=0",
+      "r5.type=number", "r5.svalue=0", "r5.uvalue=0",
+      "s[496...507].type=number"]
+
+code:
+  <start>: |
+    call 99; bpf_skc_lookup_tcp
+    if r0 == 0 goto <exit>
+    r1 = *(u32 *)(r0 + 72)
+  <exit>: |
+    r0 = 0
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0
+  - r10.type=stack
+  - r10.stack_offset=512
+  - s[496...507].type=number
+---
+test-case: skc_lookup_tcp checked socket can read narrow common fields
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r10.type=stack", "r10.stack_offset=512",
+      "r2.type=stack", "r2.stack_offset=496",
+      "r3.type=number", "r3.svalue=12", "r3.uvalue=12",
+      "r4.type=number", "r4.svalue=0", "r4.uvalue=0",
+      "r5.type=number", "r5.svalue=0", "r5.uvalue=0",
+      "s[496...507].type=number"]
+
+code:
+  <start>: |
+    call 99; bpf_skc_lookup_tcp
+    assume r0 != 0
+    r1 = *(u8 *)(r0 + 25)
+    r2 = *(u16 *)(r0 + 42)
+    r3 = *(u8 *)(r0 + 49)
+    r0 = 0
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0
+  - r1.type=number
+  - r1.svalue=[0, 255]
+  - r1.uvalue=[0, 255]
+  - r2.type=number
+  - r2.svalue=[0, 65535]
+  - r2.uvalue=[0, 65535]
+  - r3.type=number
+  - r3.svalue=[0, 255]
+  - r3.uvalue=[0, 255]
+  - r10.type=stack
+  - r10.stack_offset=512
+  - s[496...507].type=number
+---
+test-case: skc_lookup_tcp rejects socket padding access
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r10.type=stack", "r10.stack_offset=512",
+      "r2.type=stack", "r2.stack_offset=496",
+      "r3.type=number", "r3.svalue=12", "r3.uvalue=12",
+      "r4.type=number", "r4.svalue=0", "r4.uvalue=0",
+      "r5.type=number", "r5.svalue=0", "r5.uvalue=0",
+      "s[496...507].type=number"]
+
+code:
+  <start>: |
+    call 99; bpf_skc_lookup_tcp
+    assume r0 != 0
+    r1 = *(u8 *)(r0 + 50)
+    r0 = 0
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "2: Invalid socket access (valid_access(r0.offset+50, width=1) for read)"
+---
+test-case: skc_lookup_tcp rejects narrow bound_dev_if access
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r10.type=stack", "r10.stack_offset=512",
+      "r2.type=stack", "r2.stack_offset=496",
+      "r3.type=number", "r3.svalue=12", "r3.uvalue=12",
+      "r4.type=number", "r4.svalue=0", "r4.uvalue=0",
+      "r5.type=number", "r5.svalue=0", "r5.uvalue=0",
+      "s[496...507].type=number"]
+
+code:
+  <start>: |
+    call 99; bpf_skc_lookup_tcp
+    assume r0 != 0
+    r1 = *(u8 *)(r0 + 0)
+    r0 = 0
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "2: Invalid socket access (valid_access(r0.offset, width=1) for read)"
+---
 test-case: bpf_map_lookup_elem shared key
 
 pre: ["r1.type=map_fd", "r1.map_fd=1",

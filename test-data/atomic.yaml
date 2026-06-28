@@ -597,7 +597,7 @@ post:
   - "_|_"
 
 messages:
-  - "0: Invalid type (r2.type in {ctx, stack, packet, shared})"
+  - "0: Invalid type (r2.type in {ctx, stack, packet, shared, socket, alloc_mem})"
 ---
 test-case: atomic 64-bit CMPXCHG comparing against non-number
 

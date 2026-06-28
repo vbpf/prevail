@@ -258,7 +258,7 @@ class AssertExtractor {
                 // res.emplace_back(make_valid_access(basereg, offset, width, false, AccessType::read));
             }
         } else {
-            res.emplace_back(TypeConstraint{basereg, TypeGroup::pointer});
+            res.emplace_back(TypeConstraint{basereg, TypeGroup::dereferenceable});
             res.emplace_back(
                 make_valid_access(basereg, offset, width, false, ins.is_load ? AccessType::read : AccessType::write));
             if (!info.type.is_privileged && !ins.is_load) {
@@ -281,7 +281,7 @@ class AssertExtractor {
         // access_type would let an atomic corrupt e.g. ctx->data unchecked).
         return {
             Assertion{TypeConstraint{ins.valreg, TypeGroup::number}},
-            Assertion{TypeConstraint{ins.access.basereg, TypeGroup::pointer}},
+            Assertion{TypeConstraint{ins.access.basereg, TypeGroup::dereferenceable}},
             Assertion{make_valid_access(ins.access.basereg, ins.access.offset,
                                         Imm{static_cast<uint32_t>(ins.access.width)}, false, AccessType::write)},
         };
