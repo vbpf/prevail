@@ -67,6 +67,29 @@ code:
 post: ["r1.type=number", "r1.svalue=-9223372036854775807", "r1.uvalue=9223372036854775809",
        "r2.type=number", "r2.svalue=-9223372036854775803", "r2.uvalue=9223372036854775813"]
 ---
+test-case: Bitwise AND preserves masked non-null implication
+
+pre: ["r1.type=number", "r1.svalue=[0, 1]", "r1.uvalue=r1.svalue",
+      "r2.type=number", "r2.svalue=[0, 1]", "r2.uvalue=r2.svalue",
+      "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=4",
+      "r3.svalue=r1.uvalue", "r3.uvalue=r1.uvalue"]
+
+code:
+  <start>: |
+    r1 &= r2
+    r1 &= 1
+    if r1 == 0 goto <exit>
+    r0 = *(u32 *)(r3 + 0)
+  <exit>: |
+    r0 = 0
+    exit
+
+post: ["r0.type=number", "r0.svalue=0", "r0.uvalue=0",
+       "r1.type=number", "r1.svalue=[0, 1]", "r1.uvalue=r1.svalue",
+       "r2.type=number", "r2.svalue=[0, 1]", "r2.uvalue=r2.svalue",
+       "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=4",
+       "r3.svalue=r1.svalue", "r3.uvalue=r1.svalue"]
+---
 test-case: Bitwise [-1, 1] AND 0 == 0
 
 pre: ["r1.type=number", "r1.svalue=[-1, 1]"]
