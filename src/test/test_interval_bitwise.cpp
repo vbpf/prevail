@@ -30,6 +30,25 @@ TEST_CASE("signed division by a negative singleton preserves interval order", "[
     REQUIRE((Interval::top() / Interval{-1}) == Interval::top());
 }
 
+TEST_CASE("signed division by a non-singleton divisor over-approximates truncated quotients",
+          "[interval][arithmetic]") {
+    // Regression test: the abstract result must CONTAIN every concrete eBPF SDIV
+    // result (truncation toward zero). A previous dividend adjustment produced a
+    // floored-division hull that was disjoint from the true set for negative
+    // dividends, letting the verifier prune reachable paths.
+
+    // -8 s/ 5 = -1 and -8 s/ 6 = -1  (both truncate toward zero to -1).
+    REQUIRE(Interval{-8, -8}.sdiv(Interval{5, 6}) == Interval{-1, -1});
+    REQUIRE((Interval{-8, -8} / Interval{5, 6}) == Interval{-1, -1});
+
+    // -7 s/ 2 = -3, -7 s/ 3 = -2, -5 s/ 2 = -2, -5 s/ 3 = -1  ->  [-3, -1].
+    REQUIRE(Interval{-7, -5}.sdiv(Interval{2, 3}) == Interval{-3, -1});
+
+    // Positive and negative/negative boxes were already exact and stay so.
+    REQUIRE(Interval{7, 8}.sdiv(Interval{2, 3}) == Interval{2, 4});
+    REQUIRE(Interval{-8, -6}.sdiv(Interval{-3, -2}) == Interval{2, 4});
+}
+
 TEST_CASE("finite domain left shift by zero preserves 64-bit interval", "[finite_domain][bitwise]") {
     FiniteDomain::clear_thread_local_state();
     const auto r1 = reg_pack(1);
