@@ -614,8 +614,11 @@ std::string ProgramReader::append_subprograms(RawProgram& prog) {
 
     std::map<std::string, ELFIO::Elf_Xword> subprogram_offsets;
     for (const auto& reloc : function_relocations) {
-        if (reloc.prog_index >= raw_programs.size() ||
-            raw_programs[reloc.prog_index].function_name != prog.function_name) {
+        // Match the relocation to its owning program by identity, not by name.
+        // reloc.source_offset is an instruction index into raw_programs[reloc.prog_index];
+        // applying it to a different program that merely shares function_name (ELF symbol
+        // names need not be unique) can index prog.prog out of bounds.
+        if (reloc.prog_index >= raw_programs.size() || &raw_programs[reloc.prog_index] != &prog) {
             continue;
         }
         const auto& target_function_name = reloc.target_function_name;
