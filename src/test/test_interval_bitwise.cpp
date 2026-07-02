@@ -44,6 +44,10 @@ TEST_CASE("signed division by a non-singleton divisor over-approximates truncate
     // -7 s/ 2 = -3, -7 s/ 3 = -2, -5 s/ 2 = -2, -5 s/ 3 = -1  ->  [-3, -1].
     REQUIRE(Interval{-7, -5}.sdiv(Interval{2, 3}) == Interval{-3, -1});
 
+    // Positive dividend over negative divisor: 6/-3=-2, 6/-2=-3, 8/-3=-2, 8/-2=-4 -> [-4, -2].
+    REQUIRE(Interval{6, 8}.sdiv(Interval{-3, -2}) == Interval{-4, -2});
+    REQUIRE((Interval{6, 8} / Interval{-3, -2}) == Interval{-4, -2});
+
     // Positive and negative/negative boxes were already exact and stay so.
     REQUIRE(Interval{7, 8}.sdiv(Interval{2, 3}) == Interval{2, 4});
     REQUIRE(Interval{-8, -6}.sdiv(Interval{-3, -2}) == Interval{2, 4});
