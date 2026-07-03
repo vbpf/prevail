@@ -200,25 +200,30 @@ void TypeToNumDomain::havoc_all_locations_having_type(const TypeEncoding type) {
     for (const Variable type_variable : types.variables_with_type(type)) {
         types.havoc_type(type_variable);
         values.havoc(variable_registry.kind_var(DataKind::uvalues, type_variable));
-        for (const DataKind kind : type_to_kinds.at(type)) {
+        forget_type_dependent_values(type_variable);
+    }
+}
+
+void TypeToNumDomain::forget_type_dependent_values(const Variable type_variable) {
+    assert(variable_registry.is_type(type_variable));
+    for (const auto& kinds : type_to_kinds | std::views::values) {
+        for (const DataKind kind : kinds) {
             values.havoc(variable_registry.kind_var(kind, type_variable));
         }
     }
 }
 
+void TypeToNumDomain::forget_type_dependent_values(const Reg& reg) { forget_type_dependent_values(reg_type(reg)); }
+
 void TypeToNumDomain::assign(const Reg& lhs, const Reg& rhs) {
     if (lhs == rhs) {
         return;
     }
+    forget_type_dependent_values(lhs);
     types.assign_type(lhs, rhs);
 
     values.assign(reg_pack(lhs).uvalue, reg_pack(rhs).uvalue);
 
-    for (const auto& type : types.iterate_types(lhs)) {
-        for (const auto& kind : type_to_kinds.at(type)) {
-            values.havoc(variable_registry.kind_var(kind, reg_type(lhs)));
-        }
-    }
     for (const auto& type : types.iterate_types(rhs)) {
         for (const auto kind : type_to_kinds.at(type)) {
             const auto lhs_var = variable_registry.kind_var(kind, reg_type(lhs));

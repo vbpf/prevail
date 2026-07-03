@@ -163,7 +163,7 @@ void EbpfChecker::operator()(const FuncConstraint& s) const {
     if (dom.state.is_bottom()) {
         return;
     }
-    const auto src_interval = dom.state.values.eval_interval(reg_pack(s.reg).svalue);
+    const auto src_interval = dom.state.values.eval_interval(reg_pack(s.reg).uvalue);
     if (const auto sn = src_interval.singleton()) {
         if (sn->fits<int32_t>()) {
             // We can now process it as if the id was immediate.

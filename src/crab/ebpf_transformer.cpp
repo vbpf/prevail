@@ -157,7 +157,9 @@ void EbpfTransformer::save_callee_saved_registers(const std::string& prefix) {
     for (const Reg r : {Reg{R6}, Reg{R7}, Reg{R8}, Reg{R9}}) {
         if (dom.state.is_initialized(r)) {
             const Variable type_var = variable_registry.type_reg(r.v);
-            dom.state.assign_type(variable_registry.stack_frame_var(DataKind::types, r.v, prefix), type_var);
+            const Variable frame_type_var = variable_registry.stack_frame_var(DataKind::types, r.v, prefix);
+            dom.state.forget_type_dependent_values(frame_type_var);
+            dom.state.assign_type(frame_type_var, type_var);
             for (const TypeEncoding type : dom.state.iterate_types(r)) {
                 auto kinds = type_to_kinds.at(type);
                 kinds.push_back(DataKind::uvalues);
@@ -294,6 +296,7 @@ void EbpfTransformer::operator()(const LoadPseudo& pseudo) {
     case PseudoAddress::Kind::CODE_ADDR: {
         const auto dst = reg_pack(pseudo.dst);
         const uint64_t imm64 = merge_imm32_to_u64(pseudo.addr.imm, pseudo.addr.next_imm);
+        dom.state.forget_type_dependent_values(pseudo.dst);
         dom.state.values.assign(dst.uvalue, imm64);
         dom.state.values->overflow_bounds(dst.uvalue, 64, false);
         dom.state.assign_type(pseudo.dst, T_FUNC);
@@ -912,6 +915,8 @@ void EbpfTransformer::operator()(const Call& call) {
     // Set r0 as a nullable T_SHARED pointer at offset 0.
     // If region_size is known, constrain it; otherwise havoc to prevent stale values.
     auto assign_shared_map_value = [&](const std::optional<Interval>& region_size) {
+        dom.state.forget_type_dependent_values(r0_reg);
+        dom.state.assign_type(r0_reg, T_SHARED);
         assign_valid_ptr(r0_reg, true);
         dom.state.values.assign(r0_pack.shared_offset, 0);
         if (region_size) {
@@ -919,7 +924,6 @@ void EbpfTransformer::operator()(const Call& call) {
         } else {
             dom.state.values.havoc(r0_pack.shared_region_size);
         }
-        dom.state.assign_type(r0_reg, T_SHARED);
     };
     auto resolve_map_lookup = [&] {
         // Map lookup is the only way to get a null pointer.
@@ -947,8 +951,9 @@ void EbpfTransformer::operator()(const Call& call) {
     if (resolved.contract.is_map_lookup) {
         resolve_map_lookup();
     } else if (resolved.contract.return_ptr_type.has_value()) {
-        assign_valid_ptr(r0_reg, resolved.contract.return_nullable);
+        dom.state.forget_type_dependent_values(r0_reg);
         dom.state.assign_type(r0_reg, *resolved.contract.return_ptr_type);
+        assign_valid_ptr(r0_reg, resolved.contract.return_nullable);
         if (*resolved.contract.return_ptr_type == T_ALLOC_MEM && resolved.contract.alloc_size_reg.has_value()) {
             // Propagate allocation bounds: offset starts at 0, size is the allocation size argument.
             dom.state.values.assign(r0_pack.alloc_mem_offset, 0);
@@ -988,7 +993,7 @@ void EbpfTransformer::operator()(const Callx& callx) {
 
     // Look up the helper function id.
     const RegPack& reg = reg_pack(callx.func);
-    const auto src_interval = dom.state.values.eval_interval(reg.svalue);
+    const auto src_interval = dom.state.values.eval_interval(reg.uvalue);
     if (const auto sn = src_interval.singleton()) {
         if (sn->fits<int32_t>()) {
             // We can now process it as if the id was immediate.
@@ -1006,6 +1011,7 @@ void EbpfTransformer::do_load_mapfd(const Reg& dst_reg, const int mapfd, const b
     const auto& desc = context.map_descriptor(mapfd);
     const EbpfMapType& type = context.platform().get_map_type(desc.type);
     const RegPack& dst = reg_pack(dst_reg);
+    dom.state.forget_type_dependent_values(dst_reg);
     if (type.value_type == EbpfMapValueType::PROGRAM) {
         dom.state.assign_type(dst_reg, T_MAP_PROGRAMS);
         dom.state.values.assign(dst.map_fd_programs, mapfd);
@@ -1032,6 +1038,7 @@ void EbpfTransformer::do_load_map_address(const Reg& dst_reg, const int mapfd, c
     }
 
     // Set the shared region size and offset for the map.
+    dom.state.forget_type_dependent_values(dst_reg);
     dom.state.assign_type(dst_reg, T_SHARED);
     const RegPack& dst = reg_pack(dst_reg);
     dom.state.values.assign(dst.shared_offset, offset);

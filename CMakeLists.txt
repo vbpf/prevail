@@ -274,6 +274,7 @@ if (prevail_ENABLE_TESTS)
     src/test/test_sign_extension.cpp
     src/test/test_subsumption.cpp
     src/test/test_type_domain.cpp
+    src/test/test_type_to_num.cpp
     src/test/test_verify_bcc.cpp
     src/test/test_verify_bpf_cilium_test.cpp
     src/test/test_verify_build.cpp
