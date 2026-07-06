@@ -63,8 +63,22 @@ def parse_check_output(output_lines: list[str]) -> tuple[dict[str, list[dict[str
 
 def inspect_object(check_bin: Path, root: Path, elf_path: Path, timeout_seconds: int) -> tuple[str, str, dict]:
     rel = elf_path.relative_to(root)
+    project = rel.parts[0] if len(rel.parts) >= 2 else "_root"
+    object_name = Path(*rel.parts[1:]).as_posix() if len(rel.parts) >= 2 else rel.as_posix()
+
     cmd = [str(check_bin), "-l", str(elf_path)]
-    completed = subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=timeout_seconds)
+    try:
+        completed = subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        # A single slow ELF must not abort the whole inventory; record the timeout and move on.
+        return project, object_name, {
+            "exit_code": None,
+            "section_count": 0,
+            "program_count": 0,
+            "sections": {},
+            "diagnostics": [f"inventory scan timed out after {timeout_seconds}s"],
+            "timeout": True,
+        }
 
     combined_lines = []
     combined_lines.extend(completed.stdout.splitlines())
@@ -73,9 +87,6 @@ def inspect_object(check_bin: Path, root: Path, elf_path: Path, timeout_seconds:
 
     section_names = sorted(sections.keys())
     program_count = sum(len(programs) for programs in sections.values())
-
-    project = rel.parts[0] if len(rel.parts) >= 2 else "_root"
-    object_name = Path(*rel.parts[1:]).as_posix() if len(rel.parts) >= 2 else rel.as_posix()
 
     return project, object_name, {
         "exit_code": completed.returncode,
@@ -127,6 +138,21 @@ def build_inventory(samples_root: Path, check_bin: Path, jobs: int, timeout_seco
     }
 
 
+def merge_existing_overrides(inventory: dict, existing: dict) -> None:
+    """Carry hand-curated test_overrides from a previous inventory into the regenerated one.
+
+    The scan rebuilds the inventory from scratch and does not know about curated reasons or
+    kinds, so without this merge every regeneration would discard them.
+    """
+    existing_projects = existing.get("projects", {})
+    for project, pdata in inventory.get("projects", {}).items():
+        existing_objects = existing_projects.get(project, {}).get("objects", {})
+        for object_name, odata in pdata.get("objects", {}).items():
+            overrides = existing_objects.get(object_name, {}).get("test_overrides")
+            if overrides:
+                odata["test_overrides"] = overrides
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate a complete project/object/section/program inventory from ebpf-samples."
@@ -168,13 +194,21 @@ def main() -> int:
         return 2
 
     inventory = build_inventory(samples_root, check_bin, args.jobs, args.timeout_seconds)
+
+    if args.output != "-":
+        output_path = Path(args.output)
+        if output_path.exists():
+            existing = json.loads(output_path.read_text(encoding="utf-8"))
+            merge_existing_overrides(inventory, existing)
+
     rendered = json.dumps(inventory, indent=2, sort_keys=True)
 
     if args.output == "-":
         print(rendered)
     else:
         output_path = Path(args.output)
-        output_path.write_text(rendered + "\n", encoding="utf-8")
+        with open(output_path, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(rendered + "\n")
         print(f"Wrote {output_path}", file=sys.stderr)
 
     return 0

@@ -226,12 +226,49 @@ def generate(inventory: dict, project: str) -> str:
         for section_name in sorted(obj["sections"].keys()):
             programs = obj["sections"][section_name]
             if len(programs) == 1:
+                # Single-program sections are keyed at section scope; warn if an override
+                # was left at program scope, where it will not be consulted.
+                stray = program_override(obj, section_name, programs[0]["function"])
+                if stray is not None:
+                    print(
+                        f"warning: {project}/{object_name} {section_name}: program-scope override for "
+                        f"'{programs[0]['function']}' is ignored for a single-program section "
+                        "(overrides are read at section scope); it degrades to a pass test.",
+                        file=sys.stderr,
+                    )
                 status, kind, reason = classify_section(obj, section_name, programs)
                 append_entry(
                     status,
                     kind,
                     reason,
                     render_test(project, object_name, section_name, status, kind, reason),
+                    object_name,
+                    section_name,
+                )
+                continue
+
+            # Multi-program sections are keyed at program scope; warn if an override was
+            # left at section scope, where it will not be consulted.
+            stray_section = section_override(obj, section_name)
+            if stray_section is not None:
+                print(
+                    f"warning: {project}/{object_name} {section_name}: section-scope override is ignored "
+                    "for a multi-program section (overrides are read at program scope); "
+                    "it degrades to pass tests.",
+                    file=sys.stderr,
+                )
+
+            # A section that fails to load rejects every program in it, so a program-scope
+            # reject_load override is rendered as a single section-level load-rejection test.
+            if any(
+                (program_override(obj, section_name, program["function"]) or {}).get("status") == "reject_load"
+                for program in programs
+            ):
+                append_entry(
+                    "reject_load",
+                    None,
+                    None,
+                    render_test(project, object_name, section_name, "reject_load", None, None),
                     object_name,
                     section_name,
                 )
@@ -310,7 +347,8 @@ def main() -> int:
         for project in sorted(inventory.get("projects", {}).keys()):
             rendered = generate(inventory, project)
             output_path = output_dir / project_to_filename(project)
-            output_path.write_text(rendered + "\n", encoding="utf-8")
+            with open(output_path, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(rendered + "\n")
             print(f"Wrote {output_path}", file=sys.stderr)
         return 0
 
@@ -320,7 +358,8 @@ def main() -> int:
 
     output_path = Path(args.output)
     rendered = generate(inventory, args.project)
-    output_path.write_text(rendered + "\n", encoding="utf-8")
+    with open(output_path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(rendered + "\n")
     return 0
 
 

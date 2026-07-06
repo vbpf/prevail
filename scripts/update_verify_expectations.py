@@ -286,21 +286,16 @@ def refresh_expectations(
                         reason_to_store = reason
                     section_overrides[section] = {"status": status, "kind": kind, "reason": reason_to_store}
             else:
-                if status == "reject_load":
-                    section_overrides[section] = {"status": "reject_load"}
-                    program_overrides.pop(section, None)
-                    if not section_overrides:
-                        test_overrides.pop("sections", None)
-                    if not program_overrides:
-                        test_overrides.pop("programs", None)
-                    if not test_overrides:
-                        odata.pop("test_overrides", None)
-                    continue
-
+                # Multi-program sections are read by generate_verify_project_tests.py at
+                # program scope only, so every override (including reject_load) must be
+                # recorded per-program keyed by function name. Keying by function makes the
+                # result independent of the order in which sibling programs are classified.
                 section_overrides.pop(section, None)
                 section_program_overrides = program_overrides.setdefault(section, {})
                 current = section_program_overrides.get(function_name)
-                if status == "pass":
+                if status == "reject_load":
+                    section_program_overrides[function_name] = {"status": "reject_load"}
+                elif status == "pass":
                     section_program_overrides.pop(function_name, None)
                     if not section_program_overrides:
                         program_overrides.pop(section, None)
@@ -349,7 +344,8 @@ def main() -> int:
 
     inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
     unknown_diagnostics = refresh_expectations(inventory, samples_root, check_bin, args.jobs, args.timeout_seconds)
-    inventory_path.write_text(json.dumps(inventory, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    with open(inventory_path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(inventory, indent=2, sort_keys=True) + "\n")
     print(f"Wrote {inventory_path}", file=sys.stderr)
     if unknown_diagnostics:
         print(
