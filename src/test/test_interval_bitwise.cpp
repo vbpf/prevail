@@ -23,6 +23,23 @@ TEST_CASE("bitwise_and with non-singleton containing all-ones includes zero", "[
     REQUIRE(left.bitwise_and(anomalous_right) == Interval{0, 100});
 }
 
+TEST_CASE("ExtendedNumber division flips an infinite bound for a negative divisor", "[extended_number][arithmetic]") {
+    const auto pos_inf = ExtendedNumber::plus_infinity();
+    const auto neg_inf = ExtendedNumber::minus_infinity();
+    const ExtendedNumber neg{-2};
+    const ExtendedNumber pos{2};
+
+    // Signed division flips the sign of an infinite dividend when the divisor is negative.
+    REQUIRE((neg_inf / neg) == pos_inf);
+    REQUIRE((pos_inf / neg) == neg_inf);
+    REQUIRE((neg_inf / pos) == neg_inf);
+    REQUIRE((pos_inf / pos) == pos_inf);
+
+    // Modulo keeps the dividend's infinity regardless of the divisor sign.
+    REQUIRE((pos_inf % neg) == pos_inf);
+    REQUIRE((neg_inf % neg) == neg_inf);
+}
+
 TEST_CASE("signed division by a negative singleton preserves interval order", "[interval][arithmetic]") {
     REQUIRE(Interval{-8, -4}.sdiv(Interval{-1}) == Interval{4, 8});
     REQUIRE(Interval{4, 8}.sdiv(Interval{-2}) == Interval{-4, -2});
