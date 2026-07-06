@@ -124,8 +124,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timeout-seconds", type=int, default=20, help="Per-section check timeout.")
     parser.add_argument(
         "--fail-on-unknown",
-        action="store_true",
-        help="Fail if check reports diagnostics that are not mapped to a known limitation kind.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Fail (nonzero exit) if check reports a failure whose diagnostic is not mapped to a "
+        "known limitation kind. Enabled by default; pass --no-fail-on-unknown to only warn.",
     )
     return parser.parse_args()
 
@@ -234,6 +236,10 @@ def refresh_expectations(
             )
         classified = classify_diagnostic(diagnostic)
         if classified is None:
+            # The verifier rejected the program but the diagnostic is not one we recognize
+            # (a reworded message, a crash, or a bare "verification failed"). Treat this as an
+            # error condition rather than a pass, so a curated expected_failure/skip override is
+            # never silently deleted and hidden regressions surface via --fail-on-unknown.
             return (
                 project,
                 object_name,
@@ -241,7 +247,7 @@ def refresh_expectations(
                 reported_function,
                 section_program_count,
                 section_scoped,
-                "pass",
+                "unknown",
                 None,
                 diagnostic,
             )
@@ -265,8 +271,13 @@ def refresh_expectations(
             test_overrides = odata.setdefault("test_overrides", {})
             section_overrides = test_overrides.setdefault("sections", {})
             program_overrides = test_overrides.setdefault("programs", {})
-            if status == "pass" and reason and reason not in ("", "verification failed"):
-                unknown_diagnostics.append((project, object_name, section, function_name, reason))
+            if status == "unknown":
+                # Preserve any existing curated override untouched and record the program so the
+                # caller is warned (and, with --fail-on-unknown, the run exits nonzero).
+                unknown_diagnostics.append(
+                    (project, object_name, section, function_name, reason or "verification failed")
+                )
+                continue
 
             if section_scoped:
                 current = section_overrides.get(section)
@@ -353,8 +364,8 @@ def main() -> int:
     print(f"Wrote {inventory_path}", file=sys.stderr)
     if unknown_diagnostics:
         print(
-            f"warning: {len(unknown_diagnostics)} diagnostics are not mapped to a known limitation kind; "
-            "those tests are left as pass expectations.",
+            f"warning: {len(unknown_diagnostics)} verifier failures have diagnostics that are not mapped "
+            "to a known limitation kind; any existing curated overrides were left untouched.",
             file=sys.stderr,
         )
         for project, object_name, section, function_name, diagnostic in unknown_diagnostics[:20]:
