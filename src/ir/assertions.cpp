@@ -65,7 +65,8 @@ class AssertExtractor {
 
     vector<Assertion> operator()(const Exit&) const {
         vector<Assertion> res;
-        if (current_label->stack_frame_prefix.empty()) {
+        // A missing label denotes the top-level frame, consistent with make_valid_access.
+        if (!current_label || current_label->stack_frame_prefix.empty()) {
             // Verify that Exit returns a number.
             res.emplace_back(TypeConstraint{Reg{R0_RETURN_VALUE}, TypeGroup::number});
         }
