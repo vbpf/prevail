@@ -869,9 +869,13 @@ TEST_CASE("ELF loader does not cross-apply relocations between same-named progra
     text_a->set_data(a_data);
 
     // Section B: a larger program ALSO named "shared" whose instruction at index 5
-    // is a local call to subprogram "sub" (a synthetic relocation with source_offset
-    // 5). Under the bug this relocation matches section A's "shared" by name and is
-    // applied at index 5 of A's 2-instruction vector.
+    // is a local call to subprogram "sub", carrying a real .rel.text2 relocation with
+    // source_offset 5. Under the bug this relocation matches section A's "shared" by
+    // name and is applied at index 5 of A's 2-instruction vector (inserting "sub" and
+    // then writing past the end of the grown vector). A recorded relocation entry is
+    // required: the synthetic local-call path would not record source_offset 5 here,
+    // because compute_reachable_program_span already pulls "sub" into this program's
+    // span and enqueue_synthetic_local_calls skips targets inside the program.
     ELFIO::section* text_b = writer.sections.add(".text2");
     text_b->set_type(ELFIO::SHT_PROGBITS);
     text_b->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
@@ -902,7 +906,21 @@ TEST_CASE("ELF loader does not cross-apply relocations between same-named progra
     // Two FUNC symbols share the name "shared" (in different sections).
     sym_writer.add_symbol(str_writer, "shared", 0, 16, ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0, text_a->get_index());
     sym_writer.add_symbol(str_writer, "shared", 0, 48, ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0, text_b->get_index());
-    sym_writer.add_symbol(str_writer, "sub", 48, 16, ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0, text_b->get_index());
+    const auto sub_sym =
+        sym_writer.add_symbol(str_writer, "sub", 48, 16, ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0, text_b->get_index());
+
+    // Record a real relocation for the local call at index 5 of section B's "shared",
+    // targeting "sub". This is the entry that the vulnerable name-based match applies
+    // to section A's same-named program.
+    ELFIO::section* rel_sec = writer.sections.add(".rel.text2");
+    rel_sec->set_type(ELFIO::SHT_REL);
+    rel_sec->set_addr_align(8);
+    rel_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_REL));
+    rel_sec->set_link(sym_sec->get_index());
+    rel_sec->set_info(text_b->get_index());
+    ELFIO::relocation_section_accessor rel_writer(writer, rel_sec);
+    constexpr ELFIO::Elf64_Addr call_index = 5;
+    rel_writer.add_entry(call_index * sizeof(EbpfInst), sub_sym, R_BPF_64_32_TYPE);
 
     std::ostringstream out_stream;
     writer.save(out_stream);
