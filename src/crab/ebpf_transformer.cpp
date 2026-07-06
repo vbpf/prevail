@@ -880,31 +880,29 @@ void EbpfTransformer::operator()(const Call& call) {
             break;
 
         case ArgPair::Kind::PTR_TO_WRITABLE_MEM: {
-            bool store_numbers = true;
-            auto variable = dom.state.primary_kind_variable_for_type(param.mem);
-            if (!variable.has_value()) {
-                // checked by the checker
-                break;
-            }
-            Interval addr = dom.state.values.eval_interval(variable.value());
-            Interval width = dom.state.values.eval_interval(reg_pack(param.size).svalue);
-
+            // The called function may overwrite the pointed-to memory, so a stack-typed
+            // pointer requires havocing the covered stack cells. Compute the stack address
+            // per type inside join_over_types (mirroring PTR_TO_WRITABLE_LONG/INT above):
+            // the checker only requires mem in {stack, packet, shared}, so param.mem's type
+            // need not be a singleton. Using the no-type primary_kind_variable_for_type and
+            // bailing on nullopt skipped the havoc for a non-singleton type such as
+            // {stack, shared}, leaving stale stack values a later load could read (unsound).
+            const Interval width = dom.state.values.eval_interval(reg_pack(param.size).svalue);
             dom.state = dom.state.join_over_types(param.mem, [&](TypeToNumDomain& state, const TypeEncoding type) {
                 if (type == T_STACK) {
-                    // Pointer to a memory region that the called function may change,
-                    // so we must havoc.
+                    const auto offset = primary_kind_variable_for_type(param.mem, type);
+                    if (!offset.has_value()) {
+                        return;
+                    }
+                    const Interval addr = state.values.eval_interval(*offset);
                     for (const DataKind kind : iterate_kinds()) {
                         stack.havoc(state.values, kind, addr, width, context.runtime().big_endian);
                     }
-                } else {
-                    store_numbers = false;
+                    // Functions are not allowed to write sensitive data, and
+                    // initialization is guaranteed. Scope to stack-typed pointers only.
+                    stack.store_numbers(addr, width);
                 }
             });
-            if (store_numbers) {
-                // Functions are not allowed to write sensitive data,
-                // and initialization is guaranteed
-                stack.store_numbers(addr, width);
-            }
         }
         }
     }
