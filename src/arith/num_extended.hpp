@@ -123,7 +123,8 @@ class ExtendedNumber final {
     ExtendedNumber& operator*=(const ExtendedNumber& x) { return operator=(operator*(x)); }
 
   private:
-    ExtendedNumber AbsDiv(const ExtendedNumber& x, ExtendedNumber (*f)(const Number&, const Number&)) const {
+    ExtendedNumber AbsDiv(const ExtendedNumber& x, ExtendedNumber (*f)(const Number&, const Number&),
+                          const bool flip_infinite_by_divisor_sign = false) const {
         if (x._n == 0) {
             CRAB_ERROR("Bound: division by zero");
         }
@@ -134,15 +135,20 @@ class ExtendedNumber final {
             return Number{0};
         }
         if (is_infinite()) {
-            return *this;
+            // Dividing an infinite bound by a negative divisor flips its sign
+            // (e.g. -oo / negative == +oo). Only signed division applies this;
+            // modulo keeps the dividend's infinity and the unsigned ops treat
+            // the divisor as unsigned (never negative).
+            return flip_infinite_by_divisor_sign && x._n < 0 ? -*this : *this;
         }
         return f(_n, x._n);
     }
 
   public:
     ExtendedNumber operator/(const ExtendedNumber& x) const {
-        return AbsDiv(x,
-                      [](const Number& dividend, const Number& divisor) { return ExtendedNumber{dividend / divisor}; });
+        return AbsDiv(
+            x, [](const Number& dividend, const Number& divisor) { return ExtendedNumber{dividend / divisor}; },
+            /*flip_infinite_by_divisor_sign=*/true);
     }
 
     ExtendedNumber operator%(const ExtendedNumber& x) const {
