@@ -21,7 +21,9 @@ include(CMakePackageConfigHelpers)
 
 include(FetchContent)
 
-if (IS_DIRECTORY "${PROJECT_SOURCE_DIR}/.git" AND NOT CMAKE_CROSSCOMPILING)
+# Accept both a `.git` directory (normal clone) and a `.git` file (linked
+# worktrees, submodules) so tests and hooks are enabled in worktrees too.
+if (EXISTS "${PROJECT_SOURCE_DIR}/.git" AND NOT CMAKE_CROSSCOMPILING)
   file(COPY "${prevail_source_dir}/scripts/pre-commit" "${prevail_source_dir}/scripts/commit-msg" DESTINATION "${PROJECT_SOURCE_DIR}/.git/hooks")
   option(prevail_ENABLE_TESTS "Build tests" ON)
 else ()

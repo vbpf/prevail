@@ -260,8 +260,10 @@ function check_clang-format()
         return $false
     }
 
-    $req_ver = $required_cfver -split '.'
-    $cf_ver  = $cfver -split '.'
+    # '-split' treats its argument as a regex, so the version separator must
+    # be escaped; a bare '.' matches every character and yields empty fields.
+    $req_ver = $required_cfver -split '\.'
+    $cf_ver  = $cfver -split '\.'
 
     for ($i = 0; $i -lt 3; $i++)
     {
@@ -310,7 +312,12 @@ foreach ( $file in $filelist ) {
 
     if ( $whatif ) {
         log_whatif "Formatting $file ..."
-        ( Invoke-Expression ($cf) ) | Compare-Object (get-content $file)
+        # A file differs when Compare-Object emits output; the pipeline
+        # succeeding ($?) does not by itself mean the file changed.
+        $diff = ( Invoke-Expression ($cf) ) | Compare-Object (get-content $file)
+        if ( $diff ) {
+            $changecount++
+        }
     }
     else {
         if ( $verbose ) {
@@ -320,14 +327,9 @@ foreach ( $file in $filelist ) {
         else {
             Invoke-Expression $cf > $null
         }
-    }
-    if ( $? ) {
-        if ( $whatif ) {
-            $changecount++
+        if ( -not $? ) {
+            Write-Host "clang-format failed on file: $file."
         }
-    }
-    else {
-        Write-Host "clang-format failed on file: $file."
     }
 }
 

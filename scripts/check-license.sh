@@ -37,12 +37,22 @@ should_ignore() {
     false
 }
 
+# Portable replacement for 'realpath', which is not available on stock
+# macOS. Resolves an existing file or directory to an absolute path.
+resolve_path() {
+    if [[ -d $1 ]]; then
+        (cd "$1" && pwd -P)
+    else
+        (cd "$(dirname "$1")" 2>/dev/null && printf '%s/%s\n' "$(pwd -P)" "$(basename "$1")")
+    fi
+}
+
 # Create array of files to check, either from the given arguments or
 # all files in Git, ignore any that match a regex in the ignore file.
 files=()
 if [[ $# -ne 0 ]]; then
     for f in "$@"; do
-        file=$(realpath "$f")
+        file=$(resolve_path "$f")
 
         if [[ ! -f $file ]]; then # skip non-existent files
             continue
@@ -83,4 +93,6 @@ for file in "${files[@]}"; do
     done
 done
 
-exit $failures
+# Clamp to a single-bit exit status: 'exit' truncates its argument modulo
+# 256, so a raw count that is a multiple of 256 would wrongly report success.
+exit $(( failures ? 1 : 0 ))
