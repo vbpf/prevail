@@ -679,12 +679,10 @@ bool TypeDomain::State::is_subsumed_by(const State& other) const {
         }
         const auto id0 = var_ids.find_id(members[0]);
         if (!id0) {
-            for (size_t i = 1; i < members.size(); i++) {
-                if (var_ids.contains(members[i])) {
-                    return false;
-                }
-            }
-            continue;
+            // other requires type(members[0]) == type(members[i]), but members[0] is
+            // untracked in self and therefore an independent top -- self does not
+            // enforce this equality, so it is not subsumed by other.
+            return false;
         }
         const size_t rep0 = dsu.find_const(*id0);
         for (size_t i = 1; i < members.size(); i++) {

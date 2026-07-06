@@ -229,6 +229,25 @@ TEST_CASE("restrict narrows the whole equivalence class", "[type_domain]") {
 }
 
 // ============================================================================
+// Subsumption (operator<=)
+// ============================================================================
+
+TEST_CASE("top is not subsumed by an unsatisfied type equality", "[type_domain][subsumption]") {
+    // Regression: is_subsumed_by treated a top-typeset equality class in `other`
+    // whose members are untracked in `self` as satisfied, inverting the order.
+    TypeDomain self; // top: tracks no type variables
+    TypeDomain other;
+    other.assume_eq(reg_type(r0), reg_type(r1)); // type(r0) == type(r1), typeset all()
+    REQUIRE(other.same_type(r0, r1));
+
+    // `self` (top) admits type(r0) != type(r1), which `other` forbids, so `self`
+    // is NOT subsumed by `other`.
+    REQUIRE(!(self <= other));
+    // Conversely, the constrained `other` is subsumed by top.
+    REQUIRE(other <= self);
+}
+
+// ============================================================================
 // Join
 // ============================================================================
 
