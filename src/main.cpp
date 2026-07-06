@@ -104,7 +104,10 @@ int main(int argc, char** argv) {
         ->group("Features")
         ->check(CLI::Range(1, RuntimeConfig::MAX_PACKET_SIZE_LIMIT));
 
-    std::set<std::string> include_groups = get_conformance_group_names();
+    // Empty by default so that, absent --include_groups, only default_groups are
+    // enabled below (which is the documented intent: no callx or packet). Pre-seeding
+    // with every group name would OR all groups back in, overriding default_groups.
+    std::set<std::string> include_groups;
     app.add_option("--include_groups", include_groups, "Include conformance groups")
         ->group("Features")
         ->type_name("GROUPS")
@@ -156,7 +159,7 @@ int main(int argc, char** argv) {
         platform.supported_conformance_groups |= et_conformance_group_by_name(group_name).value();
     }
     for (const auto& group_name : exclude_groups) {
-        platform.supported_conformance_groups &= et_conformance_group_by_name(group_name).value();
+        platform.supported_conformance_groups &= ~et_conformance_group_by_name(group_name).value();
     }
 
     // Main program
