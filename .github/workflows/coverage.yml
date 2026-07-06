@@ -50,7 +50,7 @@ jobs:
           lcov --ignore-errors all --capture --directory build --include "*/${REPO_NAME}/src/*" --exclude "*/${REPO_NAME}/src/test/*" --output-file coverage/lcov.info
 
       - name: Coveralls Parallel
-        uses: coverallsapp/github-action@master
+        uses: coverallsapp/github-action@v2
         with:
           github-token: ${{ secrets.github_token }}
           flag-name: run-${{ matrix.configurations }}
@@ -61,7 +61,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Coveralls Finished
-        uses: coverallsapp/github-action@master
+        uses: coverallsapp/github-action@v2
         with:
           github-token: ${{ secrets.github_token }}
           parallel-finished: true

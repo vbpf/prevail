@@ -11,6 +11,11 @@ concurrency:
   group: build-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
+env:
+  # Keep in sync with BOOST_VERSION in cmake/SetupBoostHeaders.cmake so a version
+  # bump invalidates the Windows NuGet Boost cache.
+  BOOST_VERSION: "1.87.0"
+
 jobs:
   build_ubuntu:
     strategy:
@@ -77,7 +82,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ github.workspace }}\build\packages
-          key: boost-${{ runner.os }}
+          key: boost-${{ runner.os }}-${{ env.BOOST_VERSION }}
 
       - name: Configure CMake
         shell: pwsh
