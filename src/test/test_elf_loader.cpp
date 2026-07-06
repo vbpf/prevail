@@ -828,6 +828,113 @@ TEST_CASE("ELF loader rejects non-instruction-aligned FUNC symbol", "[elf][harde
                         Catch::Matchers::ContainsSubstring("Non-instruction-aligned FUNC symbol"));
 }
 
+// Regression test: subprogram relocations must be matched to their owning program
+// by identity, not by function_name. ELF symbol names need not be unique, so two
+// programs can share a name; a relocation's source_offset is an instruction index
+// into its OWN program and must not be applied to a different same-named program
+// (which could index that program's instruction vector out of bounds).
+TEST_CASE("ELF loader does not cross-apply relocations between same-named programs", "[elf][hardening]") {
+    // Append one 8-byte eBPF instruction (little-endian) to a section's data.
+    auto append_inst = [](std::string& data, const uint8_t opcode, const uint8_t dst, const uint8_t src,
+                          const int16_t offset, const int32_t imm) {
+        const auto regs = static_cast<uint8_t>((src << 4) | (dst & 0x0F));
+        const uint8_t bytes[8] = {
+            opcode,
+            regs,
+            static_cast<uint8_t>(offset & 0xFF),
+            static_cast<uint8_t>((offset >> 8) & 0xFF),
+            static_cast<uint8_t>(imm & 0xFF),
+            static_cast<uint8_t>((imm >> 8) & 0xFF),
+            static_cast<uint8_t>((imm >> 16) & 0xFF),
+            static_cast<uint8_t>((imm >> 24) & 0xFF),
+        };
+        data.append(reinterpret_cast<const char*>(bytes), sizeof(bytes));
+    };
+    constexpr uint8_t MOV64_IMM = 0xb7; // r0 = 0
+
+    ELFIO::elfio writer;
+    writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+    writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+    writer.set_type(ELFIO::ET_REL);
+    writer.set_machine(ELFIO::EM_BPF);
+
+    // Section A: a small program named "shared" (2 instructions, no calls).
+    ELFIO::section* text_a = writer.sections.add(".text");
+    text_a->set_type(ELFIO::SHT_PROGBITS);
+    text_a->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+    text_a->set_addr_align(8);
+    std::string a_data;
+    append_inst(a_data, MOV64_IMM, 0, 0, 0, 0);
+    append_inst(a_data, INST_OP_EXIT, 0, 0, 0, 0);
+    text_a->set_data(a_data);
+
+    // Section B: a larger program ALSO named "shared" whose instruction at index 5
+    // is a local call to subprogram "sub", carrying a real .rel.text2 relocation with
+    // source_offset 5. Under the bug this relocation matches section A's "shared" by
+    // name and is applied at index 5 of A's 2-instruction vector (inserting "sub" and
+    // then writing past the end of the grown vector). A recorded relocation entry is
+    // required: the synthetic local-call path would not record source_offset 5 here,
+    // because compute_reachable_program_span already pulls "sub" into this program's
+    // span and enqueue_synthetic_local_calls skips targets inside the program.
+    ELFIO::section* text_b = writer.sections.add(".text2");
+    text_b->set_type(ELFIO::SHT_PROGBITS);
+    text_b->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+    text_b->set_addr_align(8);
+    std::string b_data;
+    for (int i = 0; i < 5; ++i) {
+        append_inst(b_data, MOV64_IMM, 0, 0, 0, 0);
+    }
+    // index 5: call local to pc+1+0 == index 6 ("sub").
+    append_inst(b_data, INST_OP_CALL, 0, INST_CALL_LOCAL, 0, 0);
+    // index 6-7: subprogram "sub".
+    append_inst(b_data, MOV64_IMM, 0, 0, 0, 0);
+    append_inst(b_data, INST_OP_EXIT, 0, 0, 0, 0);
+    text_b->set_data(b_data);
+
+    ELFIO::section* str_sec = writer.sections.add(".strtab");
+    str_sec->set_type(ELFIO::SHT_STRTAB);
+    ELFIO::string_section_accessor str_writer(str_sec);
+
+    ELFIO::section* sym_sec = writer.sections.add(".symtab");
+    sym_sec->set_type(ELFIO::SHT_SYMTAB);
+    sym_sec->set_addr_align(8);
+    sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+    sym_sec->set_link(str_sec->get_index());
+    sym_sec->set_info(1);
+    ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+
+    // Two FUNC symbols share the name "shared" (in different sections).
+    sym_writer.add_symbol(str_writer, "shared", 0, 16, ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0, text_a->get_index());
+    sym_writer.add_symbol(str_writer, "shared", 0, 48, ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0, text_b->get_index());
+    const auto sub_sym =
+        sym_writer.add_symbol(str_writer, "sub", 48, 16, ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0, text_b->get_index());
+
+    // Record a real relocation for the local call at index 5 of section B's "shared",
+    // targeting "sub". This is the entry that the vulnerable name-based match applies
+    // to section A's same-named program.
+    ELFIO::section* rel_sec = writer.sections.add(".rel.text2");
+    rel_sec->set_type(ELFIO::SHT_REL);
+    rel_sec->set_addr_align(8);
+    rel_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_REL));
+    rel_sec->set_link(sym_sec->get_index());
+    rel_sec->set_info(text_b->get_index());
+    ELFIO::relocation_section_accessor rel_writer(writer, rel_sec);
+    constexpr ELFIO::Elf64_Addr call_index = 5;
+    rel_writer.add_entry(call_index * sizeof(EbpfInst), sub_sym, R_BPF_64_32_TYPE);
+
+    std::ostringstream out_stream;
+    writer.save(out_stream);
+    std::istringstream in_stream(out_stream.str());
+
+    VerifierOptions options{};
+    const auto programs = read_elf(in_stream, "memory", ".text", "", options, &g_ebpf_platform_linux);
+    REQUIRE(programs.size() == 1);
+    REQUIRE(programs[0].function_name == "shared");
+    // Section A's program owns no relocations, so it must be exactly its two
+    // original instructions — not corrupted or grown by section B's relocation.
+    REQUIRE(programs[0].prog.size() == 2);
+}
+
 // Verify that the ELF loader accepts FUNC symbols at instruction-aligned offsets.
 // Companion to the rejection test above — ensures the alignment check does not
 // reject well-formed ELF files.
