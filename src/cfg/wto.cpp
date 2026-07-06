@@ -3,6 +3,7 @@
 #include <map>
 #include <ranges>
 #include <variant>
+#include <vector>
 
 #include "cfg/cfg.hpp"
 #include "cfg/label.hpp"
@@ -17,16 +18,24 @@
 namespace prevail {
 
 bool is_component_member(const Label& label, const CycleOrLabel& component) {
-    if (const auto plabel = std::get_if<Label>(&component)) {
-        return *plabel == label;
-    }
-    const auto cycle = std::get<std::shared_ptr<WtoCycle>>(component);
-    if (cycle->head() == label) {
-        return true;
-    }
-    for (const auto& sub_component : *cycle) {
-        if (is_component_member(label, sub_component)) {
+    // Iterative (explicit work-stack) rather than recursive on cycle-nesting depth:
+    // a crafted CFG can nest ~N/2 components and overflow the C++ stack.
+    std::vector<const CycleOrLabel*> stack{&component};
+    while (!stack.empty()) {
+        const CycleOrLabel* const current = stack.back();
+        stack.pop_back();
+        if (const auto plabel = std::get_if<Label>(current)) {
+            if (*plabel == label) {
+                return true;
+            }
+            continue;
+        }
+        const auto& cycle = std::get<std::shared_ptr<WtoCycle>>(*current);
+        if (cycle->head() == label) {
             return true;
+        }
+        for (const auto& sub_component : *cycle) {
+            stack.push_back(&sub_component);
         }
     }
     return false;
