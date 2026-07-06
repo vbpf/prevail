@@ -307,7 +307,7 @@ struct Unmarshaller {
                         .offset = inst.offset,
                     },
                 .value = isLoad  ? Value{Reg{inst.dst}}
-                         : isImm ? Value{Imm{zero_extend(inst.imm)}}
+                         : isImm ? Value{Imm{sign_extend(inst.imm)}}
                                  : Value{Reg{inst.src}},
                 .is_load = isLoad,
             };

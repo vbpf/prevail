@@ -605,6 +605,37 @@ TEST_CASE("disasm_marshal_Mem", "[disasm][marshal]") {
     }
 }
 
+TEST_CASE("unmarshal ST sign-extends the immediate", "[disasm][marshal]") {
+    // A BPF_ST store assigns its signed 32-bit immediate to the target location.
+    // For a 64-bit (DW) store the kernel sign-extends, so -1 becomes
+    // 0xFFFFFFFFFFFFFFFF, not 0x00000000FFFFFFFF. Model it the same way, matching
+    // the ALU-immediate path (getBinValue).
+    //
+    // Unmarshal is width-agnostic here: it always sign-extends the s32 immediate to
+    // 64 bits regardless of store size. Narrowing to the access width (e.g. 0xFF for
+    // a byte store) is the abstract transformer's job, not the decoder's, so every
+    // width decodes to the same 0xFFFFFFFFFFFFFFFF immediate.
+    const ProgramInfo info{.platform = &g_ebpf_platform_linux,
+                           .type = g_ebpf_platform_linux.get_program_type("unspec", "unspec")};
+    constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
+
+    const std::array widths{INST_SIZE_B, INST_SIZE_H, INST_SIZE_W, INST_SIZE_DW};
+    for (const auto size : widths) {
+        // BPF_ST | BPF_MEM | <size>; e.g. INST_SIZE_DW yields opcode 0x7a.
+        const auto opcode = gsl::narrow<uint8_t>(INST_CLS_ST | INST_MODE_MEM | size);
+        // *(uN*)(r10 - 8) = -1
+        const EbpfInst store{.opcode = opcode, .dst = R10_STACK_POINTER, .src = 0, .offset = -8, .imm = -1};
+        const auto parsed = unmarshal(RawProgram{"", "", 0, "", {store, exit, exit}, info}, VerifierOptions{});
+        const auto* seq = std::get_if<InstructionSeq>(&parsed);
+        REQUIRE(seq != nullptr);
+        const auto* mem = std::get_if<Mem>(&std::get<1>((*seq)[0]));
+        REQUIRE(mem != nullptr);
+        const auto* imm = std::get_if<Imm>(&mem->value);
+        REQUIRE(imm != nullptr);
+        REQUIRE(imm->v == 0xFFFFFFFFFFFFFFFFULL);
+    }
+}
+
 TEST_CASE("unmarshal extension opcodes", "[disasm][marshal]") {
     // Merge (rX <<= 32; rX >>>= 32) into wX = rX.
     compare_unmarshal_marshal(EbpfInst{.opcode = INST_ALU_OP_LSH | INST_SRC_IMM | INST_CLS_ALU64, .dst = 1, .imm = 32},
