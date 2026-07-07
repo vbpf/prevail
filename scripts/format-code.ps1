@@ -265,6 +265,12 @@ function check_clang-format()
     $req_ver = $required_cfver -split '\.'
     $cf_ver  = $cfver -split '\.'
 
+    # Record the command before the version comparison: the '-gt' branch below
+    # (reachable once the version split is correct) returns early, and leaving
+    # $global:cf unset there would make the mainline build an empty clang-format
+    # command and silently format nothing.
+    $global:cf="clang-format"
+
     for ($i = 0; $i -lt 3; $i++)
     {
         if ( $cf_ver[$i] -gt $req_ver[$i])
@@ -279,7 +285,6 @@ function check_clang-format()
         }
         # Equal just keeps going
     }
-    $global:cf="clang-format"
     return $true
 }
 
