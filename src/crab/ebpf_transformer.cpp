@@ -880,30 +880,39 @@ void EbpfTransformer::operator()(const Call& call) {
             break;
 
         case ArgPair::Kind::PTR_TO_WRITABLE_MEM: {
-            bool store_numbers = true;
-            auto variable = dom.state.primary_kind_variable_for_type(param.mem);
-            if (!variable.has_value()) {
-                // checked by the checker
-                break;
-            }
-            Interval addr = dom.state.values.eval_interval(variable.value());
-            Interval width = dom.state.values.eval_interval(reg_pack(param.size).svalue);
-
+            // The called function may overwrite the pointed-to memory, so a stack-typed
+            // pointer requires havocing the covered stack cells. Compute the stack address
+            // per type inside join_over_types (mirroring PTR_TO_WRITABLE_LONG/INT above):
+            // the checker only requires mem in {stack, packet, shared}, so param.mem's type
+            // need not be a singleton. Havocing per type fixes the stale-value leak for a
+            // non-singleton type such as {stack, shared} (the previous no-type lookup bailed
+            // on nullopt and never havoced, leaving stale stack values a later load could read).
+            const Interval width = dom.state.values.eval_interval(reg_pack(param.size).svalue);
+            bool only_stack = true;
+            std::optional<Interval> stack_addr;
             dom.state = dom.state.join_over_types(param.mem, [&](TypeToNumDomain& state, const TypeEncoding type) {
                 if (type == T_STACK) {
-                    // Pointer to a memory region that the called function may change,
-                    // so we must havoc.
+                    const auto offset = primary_kind_variable_for_type(param.mem, type);
+                    if (!offset.has_value()) {
+                        only_stack = false;
+                        return;
+                    }
+                    const Interval addr = state.values.eval_interval(*offset);
+                    stack_addr = addr;
                     for (const DataKind kind : iterate_kinds()) {
                         stack.havoc(state.values, kind, addr, width, context.runtime().big_endian);
                     }
                 } else {
-                    store_numbers = false;
+                    only_stack = false;
                 }
             });
-            if (store_numbers) {
-                // Functions are not allowed to write sensitive data,
-                // and initialization is guaranteed
-                stack.store_numbers(addr, width);
+            // store_numbers marks the covered stack cells initialized-numeric. Unlike the
+            // per-type havoc above, it mutates the shared stack domain that join_over_types
+            // does not re-join, so it must run only when mem is definitely stack -- otherwise
+            // a {stack, shared} pointer would mark the stack numeric even on the shared path,
+            // letting a later stack read wrongly pass ValidAccess.
+            if (only_stack && stack_addr) {
+                stack.store_numbers(*stack_addr, width);
             }
         }
         }
