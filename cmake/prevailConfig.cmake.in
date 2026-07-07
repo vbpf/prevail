@@ -4,11 +4,7 @@
 @PACKAGE_INIT@
 
 include(CMakeFindDependencyMacro)
-# Boost is a headers-only dependency. On the normal path it is a find_package-able
-# package, but the MSVC/NuGet build provisions Boost as raw headers with no
-# BoostConfig.cmake. Use a non-required find_package so consumption does not
-# hard-fail when the Boost CMake package is absent.
-find_package(Boost QUIET)
+find_dependency(Boost REQUIRED)
 find_dependency(Microsoft.GSL REQUIRED)
 
 include("${CMAKE_CURRENT_LIST_DIR}/prevailTargets.cmake")
