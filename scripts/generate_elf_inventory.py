@@ -153,6 +153,32 @@ def merge_existing_overrides(inventory: dict, existing: dict) -> None:
                 odata["test_overrides"] = overrides
 
 
+def preserve_timed_out_sections(inventory: dict, existing: dict) -> None:
+    """Reuse the previous inventory's section listing for an object whose `prevail -l`
+    timed out this run.
+
+    A timeout yields an empty `sections` map; generate_verify_project_tests.py emits tests
+    only by iterating `sections`, so writing the empty map would delete every generated
+    verify test for that object on a transient timeout. Carry forward the prior listing
+    (keeping the `timeout` flag/diagnostic so the staleness is visible).
+    """
+    existing_projects = existing.get("projects", {})
+    for project, pdata in inventory.get("projects", {}).items():
+        existing_objects = existing_projects.get(project, {}).get("objects", {})
+        for object_name, odata in pdata.get("objects", {}).items():
+            if not odata.get("timeout") or odata.get("sections"):
+                continue
+            prev = existing_objects.get(object_name)
+            prev_sections = prev.get("sections") if prev else None
+            if not prev_sections:
+                continue
+            odata["sections"] = prev_sections
+            odata["section_count"] = prev.get("section_count", len(prev_sections))
+            odata["program_count"] = prev.get(
+                "program_count", sum(len(programs) for programs in prev_sections.values())
+            )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate a complete project/object/section/program inventory from ebpf-samples."
@@ -200,6 +226,7 @@ def main() -> int:
         if output_path.exists():
             existing = json.loads(output_path.read_text(encoding="utf-8"))
             merge_existing_overrides(inventory, existing)
+            preserve_timed_out_sections(inventory, existing)
 
     rendered = json.dumps(inventory, indent=2, sort_keys=True)
 
