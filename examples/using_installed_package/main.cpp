@@ -1,29 +1,22 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
 
-// Test that prevail can be consumed as an installed library
-// Main include - provides core functionality
-#include <prevail.hpp>
-
-// Specific includes for advanced features (optional)
-#include <prevail/arith/linear_constraint.hpp>
+// Test that prevail can be consumed as an installed library.
+#include <prevail.hpp>          // umbrella header (resolves via include/)
+#include <prevail/platform.hpp> // a specific header (resolves via include/prevail/)
 
 #include <iostream>
 
 int main() {
     std::cout << "Testing prevail installation..." << std::endl;
 
-    // Test 1: Create a platform (basic API usage)
-    auto platform = prevail::create_ebpf_platform(0, {}, {});
-    std::cout << "  V Platform creation works" << std::endl;
+    // Reference a symbol defined in the installed prevail library. Taking its address
+    // forces the linker to resolve it from the installed archive, so this exercises the
+    // full find_package(prevail) path: headers found, library linked, transitive
+    // dependencies (GSL, libbtf, ...) resolved.
+    const prevail::ebpf_platform_t& platform = prevail::g_ebpf_platform_linux;
+    std::cout << "  prevail library linked (platform @ " << static_cast<const void*>(&platform) << ")" << std::endl;
 
-    // Test 2: Use a type that requires GSL (tests transitive dependencies)
-    prevail::LinearConstraint constraint;
-    std::cout << "  V GSL dependency available" << std::endl;
-
-    // Test 3: Verify headers are accessible
-    std::cout << "  V All headers accessible" << std::endl;
-
-    std::cout << "\nV Prevail installation test PASSED!" << std::endl;
+    std::cout << "\nPrevail installation test PASSED!" << std::endl;
     return 0;
 }

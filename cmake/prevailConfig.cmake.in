@@ -4,7 +4,13 @@
 @PACKAGE_INIT@
 
 include(CMakeFindDependencyMacro)
-find_dependency(Boost REQUIRED)
+# Only require Boost when prevail's public interface was actually built against a Boost
+# imported target. The MSVC/NuGet-headers build provisions Boost as raw headers with no
+# BoostConfig.cmake, and does not link Boost::headers, so requiring it would make
+# find_package(prevail) fail on a consumer that has no separate Boost CMake package.
+if (@prevail_PUBLIC_NEEDS_BOOST@)
+  find_dependency(Boost REQUIRED)
+endif ()
 find_dependency(Microsoft.GSL REQUIRED)
 
 include("${CMAKE_CURRENT_LIST_DIR}/prevailTargets.cmake")

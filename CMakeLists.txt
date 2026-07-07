@@ -135,7 +135,11 @@ add_library(prevail ${prevail_LIB_SRC})
 # 1. Standard library include paths
 target_include_directories(prevail PUBLIC
   $<BUILD_INTERFACE:${prevail_source_dir}/src>
+  # <prevail/...> and the <prevail.hpp> redirect resolve against include/.
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+  # prevail's own headers use src-relative includes ("crab_utils/...", "io/...") and are
+  # installed under include/prevail/, so that directory must be on the consumer's path too.
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/prevail>
 )
 
 # 2. Consolidated Target Include Directories (Interface)
@@ -198,8 +202,15 @@ set(yaml-cpp_GUID_CMAKE "98d56b8a-d8eb-3d98-b8ee-c83696b4d58a" CACHE INTERNAL "P
 
 # Core libraries
 target_link_libraries(prevail PUBLIC libbtf Microsoft.GSL::GSL)
+# Track whether prevail's public interface actually links a Boost imported target, so the
+# installed package's find dependency matches: a consumer must resolve Boost iff we built
+# against it. On the MSVC/NuGet-headers path there is no Boost::headers target, so the
+# installed config must not hard-require a Boost CMake package that does not exist there.
 if (TARGET Boost::headers)
   target_link_libraries(prevail PUBLIC Boost::headers)
+  set(prevail_PUBLIC_NEEDS_BOOST TRUE)
+else ()
+  set(prevail_PUBLIC_NEEDS_BOOST FALSE)
 endif ()
 set_target_properties(prevail PROPERTIES
   CXX_VISIBILITY_PRESET hidden
