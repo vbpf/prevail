@@ -268,17 +268,19 @@ def refresh_expectations(
             reason,
         ) in executor.map(classify, tasks):
             odata = inventory["projects"][project]["objects"][object_name]
-            test_overrides = odata.setdefault("test_overrides", {})
-            section_overrides = test_overrides.setdefault("sections", {})
-            program_overrides = test_overrides.setdefault("programs", {})
             if status == "unknown":
                 # Preserve any existing curated override untouched and record the program so the
-                # caller is warned (and, with --fail-on-unknown, the run exits nonzero).
+                # caller is warned (and, with --fail-on-unknown, the run exits nonzero). Do this
+                # before the setdefault calls below so an object with no prior overrides is not
+                # given a spurious empty {"sections": {}, "programs": {}} test_overrides.
                 unknown_diagnostics.append(
                     (project, object_name, section, function_name, reason or "verification failed")
                 )
                 continue
 
+            test_overrides = odata.setdefault("test_overrides", {})
+            section_overrides = test_overrides.setdefault("sections", {})
+            program_overrides = test_overrides.setdefault("programs", {})
             if section_scoped:
                 current = section_overrides.get(section)
                 program_overrides.pop(section, None)
