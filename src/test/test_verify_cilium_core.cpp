@@ -130,12 +130,6 @@ TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_handle_ipv4_cont"
                   verify_test::VerifyIssueKind::VerifierTypeTracking)
 // register type refinement is too imprecise in this control-flow pattern
 // The type-kind soundness fix intentionally discards stale type-dependent
-// kind values. This exposes a false positive until the dependent T_SOCKET
-// precision branch models direct socket reads.
-TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv4_policy", 30,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking)
-// register type refinement is too imprecise in this control-flow pattern
-// The type-kind soundness fix intentionally discards stale type-dependent
 // kind values. This exposes a false positive until the dependent T_SOCKET and
 // boolean-AND precision branches restore the needed non-null proof.
 TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_handle_ipv6_cont", 30,
