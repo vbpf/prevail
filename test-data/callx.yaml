@@ -160,6 +160,23 @@ post:
 messages:
   - "0: callx helper function id is not a valid singleton (r8.type is helper)"
 ---
+test-case: callx validation and dispatch use the same helper id
+
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=stack", "r2.stack_offset=504",
+      "r8.type=number", "r8.svalue=1", "r8.uvalue=2",
+      "s[504...511].type=number"]
+
+code:
+  <start>: |
+    callx r8; bpf_map_update_elem
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Invalid type (r3.type in {stack, packet, shared})"
+---
 test-case: callx bpf_map_lookup_elem with non-numeric stack key
 
 pre: ["r1.type=map_fd", "r1.map_fd=1",

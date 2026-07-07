@@ -635,8 +635,9 @@ std::optional<Variable> ArrayDomain::store_type(TypeDomain& inv, const Interval&
         if (!is_num && range.has_value()) {
             const auto [lb, ub] = *range;
             // A non-numeric value may overwrite previously numeric bytes,
-            // so conservatively mark the range as non-numeric.
-            num_bytes.havoc(lb, ub);
+            // so conservatively mark the range [lb, ub) as non-numeric. havoc's
+            // second argument is a width, not an upper bound.
+            num_bytes.havoc(lb, ub - lb);
         }
         // When is_num is true, the value being stored is numeric. Any byte
         // that gets written will still be numeric, and bytes not written

@@ -7,6 +7,10 @@
 
 namespace prevail {
 
+// Unsigned division (udiv) operand-box adjustment. Only udiv relies on this;
+// signed division (sdiv / operator/) divides the original corners directly,
+// because truncated signed division is monotone per argument on a
+// sign-consistent box.
 static Interval make_dividend_when_both_nonzero(const Interval& dividend, const Interval& divisor) {
     if (dividend.ub() >= 0) {
         return dividend;
@@ -67,13 +71,15 @@ Interval Interval::operator/(const Interval& x) const {
         const Interval u{1, _ub};
         return (l / x) | (u / x) | Interval{0};
     } else {
-        // Neither the dividend nor the divisor contains 0
-        const Interval a = make_dividend_when_both_nonzero(*this, x);
+        // Neither the dividend nor the divisor contains 0. eBPF signed division
+        // truncates toward zero (matching Number::operator/), and truncated
+        // division is monotone in each argument on a sign-consistent box, so the
+        // extreme quotients are attained at the corners of the operand box.
         const auto [clb, cub] = std::minmax({
-            a._lb / x._lb,
-            a._lb / x._ub,
-            a._ub / x._lb,
-            a._ub / x._ub,
+            _lb / x._lb,
+            _lb / x._ub,
+            _ub / x._lb,
+            _ub / x._ub,
         });
         return Interval{clb, cub};
     }
@@ -113,13 +119,15 @@ Interval Interval::sdiv(const Interval& x) const {
         const Interval u{1, _ub};
         return l.sdiv(x) | u.sdiv(x) | Interval{0};
     } else {
-        // Neither the dividend nor the divisor contains 0
-        const Interval a = make_dividend_when_both_nonzero(*this, x);
+        // Neither the dividend nor the divisor contains 0. eBPF signed division
+        // truncates toward zero (matching Number::operator/), and truncated
+        // division is monotone in each argument on a sign-consistent box, so the
+        // extreme quotients are attained at the corners of the operand box.
         const auto [clb, cub] = std::minmax({
-            a._lb / x._lb,
-            a._lb / x._ub,
-            a._ub / x._lb,
-            a._ub / x._ub,
+            _lb / x._lb,
+            _lb / x._ub,
+            _ub / x._lb,
+            _ub / x._ub,
         });
         return Interval{clb, cub};
     }

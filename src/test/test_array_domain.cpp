@@ -27,3 +27,18 @@ TEST_CASE("weak type store outside the stack window is a no-op", "[array_domain]
     REQUIRE_NOTHROW((void)stack.store_type(types, Interval{16}, Interval{4}, false));
     REQUIRE(stack.all_num_width(Interval{0}, Interval{8}));
 }
+
+TEST_CASE("weak type store havoc spans the byte width, not the upper bound", "[array_domain]") {
+    ArrayDomain stack{64};
+    TypeDomain types;
+    stack.initialize_numbers(0, 64);
+
+    // Weak update (non-singleton index) of a non-numeric value over bytes
+    // [8, 20). Only that range must become non-numeric; the bug passed the
+    // upper bound (20) as the width and clobbered [8, 28) instead.
+    (void)stack.store_type(types, Interval{8, 16}, Interval{4}, /*is_num=*/false);
+
+    REQUIRE_FALSE(stack.all_num_width(Interval{8}, Interval{4})); // [8, 12): targeted, non-numeric
+    REQUIRE(stack.all_num_width(Interval{20}, Interval{4}));      // [20, 24): untouched, still numeric
+    REQUIRE(stack.all_num_width(Interval{24}, Interval{4}));      // [24, 28): untouched, still numeric
+}
