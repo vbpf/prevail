@@ -57,8 +57,8 @@ do
         # unavailable on stock macOS bash 3.2.
         userFiles=()
         while IFS= read -r line; do
-            userFiles+=("$line")
-        done <<< "$(git diff --cached --name-only --diff-filter=ACMR)"
+            [ -n "$line" ] && userFiles+=("$line")
+        done < <(git diff --cached --name-only --diff-filter=ACMR)
         ;;
 
     --exclude-dirs=*)

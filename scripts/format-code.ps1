@@ -304,6 +304,7 @@ $findargs = get_find_args;
 $filelist = get_file_list;
 $filecount=0
 $changecount=0
+$failcount=0
 
 $cfargs="$global:cf -style=file"
 if ( !$whatif ) {
@@ -334,11 +335,19 @@ foreach ( $file in $filelist ) {
         }
         if ( -not $? ) {
             Write-Host "clang-format failed on file: $file."
+            $failcount++
         }
     }
 }
 
 log_whatif "$filecount files processed, $changecount changed."
+
+# A clang-format failure must fail the run even when no file was reported as
+# changed, so callers like the pre-commit hook block the commit.
+if ( $failcount -gt 0 ) {
+    Write-Host "$failcount file(s) failed to format."
+    exit 1
+}
 
 # If files are being edited, this count is zero so we exit with success.
 exit $changecount
