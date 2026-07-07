@@ -29,7 +29,11 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "`n==> Building test consumer..." -ForegroundColor Cyan
 $ExampleDir = Join-Path $RootDir "examples\using_installed_package"
-cmake -B $TestBuildDir -S $ExampleDir -DCMAKE_PREFIX_PATH=$InstallDir -DCMAKE_BUILD_TYPE=Release
+# Pass the prefix with forward slashes: CMake interprets backslashes in a -D cache value
+# as escapes (e.g. \t -> tab), which corrupts a Windows path like D:\a\...\test_install_output
+# and makes find_package(prevail) miss the installed prevailConfig.cmake.
+$InstallDirCMake = $InstallDir -replace '\\', '/'
+cmake -B $TestBuildDir -S $ExampleDir "-DCMAKE_PREFIX_PATH=$InstallDirCMake" -DCMAKE_BUILD_TYPE=Release
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 cmake --build $TestBuildDir --config Release
