@@ -236,9 +236,12 @@ class AdaptGraph final {
             free_id.pop_back();
             is_free[v] = false;
         } else {
-            // static_cast<VertId>(_succs.size()) wraps to 0 at 65536 vertices,
-            // aliasing the reserved zero vertex; guard against the overflow.
-            assert(_succs.size() <= std::numeric_limits<VertId>::max());
+            // static_cast<VertId>(_succs.size()) wraps to 0 at 65536 vertices, aliasing the
+            // reserved zero vertex; and at size == max() the new vertex would make verts()'s
+            // one-past-end (65536) wrap to an empty range. Reject before either can happen.
+            // (An assert, not a hard check: an eBPF program's variable count is orders of
+            // magnitude below 65535, so this is a documented invariant, not a reachable path.)
+            assert(_succs.size() < std::numeric_limits<VertId>::max());
             v = static_cast<VertId>(_succs.size());
             is_free.push_back(false);
             _succs.emplace_back();
