@@ -12,6 +12,10 @@ name: Test Installation
   pull_request:
     branches: [main]
 
+concurrency:
+  group: test-installation-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 

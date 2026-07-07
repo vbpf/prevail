@@ -45,10 +45,17 @@ if ($IsWindows -or $env:OS -match "Windows") {
         Where-Object { Test-Path $_ } | Select-Object -First 1
     if ($BoostInc) {
         Write-Host "    Using Boost headers for consumer: $BoostInc"
-        $ConfigureArgs += "-DBoost_INCLUDE_DIR=$($BoostInc -replace '\\', '/')"
+        $BoostIncCMake = $BoostInc -replace '\\', '/'
+        # BOOST_INCLUDEDIR is FindBoost's documented include-path *hint*; Boost_INCLUDE_DIR is
+        # its result variable. Set both so the header-only find_dependency(Boost) resolves.
+        $ConfigureArgs += "-DBOOST_INCLUDEDIR=$BoostIncCMake"
+        $ConfigureArgs += "-DBoost_INCLUDE_DIR=$BoostIncCMake"
     }
     else {
-        Write-Host "    Warning: Boost headers not found under $BuildDir\packages; consumer configure may fail."
+        # prevail's public headers need Boost on MSVC, so a missing Boost is fatal here --
+        # fail with a clear message instead of letting the downstream configure error explain it.
+        Write-Host "Boost headers not found under $BuildDir\packages; cannot build the consumer." -ForegroundColor Red
+        exit 1
     }
 }
 
