@@ -33,7 +33,26 @@ $ExampleDir = Join-Path $RootDir "examples\using_installed_package"
 # as escapes (e.g. \t -> tab), which corrupts a Windows path like D:\a\...\test_install_output
 # and makes find_package(prevail) miss the installed prevailConfig.cmake.
 $InstallDirCMake = $InstallDir -replace '\\', '/'
-cmake -B $TestBuildDir -S $ExampleDir "-DCMAKE_PREFIX_PATH=$InstallDirCMake" -DCMAKE_BUILD_TYPE=Release
+$ConfigureArgs = @("-DCMAKE_PREFIX_PATH=$InstallDirCMake", "-DCMAKE_BUILD_TYPE=Release")
+
+# On MSVC, prevail's public headers use Boost (the multiprecision Number/SafeI64 fallback),
+# so the consumer needs Boost too -- both for the installed config's find_dependency(Boost)
+# and to compile. Reuse the NuGet Boost headers the main build already provisioned under
+# <build>/packages (SetupBoostHeaders.cmake) by pointing FindBoost at them.
+if ($IsWindows -or $env:OS -match "Windows") {
+    $BoostInc = Get-ChildItem -Path (Join-Path $BuildDir "packages") -Directory -Filter "boost*" -ErrorAction SilentlyContinue |
+        ForEach-Object { Join-Path $_.FullName "lib\native\include" } |
+        Where-Object { Test-Path $_ } | Select-Object -First 1
+    if ($BoostInc) {
+        Write-Host "    Using Boost headers for consumer: $BoostInc"
+        $ConfigureArgs += "-DBoost_INCLUDE_DIR=$($BoostInc -replace '\\', '/')"
+    }
+    else {
+        Write-Host "    Warning: Boost headers not found under $BuildDir\packages; consumer configure may fail."
+    }
+}
+
+cmake -B $TestBuildDir -S $ExampleDir @ConfigureArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 cmake --build $TestBuildDir --config Release
