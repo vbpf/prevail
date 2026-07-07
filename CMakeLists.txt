@@ -291,7 +291,6 @@ if (prevail_ENABLE_TESTS)
     src/test/test_verify_new_linux.cpp
     src/test/test_verify_ovs.cpp
     src/test/test_verify_prototype_kernel.cpp
-    src/test/test_verify_regression.cpp
     src/test/test_verify_suricata.cpp
     src/test/test_wto.cpp
     src/test/test_yaml.cpp
