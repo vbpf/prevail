@@ -9,10 +9,15 @@
 #include <sstream>
 #include <string>
 
-#ifdef __GNUC__
-// GCC/Clang: use compiler-native 128-bit integers.
+// Use the compiler's native 128-bit integer when available (GCC/Clang). Compilers without
+// one (MSVC) use the Boost-free fallback in num_int128.hpp, so the installed library does not
+// pull Boost.Multiprecision into consumer builds. PREVAIL_FORCE_CUSTOM_INT128 forces the
+// fallback everywhere for testing (see test_int128.cpp and the full-suite run).
+#if defined(__GNUC__) && !defined(PREVAIL_FORCE_CUSTOM_INT128)
+#define PREVAIL_HAS_NATIVE_INT128 1
 #else
-#include <boost/multiprecision/cpp_int.hpp>
+#define PREVAIL_HAS_NATIVE_INT128 0
+#include "arith/num_int128.hpp"
 #endif
 
 #include "crab_utils/debug.hpp"
@@ -26,12 +31,12 @@ namespace prevail {
 // int64 values) without overflow, not as general 128-bit integer support.
 
 // --- Int128 type aliases ---
-#ifdef __GNUC__
+#if PREVAIL_HAS_NATIVE_INT128
 using Int128 = __int128;
 using UInt128 = unsigned __int128;
 #else
-using Int128 = boost::multiprecision::int128_t;
-using UInt128 = boost::multiprecision::uint128_t;
+using Int128 = detail::Int128Custom;
+using UInt128 = detail::UInt128Custom;
 #endif
 
 // Manual min/max since std::numeric_limits<__int128> is unspecialized.
@@ -42,7 +47,7 @@ inline constexpr Int128 kInt128Min = -kInt128Max - 1;
 // --- Checked arithmetic helpers ---
 
 inline Int128 checked_add(const Int128 a, const Int128 b) {
-#ifdef __GNUC__
+#if PREVAIL_HAS_NATIVE_INT128
     Int128 result;
     if (__builtin_add_overflow(a, b, &result)) {
         CRAB_ERROR("Number overflow during addition");
@@ -57,7 +62,7 @@ inline Int128 checked_add(const Int128 a, const Int128 b) {
 }
 
 inline Int128 checked_sub(const Int128 a, const Int128 b) {
-#ifdef __GNUC__
+#if PREVAIL_HAS_NATIVE_INT128
     Int128 result;
     if (__builtin_sub_overflow(a, b, &result)) {
         CRAB_ERROR("Number overflow during subtraction");
@@ -72,7 +77,7 @@ inline Int128 checked_sub(const Int128 a, const Int128 b) {
 }
 
 inline Int128 checked_mul(const Int128 a, const Int128 b) {
-#ifdef __GNUC__
+#if PREVAIL_HAS_NATIVE_INT128
     Int128 result;
     if (__builtin_mul_overflow(a, b, &result)) {
         CRAB_ERROR("Number overflow during multiplication");
