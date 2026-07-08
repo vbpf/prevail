@@ -15,7 +15,8 @@ post:
   - r0.type=shared
   - r0.shared_offset=0
   - r0.shared_region_size=4
-  - r0.uvalue=[0, 2147418112]
+  - r0.svalue=[0, 2147418112]
+  - r0.uvalue=r0.svalue
   - s[504...511].type=number
 ---
 test-case: bpf_map_lookup_elem null check discards stale destination kind values
@@ -80,7 +81,8 @@ post:
   - r0.type=shared
   - r0.shared_offset=0
   - r0.shared_region_size=4
-  - r0.uvalue=[0, 2147418112]
+  - r0.svalue=[0, 2147418112]
+  - r0.uvalue=r0.svalue
 ---
 test-case: bpf_map_lookup_elem packet key
 
@@ -96,7 +98,8 @@ post:
   - r0.type=shared
   - r0.shared_offset=0
   - r0.shared_region_size=4
-  - r0.uvalue=[0, 2147418112]
+  - r0.svalue=[0, 2147418112]
+  - r0.uvalue=r0.svalue
   - meta_offset=0
   - packet_size=4
 ---

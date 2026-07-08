@@ -1065,13 +1065,15 @@ void EbpfTransformer::operator()(const LoadMapAddress& ins) {
 void EbpfTransformer::assign_valid_ptr(const Reg& dst_reg, const bool maybe_null) {
     using namespace dsl_syntax;
     const RegPack& reg = reg_pack(dst_reg);
+    dom.state.values.havoc(reg.svalue);
     dom.state.values.havoc(reg.uvalue);
     if (maybe_null) {
-        dom.state.values.add_constraint(0 <= reg.uvalue);
+        dom.state.values.add_constraint(0 <= reg.svalue);
     } else {
-        dom.state.values.add_constraint(0 < reg.uvalue);
+        dom.state.values.add_constraint(0 < reg.svalue);
     }
-    dom.state.values.add_constraint(reg.uvalue <= ptr_max(context.runtime().max_packet_size));
+    dom.state.values.add_constraint(reg.svalue <= ptr_max(context.runtime().max_packet_size));
+    dom.state.values.assign(reg.uvalue, reg.svalue);
 }
 
 // If nothing is known of the stack_numeric_size,

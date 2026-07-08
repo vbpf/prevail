@@ -36,6 +36,9 @@ TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_icmp6_send_time_exceed
 TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv4_ct_egress", 30)
 TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv4_ct_ingress", 30)
 TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv4_ct_ingress_policy_only", 30)
+// register type refinement is too imprecise in this control-flow pattern
+TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv4_policy", 30,
+                  verify_test::VerifyIssueKind::VerifierTypeTracking)
 TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv4_to_endpoint", 30)
 TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv6_ct_egress", 30)
 TEST_PROGRAM("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv6_ct_ingress", 30)
@@ -124,12 +127,6 @@ TEST_PROGRAM_FAIL("cilium-core", "bpf_host.o", "tc/tail", "tail_nodeport_nat_ing
 TEST_SECTION_FAIL("cilium-core", "bpf_lxc.o", ".text", verify_test::VerifyIssueKind::VerifierTypeTracking)
 // register type refinement is too imprecise in this control-flow pattern
 TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_handle_ipv4_cont", 30,
-                  verify_test::VerifyIssueKind::VerifierTypeTracking)
-// register type refinement is too imprecise in this control-flow pattern
-// The type-kind soundness fix intentionally discards stale type-dependent
-// kind values. This exposes a false positive until the dependent T_SOCKET
-// precision branch models direct socket reads.
-TEST_PROGRAM_FAIL("cilium-core", "bpf_lxc.o", "tc/tail", "tail_ipv4_policy", 30,
                   verify_test::VerifyIssueKind::VerifierTypeTracking)
 // register type refinement is too imprecise in this control-flow pattern
 // The type-kind soundness fix intentionally discards stale type-dependent
