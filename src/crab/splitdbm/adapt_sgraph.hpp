@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <cassert>
+#include <limits>
 #include <ranges>
 #include <vector>
 
@@ -128,6 +130,9 @@ class AdaptGraph final {
 
     [[nodiscard]]
     auto verts() const {
+        // A vertex count of 65536 wraps to 0 through VertId (uint16_t), yielding an
+        // empty range; far beyond any eBPF program's variable count, but guard it.
+        assert(is_free.size() <= std::numeric_limits<VertId>::max());
         return std::views::iota(VertId{0}, static_cast<VertId>(is_free.size())) |
                std::views::filter([this](const VertId v) { return !is_free[v]; });
     }
@@ -231,6 +236,12 @@ class AdaptGraph final {
             free_id.pop_back();
             is_free[v] = false;
         } else {
+            // static_cast<VertId>(_succs.size()) wraps to 0 at 65536 vertices, aliasing the
+            // reserved zero vertex; and at size == max() the new vertex would make verts()'s
+            // one-past-end (65536) wrap to an empty range. Reject before either can happen.
+            // (An assert, not a hard check: an eBPF program's variable count is orders of
+            // magnitude below 65535, so this is a documented invariant, not a reachable path.)
+            assert(_succs.size() < std::numeric_limits<VertId>::max());
             v = static_cast<VertId>(_succs.size());
             is_free.push_back(false);
             _succs.emplace_back();
@@ -260,8 +271,12 @@ class AdaptGraph final {
         edge_count -= _succs[v].size();
         _succs[v].clear();
 
-        for (const TreeSMap::Key k : _preds[v].keys()) {
-            _succs[k].remove(v);
+        for (const auto& [key, val] : _preds[v]) {
+            // Recycle the weight slot of the in-edge key -> v. It is the same slot
+            // referenced from _succs[key], so it becomes unreferenced once removed
+            // below; failing to reclaim it leaks _ws slots monotonically.
+            free_widx.push_back(val);
+            _succs[key].remove(v);
         }
         edge_count -= _preds[v].size();
         _preds[v].clear();
@@ -272,6 +287,9 @@ class AdaptGraph final {
 
     void clear_edges() {
         _ws.clear();
+        // free_widx indexes into _ws; leaving stale indices after clearing _ws would
+        // make the next add_edge write _ws[idx] out of bounds.
+        free_widx.clear();
         for (const VertId v : verts()) {
             _succs[v].clear();
             _preds[v].clear();
