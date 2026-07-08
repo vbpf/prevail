@@ -9,6 +9,11 @@ name: Release
 permissions:
   contents: write
 
+env:
+  # Keep in sync with BOOST_VERSION in cmake/SetupBoostHeaders.cmake so a version
+  # bump invalidates the Windows NuGet Boost cache.
+  BOOST_VERSION: "1.87.0"
+
 jobs:
   build-and-package:
     name: Build on ${{ matrix.os }}
@@ -39,7 +44,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ github.workspace }}\build\packages
-          key: boost-${{ runner.os }}
+          key: boost-${{ runner.os }}-${{ env.BOOST_VERSION }}
 
       # 2. Configure CMake
       - name: Configure CMake (Linux/macOS)

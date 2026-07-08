@@ -60,11 +60,15 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
   set(DEBUG_FLAGS -O0 -g3 -fno-omit-frame-pointer)
 
   set(SANITIZE_FLAGS -fsanitize=address -O1 -fno-omit-frame-pointer)
+  set(SANITIZE_LINK_FLAGS -fsanitize=address)
 endif ()
 
 if (MSVC)
   # Silence Windows version warnings
   add_compile_definitions(_WIN32_WINNT=0x0A00)
+  # AddressSanitizer flags (MSVC injects the ASan runtime automatically at link time).
+  set(SANITIZE_FLAGS /fsanitize=address)
+  set(SANITIZE_LINK_FLAGS "")
   # Add FuzzerDebug configuration (MSVC Address/Fuzzer sanitizer build)
   list(APPEND CMAKE_CONFIGURATION_TYPES FuzzerDebug)
   list(REMOVE_DUPLICATES CMAKE_CONFIGURATION_TYPES)
@@ -187,8 +191,22 @@ target_compile_options(prevail PRIVATE
   "$<$<CONFIG:Debug>:${DEBUG_FLAGS}>"
   "$<$<CONFIG:Release>:${RELEASE_FLAGS}>"
   "$<$<CONFIG:RelWithDebInfo>:${RELWITHDEBINFO_FLAGS}>"
-  "$<$<BOOL:${ENABLE_ASAN}>:${SANITIZE_FLAGS}>"
 )
+
+# Export the C++ standard as a usage requirement so consumers of the installed
+# package are compiled with the right -std.
+target_compile_features(prevail PUBLIC cxx_std_20)
+
+if (ENABLE_ASAN)
+  # Apply AddressSanitizer as a usage requirement (PUBLIC) so the CLI, tests, and
+  # any consumer linking `prevail` are both instrumented and linked consistently.
+  message(STATUS "AddressSanitizer enabled (ENABLE_ASAN=ON)")
+  target_compile_options(prevail PUBLIC ${SANITIZE_FLAGS})
+  if (NOT MSVC)
+    # GCC/Clang need -fsanitize=address at link time too; MSVC injects it automatically.
+    target_link_options(prevail PUBLIC ${SANITIZE_LINK_FLAGS})
+  endif ()
+endif ()
 
 add_subdirectory("${prevail_source_dir}/external/libbtf" "${CMAKE_CURRENT_BINARY_DIR}/libbtf")
 target_include_directories(libbtf INTERFACE
