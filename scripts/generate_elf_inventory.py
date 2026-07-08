@@ -119,22 +119,28 @@ def build_inventory(samples_root: Path, check_bin: Path, jobs: int, timeout_seco
         for project in project_names
     }
 
-    total_objects = sum(project["object_count"] for project in projects.values())
-    total_sections = sum(
-        obj["section_count"] for project in projects.values() for obj in project["objects"].values()
-    )
-    total_programs = sum(
-        obj["program_count"] for project in projects.values() for obj in project["objects"].values()
-    )
-
-    return {
+    inventory = {
         "schema_version": 1,
-        "summary": {
-            "object_count": total_objects,
-            "section_count": total_sections,
-            "program_count": total_programs,
-        },
+        "summary": {},
         "projects": projects,
+    }
+    recompute_summary(inventory)
+    return inventory
+
+
+def recompute_summary(inventory: dict) -> None:
+    """Recompute the aggregate summary from the current per-object counts.
+
+    Must be called after any pass that changes per-object counts (e.g.
+    preserve_timed_out_sections restoring a timed-out object's sections), so the
+    summary never disagrees with the objects it aggregates.
+    """
+    projects = inventory.get("projects", {})
+    objects = [obj for project in projects.values() for obj in project.get("objects", {}).values()]
+    inventory["summary"] = {
+        "object_count": sum(project.get("object_count", 0) for project in projects.values()),
+        "section_count": sum(obj.get("section_count", 0) for obj in objects),
+        "program_count": sum(obj.get("program_count", 0) for obj in objects),
     }
 
 
@@ -227,6 +233,9 @@ def main() -> int:
             existing = json.loads(output_path.read_text(encoding="utf-8"))
             merge_existing_overrides(inventory, existing)
             preserve_timed_out_sections(inventory, existing)
+            # preserve_timed_out_sections may restore per-object counts, so bring the
+            # aggregate summary back in sync with them.
+            recompute_summary(inventory)
 
     rendered = json.dumps(inventory, indent=2, sort_keys=True)
 
