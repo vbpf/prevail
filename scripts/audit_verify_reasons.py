@@ -81,7 +81,8 @@ def main() -> int:
     }
 
     output_path = Path(args.output)
-    output_path.write_text(json.dumps(audit, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    with open(output_path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(audit, indent=2, sort_keys=True) + "\n")
     print(f"Wrote {output_path}")
     return 0
 

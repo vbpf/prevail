@@ -15,7 +15,15 @@ MACRO_RE = re.compile(
 DATA_DIR = pathlib.Path("external/bpf_conformance/tests")
 CONFORMANCE_TEST_FILE = pathlib.Path("src/test/test_conformance.cpp")
 
-txt = CONFORMANCE_TEST_FILE.read_text(encoding="utf-8", errors="ignore")
+
+def strip_comments(text: str) -> str:
+    """Remove C/C++ comments so a commented-out TEST_CONFORMANCE does not count as listed."""
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
+    text = re.sub(r"//[^\n]*", "", text)
+    return text
+
+
+txt = strip_comments(CONFORMANCE_TEST_FILE.read_text(encoding="utf-8", errors="ignore"))
 listed = {m.group(2) for m in MACRO_RE.finditer(txt)}
 on_disk = {p.name for p in DATA_DIR.glob("*.data") if p.is_file()}
 
