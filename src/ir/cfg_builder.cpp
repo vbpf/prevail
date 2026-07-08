@@ -625,12 +625,20 @@ static bool is_tail_call_site(const Instruction& ins, const ebpf_platform_t& pla
 }
 
 static void collect_wto_labels(const CycleOrLabel& component, std::set<Label>& labels) {
-    if (const auto plabel = std::get_if<Label>(&component)) {
-        labels.insert(*plabel);
-        return;
-    }
-    for (const auto& nested_component : *std::get<std::shared_ptr<WtoCycle>>(component)) {
-        collect_wto_labels(nested_component, labels);
+    // Iterative (explicit work-stack) rather than recursive on cycle-nesting depth.
+    // This runs unconditionally for every program via pass_validate_tail_call_depth,
+    // so a crafted deeply-nested CFG must not be able to overflow the C++ stack here.
+    std::vector<const CycleOrLabel*> stack{&component};
+    while (!stack.empty()) {
+        const CycleOrLabel* const current = stack.back();
+        stack.pop_back();
+        if (const auto plabel = std::get_if<Label>(current)) {
+            labels.insert(*plabel);
+            continue;
+        }
+        for (const auto& nested_component : *std::get<std::shared_ptr<WtoCycle>>(*current)) {
+            stack.push_back(&nested_component);
+        }
     }
 }
 

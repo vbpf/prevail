@@ -64,6 +64,14 @@ class WtoNesting final {
 using CycleOrLabel = std::variant<std::shared_ptr<class WtoCycle>, Label>;
 using WtoPartition = std::vector<CycleOrLabel>;
 
+namespace detail {
+// Shared iterative traversal backing Wto::for_each_loop_head and
+// WtoCycle::for_each_loop_head, so the (soundness-relevant) traversal invariant lives in
+// one place. Forward-declared here and defined once WtoCycle is complete (below).
+template <typename Range, typename F>
+void wto_for_each_loop_head(const Range& top_level, F&& f);
+} // namespace detail
+
 // Bourdoncle, "Efficient chaotic iteration strategies with widenings", 1993
 // section 3 uses the term "nested component" to refer to what WtoCycle implements.
 class WtoCycle final {
@@ -104,15 +112,33 @@ class WtoCycle final {
         return _components.crend();
     }
 
-    void for_each_loop_head(auto&& f) const {
-        for (const auto& component : *this) {
+    void for_each_loop_head(auto&& f) const { detail::wto_for_each_loop_head(*this, f); }
+};
+
+namespace detail {
+template <typename Range, typename F>
+void wto_for_each_loop_head(const Range& top_level, F&& f) {
+    // Iterative (explicit work-stack) rather than recursive on cycle-nesting depth, which a
+    // crafted CFG could drive deep enough to overflow the stack. Seeds from the given
+    // top-level components (a Wto or a WtoCycle) and visits every nested cycle head once.
+    std::vector<const WtoCycle*> stack;
+    for (const auto& component : top_level) {
+        if (const auto pc = std::get_if<std::shared_ptr<WtoCycle>>(&component)) {
+            stack.push_back(pc->get());
+        }
+    }
+    while (!stack.empty()) {
+        const WtoCycle* const cycle = stack.back();
+        stack.pop_back();
+        f(cycle->head());
+        for (const auto& component : *cycle) {
             if (const auto pc = std::get_if<std::shared_ptr<WtoCycle>>(&component)) {
-                f((*pc)->head());
-                (*pc)->for_each_loop_head(f);
+                stack.push_back(pc->get());
             }
         }
     }
-};
+}
+} // namespace detail
 
 // Check if node is a member of the wto component.
 bool is_component_member(const Label& label, const CycleOrLabel& component);
@@ -158,13 +184,6 @@ class Wto final {
      *
      * The order in which the heads are visited is not specified.
      */
-    void for_each_loop_head(auto&& f) const {
-        for (const auto& component : *this) {
-            if (const auto pc = std::get_if<std::shared_ptr<WtoCycle>>(&component)) {
-                f((*pc)->head());
-                (*pc)->for_each_loop_head(f);
-            }
-        }
-    }
+    void for_each_loop_head(auto&& f) const { detail::wto_for_each_loop_head(*this, f); }
 };
 } // namespace prevail
