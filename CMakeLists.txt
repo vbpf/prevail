@@ -301,6 +301,7 @@ if (prevail_ENABLE_TESTS)
     src/test/test_conformance.cpp
     src/test/test_elf_loader.cpp
     src/test/test_failure_slice.cpp
+    src/test/test_int128.cpp
     src/test/test_interval_bitwise.cpp
     src/test/test_join.cpp
     src/test/test_marshal.cpp
