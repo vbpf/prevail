@@ -53,8 +53,12 @@ do
         ;;
 
     -s | --staged)
-        # Split into array
-        mapfile -t userFiles <<< "$(git diff --cached --name-only --diff-filter=ACMR)"
+        # Split into array. Use a read loop rather than 'mapfile', which is
+        # unavailable on stock macOS bash 3.2.
+        userFiles=()
+        while IFS= read -r line; do
+            [ -n "$line" ] && userFiles+=("$line")
+        done < <(git diff --cached --name-only --diff-filter=ACMR)
         ;;
 
     --exclude-dirs=*)
@@ -249,7 +253,12 @@ fi
 get_file_list()
 {
     if [[ -z "${userFiles[*]}" ]]; then
-        mapfile -t file_list < <(eval "$findargs")
+        # Use a read loop rather than 'mapfile', which is unavailable on
+        # stock macOS bash 3.2.
+        file_list=()
+        while IFS= read -r line; do
+            file_list+=("$line")
+        done < <(eval "$findargs")
         if [[ ${#file_list[@]} -eq 0 ]]; then
             echo "No files were found to format!"
             exit 1
@@ -301,4 +310,6 @@ done
 log_whatif "${filecount} files processed, ${changecount} changed."
 
 # If files are being edited, this count is zero so we exit with success.
-exit "$changecount"
+# Clamp to a single-bit exit status: 'exit' truncates its argument modulo
+# 256, so a raw count that is a multiple of 256 would wrongly report success.
+exit $(( changecount ? 1 : 0 ))

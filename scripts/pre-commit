@@ -25,7 +25,12 @@ if ! git diff-index --check --cached HEAD --; then
     exit_ "Commit failed: please fix the conflict markers or whitespace errors"
 fi
 
-mapfile -t files < <(git diff --cached --name-only --diff-filter=ACMR)
+# Use a read loop rather than 'mapfile', which is unavailable on stock
+# macOS bash 3.2.
+files=()
+while IFS= read -r file; do
+    files+=("$file")
+done < <(git diff --cached --name-only --diff-filter=ACMR)
 
 if [[ ${#files[@]} -eq 0 ]]; then
     # When 'git commit --amend' is used, the files list is empty. The

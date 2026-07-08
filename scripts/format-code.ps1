@@ -260,8 +260,16 @@ function check_clang-format()
         return $false
     }
 
-    $req_ver = $required_cfver -split '.'
-    $cf_ver  = $cfver -split '.'
+    # '-split' treats its argument as a regex, so the version separator must
+    # be escaped; a bare '.' matches every character and yields empty fields.
+    $req_ver = $required_cfver -split '\.'
+    $cf_ver  = $cfver -split '\.'
+
+    # Record the command before the version comparison: the '-gt' branch below
+    # (reachable once the version split is correct) returns early, and leaving
+    # $global:cf unset there would make the mainline build an empty clang-format
+    # command and silently format nothing.
+    $global:cf="clang-format"
 
     for ($i = 0; $i -lt 3; $i++)
     {
@@ -277,7 +285,6 @@ function check_clang-format()
         }
         # Equal just keeps going
     }
-    $global:cf="clang-format"
     return $true
 }
 
@@ -297,6 +304,7 @@ $findargs = get_find_args;
 $filelist = get_file_list;
 $filecount=0
 $changecount=0
+$failcount=0
 
 $cfargs="$global:cf -style=file"
 if ( !$whatif ) {
@@ -310,7 +318,12 @@ foreach ( $file in $filelist ) {
 
     if ( $whatif ) {
         log_whatif "Formatting $file ..."
-        ( Invoke-Expression ($cf) ) | Compare-Object (get-content $file)
+        # A file differs when Compare-Object emits output; the pipeline
+        # succeeding ($?) does not by itself mean the file changed.
+        $diff = ( Invoke-Expression ($cf) ) | Compare-Object (get-content $file)
+        if ( $diff ) {
+            $changecount++
+        }
     }
     else {
         if ( $verbose ) {
@@ -320,18 +333,21 @@ foreach ( $file in $filelist ) {
         else {
             Invoke-Expression $cf > $null
         }
-    }
-    if ( $? ) {
-        if ( $whatif ) {
-            $changecount++
+        if ( -not $? ) {
+            Write-Host "clang-format failed on file: $file."
+            $failcount++
         }
-    }
-    else {
-        Write-Host "clang-format failed on file: $file."
     }
 }
 
 log_whatif "$filecount files processed, $changecount changed."
+
+# A clang-format failure must fail the run even when no file was reported as
+# changed, so callers like the pre-commit hook block the commit.
+if ( $failcount -gt 0 ) {
+    Write-Host "$failcount file(s) failed to format."
+    exit 1
+}
 
 # If files are being edited, this count is zero so we exit with success.
 exit $changecount
