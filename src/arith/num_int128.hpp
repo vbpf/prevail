@@ -12,6 +12,8 @@
 // is checked against native __int128 in test_int128.cpp and by running the whole test suite
 // with -DPREVAIL_FORCE_CUSTOM_INT128 on a platform that has __int128.
 
+#include <compare>
+#include <concepts>
 #include <cstdint>
 #include <type_traits>
 

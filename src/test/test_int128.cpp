@@ -83,20 +83,24 @@ TEST_CASE("custom int128 matches native signed __int128", "[int128]") {
     for (const u128 ua : vals) {
         const auto a = static_cast<i128>(ua);
         const Int128Custom ca = to_ci(a);
-        CHECK(from_ci(-ca) == static_cast<u128>(-a));
+        // Two's-complement add/sub/mul/negate/left-shift have the same bit pattern as the
+        // unsigned ops, so compute expectations in unsigned to avoid signed-overflow UB
+        // (e.g. -INT128_MIN). Signed >> (arithmetic) and / % are well-defined and computed
+        // signed, skipping only the INT128_MIN / -1 overflow.
+        CHECK(from_ci(-ca) == static_cast<u128>(-ua));
         CHECK(static_cast<int64_t>(ca) == static_cast<int64_t>(a));
         CHECK(static_cast<uint64_t>(ca) == static_cast<uint64_t>(a));
         CHECK(static_cast<int32_t>(ca) == static_cast<int32_t>(a));
         for (int s = 0; s < 128; ++s) {
-            CHECK(from_ci(ca << s) == static_cast<u128>(a << s));
-            CHECK(from_ci(ca >> s) == static_cast<u128>(a >> s)); // arithmetic shift
+            CHECK(from_ci(ca << s) == (ua << s));
+            CHECK(from_ci(ca >> s) == static_cast<u128>(a >> s)); // arithmetic shift (defined)
         }
         for (const u128 ub : vals) {
             const auto b = static_cast<i128>(ub);
             const Int128Custom cb = to_ci(b);
-            CHECK(from_ci(ca + cb) == static_cast<u128>(a + b));
-            CHECK(from_ci(ca - cb) == static_cast<u128>(a - b));
-            CHECK(from_ci(ca * cb) == static_cast<u128>(a * b));
+            CHECK(from_ci(ca + cb) == (ua + ub));
+            CHECK(from_ci(ca - cb) == (ua - ub));
+            CHECK(from_ci(ca * cb) == (ua * ub));
             CHECK((ca == cb) == (a == b));
             CHECK((ca < cb) == (a < b));
             CHECK((ca <= cb) == (a <= b));
