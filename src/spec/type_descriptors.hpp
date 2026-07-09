@@ -42,6 +42,26 @@ struct EbpfProgramType {
     bool is_sleepable{};
 };
 
+enum class EbpfStructFieldPermission { read_only, read_write };
+
+struct EbpfStructFieldDescriptor {
+    int offset{};
+    int span{};
+    // Default read_only so a descriptor that omits an explicit permission fails
+    // closed (rejects writes); writable fields must opt in with read_write.
+    EbpfStructFieldPermission permission{EbpfStructFieldPermission::read_only};
+    int max_access_width{};
+    bool allow_narrow_access{};
+    // Additional exact-width read allowed only at the field start.
+    int extra_read_width_at_start{};
+};
+
+struct EbpfStructDescriptor {
+    int size{};
+    const EbpfStructFieldDescriptor* fields{};
+    size_t field_count{};
+};
+
 // Represents the key characteristics that determine equivalence between eBPF maps.
 // Used to cache and compare map configurations across the program.
 struct EquivalenceKey {

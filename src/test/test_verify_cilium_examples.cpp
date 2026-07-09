@@ -12,6 +12,7 @@ TEST_PROGRAM("cilium-examples", "tcx_bpf_bpfel.o", "tc", "egress_prog_func", 2)
 TEST_PROGRAM("cilium-examples", "tcx_bpf_bpfel.o", "tc", "ingress_prog_func", 2)
 TEST_SECTION("cilium-examples", "tracepoint_in_c_bpf_bpfel.o", "tracepoint/kmem/mm_page_alloc")
 TEST_SECTION("cilium-examples", "xdp_bpf_bpfel.o", "xdp")
+TEST_SECTION("cilium-examples", "tcprtt_sockops_bpf_bpfel.o", "sockops")
 
 // VerifierTypeTracking:
 // register type refinement is too imprecise in this control-flow pattern
@@ -27,7 +28,4 @@ TEST_SECTION_FAIL("cilium-examples", "fentry_bpf_bpfel.o", "fentry/tcp_connect",
                   verify_test::VerifyIssueKind::VerifierBoundsTracking)
 // interval/bounds refinement loses precision for this memory-access proof
 TEST_SECTION_FAIL("cilium-examples", "tcprtt_bpf_bpfel.o", "fentry/tcp_close",
-                  verify_test::VerifyIssueKind::VerifierBoundsTracking)
-// interval/bounds refinement loses precision for this memory-access proof
-TEST_SECTION_FAIL("cilium-examples", "tcprtt_sockops_bpf_bpfel.o", "sockops",
                   verify_test::VerifyIssueKind::VerifierBoundsTracking)

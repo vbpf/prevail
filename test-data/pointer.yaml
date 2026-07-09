@@ -20,7 +20,7 @@ post:
   - "_|_"
 
 messages:
-  - "1: Invalid type (r1.type in {ctx, stack, packet, shared})"
+  - "1: Invalid type (r1.type in {ctx, stack, packet, shared, socket, alloc_mem})"
 
 ---
 test-case: 32-bit pointer truncation - subtraction
@@ -42,7 +42,7 @@ post:
   - "_|_"
 
 messages:
-  - "1: Invalid type (r1.type in {ctx, stack, packet, shared})"
+  - "1: Invalid type (r1.type in {ctx, stack, packet, shared, socket, alloc_mem})"
 
 ---
 test-case: 32-bit pointer truncation - multiplication
@@ -471,7 +471,7 @@ post:
   - "_|_"
 
 messages:
-  - "1: Invalid type (r1.type in {ctx, stack, packet, shared})"
+  - "1: Invalid type (r1.type in {ctx, stack, packet, shared, socket, alloc_mem})"
 
 ---
 test-case: 32-bit pointer truncation - register subtraction
@@ -495,7 +495,7 @@ post:
   - "_|_"
 
 messages:
-  - "1: Invalid type (r1.type in {ctx, stack, packet, shared})"
+  - "1: Invalid type (r1.type in {ctx, stack, packet, shared, socket, alloc_mem})"
 
 ---
 # The low 32 bits of a pointer produced by a 32-bit op must not be usable as a
