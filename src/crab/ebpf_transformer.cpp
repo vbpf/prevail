@@ -591,11 +591,11 @@ void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
         case T_SOCKET:
         case T_BTF_ID:
             // Loadable but contents are not tracked: havoc the destination.
-            // T_SOCKET/T_BTF_ID dereferences are rejected by the checker
-            // (see ebpf_checker.cpp ValidAccess), so reaching this branch
-            // for those types means the checker was bypassed; havoc is the
-            // sound fallback. T_ALLOC_MEM remains a TODO for proper load
-            // semantics (offset-tracked content).
+            // T_BTF_ID dereferences are rejected by the checker (see
+            // ebpf_checker.cpp ValidAccess), so reaching that type here means
+            // the checker was bypassed; havoc is the sound fallback.
+            // T_ALLOC_MEM remains a TODO for proper load semantics
+            // (offset-tracked content).
             do_load_packet_or_shared(state, target_reg, width, b.is_signed);
             break;
         case T_UNINIT:
@@ -771,12 +771,12 @@ void EbpfTransformer::operator()(const Atomic& a) {
     if (dom.is_bottom()) {
         return;
     }
-    if (!dom.state.is_in_group(a.access.basereg, TS_POINTER) || !dom.state.is_in_group(a.valreg, TS_NUM)) {
+    if (!dom.state.is_in_group(a.access.basereg, TS_DEREFERENCEABLE) || !dom.state.is_in_group(a.valreg, TS_NUM)) {
         return;
     }
     if (!dom.state.may_have_type(a.access.basereg, T_STACK)) {
-        // Shared memory regions are volatile so we can just havoc
-        // any register that will be updated.
+        // Non-stack memory contents are not tracked here. A fetch/CMPXCHG
+        // therefore reads an unknown old value into the result register.
         if (a.op == Atomic::Op::CMPXCHG) {
             dom.state.havoc_register_except_type(Reg{R0_RETURN_VALUE});
         } else if (a.fetch) {
@@ -968,6 +968,8 @@ void EbpfTransformer::operator()(const Call& call) {
             dom.state.values.assign(r0_pack.alloc_mem_offset, 0);
             const auto size_value = dom.state.values.eval_interval(reg_pack(*resolved.contract.alloc_size_reg).uvalue);
             dom.state.values.set(r0_pack.alloc_mem_size, size_value);
+        } else if (*resolved.contract.return_ptr_type == T_SOCKET) {
+            dom.state.values.assign(r0_pack.socket_offset, 0);
         } else {
             dom.state.havoc_offsets(r0_reg);
         }

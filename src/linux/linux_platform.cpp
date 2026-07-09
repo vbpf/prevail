@@ -496,6 +496,7 @@ const ebpf_platform_t g_ebpf_platform_linux = {
     .get_map_descriptor = get_map_descriptor_linux,
     .get_map_type = get_map_type_linux,
     .resolve_inner_map_references = resolve_inner_map_references_linux,
+    .sock_common_layout = &bpf_sock_common_layout,
     .supported_conformance_groups = bpf_conformance_groups_t::default_groups | bpf_conformance_groups_t::packet,
 };
 } // namespace prevail
