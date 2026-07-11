@@ -299,7 +299,7 @@ def refresh_expectations(
                         reason_to_store = reason
                     section_overrides[section] = {"status": status, "kind": kind, "reason": reason_to_store}
             else:
-                # Multi-program sections are read by generate_verify_project_tests.py at
+                # Multi-program sections are read by src/test/test_verify_samples.cpp at
                 # program scope only, so every override (including reject_load) must be
                 # recorded per-program keyed by function name. Keying by function makes the
                 # result independent of the order in which sibling programs are classified.
