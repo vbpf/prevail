@@ -2885,12 +2885,12 @@
           "test_overrides": {
             "programs": {
               "tc/tail": {
-                "tail_handle_ipv4_cont": {
+                "tail_handle_ipv6": {
                   "kind": "VerifierTypeTracking",
                   "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
                 },
-                "tail_handle_ipv6": {
+                "tail_handle_ipv6_cont": {
                   "kind": "VerifierTypeTracking",
                   "reason": "register type refinement is too imprecise in this control-flow pattern",
                   "status": "expected_failure"
@@ -4883,15 +4883,6 @@
                 "reject_load": false
               }
             ]
-          },
-          "test_overrides": {
-            "sections": {
-              "sockops": {
-                "kind": "VerifierBoundsTracking",
-                "reason": "interval/bounds refinement loses precision for this memory-access proof",
-                "status": "expected_failure"
-              }
-            }
           }
         },
         "tcx_bpf_bpfel.o": {

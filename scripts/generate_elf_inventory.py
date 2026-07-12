@@ -163,9 +163,10 @@ def preserve_timed_out_sections(inventory: dict, existing: dict) -> None:
     """Reuse the previous inventory's section listing for an object whose `prevail -l`
     timed out this run.
 
-    A timeout yields an empty `sections` map; generate_verify_project_tests.py emits tests
-    only by iterating `sections`, so writing the empty map would delete every generated
-    verify test for that object on a transient timeout. Carry forward the prior listing
+    A timeout yields an empty `sections` map; the sample verification tests
+    (src/test/test_verify_samples.cpp) derive cases only by iterating `sections`, so
+    writing the empty map would drop every verify case for that object on a transient
+    timeout. Carry forward the prior listing
     (keeping the `timeout` flag/diagnostic so the staleness is visible).
     """
     existing_projects = existing.get("projects", {})

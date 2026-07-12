@@ -312,24 +312,10 @@ if (prevail_ENABLE_TESTS)
     src/test/test_subsumption.cpp
     src/test/test_type_domain.cpp
     src/test/test_type_to_num.cpp
-    src/test/test_verify_bcc.cpp
-    src/test/test_verify_bpf_cilium_test.cpp
-    src/test/test_verify_build.cpp
-    src/test/test_verify_cilium.cpp
-    src/test/test_verify_cilium_core.cpp
-    src/test/test_verify_cilium_ebpf.cpp
-    src/test/test_verify_cilium_examples.cpp
-    src/test/test_verify_falco.cpp
-    src/test/test_verify_invalid.cpp
-    src/test/test_verify_katran.cpp
-    src/test/test_verify_libbpf_bootstrap.cpp
-    src/test/test_verify_linux.cpp
-    src/test/test_verify_linux_selftests.cpp
+    # Full-program verification of the sample corpus is data-driven from
+    # test-data/elf_inventory.json (see src/test/test_verify_samples.cpp).
+    src/test/test_verify_samples.cpp
     src/test/test_verify_multithreading.cpp
-    src/test/test_verify_new_linux.cpp
-    src/test/test_verify_ovs.cpp
-    src/test/test_verify_prototype_kernel.cpp
-    src/test/test_verify_suricata.cpp
     src/test/test_wto.cpp
     src/test/test_yaml.cpp
   )
@@ -359,6 +345,42 @@ if (prevail_ENABLE_TESTS)
     set_target_properties(tests run_yaml PROPERTIES
       RUNTIME_OUTPUT_DIRECTORY ${prevail_binary_dir})
   endif ()
+
+  # Parallel test execution. Register one ctest entry per (project, object file) so
+  # `ctest -j` verifies the sample corpus concurrently at object granularity -- a big
+  # project (e.g. cilium) no longer serializes into one long shard. Each entry runs
+  # `tests [project] -c <object>`, selecting that object's nested Catch2 section. Every
+  # other (fast) test runs in one warm process. The shard list is read from the same
+  # inventory the tests are driven by, so it cannot drift from the corpus. Shards run
+  # from the source tree because the tests read ebpf-samples/ and test-data/ by
+  # relative path.
+  enable_testing()
+  file(READ "${prevail_source_dir}/test-data/elf_inventory.json" prevail_inventory_json)
+  string(JSON prevail_project_count LENGTH "${prevail_inventory_json}" projects)
+  if (prevail_project_count GREATER 0)
+    math(EXPR prevail_project_last "${prevail_project_count} - 1")
+    foreach (pi RANGE ${prevail_project_last})
+      string(JSON prevail_project MEMBER "${prevail_inventory_json}" projects ${pi})
+      string(JSON prevail_object_count LENGTH "${prevail_inventory_json}" projects "${prevail_project}" objects)
+      math(EXPR prevail_object_last "${prevail_object_count} - 1")
+      foreach (oi RANGE ${prevail_object_last})
+        string(JSON prevail_object MEMBER "${prevail_inventory_json}" projects "${prevail_project}" objects ${oi})
+        # Objects with no sections (e.g. a load timeout or an ELF with no programs) have
+        # no cases, so they get no shard -- a `-c` selecting a nonexistent section would
+        # otherwise fail with "no tests ran".
+        string(JSON prevail_section_count LENGTH
+          "${prevail_inventory_json}" projects "${prevail_project}" objects "${prevail_object}" sections)
+        if (prevail_section_count GREATER 0)
+          add_test(NAME "samples-${prevail_project}-${prevail_object}"
+            COMMAND tests "[${prevail_project}]" -c "${prevail_object}"
+            WORKING_DIRECTORY "${prevail_source_dir}")
+        endif ()
+      endforeach ()
+    endforeach ()
+  endif ()
+  # Everything that is not part of the sharded sample corpus (unit tests, YAML
+  # suites, the inventory-coverage guard) runs in one process.
+  add_test(NAME "unit" COMMAND tests "~[samples]" WORKING_DIRECTORY "${prevail_source_dir}")
 endif ()
 
 # Installation

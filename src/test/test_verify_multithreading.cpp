@@ -1,6 +1,9 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
 
+#include <string>
+#include <thread>
+
 #include "test_verify.hpp"
 
 static prevail::Program prepare(const std::string& section) {

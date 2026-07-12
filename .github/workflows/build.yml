@@ -53,7 +53,7 @@ jobs:
 
       - name: Run unit tests
         if: ${{ matrix.target == 'tests' }}
-        run: bin/tests -d yes --order lex
+        run: ctest --test-dir build --output-on-failure -j $(nproc)
 
       - name: Memory leak test (Debug only)
         if: ${{ matrix.target == 'tests' && matrix.configurations == 'Debug' }}
@@ -99,4 +99,4 @@ jobs:
       - name: Run unit tests
         if: ${{ matrix.target == 'tests' }}
         shell: pwsh
-        run: bin\tests.exe -d yes --order lex
+        run: ctest --test-dir build -C "$env:BUILD_CONFIGURATION" --output-on-failure -j $env:NUMBER_OF_PROCESSORS
