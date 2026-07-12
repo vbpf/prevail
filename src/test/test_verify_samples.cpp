@@ -265,10 +265,24 @@ std::set<std::string>& registered_projects() {
 }
 
 void run_project_samples(const std::string& project) {
-    for (const SampleEntry& entry : project_entries(project)) {
-        const std::string name =
-            entry.object + " " + entry.section + (entry.function.empty() ? "" : " " + entry.function);
-        DYNAMIC_SECTION(name) { run_entry(project, entry); }
+    // Nest by object file (outer section) so ctest can shard a project by object via
+    // `-c "<object>"`, letting a big project's objects verify in parallel. Entries are
+    // grouped by object (project_entries is sorted by object, then section).
+    const std::vector<SampleEntry>& entries = project_entries(project);
+    for (size_t start = 0; start < entries.size();) {
+        const std::string& object = entries[start].object;
+        size_t end = start;
+        while (end < entries.size() && entries[end].object == object) {
+            ++end;
+        }
+        DYNAMIC_SECTION(object) {
+            for (size_t k = start; k < end; ++k) {
+                const SampleEntry& entry = entries[k];
+                const std::string name = entry.section + (entry.function.empty() ? "" : " " + entry.function);
+                DYNAMIC_SECTION(name) { run_entry(project, entry); }
+            }
+        }
+        start = end;
     }
 }
 
