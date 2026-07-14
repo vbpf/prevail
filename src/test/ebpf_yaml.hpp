@@ -41,7 +41,7 @@ struct Diff {
 };
 
 struct Failure {
-    Diff<StringInvariant> invariant;
+    Diff<std::set<std::string>> invariant;
     Diff<std::set<std::string>> messages;
 };
 

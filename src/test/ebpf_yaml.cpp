@@ -448,7 +448,7 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
             return {};
         }
         return Failure{
-            .invariant = make_diff(StringInvariant::top(), StringInvariant::top()),
+            .invariant = make_diff(StringInvariant::top().to_lines(), StringInvariant::top().to_lines()),
             .messages = make_diff(actual_messages, expected_messages),
         };
     }
@@ -501,7 +501,7 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
             return {};
         }
         return Failure{
-            .invariant = make_diff(actual_last_invariant, test_case.expected_post_invariant),
+            .invariant = make_diff(actual_last_invariant.to_lines(), test_case.expected_post_invariant.to_lines()),
             .messages = make_diff(actual_messages, test_case.expected_messages),
         };
     } catch (InvalidControlFlow& ex) {
@@ -511,13 +511,13 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
             return {};
         }
         return Failure{
-            .invariant = make_diff(StringInvariant::top(), test_case.expected_post_invariant),
+            .invariant = make_diff(StringInvariant::top().to_lines(), test_case.expected_post_invariant.to_lines()),
             .messages = make_diff(actual_messages, test_case.expected_messages),
         };
     } catch (const std::exception& ex) {
         const std::set<string> actual_messages{std::string{"Exception: "} + ex.what()};
         return Failure{
-            .invariant = make_diff(StringInvariant::top(), test_case.expected_post_invariant),
+            .invariant = make_diff(StringInvariant::top().to_lines(), test_case.expected_post_invariant.to_lines()),
             .messages = make_diff(actual_messages, test_case.expected_messages),
         };
     }
@@ -628,12 +628,18 @@ ConformanceTestResult run_conformance_test_case(const std::vector<uint8_t>& memo
 void print_failure(const Failure& failure, std::ostream& os) {
     constexpr auto INDENT = "  ";
     if (!failure.invariant.unexpected.empty()) {
-        os << "Unexpected properties:\n" << INDENT << failure.invariant.unexpected << "\n";
+        os << "Unexpected properties:\n";
+        for (const auto& item : failure.invariant.unexpected) {
+            os << INDENT << item << "\n";
+        }
     } else {
         os << "Unexpected properties: None\n";
     }
     if (!failure.invariant.unseen.empty()) {
-        os << "Unseen properties:\n" << INDENT << failure.invariant.unseen << "\n";
+        os << "Unseen properties:\n";
+        for (const auto& item : failure.invariant.unseen) {
+            os << INDENT << item << "\n";
+        }
     } else {
         os << "Unseen properties: None\n";
     }

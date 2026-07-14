@@ -10,17 +10,11 @@
 
 namespace prevail {
 
-StringInvariant StringInvariant::operator-(const StringInvariant& b) const {
-    if (this->is_bottom()) {
-        return bottom();
+std::set<std::string> StringInvariant::to_lines() const {
+    if (is_bottom()) {
+        return {"_|_"};
     }
-    StringInvariant res = top();
-    for (const std::string& cst : this->value()) {
-        if (b.is_bottom() || !b.contains(cst)) {
-            res.maybe_inv->insert(cst);
-        }
-    }
-    return res;
+    return *maybe_inv;
 }
 
 StringInvariant StringInvariant::operator+(const StringInvariant& b) const {

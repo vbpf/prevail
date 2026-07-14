@@ -47,8 +47,13 @@ struct StringInvariant {
         return *maybe_inv;
     }
 
-    StringInvariant operator-(const StringInvariant& b) const;
     StringInvariant operator+(const StringInvariant& b) const;
+
+    // Render as the set of text lines used for display/diffing. Bottom is the
+    // single line "_|_", exactly the form the YAML harness parses back into a
+    // bottom invariant; a non-bottom invariant is its set of constraint lines.
+    [[nodiscard]]
+    std::set<std::string> to_lines() const;
 
     bool operator==(const StringInvariant& other) const { return maybe_inv == other.maybe_inv; }
 
