@@ -309,6 +309,7 @@ if (prevail_ENABLE_TESTS)
     src/test/test_print.cpp
     src/test/test_runtime_config.cpp
     src/test/test_sign_extension.cpp
+    src/test/test_string_constraints.cpp
     src/test/test_subsumption.cpp
     src/test/test_type_domain.cpp
     src/test/test_type_to_num.cpp
