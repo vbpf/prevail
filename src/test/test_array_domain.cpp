@@ -65,3 +65,28 @@ TEST_CASE("stack access at a negative singleton offset does not throw", "[array_
     // The in-bounds numeric cell must be untouched by the out-of-bounds operations.
     REQUIRE(stack.all_num_width(Interval{0}, Interval{8}));
 }
+
+TEST_CASE("out-of-bounds negative offset kill preserves the in-bounds cell value", "[array_domain]") {
+    // A negative constant offset must not be routed through the symbolic kill path:
+    // the inclusive range `[-8] | ([-8] + [8]) = [-8, 0]` overlaps the tracked cell
+    // [0, 8) and would erase its value. The offset-0 access at [-8, 8) covers bytes
+    // [-8, 0), which does not include byte 0, so the cell must survive intact.
+    ArrayDomain stack{8};
+    NumAbsDomain values = NumAbsDomain::top();
+    stack.initialize_numbers(0, 8);
+
+    // Store a known value in the in-bounds 8-byte cell at offset 0.
+    const std::optional<Variable> cell = stack.store(values, DataKind::svalues, Interval{0}, Interval{8},
+                                                     /*big_endian=*/false);
+    REQUIRE(cell.has_value());
+    values.assign(*cell, LinearExpression{Number{42}});
+
+    // An out-of-bounds havoc/store at a negative offset must leave the offset-0 cell alone.
+    stack.havoc(values, DataKind::svalues, Interval{-8}, Interval{8}, /*big_endian=*/false);
+    (void)stack.store(values, DataKind::svalues, Interval{-8}, Interval{8}, /*big_endian=*/false);
+
+    const std::optional<LinearExpression> reloaded =
+        stack.load(values, DataKind::svalues, Interval{0}, 8, /*big_endian=*/false);
+    REQUIRE(reloaded.has_value());
+    REQUIRE(values.eval_interval(*reloaded).singleton() == Number{42});
+}

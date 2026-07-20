@@ -330,13 +330,19 @@ static std::optional<std::pair<offset_t, unsigned>> kill_and_find_var(StackCellR
 
     offset_map_t& offset_map = cells.get(kind);
     std::vector<Cell> overlaps;
-    if (const std::optional<Number> n = ii.singleton(); n && n->fits<Index>()) {
-        // A negative singleton offset is an access below the stack frame (e.g. a
-        // pointer walked out of bounds across loop iterations). There is no stack
-        // cell at such an offset, and narrowing it to the unsigned cell-offset type
-        // would throw. Skip the constant-index bookkeeping and leave the out-of-bounds
-        // access for the assertion checker to reject; `fits<Index>()` is exactly the
-        // condition under which the narrow below is safe.
+    if (const std::optional<Number> n = ii.singleton()) {
+        // The offset is a constant.
+        if (!n->fits<Index>()) {
+            // A negative (or otherwise out-of-range) constant offset is an access below
+            // the stack frame -- e.g. a pointer walked out of bounds across loop
+            // iterations. No stack cell exists there, so there is nothing to kill.
+            // Return early rather than falling through to the symbolic kill below: that
+            // path uses the inclusive range `ii | (ii + elem_size)` (e.g. [-8, 0]), which
+            // would spuriously havoc the offset-0 cell; narrowing the offset to the
+            // unsigned cell-offset type would also throw. The assertion checker rejects
+            // the out-of-bounds access.
+            return res; // empty
+        }
         if (const auto n_bytes = elem_size.singleton()) {
             auto size = n_bytes->narrow<unsigned int>();
             // -- Constant index: kill overlapping cells
