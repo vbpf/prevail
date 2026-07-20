@@ -82,13 +82,13 @@ class offset_map_t final {
 
     void insert_cell(const Cell& c);
 
-    [[nodiscard]]
-    std::optional<Cell> get_cell(offset_t o, unsigned size);
-
     Cell mk_cell(offset_t o, unsigned size);
 
   public:
     offset_map_t() = default;
+
+    [[nodiscard]]
+    std::optional<Cell> get_cell(offset_t o, unsigned size);
 
     [[nodiscard]]
     std::size_t size() const {
@@ -334,6 +334,13 @@ static std::optional<std::pair<offset_t, unsigned>> kill_and_find_var(StackCellR
             // -- Constant index: kill overlapping cells
             offset_t o(n->narrow<Index>());
             overlaps = offset_map.get_overlap_cells(o, size);
+            // get_overlap_cells deliberately excludes the exact-match cell (o, size),
+            // which is correct for loads (get_cell handles it separately) but wrong for
+            // a kill: a pure-havoc caller (e.g. storing an uninitialized register over an
+            // exact-match cell) must forget the stale value/type, so include it here.
+            if (const auto exact = offset_map.get_cell(o, size)) {
+                overlaps.push_back(*exact);
+            }
             res = std::make_pair(o, size);
         }
     }

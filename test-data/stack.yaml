@@ -923,3 +923,21 @@ observe:
     mode: consistent
     constraints:
       - r0.svalue=0
+---
+test-case: overwrite exact-match stack cell with uninitialized register havocs stale value
+
+# Regression for issue #1202: overwriting an exact-match stack cell with an
+# uninitialized register must havoc the cell's value/type. Otherwise a later
+# aligned load reads back the stale known value.
+
+pre: ["r10.type=stack", "r10.stack_offset=512",
+      "s[504...511].type=number", "s[504...511].svalue=42", "s[504...511].uvalue=42"]
+
+code:
+  <start>: |
+    *(u64 *)(r10 - 8) = r6 ; r6 is uninitialized: must havoc the exact (504,8) cell
+    r0 = *(u64 *)(r10 - 8) ; reload must NOT read back the stale 42
+
+post:
+  - r10.type=stack
+  - r10.stack_offset=512
