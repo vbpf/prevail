@@ -384,8 +384,7 @@ static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const 
         }
 
         // Walk all successor nodes, enqueuing any not-yet-cloned macro block.
-        for (const auto& next_macro_nodes = builder.prog.cfg().children_of(macro_label);
-             const auto& next_macro_label : next_macro_nodes) {
+        for (const auto& next_macro_label : builder.prog.cfg().children_of(macro_label)) {
             if (next_macro_label != builder.prog.cfg().exit_label() && !seen_labels.contains(next_macro_label)) {
                 macro_labels.insert(next_macro_label);
                 seen_labels.insert(next_macro_label);
