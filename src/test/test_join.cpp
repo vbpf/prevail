@@ -484,4 +484,14 @@ TEST_CASE("meet does not spuriously bottom on satisfiable cross-SCC system", "[m
     CHECK(g.edge_val(3, 1) == Weight(-10)); // x - z <= -10
     REQUIRE(g.elem(3, 2));
     CHECK(g.edge_val(3, 2) == Weight(-10)); // y - z <= -10 (derived from x == y)
+
+    // The stored potentials must be a globally valid model: for every edge s->d,
+    // potential[d] <= potential[s] + w(s,d). Downstream reduced-cost closure
+    // (chromatic Dijkstra) is only correct when this holds. An invalid potential
+    // model here is a latent soundness hole even when this meet's result is right.
+    for (const VertId s : g.verts()) {
+        for (const auto& e : g.e_succs(s)) {
+            CHECK(result->potential_at(e.vert) <= result->potential_at(s) + e.val);
+        }
+    }
 }

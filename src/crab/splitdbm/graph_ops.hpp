@@ -7,6 +7,7 @@
 // Functions that need temporary storage take a ScratchSpace& parameter.
 
 #include <algorithm>
+#include <ranges>
 #include <unordered_set>
 
 #include "crab/splitdbm/graph_views.hpp"
@@ -466,8 +467,15 @@ bool select_potentials(ScratchSpace& scratch, const ReadableGraph auto& g, std::
 
     // Caller is responsible for providing reasonable initial potentials.
 
-    // Run Bellman-Ford on each SCC.
-    for (const std::vector<VertId>& scc : sccs) {
+    // Run Bellman-Ford on each SCC in topological order (sources before sinks).
+    // compute_sccs (Tarjan) emits SCCs in reverse topological order, so we iterate
+    // sccs backwards. Topological order is what keeps the final potentials a globally
+    // valid model: every cross-SCC edge then points from the SCC being processed to a
+    // later, not-yet-processed SCC, so relaxing it lowers that target's potential
+    // before its own SCC runs -- the later SCC is seeded with the tightened value and
+    // re-establishes internal consistency. Downstream reduced-cost closure (chromatic
+    // Dijkstra) requires this validity: p(d) <= p(s) + w for every edge s->d. See #1201.
+    for (const std::vector<VertId>& scc : sccs | std::views::reverse) {
 
         auto qhead = scratch.dual_queue.begin();
         auto qtail = qhead;
@@ -524,13 +532,12 @@ bool select_potentials(ScratchSpace& scratch, const ReadableGraph auto& g, std::
             }
         }
 
-        // Clear this SCC's vertex marks before moving on. Without this, the stale
-        // BF_SCC marks persist: relaxing a cross-SCC edge into an already-finished
-        // SCC would requeue one of its vertices (line "vert_marks.at(d) == BF_SCC"),
-        // consuming the current SCC's iteration budget and letting the feasibility
-        // check above read a leftover cross-SCC relaxation as a spurious negative
-        // cycle. A negative cycle is confined to a single SCC, so only intra-SCC
-        // relaxations are meaningful here. See issue #1201.
+        // Clear this SCC's vertex marks before moving on (defense-in-depth). In
+        // topological order no cross-SCC edge points back into a finished SCC, so a
+        // finished vertex is never relaxed and its stale BF_SCC mark is never read.
+        // Should the SCC order ever regress, this reset still prevents a leftover
+        // cross-SCC relaxation from being requeued (via "vert_marks.at(d) == BF_SCC")
+        // and misread by the feasibility check as a spurious negative cycle.
         for (const VertId v : scc) {
             scratch.vert_marks.at(v) = BF_NONE;
         }
