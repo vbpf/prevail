@@ -383,29 +383,32 @@ static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const 
             builder.add_child(caller_label, label);
         }
 
-        // Add an edge from any other predecessors.
-        for (const auto& prev_macro_nodes = builder.prog.cfg().parents_of(macro_label);
-             const auto& prev_macro_label : prev_macro_nodes) {
-            const Label prev_label(prev_macro_label.from, prev_macro_label.to, to_string(caller_label));
-            if (const auto& labels = builder.prog.cfg().labels();
-                std::ranges::find(labels, prev_label) != labels.end()) {
-                builder.add_child(prev_label, label);
-            }
-        }
-
-        // Walk all successor nodes.
+        // Walk all successor nodes, enqueuing any not-yet-cloned macro block.
         for (const auto& next_macro_nodes = builder.prog.cfg().children_of(macro_label);
              const auto& next_macro_label : next_macro_nodes) {
+            if (next_macro_label != builder.prog.cfg().exit_label() && !seen_labels.contains(next_macro_label)) {
+                macro_labels.insert(next_macro_label);
+                seen_labels.insert(next_macro_label);
+            }
+        }
+    }
+
+    // Reconstruct the cloned subprogram's internal edges now that every macro block
+    // has been cloned. This must run as a second pass: reconstructing edges while
+    // cloning (from already-cloned predecessors) loses any back-edge, because a loop
+    // latch is cloned after its head, so the latch->head edge is never re-added. The
+    // clone would then be analyzed straight-line, without widening or loop-counter
+    // insertion, missing a pointer that walks out of bounds across iterations (#1203).
+    for (const Label& macro_label : seen_labels) {
+        const Label label{macro_label.from, macro_label.to, stack_frame_prefix};
+        for (const auto& next_macro_label : builder.prog.cfg().children_of(macro_label)) {
             if (next_macro_label == builder.prog.cfg().exit_label()) {
-                // This is an exit transition, so add edge to the block to execute
+                // This is an exit transition, so add an edge to the block to execute
                 // upon returning from the macro.
                 builder.add_child(label, exit_to_label);
-            } else if (!seen_labels.contains(next_macro_label)) {
-                // Push any other unprocessed successor label onto the list to be processed.
-                if (!macro_labels.contains(next_macro_label)) {
-                    macro_labels.insert(next_macro_label);
-                }
-                seen_labels.insert(next_macro_label);
+            } else {
+                const Label next_label{next_macro_label.from, next_macro_label.to, stack_frame_prefix};
+                builder.add_child(label, next_label);
             }
         }
     }

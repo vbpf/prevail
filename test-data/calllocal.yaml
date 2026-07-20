@@ -449,3 +449,32 @@ post:
 
 messages:
   - "2:3: Code becomes unreachable (assume r6 >= r7)"
+---
+test-case: counted loop wholly inside a bpf-to-bpf callee keeps its back-edge
+
+# Regression for issue #1203: a loop contained entirely within an inlined
+# bpf-to-bpf subprogram must keep its back-edge after inlining. Otherwise the
+# clone is analyzed straight-line (no widening, no loop-counter insertion) and
+# the loop body is verified for a single iteration. The pc[...] loop counter in
+# the post-invariant only appears if the back-edge survived.
+
+options: ["termination"]
+pre: []
+
+code:
+  <start>: |
+    call <sub>
+    exit
+  <sub>: |
+    r0 = 0
+  <sub_loop>: |
+    r0 += 1
+    if r0 < 4 goto <sub_loop>
+  <sub_out>: |
+    exit
+
+post:
+  - r0.type=number
+  - pc[0/3]=4
+  - r0.svalue=pc[0/3]
+  - r0.uvalue=pc[0/3]
