@@ -523,6 +523,17 @@ bool select_potentials(ScratchSpace& scratch, const ReadableGraph auto& g, std::
                 }
             }
         }
+
+        // Clear this SCC's vertex marks before moving on. Without this, the stale
+        // BF_SCC marks persist: relaxing a cross-SCC edge into an already-finished
+        // SCC would requeue one of its vertices (line "vert_marks.at(d) == BF_SCC"),
+        // consuming the current SCC's iteration budget and letting the feasibility
+        // check above read a leftover cross-SCC relaxation as a spurious negative
+        // cycle. A negative cycle is confined to a single SCC, so only intra-SCC
+        // relaxations are meaningful here. See issue #1201.
+        for (const VertId v : scc) {
+            scratch.vert_marks.at(v) = BF_NONE;
+        }
     }
     return true;
 }

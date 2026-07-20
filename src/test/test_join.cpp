@@ -436,3 +436,52 @@ TEST_CASE("close_after_widen recovers transitive edge through unstable vertex", 
     REQUIRE(rg.elem(1, 3));
     CHECK(rg.edge_val(1, 3) == Weight(10));
 }
+
+// 23) SplitDBM meet must not spuriously report bottom (issue #1201)
+TEST_CASE("meet does not spuriously bottom on satisfiable cross-SCC system", "[meet][splitdbm]") {
+    using namespace splitdbm;
+
+    // Counterexample from issue #1201. Vertices: 0 (special zero vertex), 1=x, 2=y, 3=z.
+    //   Left graph:  x == y      -> edges 1->2 : 0 (y - x <= 0) and 2->1 : 0 (x - y <= 0)
+    //   Right graph: x - z <= -10 -> edge 3->1 : -10
+    //
+    // The conjunction {x == y, x <= z - 10} is satisfiable, so meet must NOT be bottom.
+    // A dropped per-SCC vertex-mark reset in select_potentials let a cross-SCC edge
+    // relaxation be misread as a negative cycle, spuriously bottoming the meet.
+
+    Graph lg;
+    lg.growTo(4);
+    lg.add_edge(1, Weight(0), 2);
+    lg.add_edge(2, Weight(0), 1);
+
+    Graph rg;
+    rg.growTo(4);
+    rg.add_edge(3, Weight(-10), 1);
+
+    const std::vector<Weight> pot(4, Weight(0));
+
+    SplitDBM left(std::move(lg), std::vector<Weight>(pot), VertSet{});
+    SplitDBM right(std::move(rg), std::vector<Weight>(pot), VertSet{});
+
+    AlignedPair aligned{
+        .left = left,
+        .right = right,
+        .left_perm = {0, 1, 2, 3},
+        .right_perm = {0, 1, 2, 3},
+        .initial_potentials = std::vector<Weight>(pot),
+    };
+
+    const std::optional<SplitDBM> result = SplitDBM::meet(aligned);
+    REQUIRE(result.has_value());
+
+    // The meet must retain both operands' relations and derive the transitive bound.
+    const Graph& g = result->graph();
+    REQUIRE(g.elem(1, 2));
+    CHECK(g.edge_val(1, 2) == Weight(0)); // y - x <= 0
+    REQUIRE(g.elem(2, 1));
+    CHECK(g.edge_val(2, 1) == Weight(0)); // x - y <= 0
+    REQUIRE(g.elem(3, 1));
+    CHECK(g.edge_val(3, 1) == Weight(-10)); // x - z <= -10
+    REQUIRE(g.elem(3, 2));
+    CHECK(g.edge_val(3, 2) == Weight(-10)); // y - z <= -10 (derived from x == y)
+}
