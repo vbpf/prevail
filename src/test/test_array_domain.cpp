@@ -38,7 +38,30 @@ TEST_CASE("weak type store havoc spans the byte width, not the upper bound", "[a
     // upper bound (20) as the width and clobbered [8, 28) instead.
     (void)stack.store_type(types, Interval{8, 16}, Interval{4}, /*is_num=*/false);
 
-    REQUIRE_FALSE(stack.all_num_width(Interval{8}, Interval{4}));   // [8, 12): targeted, non-numeric
-    REQUIRE(stack.all_num_width(Interval{20}, Interval{4}));        // [20, 24): untouched, still numeric
-    REQUIRE(stack.all_num_width(Interval{24}, Interval{4}));        // [24, 28): untouched, still numeric
+    REQUIRE_FALSE(stack.all_num_width(Interval{8}, Interval{4})); // [8, 12): targeted, non-numeric
+    REQUIRE(stack.all_num_width(Interval{20}, Interval{4}));      // [20, 24): untouched, still numeric
+    REQUIRE(stack.all_num_width(Interval{24}, Interval{4}));      // [24, 28): untouched, still numeric
+}
+
+TEST_CASE("stack access at a negative singleton offset does not throw", "[array_domain]") {
+    // Regression for an InternalError thrown when a stack pointer is walked out of
+    // bounds (below the frame) across loop iterations: the resulting negative constant
+    // offset reached Number::narrow<Index>() (an unsigned type) and threw, crashing the
+    // analysis instead of letting the assertion checker reject the out-of-bounds access.
+    // The array domain must handle such offsets gracefully (there is no cell there).
+    ArrayDomain stack{8};
+    TypeDomain types;
+    NumAbsDomain values = NumAbsDomain::top();
+    stack.initialize_numbers(0, 8);
+
+    const Interval neg{-8};
+    const Interval width{8};
+
+    REQUIRE_NOTHROW((void)stack.store_type(types, neg, width, /*is_num=*/false));
+    REQUIRE_NOTHROW(stack.havoc_type(types, neg, width));
+    REQUIRE_NOTHROW(stack.havoc(values, DataKind::svalues, neg, width, /*big_endian=*/false));
+    REQUIRE_NOTHROW((void)stack.store(values, DataKind::svalues, neg, width, /*big_endian=*/false));
+
+    // The in-bounds numeric cell must be untouched by the out-of-bounds operations.
+    REQUIRE(stack.all_num_width(Interval{0}, Interval{8}));
 }
