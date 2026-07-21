@@ -330,19 +330,11 @@ static std::optional<std::pair<offset_t, unsigned>> kill_and_find_var(StackCellR
 
     offset_map_t& offset_map = cells.get(kind);
     std::vector<Cell> overlaps;
-    if (const std::optional<Number> n = ii.singleton()) {
-        // The offset is a constant.
-        if (!n->fits<Index>()) {
-            // A negative (or otherwise out-of-range) constant offset is an access below
-            // the stack frame -- e.g. a pointer walked out of bounds across loop
-            // iterations. No stack cell exists there, so there is nothing to kill.
-            // Return early rather than falling through to the symbolic kill below: that
-            // path uses the inclusive range `ii | (ii + elem_size)` (e.g. [-8, 0]), which
-            // would spuriously havoc the offset-0 cell; narrowing the offset to the
-            // unsigned cell-offset type would also throw. The assertion checker rejects
-            // the out-of-bounds access.
-            return res; // empty
-        }
+    // A strong update requires an offset representable by the unsigned cell-offset
+    // type. An out-of-range constant (in particular a negative offset) stays on the
+    // weak path below: although the access starts outside the tracked stack, its
+    // possible byte range may still overlap a tracked cell.
+    if (const auto n = ii.singleton(); n && n->fits<Index>()) {
         if (const auto n_bytes = elem_size.singleton()) {
             auto size = n_bytes->narrow<unsigned int>();
             // -- Constant index: kill overlapping cells
@@ -360,7 +352,13 @@ static std::optional<std::pair<offset_t, unsigned>> kill_and_find_var(StackCellR
     }
     if (!res) {
         // -- Non-constant index: kill overlapping cells
-        overlaps = offset_map.get_overlap_cells_symbolic_offset(ii | (ii + elem_size));
+        // elem_size is a non-negative byte count (ValidSize enforces this for
+        // dynamic helper widths), so ii + elem_size is the exclusive end.
+        // symbolic_overlap expects an inclusive interval of byte offsets; subtract one
+        // to avoid spuriously killing a cell that starts exactly at the end. This also
+        // makes a negative constant offset safe without narrowing: [-8, -8] with width
+        // 8 touches [-8, -1], while offset -4 with width 8 may touch [0, 3].
+        overlaps = offset_map.get_overlap_cells_symbolic_offset(ii | (ii + elem_size - Interval{1}));
     }
     if (!overlaps.empty()) {
         // Forget the scalars from the relevant domain

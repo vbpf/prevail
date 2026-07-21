@@ -90,3 +90,30 @@ TEST_CASE("out-of-bounds negative offset kill preserves the in-bounds cell value
     REQUIRE(reloaded.has_value());
     REQUIRE(values.eval_interval(*reloaded).singleton() == Number{42});
 }
+
+TEST_CASE("negative offset kill forgets cells on possible partial overlap", "[array_domain]") {
+    ArrayDomain stack{8};
+    NumAbsDomain values = NumAbsDomain::top();
+    stack.initialize_numbers(0, 8);
+
+    const std::optional<Variable> cell =
+        stack.store(values, DataKind::svalues, Interval{0}, Interval{8}, /*big_endian=*/false);
+    REQUIRE(cell.has_value());
+    values.assign(*cell, LinearExpression{Number{42}});
+
+    SECTION("constant width crosses into the stack") {
+        // The write covers [-4, 4), so bytes [0, 4) of the tracked cell may change.
+        stack.havoc(values, DataKind::svalues, Interval{-4}, Interval{8}, /*big_endian=*/false);
+    }
+
+    SECTION("uncertain width may cross into the stack") {
+        // Width 8 covers [-8, 0), but width 16 covers [-8, 8). The weak update
+        // must account for the overlapping alternative.
+        stack.havoc(values, DataKind::svalues, Interval{-8}, Interval{8, 16}, /*big_endian=*/false);
+    }
+
+    const std::optional<LinearExpression> reloaded =
+        stack.load(values, DataKind::svalues, Interval{0}, 8, /*big_endian=*/false);
+    REQUIRE(reloaded.has_value());
+    REQUIRE_FALSE(values.eval_interval(*reloaded).is_singleton());
+}
