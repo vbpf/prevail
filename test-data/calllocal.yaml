@@ -449,3 +449,76 @@ post:
 
 messages:
   - "2:3: Code becomes unreachable (assume r6 >= r7)"
+---
+test-case: counted loop wholly inside a bpf-to-bpf callee keeps its back-edge
+
+# Regression for issue #1203: a loop contained entirely within an inlined
+# bpf-to-bpf subprogram must keep its back-edge after inlining. Otherwise the
+# clone is analyzed straight-line (no widening, no loop-counter insertion) and
+# the loop body is verified for a single iteration. The pc[...] loop counter in
+# the post-invariant only appears if the back-edge survived.
+
+options: ["termination"]
+pre: []
+
+code:
+  <start>: |
+    call <sub>
+    exit
+  <sub>: |
+    r0 = 0
+  <sub_loop>: |
+    r0 += 1
+    if r0 < 4 goto <sub_loop>
+  <sub_out>: |
+    exit
+
+post:
+  - r0.type=number
+  - pc[0/3]=4
+  - r0.svalue=pc[0/3]
+  - r0.uvalue=pc[0/3]
+---
+test-case: out-of-bounds packet walk in an inlined callee loop is rejected
+
+# Companion to the counted-loop regression above, demonstrating the *unsound*
+# outcome the #1203 fix removes. The callee walks a packet pointer one byte
+# further every iteration and reads through it, without re-checking the read
+# against packet_size. `assume r2 != r1` guarantees at least one byte, so the
+# first read (packet[0]) is in bounds. Before the fix the callee loop lost its
+# back-edge and was analyzed for that single iteration, so the read on later
+# iterations was never checked and the program was accepted (accept-unsafe).
+# With the back-edge restored the loop is widened, the read index is no longer
+# bounded by packet_size, and the access is correctly rejected.
+
+options: ["termination"]
+pre: [
+  "meta_offset=[-4098, 0]",
+  "packet_size=[0, 65534]",
+  "r1.ctx_offset=0", "r1.type=ctx",
+]
+
+code:
+  <start>: |
+    call <sub>
+    exit
+  <sub>: |
+    r2 = *(u32 *)(r1 + 4)
+    r1 = *(u32 *)(r1 + 0)
+    assume r2 != r1
+    r2 -= r1
+    r3 = 0
+  <sub_loop>: |
+    r4 = r1
+    r4 += r3
+    r4 = *(u8 *)(r4 + 0)
+    r3 += 1
+    if r3 < 100 goto <sub_loop>
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "0/9: Upper bound must be at most packet_size (valid_access(r4.offset, width=1) for read)"
+  - "0/11:12: Code becomes unreachable (assume r3 >= 100)"
