@@ -249,8 +249,17 @@ void EbpfTransformer::operator()(const Assume& s) {
                     // or an equality comparison on map descriptors/pointers to non-singleton locations
                     if (const auto dst_offset = primary_kind_variable_for_type(cond.left, type)) {
                         if (const auto src_offset = primary_kind_variable_for_type(src_reg, type)) {
-                            state.values.add_constraint(
-                                assume_cst_offsets_reg(cond.op, dst_offset.value(), src_offset.value()));
+                            const LinearConstraint cst =
+                                assume_cst_offsets_reg(cond.op, dst_offset.value(), src_offset.value());
+                            state.values.add_constraint(cst);
+                            // When this upper-bounds dst_offset, record a bound over the
+                            // originals that outlives dst and the ceiling being overwritten.
+                            // The numeric domain is integral, so `expr < 0` soundly
+                            // implies the weaker stored fact `expr <= 0`.
+                            if (cst.kind() == ConstraintKind::LESS_THAN_OR_EQUALS_ZERO ||
+                                cst.kind() == ConstraintKind::LESS_THAN_ZERO) {
+                                state.derive_relation_bound(dst_offset.value(), cst.expression());
+                            }
                         }
                     }
                 }
@@ -321,6 +330,10 @@ void EbpfTransformer::operator()(const Un& stmt) {
     if (dom.is_bottom()) {
         return;
     }
+    // swap_endianness's singleton fast-path writes svalue/uvalue and returns without
+    // havoc_offsets, so this is the only invalidation covering stmt.dst; before the switch
+    // so it covers every op and both the svalue and uvalue calls.
+    dom.state.invalidate_relations_for(stmt.dst);
     const auto dst = reg_pack(stmt.dst);
     auto swap_endianness = [&](const Variable v, auto be_or_le) {
         if (dom.state.is_in_group(stmt.dst, TS_NUM)) {
@@ -1109,6 +1122,9 @@ void EbpfTransformer::recompute_stack_numeric_size(TypeToNumDomain& state, const
 }
 
 void EbpfTransformer::add(const Reg& dst_reg, const int imm, const int finite_width) {
+    // add() is reached outside the Bin handler (the r10 stack-pointer adjust on call/exit),
+    // so it needs its own invalidation.
+    dom.state.invalidate_relations_for(dst_reg);
     const auto dst = reg_pack(dst_reg);
     if (dom.state.may_have_type(dst_reg, T_NUM)) {
         dom.state.values->add_overflow(dst.svalue, dst.uvalue, imm, finite_width);
@@ -1189,6 +1205,27 @@ static int _movsx_bits(const Bin::Op op) {
     }
 }
 
+// Find a same-region register whose offset the DBM proves equal to `dst`'s, via equality
+// entailment rather than by matching a preceding move or compiler pattern.
+static std::optional<Reg> find_dbm_equal_base(const TypeToNumDomain& state, const Reg& dst, const TypeEncoding region) {
+    using namespace dsl_syntax;
+    const auto dst_offset = primary_kind_variable_for_type(dst, region);
+    if (!dst_offset) {
+        return {};
+    }
+    for (uint8_t i = R0_RETURN_VALUE; i <= R10_STACK_POINTER; ++i) {
+        const Reg candidate{i};
+        if (candidate == dst || !state.may_have_type(candidate, region)) {
+            continue;
+        }
+        const auto candidate_offset = primary_kind_variable_for_type(candidate, region);
+        if (candidate_offset && state.values.entail(eq(*candidate_offset, *dst_offset))) {
+            return candidate;
+        }
+    }
+    return {};
+}
+
 void EbpfTransformer::operator()(const Bin& bin) {
     if (dom.is_bottom()) {
         return;
@@ -1197,6 +1234,10 @@ void EbpfTransformer::operator()(const Bin& bin) {
 
     auto dst = reg_pack(bin.dst);
     int finite_width = bin.is64 ? 64 : 32;
+
+    // The pure-T_NUM arms below write svalue/uvalue directly (not via havoc_offsets/assign),
+    // so this is the only invalidation covering them. The ptr+=num arm re-records afterward.
+    dom.state.invalidate_relations_for(bin.dst);
 
     // TODO: Unusable states and values should be better handled.
     //       Probably by propagating an error state.
@@ -1305,51 +1346,58 @@ void EbpfTransformer::operator()(const Bin& bin) {
             } else {
                 // Here we're not sure that lhs and rhs are the same type; they might be.
                 // But previous assertions should fail unless we know that exactly one of lhs or rhs is a pointer.
-                dom.state =
-                    dom.state.join_over_types(bin.dst, [&](TypeToNumDomain& state, const TypeEncoding dst_type) {
-                        state =
-                            state.join_over_types(src_reg, [&](TypeToNumDomain& state, const TypeEncoding src_type) {
-                                if (dst_type == T_NUM && src_type != T_NUM) {
-                                    // num += ptr
-                                    state.assign_type(bin.dst, src_type);
-                                    if (const auto dst_offset = primary_kind_variable_for_type(bin.dst, src_type)) {
-                                        state.values->apply(ArithBinOp::ADD, dst_offset.value(), dst.svalue,
-                                                            primary_kind_variable_for_type(src_reg, src_type).value());
+                dom.state = dom.state.join_over_types(bin.dst, [&](TypeToNumDomain& state,
+                                                                   const TypeEncoding dst_type) {
+                    state = state.join_over_types(src_reg, [&](TypeToNumDomain& state, const TypeEncoding src_type) {
+                        if (dst_type == T_NUM && src_type != T_NUM) {
+                            // num += ptr
+                            state.assign_type(bin.dst, src_type);
+                            if (const auto dst_offset = primary_kind_variable_for_type(bin.dst, src_type)) {
+                                state.values->apply(ArithBinOp::ADD, dst_offset.value(), dst.svalue,
+                                                    primary_kind_variable_for_type(src_reg, src_type).value());
+                            }
+                            state.values->apply_unsigned(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.uvalue,
+                                                         src.uvalue, finite_width);
+                            if (src_type == T_SHARED) {
+                                state.values.assign(dst.shared_region_size, src.shared_region_size);
+                            }
+                        } else if (dst_type != T_NUM && src_type == T_NUM) {
+                            // ptr += num. Capture the base before the ADD (equal to dst's
+                            // pre-ADD offset), record dst.offset == base.offset + num after it.
+                            const auto base = find_dbm_equal_base(state, bin.dst, dst_type);
+                            state.assign_type(bin.dst, dst_type);
+                            if (const auto dst_offset = primary_kind_variable_for_type(bin.dst, dst_type)) {
+                                state.values->apply(ArithBinOp::ADD, dst_offset.value(), dst_offset.value(),
+                                                    src.svalue);
+                                if (base) {
+                                    if (const auto base_offset = primary_kind_variable_for_type(*base, dst_type)) {
+                                        using namespace dsl_syntax;
+                                        state.record_equality(*dst_offset, LinearExpression{*base_offset} + src.svalue);
                                     }
-                                    state.values->apply_unsigned(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.uvalue,
-                                                                 src.uvalue, finite_width);
-                                    if (src_type == T_SHARED) {
-                                        state.values.assign(dst.shared_region_size, src.shared_region_size);
-                                    }
-                                } else if (dst_type != T_NUM && src_type == T_NUM) {
-                                    // ptr += num
-                                    state.assign_type(bin.dst, dst_type);
-                                    if (const auto dst_offset = primary_kind_variable_for_type(bin.dst, dst_type)) {
-                                        state.values->apply(ArithBinOp::ADD, dst_offset.value(), dst_offset.value(),
-                                                            src.svalue);
-                                        if (dst_type == T_STACK) {
-                                            // Reduce the numeric size.
-                                            using namespace dsl_syntax;
-                                            if (state.values.intersect(src.svalue < 0)) {
-                                                state.values.havoc(dst.stack_numeric_size);
-                                                recompute_stack_numeric_size(state, bin.dst);
-                                            } else {
-                                                state.values->apply_signed(ArithBinOp::SUB, dst.stack_numeric_size,
-                                                                           dst.stack_numeric_size,
-                                                                           dst.stack_numeric_size, src.svalue, 0);
-                                            }
-                                        }
-                                    }
-                                    state.values->apply_unsigned(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.uvalue,
-                                                                 src.uvalue, finite_width);
-                                } else if (dst_type == T_NUM && src_type == T_NUM) {
-                                    state.values->apply_signed(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.svalue,
-                                                               src.svalue, finite_width);
-                                } else {
-                                    state.values.set_to_bottom();
                                 }
-                            });
+                                if (dst_type == T_STACK) {
+                                    // Reduce the numeric size.
+                                    using namespace dsl_syntax;
+                                    if (state.values.intersect(src.svalue < 0)) {
+                                        state.values.havoc(dst.stack_numeric_size);
+                                        recompute_stack_numeric_size(state, bin.dst);
+                                    } else {
+                                        state.values->apply_signed(ArithBinOp::SUB, dst.stack_numeric_size,
+                                                                   dst.stack_numeric_size, dst.stack_numeric_size,
+                                                                   src.svalue, 0);
+                                    }
+                                }
+                            }
+                            state.values->apply_unsigned(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.uvalue,
+                                                         src.uvalue, finite_width);
+                        } else if (dst_type == T_NUM && src_type == T_NUM) {
+                            state.values->apply_signed(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.svalue, src.svalue,
+                                                       finite_width);
+                        } else {
+                            state.values.set_to_bottom();
+                        }
                     });
+                });
             }
             break;
         }
