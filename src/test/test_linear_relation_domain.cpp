@@ -4,6 +4,7 @@
 
 #include "arith/dsl_syntax.hpp"
 #include "crab/linear_relation_domain.hpp"
+#include "crab/type_to_num.hpp" // for NumAbsDomain alias
 #include "crab/var_registry.hpp"
 
 using namespace prevail;
@@ -394,4 +395,24 @@ TEST_CASE("LinearRelationDomain::derive_bound is a no-op on bottom values", "[re
     // bound; the guard must short-circuit before any bound is added.
     d.derive_bound(values, mid, LinearExpression{mid}.subtract(end));
     REQUIRE(d.bounds.empty());
+}
+
+TEST_CASE("TypeToNumDomain meet and narrow conjoin relation facts", "[relations][lattice]") {
+    const Variable mid = variable_registry.reg(DataKind::packet_offsets, 8);
+    const Variable base = variable_registry.reg(DataKind::packet_offsets, 6);
+    const Variable len = variable_registry.reg(DataKind::svalues, 4);
+
+    TypeToNumDomain with_fact = TypeToNumDomain::top();
+    with_fact.record_equality(mid, LinearExpression{base}.plus(len));
+    TypeToNumDomain without_fact = TypeToNumDomain::top();
+
+    const TypeToNumDomain meet = with_fact & without_fact;
+    REQUIRE(meet.relations.has_all_facts_of(with_fact.relations));
+    REQUIRE(meet <= with_fact);
+    REQUIRE(meet <= without_fact);
+
+    const TypeToNumDomain narrowed = without_fact.narrow(with_fact);
+    REQUIRE(narrowed.relations.has_all_facts_of(with_fact.relations));
+    REQUIRE(narrowed <= with_fact);
+    REQUIRE(narrowed <= without_fact);
 }
