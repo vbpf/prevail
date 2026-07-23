@@ -304,6 +304,7 @@ if (prevail_ENABLE_TESTS)
     src/test/test_int128.cpp
     src/test/test_interval_bitwise.cpp
     src/test/test_join.cpp
+    src/test/test_linear_relation_domain.cpp
     src/test/test_marshal.cpp
     src/test/test_platform_tables.cpp
     src/test/test_print.cpp
