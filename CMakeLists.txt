@@ -115,6 +115,7 @@ set(prevail_LIB_SRC
   src/crab/ebpf_transformer.cpp
   src/crab/finite_domain.cpp
   src/crab/interval.cpp
+  src/crab/linear_relation_domain.cpp
   src/crab/region_semantics.cpp
   src/crab/splitdbm/split_dbm.cpp
   src/crab/type_domain.cpp

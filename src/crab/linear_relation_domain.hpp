@@ -9,6 +9,7 @@
 #include "arith/linear_constraint.hpp"
 #include "arith/linear_expression.hpp"
 #include "arith/variable.hpp"
+#include "crab/add_bottom.hpp" // defines NumAbsDomain
 
 namespace prevail {
 
@@ -65,6 +66,12 @@ struct LinearRelationDomain {
         }
         bounds.push_back(std::move(le_zero));
     }
+
+    // Given stored `compared_var == expr` facts, turn `bound_le_zero <= 0` (which mentions
+    // compared_var) into bounds over each expr's free variables, then rewrite each variable
+    // to a DBM-proven-equal write-stable global so it survives the compared registers
+    // being overwritten after the branch. No-op if there is no equality for compared_var.
+    void derive_bound(const NumAbsDomain& values, Variable compared_var, const LinearExpression& bound_le_zero);
 
     // Drop every fact mentioning `v` (as an equality key, in an equality value, or in a
     // bound). The soundness lever: called wherever `v` is written or havoced.
@@ -131,6 +138,9 @@ struct LinearRelationDomain {
         }
         return true;
     }
+
+    [[nodiscard]]
+    bool entails(const NumAbsDomain& values, const LinearConstraint& query) const;
 };
 
 } // namespace prevail
