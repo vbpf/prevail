@@ -1,0 +1,127 @@
+# Copyright (c) Prevail Verifier contributors.
+# SPDX-License-Identifier: MIT
+#
+# Behavioral fixtures for the linear-relation domain (LinearRelationDomain in
+# linear_relation_domain.hpp), which records facts like
+# `mid.offset == ptr.offset + len.svalue` and consults them (via
+# entail_with_relations) at bound checks the DBM cannot answer directly. The
+# positive case exercises substitution at a helper-call upper-bound check; the
+# negative case confirms that a bound does not propagate to a distinct pointer.
+
+---
+test-case: linear relation lets helper-call check pass for packet region
+
+# r6's packet_offset is non-singleton, so the DBM cannot prove the
+# helper-call upper bound from interval reasoning alone; the relation
+# plus the assume on r3 carries it through.
+pre: ["meta_offset=0",
+      "r1.type=map_fd", "r1.map_fd=1",
+      "r6.type=packet", "r6.packet_offset=[0, 200]", "r6.svalue=[4098, 2147418112]", "r6.uvalue=[4098, 2147418112]",
+      "r7.type=packet", "r7.packet_offset=packet_size", "r7.packet_offset=[0, 65534]",
+      "r7.svalue=[4098, 2147418112]", "r7.uvalue=[4098, 2147418112]",
+      "packet_size=[0, 65534]",
+      "r4.type=number", "r4.svalue=[1, 100]", "r4.uvalue=[1, 100]"]
+
+code:
+  <start>: |
+    r8 = r6
+    r8 += r4
+    if r8 > r7 goto <out>
+    r2 = r6
+    r3 = r4
+    call 130; bpf_ringbuf_output
+  <out>: |
+    r0 = 0
+
+post:
+  - meta_offset=0
+  - packet_size=0
+  - packet_size-r6.packet_offset<=65534
+  - packet_size-r8.packet_offset<=65533
+  - r0.svalue=0
+  - r0.type=number
+  - r0.uvalue=0
+  - r6.packet_offset-packet_size<=200
+  - r6.packet_offset-r8.packet_offset<=-1
+  - r6.packet_offset=[0, 200]
+  - r6.svalue=[4098, 2147418112]
+  - r6.type=packet
+  - r6.uvalue-r8.svalue<=-1
+  - r6.uvalue=[4098, 2147418112]
+  - r7.packet_offset=packet_size
+  - r7.svalue=[4098, 2147418112]
+  - r7.type=packet
+  - r7.uvalue=[4098, 2147418112]
+  - r8.packet_offset-packet_size<=300
+  - r8.packet_offset-r6.packet_offset<=100
+  - r8.packet_offset=[1, 300]
+  - r8.svalue-r6.uvalue<=100
+  - r8.svalue=[4099, 2147418212]
+  - r8.type=packet
+  - r8.uvalue=r8.svalue
+
+# Stack and shared regions also use the mechanism, but realistic bytecode
+# only exposes the 3-variable gap for the packet ceiling (the others are a
+# compile-time constant or have no `end` register).
+
+---
+# Negative: only r6+r4 was bound-checked; passing r9 to the helper must
+# not propagate the bound across distinct packet pointers.
+test-case: linear relation does not propagate across distinct pointers
+
+pre: ["meta_offset=0",
+      "r1.type=map_fd", "r1.map_fd=1",
+      "r6.type=packet", "r6.packet_offset=[0, 200]", "r6.svalue=[4098, 2147418112]", "r6.uvalue=[4098, 2147418112]",
+      "r7.type=packet", "r7.packet_offset=packet_size", "r7.packet_offset=[0, 65534]",
+      "r7.svalue=[4098, 2147418112]", "r7.uvalue=[4098, 2147418112]",
+      "r9.type=packet", "r9.packet_offset=[0, 200]", "r9.svalue=[4098, 2147418112]", "r9.uvalue=[4098, 2147418112]",
+      "packet_size=[0, 65534]",
+      "r4.type=number", "r4.svalue=[1, 100]", "r4.uvalue=[1, 100]"]
+
+code:
+  <start>: |
+    r8 = r6
+    r8 += r4
+    if r8 > r7 goto <out>
+    r2 = r9
+    r3 = r4
+    call 130; bpf_ringbuf_output
+  <out>: |
+    r0 = 0
+
+post:
+  - meta_offset=0
+  - packet_size-r4.svalue<=199
+  - packet_size-r6.packet_offset<=99
+  - packet_size=0
+  - r0.svalue=0
+  - r0.type=number
+  - r0.uvalue=0
+  - r1.map_fd=1
+  - r1.type=map_fd
+  - r4.svalue=[1, 100]
+  - r4.type=number
+  - r4.uvalue-r8.svalue<=-4098
+  - r4.uvalue=[1, 100]
+  - r6.packet_offset=[0, 200]
+  - r6.svalue=[4098, 2147418112]
+  - r6.type=packet
+  - r6.uvalue-r8.svalue<=-1
+  - r6.uvalue=[4098, 2147418112]
+  - r7.packet_offset=packet_size
+  - r7.svalue=[4098, 2147418112]
+  - r7.type=packet
+  - r7.uvalue=[4098, 2147418112]
+  - r8.packet_offset=r4.svalue
+  - r8.svalue-r4.uvalue<=2147418112
+  - r8.svalue-r6.uvalue<=100
+  - r8.svalue=[4099, 2147418212]
+  - r8.type=packet
+  - r8.uvalue=r8.svalue
+  - r9.packet_offset=[0, 200]
+  - r9.svalue=[4098, 2147418112]
+  - r9.type=packet
+  - r9.uvalue=[4098, 2147418112]
+
+messages:
+  - "5: Upper bound must be at most packet_size (valid_access(r2.offset, width=r3) for read)"
