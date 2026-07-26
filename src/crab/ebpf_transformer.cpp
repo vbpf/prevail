@@ -1499,7 +1499,10 @@ void EbpfTransformer::operator()(const Bin& bin) {
         case Bin::Op::MOVSX32: {
             const int source_width = _movsx_bits(bin.op);
             // Keep relational information if operation is a no-op.
-            if (dst.svalue == src.svalue &&
+            // Only when the result is 64 bits wide: a 32-bit MOVSX must still zero-extend its
+            // 32-bit result into the upper half, and returning here would skip the truncation
+            // applied at the end of this function.
+            if (bin.is64 && dst.svalue == src.svalue &&
                 dom.state.values.eval_interval(dst.svalue) <= Interval::signed_int(source_width)) {
                 return;
             }

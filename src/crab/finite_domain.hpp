@@ -209,10 +209,8 @@ class FiniteDomain {
                                                          const Interval& right_interval) const;
     std::vector<LinearConstraint> assume_signed_32bit_lt(bool strict, Variable left_svalue, Variable left_uvalue,
                                                          const Interval& left_interval_positive,
-                                                         const Interval& left_interval_negative,
                                                          const LinearExpression& right_svalue,
-                                                         const LinearExpression& right_uvalue,
-                                                         const Interval& right_interval) const;
+                                                         const LinearExpression& right_uvalue) const;
     std::vector<LinearConstraint> assume_signed_64bit_gt(bool strict, Variable left_svalue, Variable left_uvalue,
                                                          const Interval& left_interval_positive,
                                                          const Interval& left_interval_negative,
@@ -221,10 +219,8 @@ class FiniteDomain {
                                                          const Interval& right_interval) const;
     std::vector<LinearConstraint> assume_signed_32bit_gt(bool strict, Variable left_svalue, Variable left_uvalue,
                                                          const Interval& left_interval_positive,
-                                                         const Interval& left_interval_negative,
                                                          const LinearExpression& right_svalue,
-                                                         const LinearExpression& right_uvalue,
-                                                         const Interval& right_interval) const;
+                                                         const LinearExpression& right_uvalue) const;
     std::vector<LinearConstraint> assume_signed_cst_interval(Condition::Op op, bool is64, Variable left_svalue,
                                                              Variable left_uvalue, const LinearExpression& right_svalue,
                                                              const LinearExpression& right_uvalue) const;
@@ -239,10 +235,9 @@ class FiniteDomain {
     assume_unsigned_64bit_gt(bool strict, Variable left_svalue, Variable left_uvalue, const Interval& left_interval_low,
                              const Interval& left_interval_high, const LinearExpression& right_svalue,
                              const LinearExpression& right_uvalue, const Interval& right_interval) const;
-    std::vector<LinearConstraint>
-    assume_unsigned_32bit_gt(bool strict, Variable left_svalue, Variable left_uvalue, const Interval& left_interval_low,
-                             const Interval& left_interval_high, const LinearExpression& right_svalue,
-                             const LinearExpression& right_uvalue, const Interval& right_interval) const;
+    std::vector<LinearConstraint> assume_unsigned_32bit_gt(bool strict, Variable left_svalue, Variable left_uvalue,
+                                                           const LinearExpression& right_svalue,
+                                                           const LinearExpression& right_uvalue) const;
     std::vector<LinearConstraint> assume_unsigned_cst_interval(Condition::Op op, bool is64, Variable left_svalue,
                                                                Variable left_uvalue,
                                                                const LinearExpression& right_svalue,
