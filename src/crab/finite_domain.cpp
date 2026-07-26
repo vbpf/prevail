@@ -235,22 +235,29 @@ FiniteDomain::assume_signed_64bit_lt(const bool strict, const Variable left_sval
     }
 }
 
-std::vector<LinearConstraint>
-FiniteDomain::assume_signed_32bit_lt(const bool strict, const Variable left_svalue, const Variable left_uvalue,
-                                     const Interval& left_interval_positive, const Interval& left_interval_negative,
-                                     const LinearExpression& right_svalue, const LinearExpression& right_uvalue,
-                                     const Interval& right_interval) const {
+std::vector<LinearConstraint> FiniteDomain::assume_signed_32bit_lt(const bool strict, const Variable left_svalue,
+                                                                   const Variable left_uvalue,
+                                                                   const Interval& left_interval_positive,
+                                                                   const LinearExpression& right_svalue,
+                                                                   const LinearExpression& right_uvalue) const {
 
     using namespace dsl_syntax;
 
-    if (right_interval <= Interval::negative(32)) {
-        // Interval can be represented as both an svalue and a uvalue since it fits in [INT_MIN, -1],
-        // aka [INT_MAX+1, UINT_MAX].
+    // The constraints below relate the 64-bit svalue/uvalue variables, so each branch has to
+    // establish that those variables already coincide with the 32-bit values being compared.
+    // Testing only the truncated 32-bit views is not enough: a register whose 64-bit value
+    // falls outside the 32-bit range has a 32-bit view that says nothing about how the
+    // 64-bit variables are ordered.
+    if (eval_interval(left_svalue) <= Interval::signed_int(32) &&
+        eval_interval(right_svalue) <= Interval::negative(32)) {
+        // left is a sign-extended 32-bit value and right is negative, so left < right forces left
+        // negative too: both then fit in [INT_MIN, -1], aka [INT_MAX+1, UINT_MAX], where the signed
+        // and unsigned orderings agree.
         return {std::numeric_limits<int32_t>::max() < left_uvalue,
                 strict ? left_uvalue < right_uvalue : left_uvalue <= right_uvalue,
                 strict ? left_svalue < right_svalue : left_svalue <= right_svalue};
-    } else if ((left_interval_negative | left_interval_positive) <= Interval::nonnegative(32) &&
-               right_interval <= Interval::nonnegative(32)) {
+    } else if (eval_interval(left_svalue) <= Interval::nonnegative(32) &&
+               eval_interval(right_svalue) <= Interval::nonnegative(32)) {
         // Interval can be represented as both an svalue and a uvalue since it fits in [0, INT_MAX]
         const auto lpub = left_interval_positive.truncate_to<int32_t>().ub();
         return {left_svalue >= 0,
@@ -301,16 +308,20 @@ FiniteDomain::assume_signed_64bit_gt(const bool strict, const Variable left_sval
     }
 }
 
-std::vector<LinearConstraint>
-FiniteDomain::assume_signed_32bit_gt(const bool strict, const Variable left_svalue, const Variable left_uvalue,
-                                     const Interval& left_interval_positive, const Interval& left_interval_negative,
-                                     const LinearExpression& right_svalue, const LinearExpression& right_uvalue,
-                                     const Interval& right_interval) const {
+std::vector<LinearConstraint> FiniteDomain::assume_signed_32bit_gt(const bool strict, const Variable left_svalue,
+                                                                   const Variable left_uvalue,
+                                                                   const Interval& left_interval_positive,
+                                                                   const LinearExpression& right_svalue,
+                                                                   const LinearExpression& right_uvalue) const {
 
     using namespace dsl_syntax;
 
-    if (right_interval <= Interval::nonnegative(32)) {
-        // Interval can be represented as both an svalue and a uvalue since it fits in [0, INT_MAX].
+    // As in assume_signed_32bit_lt, each branch must establish that the 64-bit svalue/uvalue
+    // variables coincide with the 32-bit values being compared before constraining them.
+    if (eval_interval(left_svalue) <= Interval::signed_int(32) &&
+        eval_interval(right_svalue) <= Interval::nonnegative(32)) {
+        // left is a sign-extended 32-bit value and right is non-negative, so left > right forces
+        // left non-negative too: it then fits in [0, INT_MAX], where svalue and uvalue coincide.
         const auto lpub = left_interval_positive.truncate_to<int32_t>().ub();
         return {left_svalue >= 0,
                 strict ? left_svalue > right_svalue : left_svalue >= right_svalue,
@@ -319,10 +330,10 @@ FiniteDomain::assume_signed_32bit_gt(const bool strict, const Variable left_sval
                 left_uvalue >= 0,
                 strict ? left_uvalue > right_uvalue : left_uvalue >= right_uvalue,
                 left_uvalue <= *lpub.number()};
-    } else if ((left_interval_negative | left_interval_positive) <= Interval::negative(32) &&
-               right_interval <= Interval::negative(32)) {
-        // Interval can be represented as both an svalue and a uvalue since it fits in [INT_MIN, -1],
-        // aka [INT_MAX+1, UINT_MAX].
+    } else if (eval_interval(left_svalue) <= Interval::negative(32) &&
+               eval_interval(right_svalue) <= Interval::negative(32)) {
+        // Both operands are sign-extended negative 32-bit values, so they fit in [INT_MIN, -1],
+        // aka [INT_MAX+1, UINT_MAX], and the signed and unsigned orderings agree.
         return {left_uvalue >= Number{std::numeric_limits<int32_t>::max()} + 1,
                 strict ? left_uvalue > right_uvalue : left_uvalue >= right_uvalue,
                 strict ? left_svalue > right_svalue : left_svalue >= right_svalue};
@@ -393,11 +404,11 @@ std::vector<LinearConstraint> FiniteDomain::assume_signed_cst_interval(const Con
     } else {
         // 32-bit compare.
         if (is_lt) {
-            return assume_signed_32bit_lt(strict, left_svalue, left_uvalue, left_interval_positive,
-                                          left_interval_negative, right_svalue, right_uvalue, right_interval);
+            return assume_signed_32bit_lt(strict, left_svalue, left_uvalue, left_interval_positive, right_svalue,
+                                          right_uvalue);
         } else {
-            return assume_signed_32bit_gt(strict, left_svalue, left_uvalue, left_interval_positive,
-                                          left_interval_negative, right_svalue, right_uvalue, right_interval);
+            return assume_signed_32bit_gt(strict, left_svalue, left_uvalue, left_interval_positive, right_svalue,
+                                          right_uvalue);
         }
     }
     return {};
@@ -513,16 +524,23 @@ FiniteDomain::assume_unsigned_64bit_gt(const bool strict, const Variable left_sv
     }
 }
 
-std::vector<LinearConstraint>
-FiniteDomain::assume_unsigned_32bit_gt(const bool strict, const Variable left_svalue, const Variable left_uvalue,
-                                       const Interval& left_interval_low, const Interval& left_interval_high,
-                                       const LinearExpression& right_svalue, const LinearExpression& right_uvalue,
-                                       const Interval& right_interval) const {
+std::vector<LinearConstraint> FiniteDomain::assume_unsigned_32bit_gt(const bool strict, const Variable left_svalue,
+                                                                     const Variable left_uvalue,
+                                                                     const LinearExpression& right_svalue,
+                                                                     const LinearExpression& right_uvalue) const {
 
     using namespace dsl_syntax;
 
-    if (right_interval <= Interval::unsigned_high(32)) {
-        // Interval can be represented as both an svalue and a uvalue since it fits in [INT_MAX+1, UINT_MAX].
+    // Constraining left_svalue requires both operands to be sign-extended negative 32-bit
+    // values; only then do the 64-bit svalues order the same way as the 32-bit values being
+    // compared. This mirrors the corresponding branch of assume_unsigned_32bit_lt. Operands
+    // that are merely in the high half of the 32-bit range fall through to the uvalue-only
+    // branch below, which stays sound because both values are then below 2^32.
+    if (eval_interval(left_svalue) <= Interval::signed_int(32) &&
+        eval_interval(right_svalue) <= Interval::negative(32)) {
+        // left is a sign-extended 32-bit value and right's 32-bit value is in the high half, so
+        // left > right (unsigned) forces left into the high half too. Both are then sign-extended
+        // negatives, where the signed and unsigned orderings agree.
         return {0 <= left_uvalue, strict ? left_uvalue > right_uvalue : left_uvalue >= right_uvalue,
                 strict ? left_svalue > right_svalue : left_svalue >= right_svalue};
     } else if (eval_interval(left_uvalue) <= Interval::unsigned_int(32) &&
@@ -607,8 +625,7 @@ std::vector<LinearConstraint> FiniteDomain::assume_unsigned_cst_interval(Conditi
         if (is_lt) {
             return assume_unsigned_32bit_lt(strict, left_svalue, left_uvalue, right_svalue, right_uvalue);
         } else {
-            return assume_unsigned_32bit_gt(strict, left_svalue, left_uvalue, left_interval_low, left_interval_high,
-                                            right_svalue, right_uvalue, right_interval);
+            return assume_unsigned_32bit_gt(strict, left_svalue, left_uvalue, right_svalue, right_uvalue);
         }
     }
 }

@@ -248,3 +248,83 @@ post:
   - r1.uvalue=r1.svalue
   - r2.type=number
   - r2.svalue=[-2147483648, 2147483647]
+---
+# Regression: a 32-bit MOVSX whose destination is also its source must still zero-extend
+# its 32-bit result. The no-op fast path used to skip that, leaving the verifier with a
+# sign-extended 64-bit value that the CPU never produces.
+test-case: movsx8 into the same register to 32 bits
+
+pre: ["r2.svalue=-1", "r2.uvalue=18446744073709551615", "r2.type=number"]
+
+code:
+  <start>: |
+    w2 s8= r2
+
+post:
+  - r2.type=number
+  - r2.svalue=4294967295
+  - r2.uvalue=4294967295
+---
+test-case: movsx32 into the same register to 32 bits
+
+pre: ["r2.svalue=-5", "r2.uvalue=18446744073709551611", "r2.type=number"]
+
+code:
+  <start>: |
+    w2 s32= r2
+
+post:
+  - r2.type=number
+  - r2.svalue=4294967291
+  - r2.uvalue=4294967291
+---
+test-case: movsx8 into the same register to 32 bits over a range
+
+pre: ["r2.svalue=[-2, -1]", "r2.uvalue=[18446744073709551614, 18446744073709551615]", "r2.type=number"]
+
+code:
+  <start>: |
+    w2 s8= r2
+
+post:
+  - r2.type=number
+  - r2.svalue=[4294967294, 4294967295]
+  - r2.uvalue=r2.svalue
+---
+# The 64-bit form really is a no-op for a value that already fits, so the fast path
+# must still apply there.
+test-case: movsx8 into the same register to 64 bits is a no-op
+
+pre: ["r2.svalue=-1", "r2.uvalue=18446744073709551615", "r2.type=number"]
+
+code:
+  <start>: |
+    r2 s8= r2
+
+post:
+  - r2.type=number
+  - r2.svalue=-1
+  - r2.uvalue=18446744073709551615
+---
+# End-to-end: dropping the zero-extension let this out-of-bounds stack write be accepted,
+# because the verifier computed r1 = r10 - 1 where the CPU computes r10 + 0xFFFFFFFF.
+test-case: movsx8 into the same register cannot hide an out-of-bounds stack write
+
+pre: ["r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    r1 = r10
+    r2 = -1
+    w2 s8= r2
+    r1 += r2
+    r3 = 0
+    *(u8 *)(r1 - 8) = r3
+    r0 = 0
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "5: Upper bound must be at most total_stack_size (valid_access(r1.offset-8, width=1) for write)"

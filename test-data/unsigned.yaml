@@ -1297,3 +1297,31 @@ code:
 post: ["r1.type=number", "r1.svalue=[-1, 2]",
        "r2.type=number", "r2.svalue=[-2, 1]",
        "r2.svalue-r1.svalue<=-1"]
+---
+# Regression: a 32-bit comparison constrains only the low 32 bits, so it must not be turned
+# into a constraint on the 64-bit svalue/uvalue unless those already coincide with the
+# 32-bit values. When the register's 64-bit range straddles a 32-bit boundary they do not,
+# and these branches used to be pruned even though concrete values take them.
+test-case: "assume 32-bit s< with left straddling INT32_MAX keeps the branch live"
+pre: ["r1.type=number", "r1.svalue=[2147483646, 2147483650]", "r1.uvalue=[2147483646, 2147483650]"]
+code:
+  <start>: assume w1 s< -1
+post: ["r1.type=number", "r1.svalue=[2147483646, 2147483650]", "r1.uvalue=[2147483646, 2147483650]"]
+---
+test-case: "assume 32-bit s> with left straddling INT32_MAX keeps the branch live"
+pre: ["r1.type=number", "r1.svalue=[2147483646, 2147483650]", "r1.uvalue=[2147483646, 2147483650]"]
+code:
+  <start>: assume w1 s> 0
+post: ["r1.type=number", "r1.svalue=[2147483646, 2147483650]", "r1.uvalue=[2147483646, 2147483650]"]
+---
+test-case: "assume 32-bit unsigned > with left straddling 2^32 keeps the branch live"
+pre: ["r1.type=number", "r1.uvalue=[4294967293, 4294967298]"]
+code:
+  <start>: assume w1 > -3
+post: ["r1.type=number", "r1.uvalue=[4294967293, 4294967298]"]
+---
+test-case: "assume 32-bit s> with left straddling 2^32 keeps the branch live"
+pre: ["r1.type=number", "r1.uvalue=[4294967293, 4294967298]"]
+code:
+  <start>: assume w1 s> 0
+post: ["r1.type=number", "r1.uvalue=[4294967293, 4294967298]"]
