@@ -332,7 +332,7 @@ class AssertExtractor {
             if (const auto src = std::get_if<Reg>(&ins.v)) {
                 const bool is_signed = (ins.op == Bin::Op::SDIV || ins.op == Bin::Op::SMOD);
                 return {Assertion{TypeConstraint{ins.dst, TypeGroup::number}},
-                        Assertion{ValidDivisor{*src, is_signed}}};
+                        Assertion{ValidDivisor{.reg = *src, .is_signed = is_signed, .is64 = ins.is64}}};
             }
             return {Assertion{TypeConstraint{ins.dst, TypeGroup::number}}};
         }

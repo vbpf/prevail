@@ -189,7 +189,14 @@ void EbpfChecker::operator()(const ValidDivisor& s) const {
     if (!context.runtime().allow_division_by_zero) {
         const auto reg = reg_pack(s.reg);
         const auto v = s.is_signed ? reg.svalue : reg.uvalue;
-        require_value(dom.state, v != 0, "Possible division by zero");
+        // A 32-bit division divides by the register's low half, the same view the
+        // transformer divides by. Testing all 64 bits instead would accept a divisor
+        // like 0x1'0000'0000, whose low half -- the actual divisor -- is zero.
+        if (s.is64) {
+            require_value(dom.state, v != 0, "Possible division by zero");
+        } else if (dom.state.values->eval_interval(v, 32).contains(0)) {
+            throw_fail("Possible division by zero");
+        }
     }
 }
 
