@@ -575,7 +575,7 @@
       }
     },
     "build": {
-      "object_count": 55,
+      "object_count": 56,
       "objects": {
         "badhelpercall.o": {
           "diagnostics": [],
@@ -1127,6 +1127,27 @@
                 "reject_load": false
               }
             ]
+          }
+        },
+        "map_sequential_lookup_unsafe.o": {
+          "diagnostics": [],
+          "exit_code": 0,
+          "program_count": 1,
+          "section_count": 1,
+          "sections": {
+            ".text": [
+              {
+                "function": "func",
+                "reject_load": false
+              }
+            ]
+          },
+          "test_overrides": {
+            "sections": {
+              ".text": {
+                "status": "reject"
+              }
+            }
           }
         },
         "mapoverflow.o": {
@@ -9416,8 +9437,8 @@
   },
   "schema_version": 1,
   "summary": {
-    "object_count": 261,
-    "program_count": 969,
-    "section_count": 756
+    "object_count": 262,
+    "program_count": 970,
+    "section_count": 757
   }
 }
