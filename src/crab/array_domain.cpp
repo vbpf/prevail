@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <algorithm>
+#include <array>
+#include <cstring>
 #include <optional>
 #include <set>
 #include <unordered_map>
@@ -464,7 +466,8 @@ std::optional<uint8_t> get_value_byte(const NumAbsDomain& inv, const offset_t o,
         break;
     default: CRAB_ERROR("Unexpected width ", width);
     }
-    const auto bytes = reinterpret_cast<uint8_t*>(&n);
+    std::array<uint8_t, sizeof(Index)> bytes{};
+    std::memcpy(bytes.data(), &n, sizeof(n));
     return bytes[o % width];
 }
 
@@ -509,7 +512,8 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, const
                     return *result_buffer;
                 }
                 if (size == 2) {
-                    uint16_t b = *reinterpret_cast<uint16_t*>(result_buffer);
+                    uint16_t b{};
+                    std::memcpy(&b, result_buffer, sizeof(b));
                     if (big_endian) {
                         b = boost::endian::native_to_big<uint16_t>(b);
                     } else {
@@ -518,7 +522,8 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, const
                     return b;
                 }
                 if (size == 4) {
-                    uint32_t b = *reinterpret_cast<uint32_t*>(result_buffer);
+                    uint32_t b{};
+                    std::memcpy(&b, result_buffer, sizeof(b));
                     if (big_endian) {
                         b = boost::endian::native_to_big<uint32_t>(b);
                     } else {
@@ -527,7 +532,8 @@ std::optional<LinearExpression> ArrayDomain::load(const NumAbsDomain& inv, const
                     return b;
                 }
                 if (size == 8) {
-                    Index b = *reinterpret_cast<Index*>(result_buffer);
+                    Index b{};
+                    std::memcpy(&b, result_buffer, sizeof(b));
                     if (big_endian) {
                         b = boost::endian::native_to_big<Index>(b);
                     } else {

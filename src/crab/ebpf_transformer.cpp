@@ -493,6 +493,21 @@ static void narrow_num_by_load_width(TypeToNumDomain& state, const RegPack& targ
     }
 }
 
+// The byte range a load of `width` bytes reads, over every address the load may use.
+static Interval read_range(const Interval& addr, const int width) {
+    return addr + Interval{Number{0}, Number{width - 1}};
+}
+
+// Whether a load covering `bytes` can see any byte of the inline pointer slot at
+// `field_offset`. A field the context descriptor does not define is negative.
+static bool may_read_ptr_field(const Interval& bytes, const int field_offset, const int offset_width) {
+    if (field_offset < 0) {
+        return false;
+    }
+    const Interval field{Number{field_offset}, Number{field_offset + offset_width - 1}};
+    return !(bytes & field).is_bottom();
+}
+
 static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, const Reg& target_reg,
                         const LinearExpression& addr_vague, const int width, const bool is_signed) {
     using namespace dsl_syntax;
@@ -515,8 +530,19 @@ static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, 
     const std::optional<Number> maybe_addr = interval.singleton();
     state.havoc_register(target_reg);
 
-    const bool may_touch_ptr =
-        interval.contains(desc->data) || interval.contains(desc->meta) || interval.contains(desc->end);
+    // We use offsets for packet data, data_end, and meta during verification,
+    // but at runtime they will be 64-bit pointers.  We can use the offset values
+    // for verification like we use map_fd's as a proxy for maps which
+    // at runtime are actually 64-bit memory pointers.
+    const int offset_width = desc->end - desc->data;
+
+    // A load that reads even one byte of a pointer slot yields pointer bytes, so its
+    // result must not be typed as a number: a partial or straddling read would
+    // otherwise launder a real pointer into a scalar the program can leak.
+    const Interval bytes = read_range(interval, width);
+    const bool may_touch_ptr = may_read_ptr_field(bytes, desc->data, offset_width) ||
+                               may_read_ptr_field(bytes, desc->meta, offset_width) ||
+                               may_read_ptr_field(bytes, desc->end, offset_width);
 
     if (!maybe_addr) {
         if (may_touch_ptr) {
@@ -530,11 +556,6 @@ static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, 
 
     const Number& addr = *maybe_addr;
 
-    // We use offsets for packet data, data_end, and meta during verification,
-    // but at runtime they will be 64-bit pointers.  We can use the offset values
-    // for verification like we use map_fd's as a proxy for maps which
-    // at runtime are actually 64-bit memory pointers.
-    const int offset_width = desc->end - desc->data;
     if (addr == desc->data) {
         if (width == offset_width) {
             state.values.assign(target.packet_offset, 0);
