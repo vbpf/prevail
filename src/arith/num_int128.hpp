@@ -7,10 +7,15 @@
 // this header provides a Boost-free fallback for compilers without a 128-bit builtin
 // (MSVC), so consumers of the installed library do not need Boost.Multiprecision.
 //
-// Semantics match two's-complement __int128 exactly: wrap-around add/sub/mul, truncation-
-// toward-zero div/mod, arithmetic right shift, and signed/unsigned comparisons. Correctness
-// is checked against native __int128 in test_int128.cpp and by running the whole test suite
-// with -DPREVAIL_FORCE_CUSTOM_INT128 on a platform that has __int128.
+// Semantics match two's-complement __int128 over the range where __int128 is defined:
+// wrap-around add/sub/mul, truncation-toward-zero div/mod, arithmetic right shift, and
+// signed/unsigned comparisons. Shift counts outside [0, 127] are undefined for __int128;
+// this header instead defines them (a negative count is a no-op, a count of 128 or more
+// yields zero, or all sign bits for a negative arithmetic right shift), so the two backends
+// agree everywhere a caller is allowed to go and only diverge past that boundary.
+// Number::operator>> and operator<< reject such counts before dispatching to either
+// backend. Correctness is checked against native __int128 in test_int128.cpp and by running
+// the whole test suite with -DPREVAIL_FORCE_CUSTOM_INT128 on a platform that has __int128.
 
 #include <compare>
 #include <concepts>

@@ -1,17 +1,23 @@
 # Copyright (c) Prevail Verifier contributors.
 # SPDX-License-Identifier: MIT
 #
-# Regression tests for writes through a context pointer.
+# Regression tests for accesses through a context pointer.
 #
 # The context descriptor used by the YAML test harness is {size=64, data=0,
 # end=4, meta=-1}: the data and data_end pointer slots occupy bytes [0,4) and
-# [4,8). A *load* of those slots synthesizes a typed packet pointer
+# [4,8). A *load* of a whole slot synthesizes a typed packet pointer
 # (do_load_ctx), but writes are not tracked by the abstract transformer. A write
 # to e.g. ctx->data that is accepted as a silent no-op, followed by a reload,
 # would hand the program a fresh "valid" packet pointer for a field it corrupted
 # at runtime -- a false PASS for an out-of-bounds dereference. Writes that may
 # overlap a pointer slot must therefore be rejected, regardless of the stored
 # value. Writes to other (scalar) context fields remain allowed.
+#
+# A load that reads only part of a pointer slot yields pointer bytes without
+# yielding a usable pointer, so its result is left untyped: typing it as a number
+# would launder those bytes into a scalar the program may store into a
+# userspace-visible region. Loads that stay clear of every slot are scalars,
+# narrowed to the range implied by the load width.
 ---
 test-case: store number to ctx data pointer slot is rejected
 
@@ -237,3 +243,69 @@ post:
   - r1.type=ctx
   - r2.type=number
   - r2.svalue=[-2147483648, 2147483647]
+
+---
+# A load straddling a pointer slot reads real pointer bytes. Typing the result as
+# a number would let the program store those bytes into a map shared with
+# userspace -- a pointer/KASLR leak (#1204). The result must carry no type, so the
+# store to the shared region is rejected.
+test-case: value straddling ctx pointer slots cannot escape to a shared region
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=16",
+      "r3.svalue=[1, 2147418112]", "r3.uvalue=r3.svalue"]
+
+code:
+  <start>: |
+    r2 = *(u32 *)(r1 + 2)
+    *(u64 *)(r3 + 0) = r2
+
+post:
+  - "_|_"
+
+messages:
+  - "1: Only numbers can be stored to externally-visible regions (r3.type != stack -> r2.type == number)"
+
+---
+# The same holds when the load address is a range: every address in [6, 10] reads
+# eight bytes, and the lowest of them reach back into the data_end slot at [4,8).
+test-case: ranged load reaching a ctx pointer slot cannot escape to a shared region
+
+pre: ["r1.type=ctx", "r1.ctx_offset=[6, 10]",
+      "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=16",
+      "r3.svalue=[1, 2147418112]", "r3.uvalue=r3.svalue"]
+
+code:
+  <start>: |
+    r2 = *(u64 *)(r1 + 0)
+    *(u64 *)(r3 + 0) = r2
+
+post:
+  - "_|_"
+
+messages:
+  - "1: Only numbers can be stored to externally-visible regions (r3.type != stack -> r2.type == number)"
+
+---
+# Precision guard for the two cases above: a load clear of every pointer slot is
+# still a plain number and may be stored to a shared region.
+test-case: value loaded from a ctx scalar field may be stored to a shared region
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=16",
+      "r3.svalue=[1, 2147418112]", "r3.uvalue=r3.svalue"]
+
+code:
+  <start>: |
+    r2 = *(u32 *)(r1 + 8)
+    *(u64 *)(r3 + 0) = r2
+
+post:
+  - r1.ctx_offset=0
+  - r1.type=ctx
+  - r2.type=number
+  - r3.shared_offset=0
+  - r3.shared_region_size=16
+  - r3.svalue=[1, 2147418112]
+  - r3.type=shared
+  - r3.uvalue=r3.svalue
