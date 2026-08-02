@@ -1,5 +1,113 @@
 # Changelog
 
+## v0.2.6 (2026-08-03)
+
+A large batch of soundness fixes, most of them cases where a crafted program
+could pass verification while performing an unsafe access, plus robustness fixes
+for crashes on adversarial input and the removal of Boost from the public
+headers.
+45 commits since v0.2.5.
+
+### Soundness fixes
+
+- Close two classes of 32-bit (ALU32/JMP32) unsoundness. The `MOVSX` no-op fast
+  path returned before the trailing zero-extension, so `wX sN= wX` kept a
+  sign-extended 64-bit value where the CPU produces a zero-extended 32-bit one.
+  Separately, the 32-bit comparison helpers emitted constraints over the 64-bit
+  `svalue`/`uvalue` after testing only the truncated 32-bit views, proving
+  branches dead that concrete executions take and leaving the unsafe code on
+  them unchecked.
+- Type a context load by the byte range it reads, not by its start offset. A
+  load straddling an inline `data`/`data_end`/`meta` pointer slot was typed
+  `T_NUM`, laundering pointer bytes into a scalar that could be stored to a map
+  shared with userspace (#1204).
+- Havoc an exact-match stack cell when it is overwritten by an uninitialized
+  register, instead of leaving the previous value and type readable (#1202).
+- Reset the per-SCC vertex marks in `select_potentials`, which otherwise
+  reported spurious infeasibility and let `meet` return bottom, vacuously
+  passing every assertion dominated by it (#1201).
+- Reconstruct an inlined callee's internal edges in a second pass, so a loop
+  wholly inside a bpf-to-bpf callee keeps its back-edge instead of being
+  analyzed straight-line (#1203).
+- Narrow sign-extending memory loads soundly: the unsigned 64-bit view of a
+  negative sign-extended result is not a single interval, so `uvalue` is havoced
+  rather than set to the zero-extended range. Extended to context inline fields.
+- Discard stale type-dependent numeric values when a register or stack slot
+  receives a new type, so scalar, offset, and size facts from a previous type
+  cannot be reinterpreted under the new one and prove an invalid state safe.
+- Fix the width argument in the weak (symbolic-index) type-store havoc, which
+  passed an upper bound where a width was expected and marked the wrong byte
+  range non-numeric.
+- Fix `TypeDomain::is_subsumed_by` for unsatisfied type-equality classes, where
+  it could report `self <= other` when false and invert the lattice order.
+- Fix the signed-division interval abstraction, and the sign of an infinite
+  bound in `ExtendedNumber` signed division, where `-oo / negative` yielded
+  `-oo` instead of `+oo` (#1158).
+- Sign-extend `BPF_ST` store immediates, so a 64-bit store of a negative
+  constant is no longer modeled with a zero upper half (#1159).
+- Havoc the stack per-type for a multi-typed `PTR_TO_WRITABLE_MEM` argument
+  (#1176).
+- Model direct socket reads conservatively, now that paths to socket-returning
+  helpers are no longer hidden by stale type-dependent facts.
+- Check the divisor a 32-bit division actually uses. The divide-by-zero check
+  tested the full 64-bit value, so a divisor that is a nonzero multiple of 2^32
+  passed while the runtime divides by zero, defeating
+  `allow_division_by_zero=false` (#1205).
+
+### Robustness
+
+- Reject an out-of-bounds negative stack offset instead of aborting the analysis
+  with an uncaught `InternalError` (#1211).
+- Fix a weight-slot leak, an out-of-bounds `clear_edges`, and vertex-count
+  overflow in `adapt_sgraph` (#1182).
+- Make the WTO consumers iterative so a crafted CFG cannot overflow the stack
+  (#1181).
+- Match subprogram relocations to their program by identity, closing a heap
+  out-of-bounds write (#1161).
+- Guard the `Exit` assertion handler against a missing label.
+
+### Build and packaging
+
+- Replace Boost.Multiprecision with a portable 128-bit integer implementation,
+  so consumers of the installed library no longer need Boost on MSVC (#1189
+  phase 1, #1190).
+- Migrate Windows CI to Visual Studio 2026 and move to yaml-cpp 0.9.0 (#1148).
+- Bump the Docker base image to ubuntu:24.04 for CMake 3.24+.
+- Fix packaging and install/consume gaps and enable the corresponding CI
+  (#1186, #1188).
+- Bump vendored CLI11 to 2.7.2, Catch2 to 3.15.3, and GSL to 4.2.2.
+
+### Precision
+
+- No sample program regressed over this release: the expected-failure set is one
+  smaller than in v0.2.5, with `cilium-examples/tcprtt_sockops_bpf_bpfel.o`
+  (`sockops`) now verifying. The precision lost when stale type-dependent values
+  were discarded was recovered by modeling direct socket reads.
+
+### CLI
+
+- Fix conformance-group selection: `--exclude_groups` intersected instead of
+  removing.
+
+### Testing and infrastructure
+
+- Drive sample verification tests from `test-data/elf_inventory.json` rather
+  than generated per-project C++ files, and parallelize CI by project (#1195).
+- Stop recording unrecognized verifier failures as passing (#1183).
+- Diff YAML invariants by line set instead of lattice subtraction, so a
+  bottom-valued expectation cannot match vacuously.
+- Cover the stale-`svalue` null-branch hole end to end with a sample that passed
+  verification before the fix (#1150).
+- Fix correctness gaps in the test-generation and inventory scripts (#1184) and
+  in the developer scripts (#1185).
+- Measure coverage on Release only, and file it against the commit under review
+  rather than the ephemeral merge ref.
+
+### Documentation
+
+- Refresh the CLI help block in the README, which was missing `--version` and
+  `--max-packet-size`.
+
 ## v0.2.5 (2026-06-07)
 
 ELF loader hardening and numeric-domain soundness fixes.
