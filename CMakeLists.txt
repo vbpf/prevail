@@ -87,7 +87,7 @@ endif ()
 
 FetchContent_Declare(GSL
   GIT_REPOSITORY "https://github.com/microsoft/GSL"
-  GIT_TAG "v4.2.0"
+  GIT_TAG "v4.2.2"
   GIT_SHALLOW ON
 )
 set(GSL_INSTALL ON CACHE BOOL "Force GSL install to vendor it with prevail" FORCE)
@@ -285,7 +285,7 @@ endif ()
 if (prevail_ENABLE_TESTS)
   FetchContent_Declare(Catch2
     GIT_REPOSITORY "https://github.com/catchorg/Catch2.git"
-    GIT_TAG "v3.15.2"
+    GIT_TAG "v3.15.3"
     GIT_SHALLOW ON
   )
   FetchContent_MakeAvailable(Catch2)
