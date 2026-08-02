@@ -565,3 +565,47 @@ post:
 
 messages:
   - "0: Possible division by zero (w2 != 0)"
+
+---
+# The same divisor is a genuine nonzero divisor for a 64-bit signed division.
+test-case: 64-bit signed division by a register whose low half is zero
+
+pre: ["r1.type=number", "r1.svalue=6", "r1.uvalue=6",
+      "r2.type=number", "r2.svalue=4294967296", "r2.uvalue=4294967296"]
+
+options: ["!allow_division_by_zero"]
+
+code:
+  <start>: |
+    r1 s/= r2
+
+post:
+  - r1.type=number
+  - r1.svalue=0
+  - r1.uvalue=0
+  - r2.type=number
+  - r2.svalue=4294967296
+  - r2.uvalue=4294967296
+
+---
+# A nonzero divisor range that crosses the 32-bit sign boundary. Sign-extending it
+# yields the whole signed range, which contains zero, so proving the low half nonzero
+# has to consult the unsigned view as well.
+test-case: 32-bit signed division by a nonzero sign-crossing range
+
+pre: ["r1.type=number", "r1.svalue=6", "r1.uvalue=6",
+      "r2.type=number", "r2.svalue=[1, 4294967295]", "r2.uvalue=r2.svalue"]
+
+options: ["!allow_division_by_zero"]
+
+code:
+  <start>: |
+    w1 s/= w2
+
+post:
+  - r1.type=number
+  - r1.svalue=[0, 4294967295]
+  - r1.uvalue=r1.svalue
+  - r2.type=number
+  - r2.svalue=[1, 4294967295]
+  - r2.uvalue=r2.svalue
