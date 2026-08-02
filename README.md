@@ -122,6 +122,7 @@ POSITIONALS:
 
 OPTIONS:
   -h,     --help              Print this help message and exit
+          --version           Display program version information and exit
           --section SECTION   Section to analyze
           --function FUNCTION Function to analyze
   -l                          List programs
@@ -138,6 +139,8 @@ Features:
                               Per-subprogram stack frame size in bytes (default: 512)
           --max-call-stack-frames INT:INT in [1 - 128]
                               Maximum number of nested function calls (default: 8)
+          --max-packet-size INT:INT in [1 - 1073741824]
+                              Maximum packet size in bytes (default: 65535)
           --include_groups GROUPS:{atomic32,atomic64,base32,base64,callx,divmul32,divmul64,packet}
                               Include conformance groups
           --exclude_groups GROUPS:{atomic32,atomic64,base32,base64,callx,divmul32,divmul64,packet}
