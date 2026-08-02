@@ -11,14 +11,14 @@ name: CPP Code Coverage
 
 jobs:
   build_ubuntu:
-    strategy:
-      matrix:
-        configurations: [Debug, Release]
+    # Coverage is measured on Release only. An unoptimized build of the verifier,
+    # instrumented and running the whole sample corpus, took between 56 min and 2h34m
+    # per run against 8-10 min for Release, and gated every pull request on it. Debug
+    # is still compiled, tested, and leak-checked by the CPP CI workflow, so nothing
+    # stops being exercised here -- only the second instrumented build goes away.
     runs-on: ubuntu-latest
     env:
-      # Configuration type to build.  For documentation on how build matrices work, see
-      # https://docs.github.com/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
-      BUILD_CONFIGURATION: ${{matrix.configurations}}
+      BUILD_CONFIGURATION: Release
 
     steps:
       - name: Install dependencies
@@ -43,25 +43,20 @@ jobs:
       - name: Run unit tests
         run: bin/tests --abort --reporter compact
 
-      # Comment only change to test coverage report to coveralls
       - name: Generate code coverage report
         run: |
           mkdir coverage
           lcov --ignore-errors all --capture --directory build --include "*/${REPO_NAME}/src/*" --exclude "*/${REPO_NAME}/src/test/*" --output-file coverage/lcov.info
 
-      - name: Coveralls Parallel
+      # git-branch/git-commit default to GITHUB_REF/GITHUB_SHA, which on a
+      # pull_request event name the ephemeral merge ref rather than the branch and
+      # commit under review. Coveralls then files the build against a commit that
+      # exists on no branch (`Merge <head> into <base>`), so its status lands on a
+      # SHA the pull request never shows and its delta compares against a phantom
+      # parent. Name the head explicitly; on push both fall back to the pushed ref.
+      - name: Coveralls
         uses: coverallsapp/github-action@v2
         with:
           github-token: ${{ secrets.github_token }}
-          flag-name: run-${{ matrix.configurations }}
-          parallel: true
-
-  finish:
-    needs: build_ubuntu
-    runs-on: ubuntu-latest
-    steps:
-      - name: Coveralls Finished
-        uses: coverallsapp/github-action@v2
-        with:
-          github-token: ${{ secrets.github_token }}
-          parallel-finished: true
+          git-branch: ${{ github.head_ref || github.ref_name }}
+          git-commit: ${{ github.event.pull_request.head.sha || github.sha }}
