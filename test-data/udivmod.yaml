@@ -513,3 +513,84 @@ post:
   - r0.type=number
   - r0.svalue=[0, 2055]
   - r0.uvalue=r0.svalue
+
+---
+# A 32-bit division divides by the low half of the divisor register. A divisor
+# that is a nonzero multiple of 2^32 has a zero low half, so the runtime divides
+# by zero; checking the full 64-bit value would accept it (#1205).
+test-case: 32-bit division by a register whose low half is zero
+
+pre: ["r1.type=number", "r1.svalue=6", "r1.uvalue=6",
+      "r2.type=number", "r2.svalue=4294967296", "r2.uvalue=4294967296"]
+
+options: ["!allow_division_by_zero"]
+
+code:
+  <start>: |
+    w1 /= w2
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Possible division by zero (w2 != 0)"
+
+---
+test-case: 32-bit modulo by a register whose low half is zero
+
+pre: ["r1.type=number", "r1.svalue=6", "r1.uvalue=6",
+      "r2.type=number", "r2.svalue=4294967296", "r2.uvalue=4294967296"]
+
+options: ["!allow_division_by_zero"]
+
+code:
+  <start>: |
+    w1 %= w2
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Possible division by zero (w2 != 0)"
+
+---
+# Precision guard: only the low half has to be nonzero. 2^32 + 5 divides as 5.
+test-case: 32-bit division by a register whose low half is nonzero
+
+pre: ["r1.type=number", "r1.svalue=6", "r1.uvalue=6",
+      "r2.type=number", "r2.svalue=4294967301", "r2.uvalue=4294967301"]
+
+options: ["!allow_division_by_zero"]
+
+code:
+  <start>: |
+    w1 /= w2
+
+post:
+  - r1.type=number
+  - r1.svalue=1
+  - r1.uvalue=1
+  - r2.type=number
+  - r2.svalue=4294967301
+  - r2.uvalue=4294967301
+
+---
+# The same divisor is a genuine nonzero divisor for a 64-bit division.
+test-case: 64-bit division by a register whose low half is zero
+
+pre: ["r1.type=number", "r1.svalue=6", "r1.uvalue=6",
+      "r2.type=number", "r2.svalue=4294967296", "r2.uvalue=4294967296"]
+
+options: ["!allow_division_by_zero"]
+
+code:
+  <start>: |
+    r1 /= r2
+
+post:
+  - r1.type=number
+  - r1.svalue=0
+  - r1.uvalue=0
+  - r2.type=number
+  - r2.svalue=4294967296
+  - r2.uvalue=4294967296

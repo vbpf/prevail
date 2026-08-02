@@ -372,6 +372,10 @@ static string size(const int w, const bool is_signed = false) {
     return string(is_signed ? "s" : "u") + std::to_string(w * 8);
 }
 
+// llvm-objdump uses "w<number>" for 32-bit operations and "r<number>" for 64-bit operations.
+// We use the same convention here for consistency.
+static string reg_name(Reg const& a, const bool is64) { return string(is64 ? "r" : "w") + std::to_string(a.v); }
+
 // ReSharper disable CppMemberFunctionMayBeConst
 struct AssertionPrinterVisitor {
     std::ostream& _os;
@@ -436,7 +440,7 @@ struct AssertionPrinterVisitor {
         _os << TypeConstraint{a.ptr, TypeGroup::pointer} << " -> " << TypeConstraint{a.num, TypeGroup::number};
     }
 
-    void operator()(ValidDivisor const& a) { _os << a.reg << " != 0"; }
+    void operator()(ValidDivisor const& a) { _os << reg_name(a.reg, a.is64) << " != 0"; }
 
     void operator()(TypeConstraint const& tc) {
         const string cmp_op = is_singleton_type(tc.types) ? "==" : "in";
@@ -474,10 +478,6 @@ struct CommandPrinterVisitor {
             break;
         }
     }
-
-    // llvm-objdump uses "w<number>" for 32-bit operations and "r<number>" for 64-bit operations.
-    // We use the same convention here for consistency.
-    static std::string reg_name(Reg const& a, const bool is64) { return ((is64) ? "r" : "w") + std::to_string(a.v); }
 
     void operator()(Bin const& b) {
         os_ << reg_name(b.dst, b.is64) << " " << b.op << "= " << b.v;

@@ -181,6 +181,15 @@ void EbpfChecker::operator()(const Addable& s) const {
     }
 }
 
+// Whether the low half of a register can be zero. Zero has the same representation in the
+// signed and the unsigned view, so either view excluding it proves the low half nonzero.
+// Consulting both matters: a range like [1, 0xffffffff] crosses the 32-bit sign boundary,
+// so sign-extending it yields the whole signed range, while zero-extending keeps it exact.
+static bool may_be_zero_at_32_bits(const TypeToNumDomain& state, const RegPack& reg) {
+    return state.values->eval_interval(reg.uvalue, 32).contains(0) &&
+           state.values->eval_interval(reg.svalue, 32).contains(0);
+}
+
 void EbpfChecker::operator()(const ValidDivisor& s) const {
     using namespace dsl_syntax;
     if (!dom.state.implies_superset(s.reg, TS_POINTER, s.reg, TS_NUM)) {
@@ -188,8 +197,15 @@ void EbpfChecker::operator()(const ValidDivisor& s) const {
     }
     if (!context.runtime().allow_division_by_zero) {
         const auto reg = reg_pack(s.reg);
-        const auto v = s.is_signed ? reg.svalue : reg.uvalue;
-        require_value(dom.state, v != 0, "Possible division by zero");
+        if (s.is64) {
+            const auto v = s.is_signed ? reg.svalue : reg.uvalue;
+            require_value(dom.state, v != 0, "Possible division by zero");
+        } else if (may_be_zero_at_32_bits(dom.state, reg)) {
+            // A 32-bit division divides by the register's low half, the same view the
+            // transformer divides by. Testing all 64 bits instead would accept a divisor
+            // like 0x1'0000'0000, whose low half -- the actual divisor -- is zero.
+            throw_fail("Possible division by zero");
+        }
     }
 }
 
