@@ -129,7 +129,11 @@ class EbpfChecker final {
     void require_upper_bound(const LinearExpression& access_ub, const LinearExpression& ceiling,
                              const std::string& msg) const {
         using namespace dsl_syntax;
-        require_value(dom.state, access_ub <= ceiling, msg);
+        // access_ub can be a three-variable sum (pointer offset + width register) the DBM
+        // cannot represent, so consult the relation store, not just the numeric domain.
+        if (!dom.state.entail_with_relations(access_ub <= ceiling)) {
+            throw_fail(msg);
+        }
     }
 
     const Assertion assertion;
