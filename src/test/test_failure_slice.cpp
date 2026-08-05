@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 #include <catch2/catch_all.hpp>
+#include <array>
+#include <cstdio>
 #include <filesystem>
 #include <sstream>
 
@@ -9,6 +11,28 @@
 #include "ebpf_verifier.hpp"
 
 using namespace prevail;
+
+// Runs the built prevail CLI binary and captures its combined stdout/stderr.
+static std::string run_prevail_cli(const std::string& args) {
+    const std::string command = "bin/prevail " + args + " 2>&1";
+    std::array<char, 4096> buffer{};
+    std::string output;
+#if defined(_WIN32)
+    FILE* pipe = _popen(command.c_str(), "r");
+#else
+    FILE* pipe = popen(command.c_str(), "r");
+#endif
+    REQUIRE(pipe != nullptr);
+    while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr) {
+        output += buffer.data();
+    }
+#if defined(_WIN32)
+    _pclose(pipe);
+#else
+    pclose(pipe);
+#endif
+    return output;
+}
 
 // Helper to check if a test sample file exists
 static bool sample_exists(const std::string& filename) { return std::filesystem::exists(filename); }
@@ -291,6 +315,35 @@ TEST_CASE("empty seed assertion still includes failing label", "[failure_slice][
         auto labels = slice.impacted_labels();
         REQUIRE(labels.contains(slice.failing_label));
     }
+}
+
+// End-to-end checks that main.cpp actually routes -v through the failure-slice
+// renderer on failure (and the plain renderer on success) -- the library-level
+// tests above bypass main.cpp entirely, so they can't catch a wiring regression there.
+TEST_CASE("-v on a failing program renders failure slices via the CLI", "[failure_slice][cli]") {
+    const std::string sample = "ebpf-samples/build/loop.o";
+    if (!sample_exists(sample)) {
+        SKIP("Sample file not found: " << sample);
+    }
+    const std::string output = run_prevail_cli(sample + " test_md -v");
+
+    REQUIRE(output.find("Failure Slice 1 of 2") != std::string::npos);
+    REQUIRE(output.find("Failure Slice 2 of 2") != std::string::npos);
+    REQUIRE(output.find("FAIL:") != std::string::npos);
+}
+
+TEST_CASE("-v on a passing program renders plain invariants via the CLI", "[failure_slice][cli]") {
+    const std::string sample = "ebpf-samples/build/bounded_loop.o";
+    if (!sample_exists(sample)) {
+        SKIP("Sample file not found: " << sample);
+    }
+    const std::string output = run_prevail_cli(sample + " test -v");
+    if (output.find("PASS:") == std::string::npos) {
+        SKIP("Program did not pass verification on this build");
+    }
+
+    REQUIRE(output.find("Pre-invariant") != std::string::npos);
+    REQUIRE(output.find("Failure Slice") == std::string::npos);
 }
 
 // loop.o contains two unrelated out-of-bounds stack accesses, one per loop.

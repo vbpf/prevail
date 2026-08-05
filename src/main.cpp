@@ -235,14 +235,16 @@ int main(int argc, char** argv) {
 
     // Convert the instruction sequence to a control-flow graph.
     try {
-        // Enable dependency collection if failure slice is requested.
-        // Also disable simplification by default so each instruction is shown individually,
-        // unless the user explicitly specified --simplify.
-        if (failure_slice) {
+        // Enable dependency collection whenever a failure-slice-style rendering may run,
+        // either explicitly (--failure-slice) or implicitly (-v on a failing program).
+        if (failure_slice || ebpf_verifier_options.verbosity_opts.print_invariants) {
             ebpf_verifier_options.verbosity_opts.collect_instruction_deps = true;
-            if (simplify_opt->count() == 0) {
-                ebpf_verifier_options.verbosity_opts.simplify = false;
-            }
+        }
+        // Disable simplification by default so each instruction is shown individually,
+        // unless the user explicitly specified --simplify. Only --failure-slice's own
+        // documented default changes here.
+        if (failure_slice && simplify_opt->count() == 0) {
+            ebpf_verifier_options.verbosity_opts.simplify = false;
         }
         const auto verbosity = ebpf_verifier_options.verbosity_opts;
         Program prog = Program::from_sequence(inst_seq, raw_prog.info, ebpf_verifier_options);
