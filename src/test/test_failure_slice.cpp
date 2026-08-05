@@ -333,14 +333,12 @@ TEST_CASE("-v on a failing program renders failure slices via the CLI", "[failur
 }
 
 TEST_CASE("-v on a passing program renders plain invariants via the CLI", "[failure_slice][cli]") {
-    const std::string sample = "ebpf-samples/build/bounded_loop.o";
+    const std::string sample = "ebpf-samples/build/stackok.o";
     if (!sample_exists(sample)) {
         SKIP("Sample file not found: " << sample);
     }
-    const std::string output = run_prevail_cli(sample + " test -v");
-    if (output.find("PASS:") == std::string::npos) {
-        SKIP("Program did not pass verification on this build");
-    }
+    const std::string output = run_prevail_cli(sample + " .text -v");
+    REQUIRE(output.find("PASS:") != std::string::npos);
 
     REQUIRE(output.find("Pre-invariant") != std::string::npos);
     REQUIRE(output.find("Failure Slice") == std::string::npos);
