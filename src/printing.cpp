@@ -194,24 +194,15 @@ void print_invariants(std::ostream& os, const Program& prog, const AnalysisResul
             printer.print_line_info(label);
             printer.print_instruction(prog, label);
             last_label = label;
-
-            const auto& current = result.invariants.at(last_label);
-            if (current.error) {
-                os << "\nVerification error:\n";
-                if (label != bb.last_label()) {
-                    os << "After " << current.pre << "\n";
-                }
-                print_error(os, *current.error, prog, verbosity);
-                os << "\n";
-                return;
-            }
         }
+
         const auto& current = result.invariants.at(last_label);
         if (!current.post.is_bottom()) {
             printer.print_jump("goto", last_label);
             os << "\nPost-invariant : " << current.post << "\n";
         }
     }
+
     os << "\n";
 }
 
