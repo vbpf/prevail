@@ -260,7 +260,12 @@ int main(int argc, char** argv) {
         auto result = analyze(context);
         if (!quiet) {
             if (verbosity.print_invariants) {
-                print_invariants(std::cout, context.program, result, verbosity);
+                if(result.failed && !failure_slice) {
+                    auto slices = result.compute_failure_slices(context);
+                    print_failure_slices(std::cout, context.program, result, slices, verbosity);
+                } else {
+                    print_invariants(std::cout, context.program, result, verbosity);
+                }
             }
             if (verbosity.print_failures) {
                 if (auto verification_error = result.find_first_error()) {

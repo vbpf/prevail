@@ -292,3 +292,48 @@ TEST_CASE("empty seed assertion still includes failing label", "[failure_slice][
         REQUIRE(labels.contains(slice.failing_label));
     }
 }
+
+// loop.o contains two unrelated out-of-bounds stack accesses, one per loop.
+TEST_CASE("compute_failure_slices reports all independent failures for loop.o", "[failure_slice][integration]") {
+    const std::string sample = "ebpf-samples/build/loop.o";
+    if (!sample_exists(sample)) {
+        SKIP("Sample file not found: " << sample);
+    }
+    const auto slices = get_failure_slices(sample, "test_md");
+
+    REQUIRE(slices.size() == 2);
+    REQUIRE(slices[0].failing_label != slices[1].failing_label);
+}
+
+// Verify print_failure_slices renders a distinct section per slice, not just the first.
+TEST_CASE("print_failure_slices renders a section per independent failure", "[failure_slice][print]") {
+    const std::string sample = "ebpf-samples/build/loop.o";
+    if (!sample_exists(sample)) {
+        SKIP("Sample file not found: " << sample);
+    }
+    VerifierOptions options{};
+    options.verbosity_opts.collect_instruction_deps = true;
+
+    ElfObject elf{sample, options, &g_ebpf_platform_linux};
+    const auto& raw_progs = elf.get_programs("test_md");
+    REQUIRE(raw_progs.size() == 1);
+
+    RawProgram raw_prog = raw_progs.back();
+    auto prog_or_error = unmarshal(raw_prog, options);
+    auto inst_seq = std::get_if<InstructionSeq>(&prog_or_error);
+    REQUIRE(inst_seq != nullptr);
+
+    Program prog = Program::from_sequence(*inst_seq, raw_prog.info, options);
+    const AnalysisContext context{std::move(prog), options};
+    auto result = analyze(context);
+    auto slices = result.compute_failure_slices(context);
+    REQUIRE(slices.size() == 2);
+
+    std::stringstream output;
+    VerbosityOptions verbosity{.simplify = false};
+    print_failure_slices(output, context.program, result, slices, verbosity);
+    const std::string output_str = output.str();
+
+    REQUIRE(output_str.find("Failure Slice 1 of 2") != std::string::npos);
+    REQUIRE(output_str.find("Failure Slice 2 of 2") != std::string::npos);
+}
