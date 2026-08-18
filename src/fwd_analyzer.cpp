@@ -142,6 +142,15 @@ class InterleavedFwdFixpointIterator final {
         return std::numeric_limits<int>::max();
     }
 
+    int max_call_depth() const {
+        int max_call_depth = 0;
+        for (const Label& label : _prog.labels()) {
+            // Label depth includes the entry frame; callers need only BPF-to-BPF calls.
+            max_call_depth = std::max(max_call_depth, label.call_stack_depth() - 1);
+        }
+        return max_call_depth;
+    }
+
   public:
     void operator()(const Label& node);
 
@@ -223,6 +232,7 @@ AnalysisResult InterleavedFwdFixpointIterator::run(const AnalysisContext& contex
     const Program& prog = context.program;
     AnalysisResult result;
     InterleavedFwdFixpointIterator analyzer(context, result);
+    result.max_call_depth = analyzer.max_call_depth();
     if (context.runtime().check_for_termination) {
         analyzer._wto.for_each_loop_head(
             [&](const Label& label) { ebpf_domain_initialize_loop_counter(entry_inv, label, context); });

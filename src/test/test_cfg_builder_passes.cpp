@@ -12,6 +12,7 @@
 #include "ir/program.hpp"
 #include "ir/syntax.hpp"
 #include "platform.hpp"
+#include "verifier.hpp"
 
 using namespace prevail;
 
@@ -204,6 +205,31 @@ TEST_CASE("pass_insert_termination_counters is off by default", "[passes]") {
 
     for (const Label& label : prog.labels()) {
         REQUIRE_FALSE(std::holds_alternative<IncrementLoopCounter>(prog.instruction_at(label)));
+    }
+}
+
+TEST_CASE("AnalysisResult reports maximum nested BPF-to-BPF call depth", "[passes][stats]") {
+    const ProgramInfo info = default_info();
+
+    SECTION("does not count the entry frame") {
+        InstructionSeq seq;
+        seq.push_back(at(0, Exit{}));
+
+        const Program prog = Program::from_sequence(seq, info, {});
+        REQUIRE(analyze(prog, {}).max_call_depth == 0);
+    }
+
+    SECTION("counts nested local calls") {
+        InstructionSeq seq;
+        // entry -> call subprogram 1 -> call subprogram 2 -> exit.
+        seq.push_back(at(0, CallLocal{.target = Label{2}}));
+        seq.push_back(at(1, Exit{}));
+        seq.push_back(at(2, CallLocal{.target = Label{4}}));
+        seq.push_back(at(3, Exit{}));
+        seq.push_back(at(4, Exit{}));
+
+        const Program prog = Program::from_sequence(seq, info, {});
+        REQUIRE(analyze(prog, {}).max_call_depth == 2);
     }
 }
 
