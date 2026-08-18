@@ -231,6 +231,40 @@ TEST_CASE("AnalysisResult reports maximum nested BPF-to-BPF call depth", "[passe
         const Program prog = Program::from_sequence(seq, info, {});
         REQUIRE(analyze(prog, {}).max_call_depth == 2);
     }
+
+    SECTION("excludes unreachable nested local calls") {
+        InstructionSeq seq;
+        seq.push_back(at(0, Exit{}));
+        // These calls are retained and inlined during CFG preparation, but are unreachable from entry.
+        seq.push_back(at(1, CallLocal{.target = Label{3}}));
+        seq.push_back(at(2, Exit{}));
+        seq.push_back(at(3, CallLocal{.target = Label{5}}));
+        seq.push_back(at(4, Exit{}));
+        seq.push_back(at(5, Exit{}));
+
+        const Program prog = Program::from_sequence(seq, info, {});
+        REQUIRE(analyze(prog, {}).max_call_depth == 0);
+    }
+
+    SECTION("preserves call depth after verification failure") {
+        InstructionSeq seq;
+        seq.push_back(at(0, CallLocal{.target = Label{2}}));
+        seq.push_back(at(1, Exit{}));
+        seq.push_back(at(2, CallLocal{.target = Label{4}}));
+        seq.push_back(at(3, Exit{}));
+        // This is one byte below the innermost 512-byte frame.
+        seq.push_back(at(4, Mem{
+                                .access = {.width = 1, .basereg = Reg{R10_STACK_POINTER}, .offset = -513},
+                                .value = Imm{0},
+                                .is_load = false,
+                            }));
+        seq.push_back(at(5, Exit{}));
+
+        const Program prog = Program::from_sequence(seq, info, {});
+        const AnalysisResult result = analyze(prog, {});
+        REQUIRE(result.failed);
+        REQUIRE(result.max_call_depth == 2);
+    }
 }
 
 TEST_CASE("pass_extract_assertions populates assertions for every label in the CFG", "[passes]") {
