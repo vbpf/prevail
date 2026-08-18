@@ -38,6 +38,11 @@ bool TypeToNumDomain::operator<=(const TypeToNumDomain& other) const {
     for (const Variable& v : this->get_nonexistent_kind_variables()) {
         tmp.values.havoc(v);
     }
+    // More must-facts = smaller in the lattice, so `this <= other` requires `this` to carry
+    // all of `other`'s facts. The direction is load-bearing: reversing it is unsound.
+    if (!this->relations.has_all_facts_of(other.relations)) {
+        return false;
+    }
     return values <= tmp.values;
 }
 
@@ -66,6 +71,7 @@ void TypeToNumDomain::operator|=(const TypeToNumDomain& other) {
     if (other.is_bottom()) {
         return;
     }
+    this->relations = LinearRelationDomain::intersect(this->relations, other.relations);
     this->join_selective(other);
     this->types |= other.types;
 }
@@ -77,6 +83,7 @@ void TypeToNumDomain::operator|=(TypeToNumDomain&& other) {
     if (other.is_bottom()) {
         return;
     }
+    this->relations = LinearRelationDomain::intersect(this->relations, other.relations);
     this->join_selective(other);
     this->types |= std::move(other.types);
 }
@@ -84,7 +91,9 @@ void TypeToNumDomain::operator|=(TypeToNumDomain&& other) {
 TypeToNumDomain TypeToNumDomain::operator&(const TypeToNumDomain& other) const {
     if (auto type_inv = types.meet(other.types)) {
         // TODO: remove unuseful variables from the numeric domain
-        return TypeToNumDomain{std::move(*type_inv), values & other.values};
+        TypeToNumDomain result{std::move(*type_inv), values & other.values};
+        result.relations = LinearRelationDomain::combine(relations, other.relations);
+        return result;
     }
     return TypeToNumDomain{TypeDomain::top(), NumAbsDomain::bottom()};
 }
@@ -92,7 +101,9 @@ TypeToNumDomain TypeToNumDomain::operator&(const TypeToNumDomain& other) const {
 TypeToNumDomain TypeToNumDomain::operator&(TypeToNumDomain&& other) const {
     if (auto type_inv = types.meet(std::move(other.types))) {
         // TODO: remove unuseful variables from the numeric domain
-        return TypeToNumDomain{std::move(*type_inv), values & std::move(other.values)};
+        TypeToNumDomain result{std::move(*type_inv), values & std::move(other.values)};
+        result.relations = LinearRelationDomain::combine(relations, other.relations);
+        return result;
     }
     return {TypeDomain::top(), NumAbsDomain::bottom()};
 }
@@ -199,6 +210,7 @@ void TypeToNumDomain::havoc_all_locations_having_type(const TypeEncoding type) {
     assert(!is_bottom());
     for (const Variable type_variable : types.variables_with_type(type)) {
         types.havoc_type(type_variable);
+        relations.invalidate_for(variable_registry.kind_var(DataKind::uvalues, type_variable));
         values.havoc(variable_registry.kind_var(DataKind::uvalues, type_variable));
         forget_type_dependent_values(type_variable);
     }
@@ -208,7 +220,9 @@ void TypeToNumDomain::forget_type_dependent_values(const Variable type_variable)
     assert(variable_registry.is_type(type_variable));
     for (const auto& kinds : type_to_kinds | std::views::values) {
         for (const DataKind kind : kinds) {
-            values.havoc(variable_registry.kind_var(kind, type_variable));
+            const Variable v = variable_registry.kind_var(kind, type_variable);
+            relations.invalidate_for(v);
+            values.havoc(v);
         }
     }
 }
@@ -219,6 +233,7 @@ void TypeToNumDomain::assign(const Reg& lhs, const Reg& rhs) {
     if (lhs == rhs) {
         return;
     }
+    invalidate_relations_for(lhs);
     forget_type_dependent_values(lhs);
     types.assign_type(lhs, rhs);
 
@@ -233,6 +248,7 @@ void TypeToNumDomain::assign(const Reg& lhs, const Reg& rhs) {
 }
 
 void TypeToNumDomain::havoc_offsets(const Reg& reg) {
+    invalidate_relations_for(reg);
     const RegPack r = reg_pack(reg);
     values.havoc(r.ctx_offset);
     values.havoc(r.map_fd);
@@ -249,6 +265,7 @@ void TypeToNumDomain::havoc_offsets(const Reg& reg) {
 }
 
 void TypeToNumDomain::havoc_register_except_type(const Reg& reg) {
+    invalidate_relations_for(reg);
     for (const DataKind kind : iterate_kinds()) {
         values.havoc(variable_registry.reg(kind, reg.v));
     }
@@ -262,11 +279,18 @@ void TypeToNumDomain::havoc_register(const Reg& reg) {
 TypeToNumDomain TypeToNumDomain::widen(const TypeToNumDomain& other) const {
     // Unlike join, widen must NOT re-add type-dependent constraints:
     // narrowing the widened result can defeat termination (see #960).
-    return TypeToNumDomain{types.widen(other.types), values.widen(other.values)};
+    TypeToNumDomain result{types.widen(other.types), values.widen(other.values)};
+    // Intersection only shrinks the fact set, so it cannot threaten termination.
+    result.relations = LinearRelationDomain::intersect(relations, other.relations);
+    return result;
 }
 
 TypeToNumDomain TypeToNumDomain::narrow(const TypeToNumDomain& other) const {
-    return TypeToNumDomain{types.narrow(other.types), values.narrow(other.values)};
+    TypeToNumDomain result{types.narrow(other.types), values.narrow(other.values)};
+    // Narrowing is a descending operation: conjoin all must-facts so the result
+    // remains at least as precise as both relation components.
+    result.relations = LinearRelationDomain::combine(relations, other.relations);
+    return result;
 }
 
 StringInvariant TypeToNumDomain::to_set() const {
