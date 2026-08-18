@@ -144,6 +144,7 @@ struct AnalysisResult {
     std::map<Label, InvariantMapPair> invariants;
     bool failed = false;
     int max_loop_count{};
+    int max_call_depth{};
     Interval exit_value = Interval::top();
 
     [[nodiscard]]
