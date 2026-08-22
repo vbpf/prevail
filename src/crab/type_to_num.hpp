@@ -5,6 +5,7 @@
 #include "arith/variable.hpp"
 #include "crab/add_bottom.hpp"
 #include "crab/interval.hpp"
+#include "crab/linear_relation_domain.hpp"
 #include "crab/type_domain.hpp"
 #include "crab/var_registry.hpp"
 
@@ -67,6 +68,7 @@ inline const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
 struct TypeToNumDomain {
     TypeDomain types{TypeDomain::top()};
     NumAbsDomain values{NumAbsDomain::top()};
+    LinearRelationDomain relations{};
 
     TypeToNumDomain() = default;
     TypeToNumDomain(TypeDomain t, NumAbsDomain n) : types(std::move(t)), values(std::move(n)) {}
@@ -90,8 +92,12 @@ struct TypeToNumDomain {
     void set_to_top() {
         types.set_to_top();
         values.set_to_top();
+        relations.clear();
     }
-    void set_to_bottom() { values.set_to_bottom(); }
+    void set_to_bottom() {
+        values.set_to_bottom();
+        relations.clear();
+    }
 
     /**
      * @brief Determines if this abstract state is subsumed by another (*this <= other).
@@ -199,6 +205,22 @@ struct TypeToNumDomain {
 
     void assign_type(auto&&... args) { types.assign_type(std::forward<decltype(args)>(args)...); }
 
+    // Linear-relation domain wrappers.
+    void record_equality(const Variable key, LinearExpression value) { relations.set_equality(key, std::move(value)); }
+    void invalidate_relations_for(const Variable v) { relations.invalidate_for(v); }
+    void invalidate_relations_for(const Reg& reg) {
+        for (const DataKind kind : iterate_kinds()) {
+            relations.invalidate_for(variable_registry.reg(kind, reg.v));
+        }
+    }
+    void derive_relation_bound(const Variable compared_var, const LinearExpression& bound_le_zero) {
+        relations.derive_bound(values, compared_var, bound_le_zero);
+    }
+    [[nodiscard]]
+    bool entail_with_relations(const LinearConstraint& query) const {
+        return relations.entails(values, query);
+    }
+
     // Convenience forwarding to TypeDomain.
     [[nodiscard]]
     bool is_in_group(const Reg& r, const TypeSet ts) const {
@@ -260,6 +282,8 @@ struct TypeToNumDomain {
     void rename(const std::vector<std::pair<Variable, Variable>>& renaming) {
         types.rename(renaming);
         values.rename(renaming);
+        // relations are variable-keyed; conservatively drop at call boundaries.
+        relations.clear();
     }
 
     [[nodiscard]]

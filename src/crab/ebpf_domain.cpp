@@ -230,6 +230,9 @@ void EbpfDomain::restrict_type(const Variable v, const TypeSet& ts) {
 
 void EbpfDomain::havoc(const Variable var) {
     // TODO: type inv?
+    // packet reallocation havocs packet_size/meta_offset through here; they are relation
+    // canonicalization targets, so a stale bound must not survive onto the new packet.
+    state.invalidate_relations_for(var);
     state.values.havoc(var);
 }
 

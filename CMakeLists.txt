@@ -115,6 +115,7 @@ set(prevail_LIB_SRC
   src/crab/ebpf_transformer.cpp
   src/crab/finite_domain.cpp
   src/crab/interval.cpp
+  src/crab/linear_relation_domain.cpp
   src/crab/region_semantics.cpp
   src/crab/splitdbm/split_dbm.cpp
   src/crab/type_domain.cpp
@@ -304,6 +305,7 @@ if (prevail_ENABLE_TESTS)
     src/test/test_int128.cpp
     src/test/test_interval_bitwise.cpp
     src/test/test_join.cpp
+    src/test/test_linear_relation_domain.cpp
     src/test/test_marshal.cpp
     src/test/test_platform_tables.cpp
     src/test/test_print.cpp
