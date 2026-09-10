@@ -1195,3 +1195,33 @@ post:
   - "_|_"
 messages:
   - "0: Lower bound must be at least r10.stack_offset - subprogram_stack_size (valid_access(r1.offset) for comparison/subtraction)"
+---
+test-case: 32-bit equality when a zone bound exceeds the 64-bit range
+
+# https://github.com/vbpf/prevail/issues/1230. The zone domain keeps
+# r0.svalue - r1.uvalue <= 2^64 - 8388608 across the outer loop; closing it
+# against r1.uvalue's upper bound gives r0.svalue <= 2^64 + 0x7f7f0000, a sound
+# bound that no int64_t can hold. Reading it raw aborted the analysis.
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=4096", "r10.uvalue=[4096, 2147418112]",
+      "meta_offset=0", "packet_size=0"]
+
+code:
+  <start>: |
+    r0 = 0
+    r2 = 0
+  <loop>: |
+    r2 = -1
+  <self>: |
+    if w0 == 1 goto <self>
+    w0 ^= -65536
+    r1 = 8388607
+    if w0 >= 0 goto <loop>
+  <exit>: |
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "6:7: Code becomes unreachable (assume r0 w< 0)"
