@@ -70,7 +70,13 @@ std::vector<LinearConstraint> FiniteDomain::assume_signed_32bit_eq(const Variabl
     using namespace dsl_syntax;
 
     if (const auto rn = right_interval.singleton()) {
-        const auto left_svalue_interval = eval_interval(left_svalue);
+        // The zone domain stores bounds as unbounded numbers, and its closure can derive a
+        // bound for an svalue from a difference constraint plus the other operand's bound.
+        // That sum is a sound but unrepresentable bound: it can land outside [INT64_MIN,
+        // INT64_MAX] even though the register itself always holds a 64-bit signed value.
+        // Read the 64-bit view, exactly as get_signed_intervals() hands one to every other
+        // assume helper, so the endpoints below can be taken as int64_t.
+        const auto left_svalue_interval = eval_interval(left_svalue).truncate_to<int64_t>();
         if (left_svalue_interval.finite_size()) {
             // Find the lowest 64-bit svalue whose low 32 bits match the singleton.
 
