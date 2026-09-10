@@ -1,6 +1,34 @@
 # Copyright (c) Prevail Verifier contributors.
 # SPDX-License-Identifier: MIT
 ---
+test-case: subtract INT_MIN immediate, 64-bit
+
+# https://github.com/vbpf/prevail/issues/1229: negating the immediate used to
+# overflow the int that carried it, so `-= INT_MIN` aborted with narrowing_error.
+pre: ["r0.type=number", "r0.svalue=0", "r0.uvalue=0"]
+
+code:
+  <start>: |
+    r0 -= -2147483648
+
+post:
+  - r0.type=number
+  - r0.svalue=2147483648
+  - r0.uvalue=2147483648
+---
+test-case: subtract INT_MIN immediate, 32-bit
+
+pre: ["r0.type=number", "r0.svalue=0", "r0.uvalue=0"]
+
+code:
+  <start>: |
+    w0 -= -2147483648
+
+post:
+  - r0.type=number
+  - r0.svalue=2147483648
+  - r0.uvalue=2147483648
+---
 test-case: subtract immediate from large singleton number
 
 pre: ["r0.type=number", "r0.svalue=2147483649", "r0.uvalue=2147483649"]

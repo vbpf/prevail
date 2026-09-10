@@ -105,7 +105,7 @@ class EbpfTransformer final {
     void do_mem_store(const Mem& b, const LinearExpression& val_svalue, const LinearExpression& val_uvalue,
                       const std::optional<Reg>& opt_val_reg);
 
-    void add(const Reg& dst_reg, int imm, int finite_width);
+    void add(const Reg& dst_reg, int64_t imm, int finite_width);
 
     void shl(const Reg& dst_reg, int imm, int finite_width);
 
@@ -1129,7 +1129,7 @@ void EbpfTransformer::recompute_stack_numeric_size(TypeToNumDomain& state, const
     recompute_stack_numeric_size(state, reg_type(reg));
 }
 
-void EbpfTransformer::add(const Reg& dst_reg, const int imm, const int finite_width) {
+void EbpfTransformer::add(const Reg& dst_reg, const int64_t imm, const int finite_width) {
     const auto dst = reg_pack(dst_reg);
     if (dom.state.may_have_type(dst_reg, T_NUM)) {
         dom.state.values->add_overflow(dst.svalue, dst.uvalue, imm, finite_width);
@@ -1258,13 +1258,15 @@ void EbpfTransformer::operator()(const Bin& bin) {
             if (imm == 0) {
                 return;
             }
-            add(bin.dst, gsl::narrow<int>(imm), finite_width);
+            add(bin.dst, imm, finite_width);
             break;
         case Bin::Op::SUB:
             if (imm == 0) {
                 return;
             }
-            add(bin.dst, gsl::narrow<int>(-imm), finite_width);
+            // Negate in 64 bits: imm is a sign-extended 32-bit value, so -INT32_MIN
+            // is representable here even though it does not fit in an int.
+            add(bin.dst, -imm, finite_width);
             break;
         case Bin::Op::MUL:
             dom.state.values->mul(dst.svalue, dst.uvalue, imm, finite_width);
