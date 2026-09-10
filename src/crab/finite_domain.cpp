@@ -1035,7 +1035,11 @@ void FiniteDomain::shl(const Variable svalue, const Variable uvalue, const int i
         shl_overflow(svalue, uvalue, imm);
         return;
     }
-    auto [lb_n, ub_n] = uinterval.pair<uint64_t>();
+    // Zone weights are unbounded numbers, so closing a difference constraint against the
+    // other operand's bound can give uvalue a finite bound outside [0, UINT64_MAX], or a
+    // negative one that has not yet been re-established as non-negative. Both are sound
+    // but not representable, so read the 64-bit unsigned view of the endpoints.
+    auto [lb_n, ub_n] = uinterval.truncate_to<uint64_t>().pair<uint64_t>();
     const uint64_t uint_max = finite_width == 64 ? uint64_t{std::numeric_limits<uint64_t>::max()}
                                                  : uint64_t{std::numeric_limits<uint32_t>::max()};
     const int unpreserved_bit_count = finite_width - imm;
@@ -1061,7 +1065,8 @@ void FiniteDomain::shl(const Variable svalue, const Variable uvalue, const int i
 void FiniteDomain::lshr(const Variable svalue, const Variable uvalue, const int imm, const int finite_width) {
     const auto uinterval = eval_interval(uvalue);
     if (uinterval.finite_size()) {
-        auto [lb_n, ub_n] = uinterval.pair_number();
+        // See shl(): a finite stored bound need not be representable as a uint64_t.
+        auto [lb_n, ub_n] = uinterval.truncate_to<uint64_t>().pair_number();
         if (finite_width == 64) {
             lb_n = lb_n.cast_to<uint64_t>() >> imm;
             ub_n = ub_n.cast_to<uint64_t>() >> imm;

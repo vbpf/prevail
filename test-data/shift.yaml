@@ -1425,3 +1425,62 @@ post:
   - r3.type=number
   - r3.uvalue=0
   - r3.svalue=0
+---
+test-case: left shift when a zone bound exceeds the 64-bit range
+
+# Same root cause as the #1230 crash in assume_signed_32bit_eq: the zone domain
+# keeps r0.svalue - r1.uvalue <= 2^64 - 8388608 across the outer loop, and
+# closing it against r1.uvalue's upper bound gives r0.uvalue <= 2^64 +
+# 0x7f7f0000 -- sound, but wider than any uint64_t. shl() read that bound raw.
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=4096", "r10.uvalue=[4096, 2147418112]",
+      "meta_offset=0", "packet_size=0"]
+
+code:
+  <start>: |
+    r0 = 0
+    r2 = 0
+  <loop>: |
+    r2 = -1
+  <self>: |
+    r0 <<= 1
+    if w0 == 1 goto <self>
+    w0 ^= -65536
+    r1 = 8388607
+    if w0 >= 0 goto <loop>
+  <exit>: |
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "7:8: Code becomes unreachable (assume r0 w< 0)"
+
+---
+test-case: unsigned right shift when a zone bound exceeds the 64-bit range
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=4096", "r10.uvalue=[4096, 2147418112]",
+      "meta_offset=0", "packet_size=0"]
+
+code:
+  <start>: |
+    r0 = 0
+    r2 = 0
+  <loop>: |
+    r2 = -1
+  <self>: |
+    r0 >>= 1
+    if w0 == 1 goto <self>
+    w0 ^= -65536
+    r1 = 8388607
+    if w0 >= 0 goto <loop>
+  <exit>: |
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "7:8: Code becomes unreachable (assume r0 w< 0)"
