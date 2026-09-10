@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <cassert>
 #include <ranges>
+#include <set>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include "analysis_context.hpp"
 #include "cfg/cfg.hpp"
@@ -142,6 +144,27 @@ class InterleavedFwdFixpointIterator final {
         return std::numeric_limits<int>::max();
     }
 
+    [[nodiscard]]
+    int max_call_depth() const {
+        int max_call_depth = 0;
+        std::set<Label> visited;
+        std::vector<Label> worklist{_cfg.entry_label()};
+        while (!worklist.empty()) {
+            const Label label = worklist.back();
+            worklist.pop_back();
+            if (!visited.insert(label).second) {
+                continue;
+            }
+
+            // Label depth includes the entry frame; callers need only BPF-to-BPF calls.
+            max_call_depth = std::max(max_call_depth, label.call_stack_depth() - 1);
+            for (const Label& child : _cfg.children_of(label)) {
+                worklist.push_back(child);
+            }
+        }
+        return max_call_depth;
+    }
+
   public:
     void operator()(const Label& node);
 
@@ -223,6 +246,7 @@ AnalysisResult InterleavedFwdFixpointIterator::run(const AnalysisContext& contex
     const Program& prog = context.program;
     AnalysisResult result;
     InterleavedFwdFixpointIterator analyzer(context, result);
+    result.max_call_depth = analyzer.max_call_depth();
     if (context.runtime().check_for_termination) {
         analyzer._wto.for_each_loop_head(
             [&](const Label& label) { ebpf_domain_initialize_loop_counter(entry_inv, label, context); });
