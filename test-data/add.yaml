@@ -154,3 +154,17 @@ post:
   - r7.svalue-r2.uvalue<=5
   - r2.packet_offset-r7.packet_offset<=-3
   - r7.packet_offset-r2.packet_offset<=5
+
+---
+test-case: add INT_MIN immediate, 64-bit
+
+pre: ["r0.type=number", "r0.svalue=0", "r0.uvalue=0"]
+
+code:
+  <start>: |
+    r0 += -2147483648
+
+post:
+  - r0.type=number
+  - r0.svalue=-2147483648
+  - r0.uvalue=18446744071562067968
