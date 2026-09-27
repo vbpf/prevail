@@ -613,3 +613,57 @@ post:
   - packet_size=0
 
 messages: []
+---
+test-case: bounded 32-bit stack counter loop with local call
+
+# The induction variable lives in a 4-byte stack slot that each iteration
+# overwrites in place. The strong update must keep the slot's svalue, or the
+# relation between the slot and the loop counter is lost (issue #1236).
+
+options: ["termination"]
+pre: ["r10.type=stack", "r10.stack_offset=4096"]
+code:
+  <start>: |
+    r0 = 0
+    *(u32 *)(r10 - 4) = r0
+    *(u32 *)(r10 - 12) = r0
+    r1 = *(u32 *)(r10 - 12)
+    if r1 s> 9 goto <out>
+    r6 = 10
+  <loop>: |
+    r1 = r0
+    call <increment>
+    r1 = *(u32 *)(r10 - 12)
+    r1 += 1
+    *(u32 *)(r10 - 12) = r1
+    r1 = *(u32 *)(r10 - 12)
+    if r6 s> r1 goto <loop>
+  <out>: |
+    exit
+  <increment>: |
+    r0 = r1
+    r0 += 1
+    exit
+
+post:
+  - pc[6]=10
+  - r0.type=number
+  - r0.svalue=pc[6]
+  - r0.uvalue=pc[6]
+  - r1.type=number
+  - r1.svalue=pc[6]
+  - r1.uvalue=pc[6]
+  - r6.type=number
+  - r6.svalue=10
+  - r6.uvalue=10
+  - r10.type=stack
+  - r10.stack_offset=4096
+  - s[4084...4087].type=number
+  - s[4084...4087].svalue=pc[6]
+  - s[4084...4087].uvalue=pc[6]
+  - s[4092...4095].type=number
+  - s[4092...4095].svalue=0
+  - s[4092...4095].uvalue=0
+
+messages:
+  - "4:13: Code becomes unreachable (assume r1 s> 9)"
