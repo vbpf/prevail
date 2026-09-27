@@ -941,3 +941,29 @@ code:
 post:
   - r10.type=stack
   - r10.stack_offset=512
+---
+test-case: narrow stack store over an existing cell keeps both numeric views
+
+# A 1/2/4-byte strong update writes the svalue cell and then the uvalue cell.
+# Killing the old uvalue cell also forgets the svalue cell at the same place,
+# so both views must be forgotten before either strong update, or the second
+# update erases the svalue just stored (issue #1236).
+
+pre: ["r10.type=stack", "r10.stack_offset=512",
+      "r1.type=number", "r1.svalue=[0, 5]", "r1.uvalue=[0, 5]"]
+
+code:
+  <start>: |
+    *(u32 *)(r10 - 12) = r1
+    r1 += 1
+    *(u32 *)(r10 - 12) = r1 ; exact-match overwrite of the (500,4) cell
+
+post:
+  - r1.type=number
+  - r1.svalue=[1, 6]
+  - r1.uvalue=r1.svalue
+  - r10.type=stack
+  - r10.stack_offset=512
+  - s[500...503].type=number
+  - s[500...503].svalue=r1.svalue
+  - s[500...503].uvalue=r1.svalue

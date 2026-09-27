@@ -674,9 +674,14 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& state, const LinearExpress
             must_be_num ? LinearExpression{T_NUM} : variable_registry.type_reg(opt_val_reg->v);
         state.assign_type(stack.store_type(state.types, addr, width, must_be_num), val_type);
 
+        // Forget both numeric views before either strong update below. Killing a cell of one
+        // numeric kind also forgets that cell's other numeric kind, so a strong update over a
+        // still-present cell of the other kind would erase the value just assigned to the first.
+        // This must follow store_type, which marks the written bytes numeric so that the
+        // numeric cells partially overlapping them can be split.
+        stack.havoc(state.values, DataKind::svalues, addr, width, big_endian);
+        stack.havoc(state.values, DataKind::uvalues, addr, width, big_endian);
         if (exact_width == 8) {
-            stack.havoc(state.values, DataKind::svalues, addr, width, big_endian);
-            stack.havoc(state.values, DataKind::uvalues, addr, width, big_endian);
             state.values.assign(stack.store(state.values, DataKind::svalues, addr, width, big_endian), val_svalue);
             state.values.assign(stack.store(state.values, DataKind::uvalues, addr, width, big_endian), val_uvalue);
 
@@ -693,18 +698,11 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& state, const LinearExpress
             if (const auto stack_svalue = stack.store(state.values, DataKind::svalues, addr, width, big_endian)) {
                 state.values.assign(stack_svalue, val_svalue);
                 state.values->overflow_bounds(*stack_svalue, exact_width * 8, true);
-            } else {
-                stack.havoc(state.values, DataKind::svalues, addr, width, big_endian);
             }
             if (const auto stack_uvalue = stack.store(state.values, DataKind::uvalues, addr, width, big_endian)) {
                 state.values.assign(stack_uvalue, val_uvalue);
                 state.values->overflow_bounds(*stack_uvalue, exact_width * 8, false);
-            } else {
-                stack.havoc(state.values, DataKind::uvalues, addr, width, big_endian);
             }
-        } else {
-            stack.havoc(state.values, DataKind::svalues, addr, width, big_endian);
-            stack.havoc(state.values, DataKind::uvalues, addr, width, big_endian);
         }
     }
 
