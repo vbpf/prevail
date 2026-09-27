@@ -357,13 +357,12 @@ messages:
   - "0: Invalid type (r1.type == number)"
 
 ---
-# Regression test: when a register carries a
-# non-singleton typeset (here {ctx, shared}), add() cannot pick a single
-# offset variable to update. It must invalidate all offset variables rather
-# than leaving them stale; otherwise the post-add bounds check uses the
+# Regression test: when a register carries a non-singleton typeset (here
+# {ctx, shared}), add() must advance the offset of every possible type rather
+# than leave any of them stale; otherwise the post-add bounds check uses the
 # pre-add offset and accepts an out-of-bounds access. After advancing the
 # pointer past both regions, the dereference must be rejected.
-test-case: non-singleton typeset pointer add invalidates offsets
+test-case: non-singleton typeset pointer add advances every offset
 
 pre: ["r1.type in {ctx, shared}",
       "r1.ctx_offset=8",
@@ -379,7 +378,71 @@ post:
   - "_|_"
 
 messages:
-  - "1: Lower bound must be at least 0 (valid_access(r1.offset, width=8) for read)"
+  - "1: Upper bound must be at most 64 (valid_access(r1.offset, width=8) for read)"
+
+---
+# A constant add to a {stack, shared} pointer advances the stack offset and
+# the shared offset independently, keeping the shared region size, so an
+# access that is in bounds under both types is accepted (issue #1237).
+test-case: stack and shared pointer add keeps both offsets
+
+pre: ["r10.type=stack", "r10.stack_offset=4096",
+      "r8.type in {stack, shared}",
+      "r8.stack_offset=3936", "r8.stack_numeric_size=56",
+      "r8.shared_offset=0", "r8.shared_region_size=56",
+      "r8.uvalue=[1, 2147418112]",
+      "s[3968...3968].type=number"]
+
+code:
+  <start>: |
+    r3 = 0
+    r3 = r8
+    r3 += 32
+    r0 = *(u8 *)(r3 + 0)
+
+post:
+  - r0.type=number
+  - r3.type in {stack, shared}
+  - r3.stack_offset=3968
+  - r3.shared_offset=32
+  - r3.shared_region_size=56
+  - r3.stack_numeric_size=1
+  - r3.svalue=[33, 2147418144]
+  - r3.svalue=r8.uvalue+32
+  - r3.uvalue=r3.svalue
+  - r8.type=r3.type
+  - r8.stack_offset=3936
+  - r8.stack_numeric_size=56
+  - r8.shared_offset=0
+  - r8.shared_region_size=56
+  - r8.uvalue=[1, 2147418112]
+  - r10.type=stack
+  - r10.stack_offset=4096
+  - s[3968].type=number
+
+---
+# Companion: each type's advanced offset is checked against its own region.
+# Past the shared region the {stack, shared} pointer is out of bounds on the
+# shared path even though the stack path is fine, so the access is rejected.
+test-case: stack and shared pointer add past the shared region is rejected
+
+pre: ["r10.type=stack", "r10.stack_offset=4096",
+      "r8.type in {stack, shared}",
+      "r8.stack_offset=3936", "r8.stack_numeric_size=160",
+      "r8.shared_offset=0", "r8.shared_region_size=56",
+      "r8.uvalue=[1, 2147418112]",
+      "s[3936...4095].type=number"]
+
+code:
+  <start>: |
+    r8 += 56
+    r0 = *(u8 *)(r8 + 0)
+
+post:
+  - "_|_"
+
+messages:
+  - "1: Upper bound must be at most r8.shared_region_size (valid_access(r8.offset, width=1) for read)"
 
 ---
 # Symmetric regression on the register-register
