@@ -1140,14 +1140,13 @@ void EbpfTransformer::add(const Reg& dst_reg, const int64_t imm, const int finit
             dom.state.havoc_offsets(dst_reg);
         }
     } else {
-        if (const auto kind = dom.state.primary_kind_variable_for_type(dst_reg)) {
-            dom.state.values->add(*kind, imm);
-        } else {
-            // The register's typeset is non-singleton, so we cannot pick a single offset
-            // variable to update. Conservatively invalidate all offset variables rather than
-            // leaving them stale, which would make subsequent bounds checks use a pre-add
-            // offset and accept out-of-bounds accesses. Mirrors shl()/lshr()/ashr().
-            dom.state.havoc_offsets(dst_reg);
+        // Advance the primary kind variable of every type the register may have. Each such
+        // variable is meaningful only while the register has its type, so advancing all of them
+        // is exact for every alternative and relates no variable to another type's.
+        for (const TypeEncoding type : dom.state.iterate_types(dst_reg)) {
+            if (const auto kind = primary_kind_variable_for_type(dst_reg, type)) {
+                dom.state.values->add(*kind, imm);
+            }
         }
         dom.state.values->apply_unsigned(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.uvalue, imm, finite_width);
     }
