@@ -38,10 +38,20 @@ EbpfDomain Extrapolator::compute_fixpoint(EbpfDomain invariant, const Step& step
         if (++iteration > max_descending_iterations_) {
             break;
         }
+        EbpfDomain refined;
         if (iteration == 1) {
-            invariant = invariant & new_pre;
+            refined = invariant & new_pre;
         } else {
-            invariant = invariant.narrow(new_pre);
+            refined = invariant.narrow(new_pre);
+        }
+
+        // Narrowing is descending, so refined <= invariant by construction. The reverse ordering means narrowing
+        // made no semantic progress. Retain the result so any canonicalized representation or auxiliary stack-cell
+        // metadata is preserved.
+        const bool narrowing_fixpoint = invariant <= refined;
+        invariant = std::move(refined);
+        if (narrowing_fixpoint) {
+            break;
         }
     }
 

@@ -532,6 +532,33 @@ messages:
   - "1 (counter): Loop counter is too large (pc[1] < 100000)"
 
 ---
+# True-positive regression for #783: the countdown SCC reaches a stationary
+# narrowing result, and the following self-loop makes the program genuinely
+# nonterminating.
+test-case: 32-bit countdown before infinite loop reaches stationary narrowing fixpoint
+options: ["termination"]
+
+pre: []
+
+code:
+  <start>: |
+    r0 = 0
+    r1 = 10
+  <loop>: |
+    w1 -= 1
+    if r1 > 0 goto <loop>
+  <infinite>: |
+    goto <infinite>
+  <out>: |
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "2 (counter): Loop counter is too large (pc[2] < 100000)"
+
+---
 test-case: while loop with 16-bit AND truncation, variable bound
 options: ["termination"]
 
