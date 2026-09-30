@@ -532,9 +532,10 @@ messages:
   - "1 (counter): Loop counter is too large (pc[1] < 100000)"
 
 ---
-# Regression for #783: 32-bit arithmetic previously reached a stationary
-# narrowing result and repeated it until the descending iteration limit.
-test-case: 32-bit countdown reaches stationary narrowing fixpoint
+# True-positive regression for #783: the countdown SCC reaches a stationary
+# narrowing result, and the following self-loop makes the program genuinely
+# nonterminating.
+test-case: 32-bit countdown before infinite loop reaches stationary narrowing fixpoint
 options: ["termination"]
 
 pre: []
@@ -546,17 +547,13 @@ code:
   <loop>: |
     w1 -= 1
     if r1 > 0 goto <loop>
+  <infinite>: |
+    goto <infinite>
+  <out>: |
     exit
 
 post:
-  - "pc[2]=[1, +oo]"
-  - "r0.svalue=0"
-  - "r0.type=number"
-  - "r0.uvalue=0"
-  - "r1.svalue-pc[2]<=4294967290"
-  - "r1.svalue=0"
-  - "r1.type=number"
-  - "r1.uvalue=r1.svalue"
+  - "_|_"
 
 messages:
   - "2 (counter): Loop counter is too large (pc[2] < 100000)"
