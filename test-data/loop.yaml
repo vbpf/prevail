@@ -532,6 +532,36 @@ messages:
   - "1 (counter): Loop counter is too large (pc[1] < 100000)"
 
 ---
+# Regression for #783: 32-bit arithmetic previously reached a stationary
+# narrowing result and repeated it until the descending iteration limit.
+test-case: 32-bit countdown reaches stationary narrowing fixpoint
+options: ["termination"]
+
+pre: []
+
+code:
+  <start>: |
+    r0 = 0
+    r1 = 10
+  <loop>: |
+    w1 -= 1
+    if r1 > 0 goto <loop>
+    exit
+
+post:
+  - "pc[2]=[1, +oo]"
+  - "r0.svalue=0"
+  - "r0.type=number"
+  - "r0.uvalue=0"
+  - "r1.svalue-pc[2]<=4294967290"
+  - "r1.svalue=0"
+  - "r1.type=number"
+  - "r1.uvalue=r1.svalue"
+
+messages:
+  - "2 (counter): Loop counter is too large (pc[2] < 100000)"
+
+---
 test-case: while loop with 16-bit AND truncation, variable bound
 options: ["termination"]
 

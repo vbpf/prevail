@@ -300,6 +300,7 @@ if (prevail_ENABLE_TESTS)
     src/test/test_cfg_builder_passes.cpp
     src/test/test_conformance.cpp
     src/test/test_elf_loader.cpp
+    src/test/test_extrapolator.cpp
     src/test/test_failure_slice.cpp
     src/test/test_int128.cpp
     src/test/test_interval_bitwise.cpp
