@@ -1,0 +1,45 @@
+# Copyright (c) Prevail Verifier contributors.
+# SPDX-License-Identifier: MIT
+---
+name: Docker CI
+
+"on":
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+
+concurrency:
+  group: docker-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Exercise the same non-recursive checkout used by external build tools.
+          submodules: false
+          persist-credentials: false
+
+      - name: Build image from a non-recursive checkout
+        run: docker build --progress=plain -t prevail:test .
+
+      - name: Run tests without network access
+        run: >-
+          docker run --rm --network=none --entrypoint ctest prevail:test
+          --test-dir build --output-on-failure --no-tests=error --parallel 2
+
+      - name: Verify sample without network access
+        run: >-
+          docker run --rm --network=none prevail:test
+          ebpf-samples/cilium/bpf_lxc.o 2/1
