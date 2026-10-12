@@ -169,6 +169,11 @@ void EbpfChecker::operator()(const Comparable& s) const {
     } else {
         // _Maybe_ different types, so r2 must be a number.
         // We checked in a previous assertion that r1 is a pointer or a number.
+        // Preserve existing pointer comparison behavior for an exact-zero scalar.
+        if (!s.or_r2_is_number && dom.state.entail_type(reg_type(s.r2), T_NUM) &&
+            !dom.state.values.entail(reg_pack(s.r2).uvalue == 0)) {
+            throw_fail("Cannot compare values of different types");
+        }
         if (!dom.state.entail_type(reg_type(s.r2), T_NUM)) {
             throw_fail("Cannot subtract pointers to different regions");
         }

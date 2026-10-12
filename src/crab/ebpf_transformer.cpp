@@ -229,6 +229,7 @@ static LinearConstraint assume_cst_offsets_reg(const Condition::Op op, const Var
 }
 
 void EbpfTransformer::operator()(const Assume& s) {
+    using namespace dsl_syntax;
     if (dom.is_bottom()) {
         return;
     }
@@ -256,14 +257,12 @@ void EbpfTransformer::operator()(const Assume& s) {
                 }
             });
         } else if (dom.state.entail_type(reg_type(src_reg), T_NUM)) {
-            // Different types but src is a number — apply only numeric constraints.
-            // This does not split dst by concrete type via join_over_types: the numeric
-            // constraints are applied to the global state across all type possibilities.
-            // This is sound (pointer registers carry meaningful svalue/uvalue bounds)
-            // but less precise than a type-split approach for non-numeric type paths.
-            for (const LinearConstraint& cst :
-                 dom.state.values->assume_cst_reg(cond.op, cond.is64, dst.svalue, dst.uvalue, src.svalue, src.uvalue)) {
-                dom.state.values.add_constraint(cst);
+            // Preserve exact-zero pointer comparisons, but do not narrow addresses against other scalars.
+            if (dom.state.entail_type(reg_type(cond.left), T_NUM) || dom.state.values.entail(src.uvalue == 0)) {
+                for (const LinearConstraint& cst : dom.state.values->assume_cst_reg(
+                         cond.op, cond.is64, dst.svalue, dst.uvalue, src.svalue, src.uvalue)) {
+                    dom.state.values.add_constraint(cst);
+                }
             }
         } else {
             // Different types and src is not a number.

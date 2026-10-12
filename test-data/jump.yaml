@@ -406,6 +406,155 @@ post:
 messages:
   - "8: Only numbers can be added to pointers (r2.type in {ctx, stack, packet, shared} -> r3.type == number)"
 ---
+test-case: reject ordered comparison between context pointer and nonzero scalar
+
+pre:
+  - "r1.type=ctx"
+  - "r1.ctx_offset=0"
+  - "r1.svalue=[1, 2147418112]"
+  - "r2.type=number"
+  - "r2.svalue=4027836164"
+  - "r2.uvalue=4027836164"
+
+code:
+  <start>: |
+    if r1 >= r2 goto <exit>
+    r0 = 1
+  <exit>: |
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Cannot compare values of different types (r1.type == r2.type in {ctx, stack, packet})"
+---
+test-case: compare context pointer with zero-valued register for equality
+
+pre:
+  - "r1.type=ctx"
+  - "r1.ctx_offset=0"
+  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
+  - "r2.type=number"
+  - "r2.svalue=0"
+  - "r2.uvalue=0"
+
+code:
+  <start>: |
+    r0 = 1
+    if r1 == r2 goto <exit>
+    r0 = 2
+  <exit>: |
+    exit
+
+post:
+  - "r0.type=number"
+  - "r0.svalue=2"
+  - "r0.uvalue=2"
+  - "r1.type=ctx"
+  - "r1.ctx_offset=0"
+  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
+  - "r2.type=number"
+  - "r2.svalue=0"
+  - "r2.uvalue=0"
+
+messages:
+  - "1:3: Code becomes unreachable (assume r1 == r2)"
+---
+test-case: compare context pointer with zero-valued register for inequality
+
+pre:
+  - "r1.type=ctx"
+  - "r1.ctx_offset=0"
+  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
+  - "r2.type=number"
+  - "r2.svalue=0"
+  - "r2.uvalue=0"
+
+code:
+  <start>: |
+    r0 = 1
+    if r1 != r2 goto <exit>
+    r0 = 2
+  <exit>: |
+    exit
+
+post:
+  - "r0.type=number"
+  - "r0.svalue=1"
+  - "r0.uvalue=1"
+  - "r1.type=ctx"
+  - "r1.ctx_offset=0"
+  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
+  - "r2.type=number"
+  - "r2.svalue=0"
+  - "r2.uvalue=0"
+
+messages:
+  - "1:2: Code becomes unreachable (assume r1 == r2)"
+---
+test-case: compare context pointer with zero-valued register using unsigned ordering
+
+pre:
+  - "r1.type=ctx"
+  - "r1.ctx_offset=0"
+  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
+  - "r2.type=number"
+  - "r2.svalue=0"
+  - "r2.uvalue=0"
+
+code:
+  <start>: |
+    r0 = 1
+    if r1 >= r2 goto <exit>
+    r0 = 2
+  <exit>: |
+    exit
+
+post:
+  - "r0.type=number"
+  - "r0.svalue=1"
+  - "r0.uvalue=1"
+  - "r1.type=ctx"
+  - "r1.ctx_offset=0"
+  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
+  - "r2.type=number"
+  - "r2.svalue=0"
+  - "r2.uvalue=0"
+
+messages:
+  - "1:2: Code becomes unreachable (assume r1 < r2)"
+---
+test-case: reject context pointer comparison with possibly-zero register
+
+pre:
+  - "r1.type=ctx"
+  - "r1.ctx_offset=0"
+  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
+  - "r2.type=number"
+  - "r2.svalue=[0, 1]"
+  - "r2.uvalue=[0, 1]"
+
+code:
+  <start>: |
+    if r1 >= r2 goto <exit>
+    r0 = 1
+  <exit>: |
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Cannot compare values of different types (r1.type == r2.type in {ctx, stack, packet})"
+---
 test-case: multiple types compare
 
 pre: ["r0.type=number",
