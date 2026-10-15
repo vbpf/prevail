@@ -297,6 +297,7 @@ if (prevail_ENABLE_TESTS)
 
   set(prevail_TEST_SRC
     src/test/test_array_domain.cpp
+    src/test/test_assume.cpp
     src/test/test_cfg_builder_passes.cpp
     src/test/test_conformance.cpp
     src/test/test_elf_loader.cpp

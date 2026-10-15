@@ -187,28 +187,7 @@ class AssertExtractor {
                 // no need to check for valid access, it must be a number
                 res.emplace_back(TypeConstraint{cond.left, TypeGroup::number});
             } else {
-                bool allow_pointers = false;
-
-                switch (cond.op) {
-                case Condition::Op::EQ: allow_pointers = true; break;
-                case Condition::Op::NE: allow_pointers = true; break;
-                case Condition::Op::SET: allow_pointers = true; break;
-                case Condition::Op::NSET: allow_pointers = true; break;
-                case Condition::Op::LT: allow_pointers = true; break;
-                case Condition::Op::LE: allow_pointers = true; break;
-                case Condition::Op::GT: allow_pointers = true; break;
-                case Condition::Op::GE: allow_pointers = true; break;
-                case Condition::Op::SLT: allow_pointers = false; break;
-                case Condition::Op::SLE: allow_pointers = false; break;
-                case Condition::Op::SGT: allow_pointers = false; break;
-                case Condition::Op::SGE: allow_pointers = false; break;
-                default: std::unreachable();
-                }
-
-                // Only permit pointer comparisons if the operation is 64-bit.
-                allow_pointers &= cond.is64;
-
-                if (!allow_pointers) {
+                if (!admits_pointer_operands(cond)) {
                     res.emplace_back(TypeConstraint{cond.left, TypeGroup::number});
                 }
 
@@ -220,7 +199,10 @@ class AssertExtractor {
             const auto reg_right = get<Reg>(cond.right);
             res.emplace_back(make_valid_access(cond.left));
             res.emplace_back(make_valid_access(reg_right));
-            if (cond.op != Condition::Op::EQ && cond.op != Condition::Op::NE) {
+            if (!admits_pointer_operands(cond)) {
+                res.emplace_back(TypeConstraint{cond.left, TypeGroup::number});
+                res.emplace_back(TypeConstraint{reg_right, TypeGroup::number});
+            } else if (cond.op != Condition::Op::EQ && cond.op != Condition::Op::NE) {
                 res.emplace_back(TypeConstraint{cond.left, TypeGroup::ptr_or_num});
             }
             res.emplace_back(Comparable{.r1 = cond.left, .r2 = reg_right, .or_r2_is_number = false});

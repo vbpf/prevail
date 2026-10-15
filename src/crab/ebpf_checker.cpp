@@ -166,11 +166,17 @@ void EbpfChecker::operator()(const Comparable& s) const {
         // And, to avoid wraparound errors, they must be within bounds.
         this->operator()(ValidAccess{context.runtime().max_call_stack_frames, s.r1, 0, Imm{0}, false});
         this->operator()(ValidAccess{context.runtime().max_call_stack_frames, s.r2, 0, Imm{0}, false});
-    } else {
+    } else if (s.or_r2_is_number) {
         // _Maybe_ different types, so r2 must be a number.
         // We checked in a previous assertion that r1 is a pointer or a number.
         if (!dom.state.entail_type(reg_type(s.r2), T_NUM)) {
             throw_fail("Cannot subtract pointers to different regions");
+        }
+    } else {
+        // _Maybe_ different types. A pointer compared with a number is a null check, so the
+        // number must be exactly zero: any other value would be compared with an address.
+        if (!dom.state.entail_type(reg_type(s.r2), T_NUM) || !dom.state.values.entail(reg_pack(s.r2).svalue == 0)) {
+            throw_fail("Cannot compare values of different types");
         }
     }
 }
