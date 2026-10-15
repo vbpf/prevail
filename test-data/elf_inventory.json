@@ -743,6 +743,15 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "xdp": {
+                "kind": "VerifierTypeTracking",
+                "reason": "joining a packet pointer with a zero number loses the packet bounds check that holds only on the pointer path",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "correlated_branch2.o": {

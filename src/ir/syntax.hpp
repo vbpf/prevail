@@ -144,6 +144,20 @@ struct Condition {
     constexpr bool operator==(const Condition&) const = default;
 };
 
+/// Whether a comparison may take a pointer operand. Only a 64-bit unsigned or equality comparison
+/// has an outcome determined by pointer offsets within one region, or by a pointer being null:
+/// a signed or 32-bit view of an address depends on where the region lies, which is unknown.
+constexpr bool admits_pointer_operands(const Condition& cond) {
+    using enum Condition::Op;
+    switch (cond.op) {
+    case SLT:
+    case SLE:
+    case SGT:
+    case SGE: return false;
+    default: return cond.is64;
+    }
+}
+
 struct Jmp {
     std::optional<Condition> cond;
     Label target;

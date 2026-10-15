@@ -216,18 +216,42 @@ static LinearConstraint assume_cst_offsets_reg(const Condition::Op op, const Var
     case Op::EQ: return eq(dst_offset, src_offset);
     case Op::NE: return neq(dst_offset, src_offset);
     case Op::GE: return dst_offset >= src_offset;
-    case Op::SGE: return dst_offset >= src_offset; // pointer comparison is unsigned
     case Op::LE: return dst_offset <= src_offset;
-    case Op::SLE: return dst_offset <= src_offset; // pointer comparison is unsigned
     case Op::GT: return dst_offset > src_offset;
-    case Op::SGT: return dst_offset > src_offset; // pointer comparison is unsigned
-    case Op::SLT: return src_offset > dst_offset;
     // Note: reverse the test as a workaround strange lookup:
     case Op::LT: return src_offset > dst_offset; // FIX unsigned
     default: return dst_offset - dst_offset == 0;
     }
 }
 
+/// Whether comparing two pointers of type `type` by their offsets decides the comparison.
+/// Pointers to a singleton region share one base, so offsets order them. Map descriptors are
+/// equal exactly when they denote the same map. Pointers into other regions are equal only if
+/// their offsets are, but equal offsets in different regions are different addresses.
+static bool offsets_decide_pointer_comparison(const TypeEncoding type, const Condition::Op op) {
+    using Op = Condition::Op;
+    if (TS_SINGLETON_PTR.contains(type)) {
+        return true;
+    }
+    if (TS_MAP.contains(type)) {
+        return op == Op::EQ || op == Op::NE;
+    }
+    return op == Op::EQ;
+}
+
+/// Narrow a pointer compared with zero: the comparison tests whether it is null.
+static void assume_pointer_null_check(TypeToNumDomain& state, const Condition& cond, const RegPack& dst) {
+    if (admits_pointer_operands(cond)) {
+        for (const LinearConstraint& cst :
+             state.values->assume_cst_imm(cond.op, cond.is64, dst.svalue, dst.uvalue, 0)) {
+            state.values.add_constraint(cst);
+        }
+    }
+}
+
+// The checker restricts which comparisons unprivileged programs may make, but privileged programs
+// are not checked, so each case below narrows only what holds regardless of where regions lie.
+// A pointer compared with anything but a same-region pointer or zero yields no information.
 void EbpfTransformer::operator()(const Assume& s) {
     if (dom.is_bottom()) {
         return;
@@ -237,46 +261,42 @@ void EbpfTransformer::operator()(const Assume& s) {
     if (const auto psrc_reg = std::get_if<Reg>(&cond.right)) {
         const auto src_reg = *psrc_reg;
         const auto src = reg_pack(src_reg);
-        if (dom.state.same_type(cond.left, src_reg)) {
-            dom.state = dom.state.join_over_types(cond.left, [&](TypeToNumDomain& state, const TypeEncoding type) {
-                if (type == T_NUM) {
+        dom.state = dom.state.join_over_types(cond.left, [&](TypeToNumDomain& state, const TypeEncoding dst_type) {
+            state = state.join_over_types(src_reg, [&](TypeToNumDomain& state, const TypeEncoding src_type) {
+                if (dst_type == T_NUM && src_type == T_NUM) {
                     for (const LinearConstraint& cst : state.values->assume_cst_reg(
                              cond.op, cond.is64, dst.svalue, dst.uvalue, src.svalue, src.uvalue)) {
                         state.values.add_constraint(cst);
                     }
-                } else {
-                    // Either pointers to a singleton region,
-                    // or an equality comparison on map descriptors/pointers to non-singleton locations
-                    if (const auto dst_offset = primary_kind_variable_for_type(cond.left, type)) {
-                        if (const auto src_offset = primary_kind_variable_for_type(src_reg, type)) {
+                } else if (dst_type == src_type) {
+                    if (admits_pointer_operands(cond) && offsets_decide_pointer_comparison(dst_type, cond.op)) {
+                        const auto dst_offset = primary_kind_variable_for_type(cond.left, dst_type);
+                        const auto src_offset = primary_kind_variable_for_type(src_reg, src_type);
+                        if (dst_offset && src_offset) {
                             state.values.add_constraint(
                                 assume_cst_offsets_reg(cond.op, dst_offset.value(), src_offset.value()));
                         }
                     }
+                } else if (src_type == T_NUM) {
+                    using namespace dsl_syntax;
+                    if (state.values.entail(src.svalue == 0)) {
+                        assume_pointer_null_check(state, cond, dst);
+                    }
                 }
             });
-        } else if (dom.state.entail_type(reg_type(src_reg), T_NUM)) {
-            // Different types but src is a number — apply only numeric constraints.
-            // This does not split dst by concrete type via join_over_types: the numeric
-            // constraints are applied to the global state across all type possibilities.
-            // This is sound (pointer registers carry meaningful svalue/uvalue bounds)
-            // but less precise than a type-split approach for non-numeric type paths.
-            for (const LinearConstraint& cst :
-                 dom.state.values->assume_cst_reg(cond.op, cond.is64, dst.svalue, dst.uvalue, src.svalue, src.uvalue)) {
-                dom.state.values.add_constraint(cst);
-            }
-        } else {
-            // Different types and src is not a number.
-            // The checker may not have seen this Assume (e.g., implicit Assume or CFG-split edge),
-            // so go to bottom conservatively.
-            dom.state.set_to_bottom();
-        }
+        });
     } else {
         const int64_t imm = gsl::narrow_cast<int64_t>(std::get<Imm>(cond.right).v);
-        for (const LinearConstraint& cst :
-             dom.state.values->assume_cst_imm(cond.op, cond.is64, dst.svalue, dst.uvalue, imm)) {
-            dom.state.values.add_constraint(cst);
-        }
+        dom.state = dom.state.join_over_types(cond.left, [&](TypeToNumDomain& state, const TypeEncoding dst_type) {
+            if (dst_type == T_NUM) {
+                for (const LinearConstraint& cst :
+                     state.values->assume_cst_imm(cond.op, cond.is64, dst.svalue, dst.uvalue, imm)) {
+                    state.values.add_constraint(cst);
+                }
+            } else if (imm == 0) {
+                assume_pointer_null_check(state, cond, dst);
+            }
+        });
     }
 }
 
