@@ -74,6 +74,10 @@ struct ebpf_platform_t {
     const EbpfStructDescriptor* sock_common_layout;
     bpf_conformance_groups_t supported_conformance_groups;
 
+    // Some runtimes lower context fields using only the instruction offset,
+    // not the effective address. Such accesses require an unshifted base.
+    bool context_access_requires_zero_offset{};
+
     bool supports_group(const bpf_conformance_groups_t group) const {
         return (supported_conformance_groups & group) == group;
     }
