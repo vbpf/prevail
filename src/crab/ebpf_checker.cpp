@@ -427,6 +427,13 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             break;
         }
         case T_CTX: {
+            const auto* platform = context.program_info().platform;
+            if (!is_comparison_check && platform && platform->context_access_requires_zero_offset) {
+                // Linux rewrites a context access according to its instruction
+                // offset alone. A shifted base would select a different runtime
+                // field than the total offset used by our abstract transformer.
+                require_value(dom.state, reg.ctx_offset == 0, "Nonzero context offset");
+            }
             const auto* desc = context.program_info().type.ctx_descriptor;
             const auto [lb, ub] = lb_ub_access_pair(s, reg.ctx_offset);
             if (s.access_type == AccessType::write && desc->end >= 0) {
