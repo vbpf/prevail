@@ -464,6 +464,65 @@ void patch_first_relocation_type(const std::filesystem::path& path, const std::s
     write_file_bytes(path, bytes);
 }
 
+// Build an ELF in memory so these tests do not depend on a BPF compiler or
+// generated binary fixtures. Relocate a u64 load using local BTF.
+std::vector<RawProgram> load_core_array_access(const libbtf::btf_type_data& types, const uint32_t root_type,
+                                               const std::string& access) {
+    ELFIO::elfio writer;
+    writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+    writer.set_type(ELFIO::ET_REL);
+    writer.set_machine(ELFIO::EM_BPF);
+    auto* text = writer.sections.add("socket");
+    text->set_type(ELFIO::SHT_PROGBITS);
+    text->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+    text->set_addr_align(8);
+    const uint8_t instructions[] = {0x79, 0x10, 0, 0, 0, 0, 0, 0, 0x95, 0, 0, 0, 0, 0, 0, 0};
+    text->set_data(reinterpret_cast<const char*>(instructions), sizeof(instructions));
+    auto* strings = writer.sections.add(".strtab");
+    strings->set_type(ELFIO::SHT_STRTAB);
+    ELFIO::string_section_accessor string_writer(strings);
+    auto* symbols = writer.sections.add(".symtab");
+    symbols->set_type(ELFIO::SHT_SYMTAB);
+    symbols->set_addr_align(8);
+    symbols->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+    symbols->set_link(strings->get_index());
+    symbols->set_info(1);
+    ELFIO::symbol_section_accessor symbol_writer(writer, symbols);
+    symbol_writer.add_symbol(string_writer, "array_access", 0, sizeof(instructions), ELFIO::STB_GLOBAL, ELFIO::STT_FUNC,
+                             0, text->get_index());
+
+    const auto encoded_types = types.to_bytes();
+    std::vector<uint8_t> btf(encoded_types.size());
+    std::memcpy(btf.data(), encoded_types.data(), encoded_types.size());
+    const uint32_t section_name = read_u32_le(btf, 20); // btf_header.str_len
+    const std::string extra_strings = std::string{"socket"} + '\0' + access + '\0';
+    btf.insert(btf.end(), extra_strings.begin(), extra_strings.end());
+    write_u32_le(btf, 20, section_name + gsl::narrow<uint32_t>(extra_strings.size()));
+    auto* btf_section = writer.sections.add(".BTF");
+    btf_section->set_type(ELFIO::SHT_PROGBITS);
+    btf_section->set_data(reinterpret_cast<const char*>(btf.data()), btf.size());
+
+    // 32-byte BTF.ext header, record size, section descriptor, one FIELD_BYTE_OFFSET relocation.
+    std::vector<uint8_t> ext(60);
+    write_u16_le(ext, 0, 0xeb9f);
+    ext[2] = 1;
+    write_u32_le(ext, 4, 32);
+    write_u32_le(ext, 28, 28);
+    write_u32_le(ext, 32, 16);
+    write_u32_le(ext, 36, section_name);
+    write_u32_le(ext, 40, 1);
+    write_u32_le(ext, 48, root_type);
+    write_u32_le(ext, 52, section_name + 7);
+    auto* ext_section = writer.sections.add(".BTF.ext");
+    ext_section->set_type(ELFIO::SHT_PROGBITS);
+    ext_section->set_data(reinterpret_cast<const char*>(ext.data()), ext.size());
+
+    std::ostringstream output;
+    writer.save(output);
+    std::istringstream input(output.str());
+    return read_elf(input, "core-array-memory", "socket", "", {}, &g_ebpf_platform_linux);
+}
+
 } // namespace
 
 #define FAIL_LOAD_ELF_BASE(test_name, dirname, filename, sectionname)                                                  \
@@ -981,4 +1040,115 @@ TEST_CASE("ELF loader accepts instruction-aligned FUNC symbols", "[elf][hardenin
     VerifierOptions options{};
     const auto programs = read_elf(in_stream, "memory", ".text", "", options, &g_ebpf_platform_linux);
     REQUIRE_FALSE(programs.empty());
+}
+
+TEST_CASE("CO-RE array indexing recognizes only flexible trailing members", "[elf][core]") {
+    libbtf::btf_type_data types;
+    const auto u64 = types.append(libbtf::btf_kind_int{.name = "u64",
+                                                       .size_in_bytes = 8,
+                                                       .offset_from_start_in_bits = 0,
+                                                       .field_width_in_bits = 64,
+                                                       .is_signed = false,
+                                                       .is_char = false,
+                                                       .is_bool = false});
+    const auto array = types.append(libbtf::btf_kind_array{u64, u64, 0});
+    auto member_type = array;
+    std::vector<libbtf::btf_kind_struct_member> members{{"prefix", u64, 0}, {"args", array, 64}};
+    uint32_t index = 1;
+    bool accepted = true;
+    bool as_union = false;
+    bool as_root_array = false;
+    std::string suffix;
+
+    SECTION("zero-sized trailing struct array") {}
+    SECTION("zero index of flexible array") { index = 0; }
+    SECTION("single-member raw tracepoint context") { members = {{"args", array, 0}}; }
+    SECTION("typedef and const modifiers") {
+        const auto alias = types.append(libbtf::btf_kind_typedef{"args_t", array});
+        member_type = types.append(libbtf::btf_kind_const{alias});
+        members.back().type = member_type;
+    }
+    SECTION("last union member follows libbpf composite rule") {
+        as_union = true;
+        members.back().offset_from_start_in_bits = 0;
+    }
+    SECTION("non-final zero-sized array") {
+        members.push_back({"after", u64, 64});
+        accepted = false;
+    }
+    SECTION("unnamed zero-sized array") {
+        members.back().name.reset();
+        accepted = false;
+    }
+    SECTION("root zero-sized array") {
+        as_root_array = true;
+        accepted = false;
+    }
+    SECTION("fixed array in bounds") { types.replace(array, libbtf::btf_kind_array{u64, u64, 2}); }
+    SECTION("fixed trailing array out of bounds") {
+        types.replace(array, libbtf::btf_kind_array{u64, u64, 1});
+        accepted = false;
+    }
+    SECTION("inner zero-sized array is not a flexible member") {
+        const auto inner = types.append(libbtf::btf_kind_array{u64, u64, 0});
+        types.replace(array, libbtf::btf_kind_array{inner, u64, 0});
+        suffix = ":1";
+        accepted = false;
+    }
+    SECTION("fixed inner array retains its bound") {
+        const auto inner = types.append(libbtf::btf_kind_array{u64, u64, 1});
+        types.replace(array, libbtf::btf_kind_array{inner, u64, 0});
+        suffix = ":1";
+        accepted = false;
+    }
+    const auto root = as_root_array ? array
+                      : as_union    ? types.append(libbtf::btf_kind_union{"context", members, 8})
+                                    : types.append(libbtf::btf_kind_struct{"context", members, 8});
+    const auto member_index = members.size() == 1 ? 0 : 1;
+    const std::string access =
+        (as_root_array ? "0:" : "0:" + std::to_string(member_index) + ":") + std::to_string(index) + suffix;
+    if (accepted) {
+        const auto programs = load_core_array_access(types, root, access);
+        REQUIRE(programs.size() == 1);
+        REQUIRE(programs[0].core_relocation_count == 1);
+        const auto member_offset = members[member_index].offset_from_start_in_bits / 8;
+        REQUIRE(programs[0].prog[0].offset == member_offset + index * 8);
+    } else {
+        REQUIRE_THROWS_WITH(load_core_array_access(types, root, access),
+                            Catch::Matchers::ContainsSubstring("array index"));
+    }
+}
+
+TEST_CASE("CO-RE flexible array offsets cannot wrap or overflow instruction offsets", "[elf][core][hardening]") {
+    libbtf::btf_type_data types;
+    const auto u64 = types.append(libbtf::btf_kind_int{.name = "u64",
+                                                       .size_in_bytes = 8,
+                                                       .offset_from_start_in_bits = 0,
+                                                       .field_width_in_bits = 64,
+                                                       .is_signed = false,
+                                                       .is_char = false,
+                                                       .is_bool = false});
+    auto element = u64;
+    std::string access = "0:0:4096";
+    std::string error = "does not fit instruction offset field";
+    SECTION("instruction offset overflow") {}
+    SECTION("bit offset overflow") {
+        element = types.append(libbtf::btf_kind_struct{"huge", {}, std::numeric_limits<uint32_t>::max()});
+        access = "0:0:4294967295";
+        error = "array offset overflow";
+    }
+    SECTION("struct member offset overflow after array index") {
+        element = types.append(libbtf::btf_kind_struct{"huge", {{"field", u64, 64}}, 536870913});
+        access = "0:0:4294967288:0";
+        error = "member offset overflow";
+    }
+    SECTION("union member offset overflow after array index") {
+        // Malformed BTF must not wrap even when a union member has nonzero offset.
+        element = types.append(libbtf::btf_kind_union{"huge", {{"field", u64, 64}}, 536870913});
+        access = "0:0:4294967288:0";
+        error = "member offset overflow";
+    }
+    const auto array = types.append(libbtf::btf_kind_array{element, u64, 0});
+    const auto root = types.append(libbtf::btf_kind_struct{"context", {{"args", array, 0}}, 0});
+    REQUIRE_THROWS_WITH(load_core_array_access(types, root, access), Catch::Matchers::ContainsSubstring(error));
 }

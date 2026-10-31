@@ -172,6 +172,16 @@ core_field_resolution_t resolve_core_field(const libbtf::btf_type_data& btf_data
         indices.erase(indices.begin());
     }
     core_field_resolution_t result{type_id, 0, std::nullopt};
+    // Like libbpf's is_flex_arr, only a zero-length array reached through a
+    // named final struct/union member is flexible. This is a property of this
+    // access step, not of the array type: array elements must not inherit it.
+    bool final_member = false;
+    const auto add_member_offset = [&](const uint32_t member_offset) {
+        if (member_offset > std::numeric_limits<uint64_t>::max() - result.offset_bits) {
+            throw UnmarshalError("CO-RE: member offset overflow for access path " + std::string(access_string));
+        }
+        result.offset_bits += member_offset;
+    };
 
     for (const uint32_t index : indices) {
         result.type_id = strip_type_modifiers(btf_data, result.type_id);
@@ -184,7 +194,8 @@ core_field_resolution_t resolve_core_field(const libbtf::btf_type_data& btf_data
                                      std::string(access_string));
             }
             const auto& member = s.members[index];
-            result.offset_bits += BTF_MEMBER_BIT_OFFSET(member.offset_from_start_in_bits);
+            final_member = index == s.members.size() - 1 && member.name && !member.name->empty();
+            add_member_offset(BTF_MEMBER_BIT_OFFSET(member.offset_from_start_in_bits));
             result.member_offset_encoding = member.offset_from_start_in_bits;
             result.type_id = member.type;
             break;
@@ -197,21 +208,28 @@ core_field_resolution_t resolve_core_field(const libbtf::btf_type_data& btf_data
                                      std::string(access_string));
             }
             const auto& member = u.members[index];
-            result.offset_bits += BTF_MEMBER_BIT_OFFSET(member.offset_from_start_in_bits);
+            final_member = index == u.members.size() - 1 && member.name && !member.name->empty();
+            add_member_offset(BTF_MEMBER_BIT_OFFSET(member.offset_from_start_in_bits));
             result.member_offset_encoding = member.offset_from_start_in_bits;
             result.type_id = member.type;
             break;
         }
         case libbtf::BTF_KIND_ARRAY: {
             const auto a = btf_data.get_kind_type<libbtf::btf_kind_array>(result.type_id);
-            if (index >= a.count_of_elements) {
+            if (index >= a.count_of_elements && !(final_member && a.count_of_elements == 0)) {
                 throw UnmarshalError("CO-RE: array index " + std::to_string(index) + " out of bounds (size " +
                                      std::to_string(a.count_of_elements) + ") for access path " +
                                      std::string(access_string));
             }
-            result.offset_bits += static_cast<uint64_t>(index) * btf_data.get_size(a.element_type) * 8;
+            const uint64_t element_size = btf_data.get_size(a.element_type);
+            if (element_size != 0 &&
+                index > (std::numeric_limits<uint64_t>::max() - result.offset_bits) / 8 / element_size) {
+                throw UnmarshalError("CO-RE: array offset overflow for access path " + std::string(access_string));
+            }
+            result.offset_bits += static_cast<uint64_t>(index) * element_size * 8;
             result.member_offset_encoding.reset();
             result.type_id = a.element_type;
+            final_member = false;
             break;
         }
         default: throw UnmarshalError("CO-RE: indexing into non-aggregate type");
