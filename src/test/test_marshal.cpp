@@ -889,6 +889,12 @@ TEST_CASE("unmarshal 64bit immediate", "[disasm][marshal]") {
                              EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM}, "0: invalid lddw\n");
     }
 
+    // r10 is read-only: no LDDW form may target it.
+    for (uint8_t src = 0; src <= 6; src++) {
+        check_unmarshal_fail(EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = R10_STACK_POINTER, .src = src},
+                             EbpfInst{}, "0: invalid target r10\n");
+    }
+
     // For mode-specific LDDW encodings, next_imm is reserved for src={1,3,4,5}.
     // src=2 (map_value) and src=6 (map_value_by_idx) carry payload in next_imm.
     check_unmarshal_fail(EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .src = 1}, EbpfInst{.imm = 1},

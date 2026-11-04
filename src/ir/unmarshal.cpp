@@ -403,6 +403,9 @@ struct Unmarshaller {
         if (inst.offset != 0) {
             throw InvalidInstruction(pc, make_opcode_message("nonzero offset for", inst.opcode));
         }
+        if (inst.dst == R10_STACK_POINTER) {
+            throw InvalidInstruction(pc, "invalid target r10");
+        }
         if (inst.dst > R10_STACK_POINTER) {
             throw InvalidInstruction(pc, "bad register");
         }
