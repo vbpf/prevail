@@ -1405,6 +1405,39 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         REQUIRE(pseudo->addr.kind == PseudoAddress::Kind::CODE_ADDR);
     }
 
+    SECTION("lddw map_val is refused for maps whose values are maps or programs") {
+        // r1 = map_val(map) + 0; *(u32 *)(r1 + 0) = 7; r0 = 0; exit
+        const auto verify_store_to_map_val = [&](const uint32_t map_type, const uint8_t lddw_mode, const int32_t map) {
+            ProgramInfo map_info = info;
+            map_info.map_descriptors.push_back(EbpfMapDescriptor{.original_fd = 1,
+                                                                 .type = map_type,
+                                                                 .key_size = 4,
+                                                                 .value_size = 4,
+                                                                 .max_entries = 4,
+                                                                 .inner_map_fd = 1});
+            RawProgram raw_prog{
+                "",
+                "",
+                0,
+                "",
+                {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 1, .src = lddw_mode, .imm = map}, EbpfInst{},
+                 EbpfInst{.opcode = INST_CLS_ST | INST_MODE_MEM | INST_SIZE_W, .dst = 1, .imm = 7},
+                 EbpfInst{.opcode = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM, .dst = 0, .imm = 0}, exit},
+                map_info};
+            auto prog_or_error = unmarshal(raw_prog, {});
+            REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+            return verify(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), map_info, {}), {});
+        };
+        // The slots of PROG_ARRAY (3), ARRAY_OF_MAPS (12) and HASH_OF_MAPS (13) hold programs or maps that a
+        // lookup is modelled to return; ARRAY (2) holds plain data.
+        for (const uint32_t map_type : {2u, 3u, 12u, 13u}) {
+            CAPTURE(map_type);
+            const bool data_map = map_type == 2;
+            REQUIRE(verify_store_to_map_val(map_type, INST_LD_MODE_MAP_VALUE, 1) == data_map);
+            REQUIRE(verify_store_to_map_val(map_type, INST_LD_MODE_MAP_VALUE_BY_IDX, 0) == data_map);
+        }
+    }
+
     SECTION("helper ptr_to_func argument type is accepted for bpf_loop") {
         constexpr uint8_t mov64_imm = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
         RawProgram raw_prog{
