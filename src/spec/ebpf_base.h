@@ -19,6 +19,8 @@ typedef enum _ebpf_return_type {
     EBPF_RETURN_TYPE_PTR_TO_MEM_OR_BTF_ID_OR_NULL,
     EBPF_RETURN_TYPE_PTR_TO_BTF_ID,
     EBPF_RETURN_TYPE_PTR_TO_MEM_OR_BTF_ID,
+    // Like INTEGER_OR_NO_RETURN_IF_SUCCEED, except that a failed call falls through without writing r0.
+    EBPF_RETURN_TYPE_VOID_OR_NO_RETURN_IF_SUCCEED,
 } ebpf_return_type_t;
 
 // Describes the type of an eBPF program argument.

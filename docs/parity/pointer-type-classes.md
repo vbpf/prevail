@@ -14,6 +14,7 @@ and integration into helper argument/return checking.
 Return types that are classified and propagated into register state:
 
 - [x] `EBPF_RETURN_TYPE_INTEGER` / `INTEGER_OR_NO_RETURN_IF_SUCCEED` — scalar return
+- [x] `VOID_OR_NO_RETURN_IF_SUCCEED` — `bpf_tail_call` on Linux (`RET_VOID`): a failed call does not write `r0`, which is left uninitialized
 - [x] `PTR_TO_MAP_VALUE_OR_NULL` — returned by map lookup helpers; propagated as nullable map-value pointer
 - [x] `PTR_TO_SOCK_COMMON_OR_NULL` / `PTR_TO_SOCKET_OR_NULL` / `PTR_TO_TCP_SOCKET_OR_NULL` — all mapped to `T_SOCKET` (nullable). Type-system representation works; lifecycle tracking does not (see [lifetime.md](lifetime.md)).
 - [x] `PTR_TO_ALLOC_MEM_OR_NULL` — mapped to `T_ALLOC_MEM` (nullable). Type propagation works; ownership tracking does not (see [lifetime.md](lifetime.md)).

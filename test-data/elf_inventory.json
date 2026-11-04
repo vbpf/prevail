@@ -1540,6 +1540,13 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "xdp_prog": {
+                "status": "reject"
+              }
+            }
           }
         },
         "tail_call_bad.o": {

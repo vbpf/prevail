@@ -171,6 +171,7 @@ std::optional<ResolvedCall> make_kfunc_call(const int32_t btf_id, const int16_t 
     }
     res.contract.return_ptr_type = return_info->pointer_type;
     res.contract.return_nullable = return_info->pointer_nullable;
+    res.contract.return_void = return_info->is_void;
 
     const std::array<ebpf_argument_type_t, 7> args = {
         {EBPF_ARGUMENT_TYPE_DONTCARE, proto.argument_type[0], proto.argument_type[1], proto.argument_type[2],

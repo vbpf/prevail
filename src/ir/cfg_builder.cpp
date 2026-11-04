@@ -609,8 +609,9 @@ static bool is_tail_call_helper(const Call& call, const ebpf_platform_t& platfor
     if (!platform.is_helper_usable(call.func, program_type)) {
         return false;
     }
-    return platform.get_helper_prototype(call.func, program_type).return_type ==
-           EBPF_RETURN_TYPE_INTEGER_OR_NO_RETURN_IF_SUCCEED;
+    const ebpf_return_type_t return_type = platform.get_helper_prototype(call.func, program_type).return_type;
+    return return_type == EBPF_RETURN_TYPE_INTEGER_OR_NO_RETURN_IF_SUCCEED ||
+           return_type == EBPF_RETURN_TYPE_VOID_OR_NO_RETURN_IF_SUCCEED;
 }
 
 static bool is_tail_call_site(const Instruction& ins, const ebpf_platform_t& platform,

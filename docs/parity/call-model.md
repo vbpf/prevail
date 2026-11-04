@@ -11,6 +11,7 @@
 
 - [x] **Tail calls in subprograms** — no longer rejected unconditionally.
 - [x] **Tail call chain depth tracking** — verifier enforces a tail-call chain limit of 33 during CFG validation.
+- [x] **Failed tail call leaves `r0` unwritten** — `bpf_tail_call` is `RET_VOID` on Linux; after the call `r0` is unreadable (as in Linux), not a number.
 
 ## Global functions
 

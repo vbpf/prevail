@@ -278,10 +278,13 @@ code:
     exit
   <sub>: |
     call 12; bpf_tail_call
+    r0 = 0
     exit
 
 post:
   - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0
 ---
 test-case: fail infinite self-recursion
 

@@ -588,3 +588,52 @@ post:
 
 messages:
   - "0: Invalid size (r2.value > 0)"
+---
+test-case: bpf_tail_call leaves r0 unreadable when it fails
+
+# On Linux bpf_tail_call has no return value: a call that fails (e.g. index out of range)
+# falls through without writing r0, so r0 must not be typed as a number afterwards.
+pre: ["r0.type=number", "r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r3.type=number"]
+
+code:
+  <start>: |
+    call 12; bpf_tail_call
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "1: Invalid type (r0.type == number)"
+---
+test-case: bpf_tail_call that fails does not turn a pointer in r0 into a number
+
+pre: ["r0.type=stack", "r0.stack_offset=512",
+      "r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r3.type=number",
+      "r7.type=shared", "r7.shared_offset=0", "r7.shared_region_size=8", "r7.svalue=[1, 2147418112]", "r7.uvalue=[1, 2147418112]"]
+
+code:
+  <start>: |
+    call 12; bpf_tail_call
+    *(u64 *)(r7 + 0) = r0
+
+post:
+  - "_|_"
+
+messages:
+  - "1: Only numbers can be stored to externally-visible regions (r7.type != stack -> r0.type == number)"
+---
+test-case: bpf_tail_call that fails is followed by an explicit return value
+
+pre: ["r0.type=number", "r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r3.type=number"]
+
+code:
+  <start>: |
+    call 12; bpf_tail_call
+    r0 = 0
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0

@@ -32,6 +32,7 @@ bool has_unmodeled_return_type(const ebpf_return_type_t type) {
     case EBPF_RETURN_TYPE_INTEGER:
     case EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL:
     case EBPF_RETURN_TYPE_INTEGER_OR_NO_RETURN_IF_SUCCEED:
+    case EBPF_RETURN_TYPE_VOID_OR_NO_RETURN_IF_SUCCEED:
     case EBPF_RETURN_TYPE_PTR_TO_SOCK_COMMON_OR_NULL:
     case EBPF_RETURN_TYPE_PTR_TO_SOCKET_OR_NULL:
     case EBPF_RETURN_TYPE_PTR_TO_TCP_SOCKET_OR_NULL:
@@ -244,6 +245,11 @@ TEST_CASE("new helper ABI classes map to modeled call contracts", "[platform][ta
         REQUIRE(rc.is_supported);
         return rc;
     };
+
+    // A failed bpf_tail_call falls through without writing r0 on Linux (RET_VOID).
+    const ResolvedCall tail_call = require_supported(12);
+    REQUIRE(tail_call.contract.return_void);
+    REQUIRE_FALSE(tail_call.contract.return_ptr_type.has_value());
 
     const ResolvedCall strtoul = require_supported(106);
     REQUIRE(has_single_arg(strtoul, ArgSingle::Kind::PTR_TO_WRITABLE_LONG, Reg{4}));
