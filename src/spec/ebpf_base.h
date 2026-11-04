@@ -65,6 +65,10 @@ typedef enum _ebpf_argument_type {
     EBPF_ARGUMENT_TYPE_PTR_TO_UNINIT_MAP_VALUE = 31,
     EBPF_ARGUMENT_TYPE_CONST_PTR_TO_MAP = 32,
     EBPF_ARGUMENT_TYPE_UNSUPPORTED = 33,
+    // In/out memory: must have been initialized, and the helper may overwrite any part of it.
+    EBPF_ARGUMENT_TYPE_PTR_TO_READWRITE_MEM = 34,
+    // Same as PTR_TO_READWRITE_MEM, except the pointer may be null when the paired size is zero.
+    EBPF_ARGUMENT_TYPE_PTR_TO_READWRITE_MEM_OR_NULL = 35,
 } ebpf_argument_type_t;
 
 // The following struct describes how to access the layout in

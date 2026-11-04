@@ -159,12 +159,17 @@ class AssertExtractor {
         }
         for (ArgPair arg : resolved.contract.pairs) {
             const auto group = arg.or_null ? mem_or_num : mem;
-            const auto access_type =
-                arg.kind == ArgPair::Kind::PTR_TO_READABLE_MEM ? AccessType::read : AccessType::write;
             res.emplace_back(TypeConstraint{arg.size, TypeGroup::number});
             res.emplace_back(ValidSize{arg.size, arg.can_be_zero});
             res.emplace_back(TypeConstraint{arg.mem, group});
-            res.emplace_back(make_valid_access(arg.mem, 0, arg.size, arg.or_null, access_type));
+            // An in/out buffer (PTR_TO_READWRITE_MEM) must be initialized like a readable one
+            // and writable like an output one, so it gets both checks.
+            if (arg.kind != ArgPair::Kind::PTR_TO_WRITABLE_MEM) {
+                res.emplace_back(make_valid_access(arg.mem, 0, arg.size, arg.or_null, AccessType::read));
+            }
+            if (arg.kind != ArgPair::Kind::PTR_TO_READABLE_MEM) {
+                res.emplace_back(make_valid_access(arg.mem, 0, arg.size, arg.or_null, AccessType::write));
+            }
             // TODO: reg is constant (or maybe it's not important)
         }
         for (uint8_t i = 0; i < 5; ++i) {

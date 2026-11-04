@@ -192,10 +192,11 @@ struct ArgSingle {
 /// Pair of arguments to a function for pointer and size.
 struct ArgPair {
     enum class Kind {
-        PTR_TO_READABLE_MEM,
-        PTR_TO_WRITABLE_MEM,
+        PTR_TO_READABLE_MEM,  ///< Read by the callee; contents are preserved.
+        PTR_TO_WRITABLE_MEM,  ///< Fully initialized by the callee; may be uninitialized before the call.
+        PTR_TO_READWRITE_MEM, ///< Read and possibly overwritten by the callee; must be initialized before the call.
     } kind{};
-    bool or_null{}; ///< true for PTR_TO_READABLE_MEM_OR_NULL and for PTR_TO_WRITABLE_MEM_OR_NULL
+    bool or_null{}; ///< true for the PTR_TO_{READABLE,WRITABLE,READWRITE}_MEM_OR_NULL tags
     Reg mem;        ///< Pointer.
     Reg size;       ///< Size of space pointed to.
     bool can_be_zero{};

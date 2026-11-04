@@ -797,6 +797,48 @@ post:
   - r10.type=stack
   - r10.stack_offset=512
 ---
+test-case: bpf_fib_lookup forgets the params it may overwrite
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    *(u64 *)(r10 - 8) = 0
+    r2 = r10
+    r2 += -8
+    r3 = 8
+    r4 = 0
+    call 69; bpf_fib_lookup
+    r5 = *(u64 *)(r10 - 8) ; reload must NOT read back the stale 0
+
+post:
+  - r0.type=number
+  - r5.type=number
+  - s[504...511].type=number
+  - s[504...511].svalue=r5.svalue
+  - s[504...511].uvalue=r5.uvalue
+  - r10.type=stack
+  - r10.stack_offset=512
+---
+test-case: bpf_fib_lookup with non-numeric stack params
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r2.type=stack", "r2.stack_offset=504",
+      "r3.type=number", "r3.svalue=8", "r3.uvalue=8",
+      "r4.type=number",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    call 69; bpf_fib_lookup
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Stack content is not numeric (valid_access(r2.offset, width=r3) for read)"
+---
 test-case: bpf_trace_printk with negative size buffer
 
 pre: ["r1.type=stack", "r1.stack_offset=504",
