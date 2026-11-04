@@ -238,6 +238,7 @@ struct CallContract {
     std::optional<TypeEncoding> return_ptr_type{}; ///< Non-integer return pointer type, if any.
     bool return_nullable{};                        ///< Whether the return pointer may be null.
     bool return_void{};                            ///< Whether the call may leave r0 unwritten (failed tail call).
+    std::optional<Reg> return_arg{};               ///< Argument register the call returns unchanged, if any.
     bool is_map_lookup{};
     bool reallocate_packet{};
     std::optional<Reg> alloc_size_reg{}; ///< Register holding allocation size (for T_ALLOC_MEM returns).
