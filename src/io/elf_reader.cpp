@@ -702,11 +702,12 @@ int ProgramReader::relocate_global_variable(const std::string& name) const {
 
 int32_t ProgramReader::compute_lddw_reloc_offset_imm(const ELFIO::Elf_Sxword addend, const ELFIO::Elf_Word index,
                                                      const std::reference_wrapper<EbpfInst> lo_inst) const {
+    // R_BPF_64_64 resolves to S + A for every symbol type, not only for section symbols.
+    // eBPF objects carry SHT_REL entries, which have no addend field: A is the immediate
+    // the lddw already holds (libbpf: insn[1].imm = insn[0].imm + sym_off).
     const auto& sym = get_symbol_details(symbols, index);
-    if (sym.type == ELFIO::STT_SECTION) {
-        return addend != 0 ? gsl::narrow<int32_t>(addend) : lo_inst.get().imm;
-    }
-    return gsl::narrow<int32_t>(sym.value + addend);
+    const int64_t implicit_addend = addend != 0 ? addend : lo_inst.get().imm;
+    return gsl::narrow<int32_t>(static_cast<int64_t>(sym.value + implicit_addend));
 }
 
 void ProgramReader::build_ksym_function_resolution_cache() {
