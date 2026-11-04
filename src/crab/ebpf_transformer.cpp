@@ -886,7 +886,8 @@ void EbpfTransformer::operator()(const Call& call) {
     }
     const ResolvedCall resolved = resolve(call, context.program_info());
     // Precondition: cfg_builder::check_instruction_feature_support rejects
-    // unsupported Calls before CFG construction. If that ever drifts, an
+    // unsupported Calls before CFG construction, and the Callx transformer
+    // does not dispatch to an unsupported target. If that ever drifts, an
     // unsupported call here would silently fall through the empty-contract
     // path and yield T_NUM on r0 with no diagnostic.
     assert(resolved.is_supported && "unsupported Call reached transformer; cfg_builder should have rejected it");
@@ -1105,10 +1106,10 @@ void EbpfTransformer::operator()(const Callx& callx) {
         if (sn->fits<int32_t>()) {
             // We can now process it as if the id was immediate.
             const int32_t imm = sn->cast_to<int32_t>();
-            if (!context.is_helper_usable(imm)) {
+            const Call call{.func = imm, .kind = CallKind::helper};
+            if (!resolve(call, context.program_info()).is_supported) {
                 return;
             }
-            const Call call{.func = imm, .kind = CallKind::helper};
             (*this)(call);
         }
     }

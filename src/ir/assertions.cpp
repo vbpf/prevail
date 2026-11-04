@@ -81,11 +81,12 @@ class AssertExtractor {
     }
 
     vector<Assertion> operator()(const Call& call) const {
-        // Invariant: cfg_builder::check_instruction_feature_support has already
+        // Invariant: cfg_builder::check_instruction_feature_support (or, for a
+        // callx target, EbpfChecker's FuncConstraint check) has already
         // rejected unsupported calls, so resolved.contract below is the real
         // contract for this (func, kind) key. An unsupported call would have
         // an empty contract and produce no preconditions here -- sound only
-        // because the cfg_builder gate ensures we never reach that state.
+        // because those gates ensure we never reach that state.
         const ResolvedCall resolved = resolve(call, info);
         // A helper that may reallocate the packet can do so before it dereferences its memory arguments
         // (e.g. bpf_skb_store_bytes makes the packet writable before reading its source), so a packet
