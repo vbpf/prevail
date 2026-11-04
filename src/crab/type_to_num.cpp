@@ -82,17 +82,22 @@ void TypeToNumDomain::operator|=(TypeToNumDomain&& other) {
 }
 
 TypeToNumDomain TypeToNumDomain::operator&(const TypeToNumDomain& other) const {
-    if (auto type_inv = types.meet(other.types)) {
-        // TODO: remove unuseful variables from the numeric domain
-        return TypeToNumDomain{std::move(*type_inv), values & other.values};
-    }
-    return TypeToNumDomain{TypeDomain::top(), NumAbsDomain::bottom()};
+    return *this & TypeToNumDomain{other};
 }
 
 TypeToNumDomain TypeToNumDomain::operator&(TypeToNumDomain&& other) const {
-    if (auto type_inv = types.meet(std::move(other.types))) {
-        // TODO: remove unuseful variables from the numeric domain
-        return TypeToNumDomain{std::move(*type_inv), values & std::move(other.values)};
+    if (auto type_inv = types.meet(other.types)) {
+        TypeToNumDomain res{std::move(*type_inv), values};
+        // A kind variable whose type did not survive the meet is meaningless in the result: whatever either
+        // operand says about it describes an alternative that no longer exists. Forget it on both sides before
+        // the numeric meet, so that it can neither drive the meet to bottom nor be read as a fact about a type
+        // that remains.
+        for (const Variable& v : res.get_nonexistent_kind_variables()) {
+            res.values.havoc(v);
+            other.values.havoc(v);
+        }
+        res.values = res.values & std::move(other.values);
+        return res;
     }
     return {TypeDomain::top(), NumAbsDomain::bottom()};
 }
@@ -177,12 +182,17 @@ TypeToNumDomain::join_over_types(const Reg& reg,
     for (const TypeEncoding type : valid_types) {
         TypeToNumDomain tmp(*this);
         tmp.types.restrict_to(reg_type(reg), TypeSet{type});
-        // This might have changed the type variable of reg.
-        // It might also have changed the type variable of other registers, but we don't deal with that.
+        // This changed the type variable of reg, and of every variable known to have the same type as reg.
+        // Forget the kind variables of the types they lost.
         for (const auto& [other_type, kinds] : valid_type_to_kinds) {
             if (other_type != type) {
-                for (const auto kind : kinds) {
-                    tmp.values.havoc(variable_registry.kind_var(kind, reg_type(reg)));
+                for (const Variable v : types.variables_with_type(other_type)) {
+                    if (tmp.types.may_have_type(v, other_type)) {
+                        continue;
+                    }
+                    for (const auto kind : kinds) {
+                        tmp.values.havoc(variable_registry.kind_var(kind, v));
+                    }
                 }
             }
         }
@@ -266,7 +276,12 @@ TypeToNumDomain TypeToNumDomain::widen(const TypeToNumDomain& other) const {
 }
 
 TypeToNumDomain TypeToNumDomain::narrow(const TypeToNumDomain& other) const {
-    return TypeToNumDomain{types.narrow(other.types), values.narrow(other.values)};
+    TypeToNumDomain res{types.narrow(other.types), values.narrow(other.values)};
+    // As in meet: narrowing the type sets must take the kind variables of the removed types with it.
+    for (const Variable& v : res.get_nonexistent_kind_variables()) {
+        res.values.havoc(v);
+    }
+    return res;
 }
 
 StringInvariant TypeToNumDomain::to_set() const {

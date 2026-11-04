@@ -597,9 +597,9 @@ messages: []
 test-case: stack counter type preserved through widening (issue 1071)
 
 pre: [
-  "r1.type=ctx", "r1.ctx_offset=0", "r1.svalue=[1, 2147418112]",
+  "r1.type=ctx", "r1.ctx_offset=0", "r1.uvalue=[1, 2147418112]",
   "r2.type=number", "r2.svalue=4294967296", "r2.uvalue=4294967296",
-  "r10.type=stack", "r10.stack_offset=4096", "r10.svalue=[4096, 2147418112]",
+  "r10.type=stack", "r10.stack_offset=4096", "r10.uvalue=[4096, 2147418112]",
   "meta_offset=0",
   "packet_size=0",
 ]
@@ -629,10 +629,10 @@ post:
   - r3.uvalue=r2.svalue
   - r10.type=stack
   - r10.stack_offset=4096
-  - r10.svalue=[4096, 2147418112]
+  - r10.uvalue=[4096, 2147418112]
   - r1.type=ctx
   - r1.ctx_offset=0
-  - r1.svalue=[1, 2147418112]
+  - r1.uvalue=[1, 2147418112]
   - s[4088...4095].type=number
   - s[4088...4095].svalue=r2.svalue
   - s[4088...4095].uvalue=r2.svalue
@@ -694,3 +694,86 @@ post:
 
 messages:
   - "4:13: Code becomes unreachable (assume r1 s> 9)"
+---
+test-case: narrowing a type set forgets the kind variables of the removed type
+
+# r4 lags two iterations behind r2, so <never> becomes infeasible only in the second descending
+# iteration, which uses narrow(). It removes number from r6's types; r6.svalue=0 must go with it,
+# or <live> is considered unreachable.
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "r1.uvalue=[1, 2147418112]"]
+
+code:
+  <start>: |
+    r6 = r1
+    r2 = 0
+    r4 = 0
+    r5 = 0
+  <head>: |
+    if r2 > 9 goto <out>
+    if r4 > 100 goto <never>
+    r6 = r1
+    r4 = r5
+    r5 = r2
+    r2 += 1
+    goto <head>
+  <never>: |
+    r6 = 0
+    r2 = 10
+    r4 = 0
+    r5 = 0
+    goto <head>
+  <out>: |
+    if r6 != 0 goto <live>
+  <null>: |
+    goto <null>
+  <live>: |
+    r3 = 1
+    r0 = *(u64 *)(r3 + 0)
+    exit
+
+post: ["_|_"]
+
+messages:
+  - "5:11: Code becomes unreachable (assume r4 > 100)"
+  - "19: Invalid type (r3.type in {ctx, stack, packet, shared, socket, alloc_mem})"
+---
+test-case: meet at a loop head ignores the kind variables of the removed type
+
+# <never> becomes infeasible in the first descending iteration, which uses meet. r6.svalue=0 describes
+# the number that <never> assigns and must not contradict the svalue of the pointer that remains,
+# or the loop head is considered unreachable.
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "r1.uvalue=[1, 2147418112]"]
+
+code:
+  <start>: |
+    r3 = 8
+    r6 = r1
+    r6 += r3
+    r2 = 0
+    r4 = 0
+  <head>: |
+    if r2 > 9 goto <out>
+    if r4 > 100 goto <never>
+    r6 = r1
+    r6 += r3
+    r4 = r2
+    r4 *= 3
+    r2 += 1
+    goto <head>
+  <never>: |
+    r6 = 0
+    r2 = 10
+    r4 = 0
+    goto <head>
+  <out>: |
+    r3 = 1
+    r0 = *(u64 *)(r3 + 0)
+    exit
+
+post: ["_|_"]
+
+messages:
+  - "6:13: Code becomes unreachable (assume r4 > 100)"
+  - "18: Invalid type (r3.type in {ctx, stack, packet, shared, socket, alloc_mem})"
