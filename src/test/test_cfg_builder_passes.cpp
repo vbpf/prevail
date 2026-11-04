@@ -267,6 +267,47 @@ TEST_CASE("AnalysisResult reports maximum nested BPF-to-BPF call depth", "[passe
     }
 }
 
+TEST_CASE("xdp_md.data_meta is not assumed to precede data", "[verify][ctx]") {
+    const ProgramInfo info{
+        .platform = &g_ebpf_platform_linux,
+        .type = g_ebpf_platform_linux.get_program_type("xdp", ""),
+    };
+    const Reg data{2};
+    const Reg data_meta{3};
+    InstructionSeq seq;
+    seq.push_back(at(0, Mem{.access = {.width = 4, .basereg = Reg{1}, .offset = 0}, .value = data, .is_load = true}));
+    seq.push_back(
+        at(1, Mem{.access = {.width = 4, .basereg = Reg{1}, .offset = 8}, .value = data_meta, .is_load = true}));
+
+    SECTION("code guarded by data_meta > data is verified") {
+        // A Linux driver without XDP metadata support publishes data_meta == data + 1,
+        // so the store through the forged pointer below is reachable and must be rejected.
+        const Condition meta_le_data{.op = Condition::Op::LE, .left = data_meta, .right = data, .is64 = true};
+        seq.push_back(at(2, Jmp{.cond = meta_le_data, .target = Label{5}}));
+        seq.push_back(at(3, Bin{.op = Bin::Op::MOV, .dst = Reg{4}, .v = Imm{0x41414141}, .is64 = true}));
+        seq.push_back(
+            at(4, Mem{.access = {.width = 8, .basereg = Reg{4}, .offset = 0}, .value = Reg{4}, .is_load = false}));
+        seq.push_back(at(5, Bin{.op = Bin::Op::MOV, .dst = Reg{0}, .v = Imm{2}, .is64 = true}));
+        seq.push_back(at(6, Exit{}));
+
+        REQUIRE(analyze(Program::from_sequence(seq, info, {}), {}).failed);
+    }
+
+    SECTION("metadata is accessible after the customary bounds check") {
+        // if (data_meta + 4 > data) goto exit; r0 = *(u32 *)data_meta
+        seq.push_back(at(2, Bin{.op = Bin::Op::MOV, .dst = Reg{4}, .v = data_meta, .is64 = true}));
+        seq.push_back(at(3, Bin{.op = Bin::Op::ADD, .dst = Reg{4}, .v = Imm{4}, .is64 = true}));
+        const Condition end_gt_data{.op = Condition::Op::GT, .left = Reg{4}, .right = data, .is64 = true};
+        seq.push_back(at(4, Jmp{.cond = end_gt_data, .target = Label{6}}));
+        seq.push_back(
+            at(5, Mem{.access = {.width = 4, .basereg = data_meta, .offset = 0}, .value = Reg{0}, .is_load = true}));
+        seq.push_back(at(6, Bin{.op = Bin::Op::MOV, .dst = Reg{0}, .v = Imm{2}, .is64 = true}));
+        seq.push_back(at(7, Exit{}));
+
+        REQUIRE_FALSE(analyze(Program::from_sequence(seq, info, {}), {}).failed);
+    }
+}
+
 TEST_CASE("pass_extract_assertions populates assertions for every label in the CFG", "[passes]") {
     const ProgramInfo info = default_info();
     InstructionSeq seq;

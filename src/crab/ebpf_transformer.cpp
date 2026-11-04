@@ -592,7 +592,13 @@ static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, 
         }
     } else if (addr == desc->meta) {
         if (width == offset_width) {
-            state.values.assign(target.packet_offset, variable_registry.meta_offset());
+            // meta_offset is the lowest accessible packet offset; the field itself need not
+            // hold it. Linux sets xdp_md.data_meta to data + 1 on a driver without XDP
+            // metadata support, so only data_meta in [meta_offset, meta_offset + 1] covers
+            // every runtime. Aliasing the two would make data_meta > data unreachable and
+            // leave whatever a program hides behind that guard unchecked.
+            state.values.add_constraint(variable_registry.meta_offset() <= target.packet_offset);
+            state.values.add_constraint(target.packet_offset <= variable_registry.meta_offset() + 1);
         }
     } else {
         if (may_touch_ptr) {
