@@ -22,4 +22,6 @@ Program types that exist but have approximate or incorrect context modeling.
 
 - [x] Fix native type assignments — several program types are registered with `BPF_PROG_TYPE_SOCKET_FILTER` as native type instead of their actual kernel enum (e.g., `cgroup_sock_addr`, `sk_msg`, `lirc_mode2`).
 - [ ] Context descriptor parity — field offsets and sizes match Linux 6.18 definitions for all registered program types.
+- [x] Read-only contexts — program types whose `is_valid_access()` rejects every `BPF_WRITE` (kprobe, tracepoint, perf_event, tracing, LSM, struct_ops, XDP, ...) reject stores through the context pointer.
+- [ ] Per-field context write permissions — for contexts with writable fields (`__sk_buff`, `bpf_sock_ops`, `bpf_sock_addr`, ...), stores are checked only against the data/data_end/data_meta slots, not against the per-program-type `BPF_WRITE` field set.
 - [ ] Model attach-type-dependent helper availability — Linux gates helper legality on (program type, attach type) pairs, not just program type alone.

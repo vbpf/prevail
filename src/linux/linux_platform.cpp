@@ -89,9 +89,14 @@
 
 #define PTYPE(name, descr, native_type, prefixes) {name, descr, native_type, prefixes}
 #define PTYPE_PRIVILEGED(name, descr, native_type, prefixes) {name, descr, native_type, prefixes, true}
+#define PTYPE_READONLY_CTX(name, descr, native_type, prefixes) {name, descr, native_type, prefixes, false, false, true}
+#define PTYPE_PRIVILEGED_READONLY_CTX(name, descr, native_type, prefixes) \
+    {name, descr, native_type, prefixes, true, false, true}
 #else
 #define PTYPE(name, descr, native_type, prefixes) {name, descr, 0, prefixes}
 #define PTYPE_PRIVILEGED(name, descr, native_type, prefixes) {name, descr, 0, prefixes, true}
+#define PTYPE_READONLY_CTX(name, descr, native_type, prefixes) {name, descr, 0, prefixes, false, false, true}
+#define PTYPE_PRIVILEGED_READONLY_CTX(name, descr, native_type, prefixes) {name, descr, 0, prefixes, true, false, true}
 #endif
 #include "io/elf_loader.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
@@ -121,7 +126,7 @@ static int create_map_linux(uint32_t map_type, uint32_t key_size, uint32_t value
 const EbpfProgramType linux_socket_filter_program_type =
     PTYPE("socket_filter", &g_socket_filter_descr, BPF_PROG_TYPE_SOCKET_FILTER, {"socket"});
 
-const EbpfProgramType linux_xdp_program_type = PTYPE("xdp", &g_xdp_descr, BPF_PROG_TYPE_XDP, {"xdp"});
+const EbpfProgramType linux_xdp_program_type = PTYPE_READONLY_CTX("xdp", &g_xdp_descr, BPF_PROG_TYPE_XDP, {"xdp"});
 
 const EbpfProgramType cilium_lxc_program_type = PTYPE("lxc", &g_sched_descr, BPF_PROG_TYPE_SOCKET_FILTER, {});
 
@@ -129,44 +134,48 @@ const std::vector<EbpfProgramType> linux_program_types = {
     PTYPE("unspec", &g_unspec_descr, BPF_PROG_TYPE_UNSPEC, {}),
     linux_socket_filter_program_type,
     linux_xdp_program_type,
-    PTYPE("cgroup_device", &g_cgroup_dev_descr, BPF_PROG_TYPE_CGROUP_DEVICE, {"cgroup/dev"}),
+    PTYPE_READONLY_CTX("cgroup_device", &g_cgroup_dev_descr, BPF_PROG_TYPE_CGROUP_DEVICE, {"cgroup/dev"}),
     PTYPE("cgroup_skb", &g_socket_filter_descr, BPF_PROG_TYPE_CGROUP_SKB, {"cgroup/skb"}),
     PTYPE("cgroup_sock", &g_cgroup_sock_descr, BPF_PROG_TYPE_CGROUP_SOCK, {"cgroup/sock"}),
-    PTYPE_PRIVILEGED("kprobe", &g_kprobe_descr, BPF_PROG_TYPE_KPROBE, {"kprobe/" COMMA "kretprobe/"}),
+    PTYPE_PRIVILEGED_READONLY_CTX("kprobe", &g_kprobe_descr, BPF_PROG_TYPE_KPROBE, {"kprobe/" COMMA "kretprobe/"}),
     PTYPE("lwt_in", &g_lwt_inout_descr, BPF_PROG_TYPE_LWT_IN, {"lwt_in"}),
     PTYPE("lwt_out", &g_lwt_inout_descr, BPF_PROG_TYPE_LWT_OUT, {"lwt_out"}),
     PTYPE("lwt_xmit", &g_lwt_xmit_descr, BPF_PROG_TYPE_LWT_XMIT, {"lwt_xmit"}),
-    PTYPE("perf_event", &g_perf_event_descr, BPF_PROG_TYPE_PERF_EVENT, {"perf_section" COMMA "perf_event"}),
+    PTYPE_READONLY_CTX("perf_event", &g_perf_event_descr, BPF_PROG_TYPE_PERF_EVENT,
+                       {"perf_section" COMMA "perf_event"}),
     PTYPE("sched_act", &g_sched_descr, BPF_PROG_TYPE_SCHED_ACT, {"action"}),
     PTYPE("sched_cls", &g_sched_descr, BPF_PROG_TYPE_SCHED_CLS, {"classifier"}),
     PTYPE("sk_skb", &g_sk_skb_descr, BPF_PROG_TYPE_SK_SKB, {"sk_skb"}),
     PTYPE("sock_ops", &g_sock_ops_descr, BPF_PROG_TYPE_SOCK_OPS, {"sockops"}),
-    PTYPE("tracepoint", &g_tracepoint_descr, BPF_PROG_TYPE_TRACEPOINT, {"tracepoint/"}),
+    PTYPE_READONLY_CTX("tracepoint", &g_tracepoint_descr, BPF_PROG_TYPE_TRACEPOINT, {"tracepoint/"}),
     PTYPE("cgroup_sockopt", &g_sockopt_descr, BPF_PROG_TYPE_CGROUP_SOCKOPT,
           {"cgroup/getsockopt" COMMA "cgroup/setsockopt"}),
-    PTYPE("sk_msg", &g_sk_msg_md, BPF_PROG_TYPE_SK_MSG, {"sk_msg"}),
-    PTYPE_PRIVILEGED("raw_tracepoint", &g_tracepoint_descr, BPF_PROG_TYPE_RAW_TRACEPOINT,
-                     {"raw_tracepoint/" COMMA "raw_tp/"}),
-    PTYPE_PRIVILEGED("raw_tracepoint_writable", &g_tracepoint_descr, BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE,
-                     {"raw_tracepoint.w/" COMMA "raw_tp.w/"}),
+    PTYPE_READONLY_CTX("sk_msg", &g_sk_msg_md, BPF_PROG_TYPE_SK_MSG, {"sk_msg"}),
+    PTYPE_PRIVILEGED_READONLY_CTX("raw_tracepoint", &g_tracepoint_descr, BPF_PROG_TYPE_RAW_TRACEPOINT,
+                                  {"raw_tracepoint/" COMMA "raw_tp/"}),
+    // The writable buffer of a writable raw tracepoint is reached through a pointer loaded
+    // from the context, not by storing into the context itself.
+    PTYPE_PRIVILEGED_READONLY_CTX("raw_tracepoint_writable", &g_tracepoint_descr, BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE,
+                                  {"raw_tracepoint.w/" COMMA "raw_tp.w/"}),
     PTYPE("cgroup_sock_addr", &g_sock_addr_descr, BPF_PROG_TYPE_CGROUP_SOCK_ADDR,
           {"cgroup/bind" COMMA "cgroup/post_bind" COMMA "cgroup/connect" COMMA "cgroup/sendmsg" COMMA
            "cgroup/recvmsg" COMMA "cgroup/getpeername" COMMA "cgroup/getsockname"}),
     PTYPE("lwt_seg6local", &g_lwt_xmit_descr, BPF_PROG_TYPE_LWT_SEG6LOCAL, {"lwt_seg6local"}),
-    PTYPE("lirc_mode2", &g_lirc_mode2_descr, BPF_PROG_TYPE_LIRC_MODE2, {"lirc_mode2"}),
-    PTYPE("sk_reuseport", &g_sk_reuseport_descr, BPF_PROG_TYPE_SK_REUSEPORT, {"sk_reuseport/"}),
-    PTYPE("flow_dissector", &g_flow_dissector_descr, BPF_PROG_TYPE_FLOW_DISSECTOR, {"flow_dissector"}),
+    PTYPE_READONLY_CTX("lirc_mode2", &g_lirc_mode2_descr, BPF_PROG_TYPE_LIRC_MODE2, {"lirc_mode2"}),
+    PTYPE_READONLY_CTX("sk_reuseport", &g_sk_reuseport_descr, BPF_PROG_TYPE_SK_REUSEPORT, {"sk_reuseport/"}),
+    PTYPE_READONLY_CTX("flow_dissector", &g_flow_dissector_descr, BPF_PROG_TYPE_FLOW_DISSECTOR, {"flow_dissector"}),
     PTYPE("cgroup_sysctl", &g_cgroup_sysctl_descr, BPF_PROG_TYPE_CGROUP_SYSCTL, {"cgroup/sysctl"}),
     PTYPE("ext", &g_unspec_descr, BPF_PROG_TYPE_EXT, {"freplace/"}),
-    PTYPE("tracing", &g_tracing_descr, BPF_PROG_TYPE_TRACING,
-          {"fentry/" COMMA "fentry.s/" COMMA "fexit/" COMMA "fexit.s/" COMMA "fmod_ret/" COMMA "fmod_ret.s/" COMMA
-           "iter/" COMMA "iter.s/" COMMA "tp_btf/" COMMA "tp_btf.s/"}),
+    // The argument array is where the trampoline saved the traced function's registers.
+    PTYPE_READONLY_CTX("tracing", &g_tracing_descr, BPF_PROG_TYPE_TRACING,
+                       {"fentry/" COMMA "fentry.s/" COMMA "fexit/" COMMA "fexit.s/" COMMA "fmod_ret/" COMMA
+                        "fmod_ret.s/" COMMA "iter/" COMMA "iter.s/" COMMA "tp_btf/" COMMA "tp_btf.s/"}),
     // struct_ops callbacks receive function arguments as u64 array, same as fentry/fexit.
-    PTYPE("struct_ops", &g_tracing_descr, BPF_PROG_TYPE_STRUCT_OPS, {"struct_ops/" COMMA "struct_ops.s/"}),
-    PTYPE("lsm", &g_tracing_descr, BPF_PROG_TYPE_LSM, {"lsm/" COMMA "lsm.s/"}),
-    PTYPE("sk_lookup", &g_sk_lookup_descr, BPF_PROG_TYPE_SK_LOOKUP, {"sk_lookup/"}),
+    PTYPE_READONLY_CTX("struct_ops", &g_tracing_descr, BPF_PROG_TYPE_STRUCT_OPS, {"struct_ops/" COMMA "struct_ops.s/"}),
+    PTYPE_READONLY_CTX("lsm", &g_tracing_descr, BPF_PROG_TYPE_LSM, {"lsm/" COMMA "lsm.s/"}),
+    PTYPE_READONLY_CTX("sk_lookup", &g_sk_lookup_descr, BPF_PROG_TYPE_SK_LOOKUP, {"sk_lookup/"}),
     PTYPE("syscall", &g_syscall_descr, BPF_PROG_TYPE_SYSCALL, {"syscall/"}),
-    PTYPE("netfilter", &g_netfilter_descr, BPF_PROG_TYPE_NETFILTER, {"netfilter/"}),
+    PTYPE_READONLY_CTX("netfilter", &g_netfilter_descr, BPF_PROG_TYPE_NETFILTER, {"netfilter/"}),
 };
 
 static EbpfProgramType get_program_type_linux(const std::string& section, const std::string& path) {
