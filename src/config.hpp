@@ -62,11 +62,18 @@ struct RuntimeConfig {
     // Maximum number of nested function calls.
     int max_call_stack_frames = 8;
 
+    // Maximum number of local call instances inlined into one program. Each call
+    // site clones its callee, so a chain of functions that each call the next
+    // several times grows geometrically in the call depth; this bounds the
+    // breadth that max_call_stack_frames leaves unconstrained.
+    int max_inlined_calls = 256;
+
     // Maximum packet size in bytes (upper bound on packet_size).
     int max_packet_size = 0xffff;
 
     static constexpr int MAX_SUBPROGRAM_STACK_SIZE = 1024 * 1024;
     static constexpr int MAX_CALL_STACK_FRAMES_LIMIT = 128;
+    static constexpr int MAX_INLINED_CALLS_LIMIT = (1 << 20);
     static constexpr int MAX_PACKET_SIZE_LIMIT = (1 << 30);
 
     [[nodiscard]]
@@ -84,6 +91,10 @@ struct RuntimeConfig {
             throw std::invalid_argument("max_call_stack_frames must be in [1, " +
                                         std::to_string(MAX_CALL_STACK_FRAMES_LIMIT) + "], got " +
                                         std::to_string(max_call_stack_frames));
+        }
+        if (max_inlined_calls <= 0 || max_inlined_calls > MAX_INLINED_CALLS_LIMIT) {
+            throw std::invalid_argument("max_inlined_calls must be in [1, " + std::to_string(MAX_INLINED_CALLS_LIMIT) +
+                                        "], got " + std::to_string(max_inlined_calls));
         }
         if (max_packet_size <= 0 || max_packet_size > MAX_PACKET_SIZE_LIMIT) {
             throw std::invalid_argument("max_packet_size must be in [1, " + std::to_string(MAX_PACKET_SIZE_LIMIT) +

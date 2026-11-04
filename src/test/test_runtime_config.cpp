@@ -12,6 +12,7 @@ TEST_CASE("RuntimeConfig defaults are accepted", "[config][runtime]") {
     REQUIRE_NOTHROW(cfg.validate());
     CHECK(cfg.subprogram_stack_size == 512);
     CHECK(cfg.max_call_stack_frames == 8);
+    CHECK(cfg.max_inlined_calls == 256);
     CHECK(cfg.max_packet_size == 0xffff);
     CHECK(cfg.total_stack_size() == 512 * 8);
 }
@@ -58,6 +59,25 @@ TEST_CASE("RuntimeConfig::validate rejects out-of-range max_call_stack_frames", 
     CHECK_NOTHROW(cfg.validate());
 
     cfg.max_call_stack_frames = 1;
+    CHECK_NOTHROW(cfg.validate());
+}
+
+TEST_CASE("RuntimeConfig::validate rejects out-of-range max_inlined_calls", "[config][runtime]") {
+    RuntimeConfig cfg{};
+
+    cfg.max_inlined_calls = 0;
+    CHECK_THROWS_AS(cfg.validate(), std::invalid_argument);
+
+    cfg.max_inlined_calls = -1;
+    CHECK_THROWS_AS(cfg.validate(), std::invalid_argument);
+
+    cfg.max_inlined_calls = RuntimeConfig::MAX_INLINED_CALLS_LIMIT + 1;
+    CHECK_THROWS_AS(cfg.validate(), std::invalid_argument);
+
+    cfg.max_inlined_calls = RuntimeConfig::MAX_INLINED_CALLS_LIMIT;
+    CHECK_NOTHROW(cfg.validate());
+
+    cfg.max_inlined_calls = 1;
     CHECK_NOTHROW(cfg.validate());
 }
 
