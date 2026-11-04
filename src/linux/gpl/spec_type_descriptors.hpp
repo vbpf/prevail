@@ -104,8 +104,13 @@ inline constexpr EbpfStructDescriptor bpf_sock_common_layout{
     .size = cgroup_sock_regions, .fields = bpf_sock_common_fields.data(), .field_count = bpf_sock_common_fields.size()};
 
 constexpr ebpf_ctx_descriptor_t sk_buff = {sk_skb_regions, 76, 80, 140}; // data/data_end/data_meta
-constexpr ebpf_ctx_descriptor_t xdp_md = {xdp_regions, 0, 4, 8};         // data/data_end/data_meta
-constexpr ebpf_ctx_descriptor_t sk_msg_md = {80, 0, 8, -1};              // sizeof(sk_msg_md), data/data_end
+// __sk_buff outside tc: Linux rejects data_meta for these program types, and the
+// cgroup_skb, sk_skb and socket_filter entry points never compute the pointer
+// behind it (the slot holds unrelated skb->cb bytes), so it must not be typed
+// as a packet pointer.
+constexpr ebpf_ctx_descriptor_t sk_buff_no_meta = {sk_skb_regions, 76, 80, -1};
+constexpr ebpf_ctx_descriptor_t xdp_md = {xdp_regions, 0, 4, 8}; // data/data_end/data_meta
+constexpr ebpf_ctx_descriptor_t sk_msg_md = {80, 0, 8, -1};      // sizeof(sk_msg_md), data/data_end
 constexpr ebpf_ctx_descriptor_t unspec_descr = {0, -1, -1, -1};
 constexpr ebpf_ctx_descriptor_t tracing_descr = {tracing_regions, -1, -1, -1};
 constexpr ebpf_ctx_descriptor_t lirc_mode2_descr = {lirc_mode2_regions, -1, -1, -1};
@@ -126,6 +131,7 @@ constexpr ebpf_ctx_descriptor_t cgroup_sysctl_descr = {cgroup_sysctl_regions, -1
 constexpr ebpf_ctx_descriptor_t flow_dissector_descr = {sk_skb_regions, 76, 80, -1};
 
 extern const ebpf_ctx_descriptor_t g_sk_buff;
+extern const ebpf_ctx_descriptor_t g_sk_buff_no_meta;
 extern const ebpf_ctx_descriptor_t g_xdp_md;
 extern const ebpf_ctx_descriptor_t g_sk_msg_md;
 extern const ebpf_ctx_descriptor_t g_unspec_descr;
@@ -146,12 +152,12 @@ extern const ebpf_ctx_descriptor_t g_sk_reuseport_descr;
 extern const ebpf_ctx_descriptor_t g_cgroup_sysctl_descr;
 extern const ebpf_ctx_descriptor_t g_flow_dissector_descr;
 
-// The following all use the __sk_buff context struct (with data/data_end/data_meta).
-#define g_socket_filter_descr g_sk_buff
+// The following all use the __sk_buff context struct; only tc programs get data_meta.
 #define g_sched_descr g_sk_buff
-#define g_lwt_xmit_descr g_sk_buff
-#define g_lwt_inout_descr g_sk_buff
-#define g_sk_skb_descr g_sk_buff
+#define g_socket_filter_descr g_sk_buff_no_meta
+#define g_lwt_xmit_descr g_sk_buff_no_meta
+#define g_lwt_inout_descr g_sk_buff_no_meta
+#define g_sk_skb_descr g_sk_buff_no_meta
 
 // And these were also interchangeable.
 #define g_xdp_descr g_xdp_md
