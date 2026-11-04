@@ -152,11 +152,13 @@ const std::vector<EbpfProgramType> linux_program_types = {
     PTYPE("cgroup_sockopt", &g_sockopt_descr, BPF_PROG_TYPE_CGROUP_SOCKOPT,
           {"cgroup/getsockopt" COMMA "cgroup/setsockopt"}),
     PTYPE_READONLY_CTX("sk_msg", &g_sk_msg_md, BPF_PROG_TYPE_SK_MSG, {"sk_msg"}),
-    PTYPE_PRIVILEGED_READONLY_CTX("raw_tracepoint", &g_tracepoint_descr, BPF_PROG_TYPE_RAW_TRACEPOINT,
+    // Raw tracepoints receive the tracepoint arguments as a u64 array (bpf_tracing_ctx_access),
+    // not a perf trace record.
+    PTYPE_PRIVILEGED_READONLY_CTX("raw_tracepoint", &g_tracing_descr, BPF_PROG_TYPE_RAW_TRACEPOINT,
                                   {"raw_tracepoint/" COMMA "raw_tp/"}),
     // The writable buffer of a writable raw tracepoint is reached through a pointer loaded
     // from the context, not by storing into the context itself.
-    PTYPE_PRIVILEGED_READONLY_CTX("raw_tracepoint_writable", &g_tracepoint_descr, BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE,
+    PTYPE_PRIVILEGED_READONLY_CTX("raw_tracepoint_writable", &g_tracing_descr, BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE,
                                   {"raw_tracepoint.w/" COMMA "raw_tp.w/"}),
     PTYPE("cgroup_sock_addr", &g_sock_addr_descr, BPF_PROG_TYPE_CGROUP_SOCK_ADDR,
           {"cgroup/bind" COMMA "cgroup/post_bind" COMMA "cgroup/connect" COMMA "cgroup/sendmsg" COMMA

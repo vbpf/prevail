@@ -10,13 +10,19 @@ constexpr int NONMAPS = 5;
 constexpr int ALL_TYPES = NMAPS + NONMAPS;
 
 // Context struct sizes — verified against kernel 6.14 uapi headers.
-// kprobe and perf_event use a cross-arch upper bound for pt_regs.
+// A size is the upper bound every context access is checked against, so it
+// must never exceed the object the program actually receives: rounding up
+// accepts out-of-bounds accesses. pt_regs is architecture-specific and an
+// ELF object does not name its target, so kprobe and perf_event model the
+// x86_64 layout; that is merely conservative for targets with a larger
+// pt_regs (e.g. arm64), and a platform targeting a smaller one must supply
+// its own descriptors.
 constexpr int perf_max_trace_size = 2048;
-constexpr int ptregs_size = (3 + 63 + 8 + 2) * 8; // cross-arch upper bound
-constexpr int cgroup_dev_regions = 12;            // sizeof(bpf_cgroup_dev_ctx): 3 × u32
-constexpr int kprobe_regions = ptregs_size;       // cross-arch upper bound (x86_64 actual: 168)
+constexpr int ptregs_size = 21 * 8;         // sizeof(pt_regs) on x86_64: r15 through ss
+constexpr int cgroup_dev_regions = 12;      // sizeof(bpf_cgroup_dev_ctx): 3 × u32
+constexpr int kprobe_regions = ptregs_size; // sizeof(pt_regs)
 constexpr int tracepoint_regions = perf_max_trace_size;
-constexpr int perf_event_regions = 3 * 8 + ptregs_size; // cross-arch upper bound (x86_64 actual: 184)
+constexpr int perf_event_regions = ptregs_size + 2 * 8; // sizeof(bpf_perf_event_data): regs, sample_period, addr
 constexpr int sk_skb_regions = 192;                     // sizeof(__sk_buff): 48 fields through hwtstamp
 constexpr int xdp_regions = 24;                         // sizeof(xdp_md): 6 × u32, incl. egress_ifindex
 constexpr int cgroup_sock_regions = 80;                 // sizeof(bpf_sock): through rx_queue_mapping
