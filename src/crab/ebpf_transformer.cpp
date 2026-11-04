@@ -1033,6 +1033,10 @@ void EbpfTransformer::operator()(const Call& call) {
         } else {
             dom.state.havoc_offsets(r0_reg);
         }
+    } else if (resolved.contract.return_void) {
+        // The call may fall through without writing r0 (a failed tail call), so r0 still holds whatever it
+        // held before and must not be retyped as a number: treat it like the scratched r1-r5.
+        dom.state.havoc_register(r0_reg);
     } else {
         dom.state.havoc_register_except_type(r0_reg);
         dom.state.assign_type(r0_reg, T_NUM);

@@ -76,9 +76,10 @@ static constexpr EbpfHelperPrototype bpf_unspec_proto = {
     .return_type = EBPF_RETURN_TYPE_UNSUPPORTED,
 };
 
+// Not a function at run time (RET_VOID in the kernel): a failed tail call falls through without setting r0.
 constexpr EbpfHelperPrototype bpf_tail_call_proto = {
     .name = "tail_call",
-    .return_type = EBPF_RETURN_TYPE_INTEGER_OR_NO_RETURN_IF_SUCCEED,
+    .return_type = EBPF_RETURN_TYPE_VOID_OR_NO_RETURN_IF_SUCCEED,
     .argument_type =
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
@@ -1820,8 +1821,7 @@ static constexpr EbpfHelperPrototype bpf_task_storage_delete_proto = {
 };
 
 static constexpr EbpfHelperPrototype bpf_get_current_task_btf_proto = {
-    .name = "get_current_task_btf",
-    .return_type = EBPF_RETURN_TYPE_PTR_TO_BTF_ID,
+    .name = "get_current_task_btf", .return_type = EBPF_RETURN_TYPE_PTR_TO_BTF_ID,
     // .ret_btf_id = &bpf_get_current_btf_ids[0],
 };
 

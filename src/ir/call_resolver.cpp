@@ -47,6 +47,7 @@ ResolvedCall resolve_helper(const Call& call, const ProgramInfo& info) {
     ResolvedCall res{.call = call, .name = helper_prototype_name};
     res.contract.return_ptr_type = return_info->pointer_type;
     res.contract.return_nullable = return_info->pointer_nullable;
+    res.contract.return_void = return_info->is_void;
     res.contract.reallocate_packet = proto.reallocate_packet;
     res.contract.is_map_lookup = proto.return_type == EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL;
     res.contract.zero_args_mask = proto.zero_args_mask;

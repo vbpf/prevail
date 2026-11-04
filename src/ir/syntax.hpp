@@ -235,6 +235,7 @@ struct CallContract {
     std::vector<ArgPair> pairs;
     std::optional<TypeEncoding> return_ptr_type{}; ///< Non-integer return pointer type, if any.
     bool return_nullable{};                        ///< Whether the return pointer may be null.
+    bool return_void{};                            ///< Whether the call may leave r0 unwritten (failed tail call).
     bool is_map_lookup{};
     bool reallocate_packet{};
     std::optional<Reg> alloc_size_reg{}; ///< Register holding allocation size (for T_ALLOC_MEM returns).
@@ -260,6 +261,7 @@ struct ResolvedCall {
 struct CallReturnTypeInfo {
     std::optional<TypeEncoding> pointer_type{}; ///< Empty for scalar/map-lookup-style returns.
     bool pointer_nullable{};
+    bool is_void{}; ///< The call may leave r0 unwritten; r0 is unreadable afterwards.
 };
 
 /// Shared helper/kfunc return-type mapping used by unmarshal and kfunc lowering.
@@ -269,6 +271,7 @@ inline std::optional<CallReturnTypeInfo> classify_call_return_type(const ebpf_re
     case EBPF_RETURN_TYPE_INTEGER:
     case EBPF_RETURN_TYPE_PTR_TO_MAP_VALUE_OR_NULL:
     case EBPF_RETURN_TYPE_INTEGER_OR_NO_RETURN_IF_SUCCEED: return CallReturnTypeInfo{};
+    case EBPF_RETURN_TYPE_VOID_OR_NO_RETURN_IF_SUCCEED: return CallReturnTypeInfo{.is_void = true};
     case EBPF_RETURN_TYPE_PTR_TO_SOCK_COMMON_OR_NULL:
     case EBPF_RETURN_TYPE_PTR_TO_SOCKET_OR_NULL:
     case EBPF_RETURN_TYPE_PTR_TO_TCP_SOCKET_OR_NULL: return CallReturnTypeInfo{T_SOCKET, true};
