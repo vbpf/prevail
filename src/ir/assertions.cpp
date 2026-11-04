@@ -61,7 +61,14 @@ class AssertExtractor {
     }
 
     /// Packet access implicitly uses R6, so verify that R6 still has a pointer to the context.
-    vector<Assertion> operator()(const Packet&) const { return zero_offset_ctx({6}, false); }
+    /// The indirect form (LD_IND) also reads an index register, which must hold a number.
+    vector<Assertion> operator()(const Packet& ins) const {
+        vector<Assertion> res = zero_offset_ctx({6}, false);
+        if (ins.regoffset) {
+            res.emplace_back(TypeConstraint{*ins.regoffset, TypeGroup::number});
+        }
+        return res;
+    }
 
     vector<Assertion> operator()(const Exit&) const {
         vector<Assertion> res;
