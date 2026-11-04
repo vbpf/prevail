@@ -3764,6 +3764,13 @@
             ]
           },
           "test_overrides": {
+            "programs": {
+              "tp_btf/task_newtask": {
+                "call_weak_kfunc": {
+                  "status": "reject"
+                }
+              }
+            },
             "sections": {
               "fentry/bpf_fentry_test2": {
                 "status": "reject"

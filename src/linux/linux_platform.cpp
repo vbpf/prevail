@@ -388,7 +388,7 @@ std::optional<KsymBtfId> resolve_ksym_btf_id_linux(const std::string& name) {
     // Synthetic BTF IDs for test/sample kfunc symbols.  IDs 20001-20012, 21000 are
     // intentionally NOT in kfunc_prototypes — they exist only to exercise the ELF
     // relocation rewrite path and will fail prototype lookup during verification.
-    // IDs 1009-1010 (cpumask) have prototype entries and will verify.
+    // IDs 1009-1010 (cpumask) have prototype entries; 1010 is KF_RELEASE and is rejected by make_kfunc_call.
     // In production, the platform callout resolves to real kernel/module BTF IDs.
     if (name == "bpf_skb_ct_lookup") {
         return KsymBtfId{.btf_id = 20001, .module = 0};
