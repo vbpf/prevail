@@ -147,7 +147,7 @@ code:
 post: []
 
 messages:
-  - "too many call stack frames"
+  - "0/2: illegal recursion"
 ---
 test-case: jump within a subfunction
 
@@ -553,3 +553,80 @@ post:
 
 messages:
   - "3: Invalid type (r0.type == number)"
+
+---
+test-case: callee placed before its caller keeps its frame across a nested call
+
+# The call sites are inlined in instruction order, so g's call of h is expanded
+# before main's call of g. The expansion of main's call used to walk the live
+# graph into that earlier clone of h and copy it, exit included, into g's frame:
+# returning from h then popped g's frame, and the load at pc 3 read main's slot
+# (svalue=1) instead of g's. With a pointer spilled there by main, the store
+# through it was accepted (accept-unsafe).
+
+pre: ["r10.type=stack", "r10.stack_offset=4096"]
+
+code:
+  <start>: |
+    goto <main>
+  <g>: |
+    *(u64 *)(r10 - 8) = 2
+    call <h>
+    r0 = *(u64 *)(r10 - 8)
+    exit
+  <h>: |
+    r0 = 0
+    exit
+  <main>: |
+    *(u64 *)(r10 - 8) = 1
+    call <g>
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=2
+  - r0.uvalue=2
+  - r10.type=stack
+  - r10.stack_offset=4096
+  - s[4088...4095].type=number
+  - s[4088...4095].svalue=1
+  - s[4088...4095].uvalue=1
+---
+test-case: callee placed before its caller may call the same function twice
+
+pre: []
+
+code:
+  <start>: |
+    goto <main>
+  <g>: |
+    call <h>
+    call <h>
+    exit
+  <h>: |
+    r0 = 0
+    exit
+  <main>: |
+    call <g>
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0
+---
+test-case: fail recursion through the instruction a call returns to
+
+pre: []
+
+code:
+  <start>: |
+    call <next>
+  <next>: |
+    call <start>
+    exit
+
+post: []
+
+messages:
+  - "0/1: illegal recursion"
