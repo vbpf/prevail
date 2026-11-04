@@ -1453,3 +1453,38 @@ post:
 
 messages:
   - "6:7: Code becomes unreachable (assume r0 w< 0)"
+---
+test-case: assume on same-typed registers forgets the kind variables of the removed type for both
+
+# r6 and r7 are either the numbers 5 and 0, or two ctx pointers. Only the pointers satisfy r6 < r7;
+# r7.svalue=0 describes the number and must not survive, or <live> is considered unreachable.
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "r1.uvalue=[1, 2147418112]", "r2.type=number"]
+
+code:
+  <start>: |
+    if r2 == 0 goto <pointers>
+    r6 = 5
+    r7 = 0
+    goto <merged>
+  <pointers>: |
+    r6 = r1
+    r7 = r1
+    r7 += 8
+  <merged>: |
+    if r6 < r7 goto <less>
+  <done>: |
+    goto <done>
+  <less>: |
+    if r7 != 0 goto <live>
+  <null>: |
+    goto <null>
+  <live>: |
+    r3 = 1
+    r0 = *(u64 *)(r3 + 0)
+    exit
+
+post: ["_|_"]
+
+messages:
+  - "12: Invalid type (r3.type in {ctx, stack, packet, shared, socket, alloc_mem})"

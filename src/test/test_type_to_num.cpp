@@ -91,3 +91,77 @@ TEST_CASE("TypeToNumDomain self assignment keeps kind values", "[type_to_num]") 
     REQUIRE(dom.values.eval_interval(pack.svalue) == Interval{-3});
     REQUIRE(dom.values.eval_interval(pack.uvalue) == Interval{7});
 }
+
+// r0 is either the number 0 or a pointer to the start of the context.
+static TypeToNumDomain zero_or_ctx() {
+    TypeToNumDomain dom;
+    dom.types.restrict_to(reg_type(r0), TypeSet{T_NUM, T_CTX});
+    dom.values.assign(reg_pack(r0).svalue, 0);
+    dom.values.assign(reg_pack(r0).ctx_offset, 0);
+    return dom;
+}
+
+TEST_CASE("TypeToNumDomain narrow forgets kind values of removed types", "[type_to_num]") {
+    const RegPack pack = reg_pack(r0);
+
+    TypeToNumDomain ctx;
+    ctx.assign_type(r0, T_CTX);
+    ctx.values.assign(pack.ctx_offset, 0);
+
+    const TypeToNumDomain res = zero_or_ctx().narrow(ctx);
+
+    REQUIRE(res.get_type(r0) == T_CTX);
+    REQUIRE(res.values.eval_interval(pack.ctx_offset) == Interval{0});
+    REQUIRE(res.values.eval_interval(pack.svalue).is_top());
+}
+
+TEST_CASE("TypeToNumDomain meet forgets kind values of removed types", "[type_to_num]") {
+    const RegPack pack = reg_pack(r0);
+
+    TypeToNumDomain ctx;
+    ctx.assign_type(r0, T_CTX);
+    ctx.values.assign(pack.ctx_offset, 0);
+
+    for (const TypeToNumDomain& res : {zero_or_ctx() & ctx, ctx & zero_or_ctx()}) {
+        REQUIRE(res.get_type(r0) == T_CTX);
+        REQUIRE(res.values.eval_interval(pack.ctx_offset) == Interval{0});
+        REQUIRE(res.values.eval_interval(pack.svalue).is_top());
+    }
+}
+
+TEST_CASE("TypeToNumDomain meet ignores conflicts on kind values of removed types", "[type_to_num]") {
+    const RegPack pack = reg_pack(r0);
+
+    // svalue=0 describes the number alternative only, so it does not contradict what is known about the pointer.
+    TypeToNumDomain ctx;
+    ctx.assign_type(r0, T_CTX);
+    ctx.values.assign(pack.ctx_offset, 0);
+    ctx.values.assign(pack.svalue, 4096);
+
+    for (const TypeToNumDomain& res : {zero_or_ctx() & ctx, ctx & zero_or_ctx()}) {
+        REQUIRE_FALSE(res.is_bottom());
+        REQUIRE(res.get_type(r0) == T_CTX);
+        REQUIRE(res.values.eval_interval(pack.ctx_offset) == Interval{0});
+    }
+}
+
+TEST_CASE("TypeToNumDomain join_over_types forgets kind values of all registers sharing the type", "[type_to_num]") {
+    const RegPack pack = reg_pack(r1);
+
+    TypeToNumDomain dom = zero_or_ctx();
+    dom.assign(r1, r0);
+    REQUIRE(dom.same_type(r0, r1));
+
+    const TypeToNumDomain res = dom.join_over_types(r0, [&](TypeToNumDomain& state, const TypeEncoding type) {
+        REQUIRE(state.get_type(r1) == type);
+        REQUIRE(state.values.eval_interval(pack.svalue).is_top() == (type != T_NUM));
+        REQUIRE(state.values.eval_interval(pack.ctx_offset).is_top() == (type != T_CTX));
+        if (type == T_NUM) {
+            state.set_to_bottom();
+        }
+    });
+
+    REQUIRE(res.get_type(r1) == T_CTX);
+    REQUIRE(res.values.eval_interval(pack.ctx_offset) == Interval{0});
+    REQUIRE(res.values.eval_interval(pack.svalue).is_top());
+}

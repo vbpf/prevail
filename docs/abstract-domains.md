@@ -94,6 +94,8 @@ This affects the main domain operations:
 
 * **Join** is type-aware: constraints on kind variables that exist only on the branch where the guarding type is possible are preserved instead of being dropped by a naive numeric join.
 
+* **Meet and narrowing** are type-aware: kind variables whose guarding type does not survive the intersection of the type sets are forgotten, so a constraint that described a removed alternative (`{r is NUM or CTX, r.svalue = 0}` meeting `{r is CTX}`) can neither make the numeric meet infeasible nor be read as a fact about the type that remains. The per-type split in `join_over_types()` does the same for every variable whose type set it restricts.
+
 Intuitively, this behaves like "splitting the numeric state by possible types", but it's implemented compactly as one relational numeric domain plus type-aware subsumption and join.
 
 ### Type Assignment
