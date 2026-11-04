@@ -485,6 +485,42 @@ post:
   - r1.uvalue=64
 
 ---
+# In a {number, pointer} union svalue describes the numeric alternative only,
+# while uvalue covers every alternative. The add must advance each on its own:
+# recomputing uvalue from svalue gives uvalue=2, which excludes the stack address.
+test-case: mixed number-pointer add keeps the pointer address in uvalue
+
+pre: ["r1.type in {number, stack}", "r1.stack_offset=4096", "r1.svalue=1", "r1.uvalue=[1, 2147418112]"]
+
+code:
+  <start>: |
+    r1 += 1
+
+post:
+  - r1.svalue=2
+  - r1.type in {number, stack}
+  - r1.uvalue=[2, 2147418113]
+
+---
+# Same on the register-register subtract path.
+test-case: mixed number-pointer sub keeps the pointer address in uvalue
+
+pre: ["r1.type in {number, stack}", "r1.stack_offset=4096", "r1.svalue=3", "r1.uvalue=[3, 2147418112]",
+      "r2.type=number", "r2.svalue=1", "r2.uvalue=1"]
+
+code:
+  <start>: |
+    r1 -= r2
+
+post:
+  - r1.svalue=2
+  - r1.type in {number, stack}
+  - r1.uvalue=[2, 2147418111]
+  - r2.svalue=1
+  - r2.type=number
+  - r2.uvalue=1
+
+---
 # Companion showing the conservative havoc only affects offsets *after*
 # arithmetic: a non-singleton {ctx, shared} register dereferenced directly,
 # in bounds and without prior arithmetic, still passes.
