@@ -28,6 +28,12 @@ struct ProgramTypeExpectation {
     const ebpf_ctx_descriptor_t* expected_context;
 };
 
+struct HelperContextExpectation {
+    int32_t id;
+    const char* owner_section;
+    const ebpf_ctx_descriptor_t* expected_context;
+};
+
 struct MapTypeExpectation {
     uint32_t id;
     const char* expected_name;
@@ -502,6 +508,84 @@ TEST_CASE("socket cookie helper availability is not treated as fully context-agn
     REQUIRE_FALSE(g_ebpf_platform_linux.is_helper_usable(46, xdp_type));
 
     REQUIRE_FALSE(g_ebpf_platform_linux.is_helper_usable(47, cgroup_type)); // get_socket_uid remains skb-only
+}
+
+TEST_CASE("single-context helpers are gated by their context descriptor", "[platform][tables]") {
+    // Helpers whose first argument is the context of exactly one program family.
+    const std::array<HelperContextExpectation, 17> expectations{{
+        {58, "kprobe/sys_open", &g_kprobe_descr},         // override_return
+        {64, "cgroup/connect4", &g_sock_addr_descr},      // bind
+        {77, "lirc_mode2", &g_lirc_mode2_descr},          // rc_repeat
+        {78, "lirc_mode2", &g_lirc_mode2_descr},          // rc_keydown
+        {92, "lirc_mode2", &g_lirc_mode2_descr},          // rc_pointer_rel
+        {82, "sk_reuseport/test", &g_sk_reuseport_descr}, // sk_select_reuseport
+        {97, "cgroup/skb", &g_sk_buff},                   // skb_ecn_set_ce
+        {135, "classifier", &g_sk_buff},                  // csum_level
+        {151, "classifier", &g_sk_buff},                  // skb_cgroup_classid
+        {101, "cgroup/sysctl", &g_cgroup_sysctl_descr},   // sysctl_get_name
+        {102, "cgroup/sysctl", &g_cgroup_sysctl_descr},   // sysctl_get_current_value
+        {103, "cgroup/sysctl", &g_cgroup_sysctl_descr},   // sysctl_get_new_value
+        {104, "cgroup/sysctl", &g_cgroup_sysctl_descr},   // sysctl_set_new_value
+        {119, "perf_event", &g_perf_event_descr},         // read_branch_records
+        {183, "fentry/test", &g_tracing_descr},           // get_func_arg
+        {184, "fexit/test", &g_tracing_descr},            // get_func_ret
+        {185, "lsm/test", &g_tracing_descr},              // get_func_arg_cnt
+    }};
+
+    const auto xdp_type = g_ebpf_platform_linux.get_program_type("xdp", "");
+    for (const auto& [id, section, expected_context] : expectations) {
+        const EbpfProgramType owner_type = g_ebpf_platform_linux.get_program_type(section, "");
+        CAPTURE(id, section);
+        // Non-tc __sk_buff program types use the same struct without data_meta; helpers gated on
+        // g_sk_buff accept it too.
+        const bool same_struct_without_meta =
+            expected_context == &g_sk_buff && owner_type.ctx_descriptor == &g_sk_buff_no_meta;
+        REQUIRE((owner_type.ctx_descriptor == expected_context || same_struct_without_meta));
+        REQUIRE(g_ebpf_platform_linux.is_helper_usable(id, owner_type));
+        const EbpfHelperPrototype proto = g_ebpf_platform_linux.get_helper_prototype(id, owner_type);
+        REQUIRE(proto.argument_type[0] == EBPF_ARGUMENT_TYPE_PTR_TO_CTX);
+        REQUIRE(proto.ctx_descriptor == expected_context);
+        // An xdp_md is not the context these helpers dereference.
+        REQUIRE_FALSE(g_ebpf_platform_linux.is_helper_usable(id, xdp_type));
+    }
+}
+
+TEST_CASE("context-taking helpers without a descriptor are a closed set", "[platform][tables]") {
+    // Helpers that accept the context of several program types (void *ctx or one
+    // signature per context) and therefore cannot carry a single ctx_descriptor.
+    // A new PTR_TO_CTX prototype must either name its descriptor or be added here
+    // deliberately, so that it does not silently become usable from every program type.
+    constexpr std::array<int32_t, 15> multi_context_helpers{
+        12,  // tail_call
+        25,  // perf_event_output
+        27,  // get_stackid
+        49,  // setsockopt
+        57,  // getsockopt
+        67,  // get_stack
+        69,  // fib_lookup
+        84,  // sk_lookup_tcp
+        85,  // sk_lookup_udp
+        99,  // skc_lookup_tcp
+        122, // get_netns_cookie
+        124, // sk_assign
+        163, // check_mtu
+        173, // get_func_ip
+        174, // get_attach_cookie
+    };
+
+    const auto xdp_type = g_ebpf_platform_linux.get_program_type("xdp", "");
+    for (int32_t id = 0; id <= 211; ++id) {
+        if (!g_ebpf_platform_linux.is_helper_usable(id, xdp_type)) {
+            continue;
+        }
+        const EbpfHelperPrototype proto = g_ebpf_platform_linux.get_helper_prototype(id, xdp_type);
+        if (proto.argument_type[0] != EBPF_ARGUMENT_TYPE_PTR_TO_CTX || proto.ctx_descriptor != nullptr) {
+            continue;
+        }
+        CAPTURE(id, proto.name);
+        REQUIRE(std::find(multi_context_helpers.begin(), multi_context_helpers.end(), id) !=
+                multi_context_helpers.end());
+    }
 }
 
 TEST_CASE("helper map-type restrictions cover every map the register may refer to", "[platform][tables]") {
