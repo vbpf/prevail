@@ -9,6 +9,7 @@
 #include <catch2/catch_all.hpp>
 
 #include "ebpf_verifier.hpp"
+#include "ir/arg_kind.hpp"
 #include "ir/call_resolver.hpp"
 #include "ir/program.hpp"
 #include "ir/syntax.hpp"
@@ -492,6 +493,40 @@ TEST_CASE("PTR_TO_CONST_STR helpers remain explicitly unsupported", "[platform][
     CAPTURE(strncmp.name, strncmp.unsupported_reason);
     REQUIRE_FALSE(strncmp.is_supported);
     REQUIRE_FALSE(strncmp.unsupported_reason.empty());
+}
+
+TEST_CASE("map key/value arguments require a preceding map argument", "[platform][tables]") {
+    // Assertion extraction sizes a key/value pointer against the last MAP_FD argument;
+    // a contract with no such argument must not be built.
+    const auto outcome_after = [](const ebpf_argument_type_t first, const ebpf_argument_type_t type) {
+        const std::array<ebpf_argument_type_t, 7> args{EBPF_ARGUMENT_TYPE_DONTCARE, first, type};
+        CallContract contract;
+        REQUIRE(process_arg(contract, args, 1) == ArgOutcome::Single);
+        return process_arg(contract, args, 2);
+    };
+
+    for (const auto type : {EBPF_ARGUMENT_TYPE_PTR_TO_MAP_KEY, EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE,
+                            EBPF_ARGUMENT_TYPE_PTR_TO_UNINIT_MAP_VALUE}) {
+        CAPTURE(type);
+        CallContract contract;
+        REQUIRE(process_arg(contract, {EBPF_ARGUMENT_TYPE_DONTCARE, type}, 1) == ArgOutcome::Unavailable);
+        REQUIRE(contract.singles.empty());
+
+        REQUIRE(outcome_after(EBPF_ARGUMENT_TYPE_PTR_TO_MAP, type) == ArgOutcome::Single);
+        REQUIRE(outcome_after(EBPF_ARGUMENT_TYPE_CONST_PTR_TO_MAP, type) == ArgOutcome::Single);
+        REQUIRE(outcome_after(EBPF_ARGUMENT_TYPE_ANYTHING, type) == ArgOutcome::Unavailable);
+        // A map of programs has no key/value size to check against (MAP_FD_PROGRAMS is not a MAP_FD).
+        REQUIRE(outcome_after(EBPF_ARGUMENT_TYPE_PTR_TO_MAP_OF_PROGRAMS, type) == ArgOutcome::Unavailable);
+    }
+
+    // kptr_xchg (194) takes a map value with no map argument: it must stay unsupported,
+    // not be bounds-checked against whatever map happens to be in r0.
+    const auto program_type = g_ebpf_platform_linux.get_program_type("xdp", "");
+    const ProgramInfo info{.platform = &g_ebpf_platform_linux, .type = program_type};
+    const ResolvedCall kptr_xchg = resolve(Call{.func = 194, .kind = CallKind::helper}, info);
+    CAPTURE(kptr_xchg.name, kptr_xchg.unsupported_reason);
+    REQUIRE_FALSE(kptr_xchg.is_supported);
+    REQUIRE_FALSE(kptr_xchg.unsupported_reason.empty());
 }
 
 TEST_CASE("socket cookie helper availability is not treated as fully context-agnostic", "[platform][tables]") {

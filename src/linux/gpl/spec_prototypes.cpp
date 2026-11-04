@@ -2385,7 +2385,9 @@ static constexpr EbpfHelperPrototype bpf_ima_file_hash_proto = {
     .might_sleep = true,
 };
 
-// Helper 194 - kptr_xchg
+// Helper 194 - kptr_xchg (UNSUPPORTED - kptr fields and ownership transfer not implemented)
+// The dst argument is an 8-byte kptr slot inside a map value, but no map is passed to the
+// helper, so its bounds cannot be checked against a map argument; see docs/parity/lifetime.md.
 static constexpr EbpfHelperPrototype bpf_kptr_xchg_proto = {
     .name = "kptr_xchg",
     .return_type = EBPF_RETURN_TYPE_PTR_TO_BTF_ID_OR_NULL,
@@ -2394,6 +2396,7 @@ static constexpr EbpfHelperPrototype bpf_kptr_xchg_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE, // dst (kptr location)
             EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID,    // ptr (can be NULL)
         },
+    .unsupported = true,
 };
 
 // Helper 197 - dynptr_from_mem (UNSUPPORTED - dynptr not implemented)

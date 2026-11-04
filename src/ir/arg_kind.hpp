@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <optional>
 
@@ -114,6 +115,22 @@ inline ArgOutcome process_arg(CallContract& contract, const std::array<ebpf_argu
             return ArgOutcome::Single;
         }
         return ArgOutcome::Unavailable;
+    case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_KEY:
+    case EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE:
+    case EBPF_ARGUMENT_TYPE_PTR_TO_UNINIT_MAP_VALUE: {
+        // A key/value pointer is bounds-checked against the key/value size of the map
+        // passed in an earlier argument (assertions.cpp emits ValidMapKeyValue against
+        // the last MAP_FD seen). A prototype with no such map gives nothing to check
+        // the pointer against, so the call is conservatively unsupported.
+        const bool has_map_fd = std::ranges::any_of(
+            contract.singles, [](const ArgSingle& single) { return single.kind == ArgSingle::Kind::MAP_FD; });
+        const auto kind = to_arg_single_kind(args[i]);
+        if (!has_map_fd || !kind) {
+            return ArgOutcome::Unavailable;
+        }
+        contract.singles.push_back({*kind, false, reg});
+        return ArgOutcome::Single;
+    }
     case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM:
     case EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL:
     case EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM:
