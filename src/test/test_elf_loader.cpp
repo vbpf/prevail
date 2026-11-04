@@ -792,24 +792,24 @@ TEST_CASE("rewrite_extern_constant_load bails out on values exceeding int32 rang
         const auto original = make_instructions();
         auto insts = original;
         bool result = true;
-        CHECK_NOTHROW(result = rewrite_extern_constant_load(insts, 0, value));
+        CHECK_NOTHROW(result = rewrite_extern_constant_load(insts, 0, value, {}));
         CHECK_FALSE(result);
         CHECK(insts == original);
     };
 
     SECTION("small value fits in int32 — rewrite succeeds") {
         auto insts = make_instructions();
-        REQUIRE(rewrite_extern_constant_load(insts, 0, 42));
+        REQUIRE(rewrite_extern_constant_load(insts, 0, 42, {}));
     }
 
     SECTION("INT32_MAX fits — rewrite succeeds") {
         auto insts = make_instructions();
-        REQUIRE(rewrite_extern_constant_load(insts, 0, 0x7FFFFFFF));
+        REQUIRE(rewrite_extern_constant_load(insts, 0, 0x7FFFFFFF, {}));
     }
 
     SECTION("-1 (0xFFFFFFFFFFFFFFFF) fits via sign-extension — rewrite succeeds") {
         auto insts = make_instructions();
-        REQUIRE(rewrite_extern_constant_load(insts, 0, 0xFFFFFFFFFFFFFFFFULL));
+        REQUIRE(rewrite_extern_constant_load(insts, 0, 0xFFFFFFFFFFFFFFFFULL, {}));
     }
 
     SECTION("0x80000000 exceeds int32 — bails out without mutation") { check_bailout_preserves_program(0x80000000ULL); }
@@ -824,6 +824,58 @@ TEST_CASE("rewrite_extern_constant_load bails out on values exceeding int32 rang
 
     SECTION("large 64-bit value — bails out without mutation") {
         check_bailout_preserves_program(0xDEADBEEFCAFEBABEULL);
+    }
+}
+
+// Regression test: folding the load of a known extern must not drop the LDDW. The LDDW
+// overwrites its destination register; turning it into a no-op lets the register keep a
+// previous pointer value, and later accesses through it are verified against that pointer.
+TEST_CASE("rewrite_extern_constant_load keeps the LDDW write to the address register", "[elf][hardening]") {
+    constexpr EbpfInst lddw_lo{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = 0, .offset = 0, .imm = 0};
+    constexpr EbpfInst ldx_w{.opcode = INST_CLS_LDX | INST_MODE_MEM | INST_SIZE_W, .dst = 3, .src = 2};
+    constexpr EbpfInst mov_zero{.opcode = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM, .dst = 2, .imm = 0};
+    constexpr EbpfInst mov32_imm{.opcode = INST_CLS_ALU | INST_ALU_OP_MOV | INST_SRC_IMM, .dst = 3, .imm = 42};
+    constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
+
+    SECTION("the address register is set to zero like any other extern address") {
+        std::vector<EbpfInst> insts{lddw_lo, {}, ldx_w, exit};
+        REQUIRE(rewrite_extern_constant_load(insts, 0, 42, {}));
+        CHECK(insts == std::vector<EbpfInst>{mov_zero, make_mov_reg_nop(2), mov32_imm, exit});
+    }
+
+    // A path that jumps past the first slot of the LDDW does not read the extern.
+    auto check_bailout_on_jump_to_load = [&](const EbpfInst jump) {
+        const std::vector<EbpfInst> original{jump, lddw_lo, {}, ldx_w, exit};
+        auto insts = original;
+        CHECK_FALSE(rewrite_extern_constant_load(insts, 1, 42, collect_jump_targets(insts)));
+        CHECK(insts == original);
+    };
+
+    SECTION("conditional jump to the load — bails out without mutation") {
+        check_bailout_on_jump_to_load({.opcode = INST_CLS_JMP | (0x1 << 4), .dst = 1, .offset = 2});
+    }
+
+    SECTION("jump to the second slot of the LDDW — bails out without mutation") {
+        check_bailout_on_jump_to_load({.opcode = INST_OP_JA16, .offset = 1});
+    }
+
+    SECTION("32-bit-offset jump to the load — bails out without mutation") {
+        check_bailout_on_jump_to_load({.opcode = INST_OP_JA32, .imm = 2});
+    }
+
+    SECTION("local call to the load — bails out without mutation") {
+        check_bailout_on_jump_to_load({.opcode = INST_OP_CALL, .src = INST_CALL_LOCAL, .imm = 2});
+    }
+
+    SECTION("helper id is not a jump offset — rewrite succeeds") {
+        std::vector<EbpfInst> insts{{.opcode = INST_OP_CALL, .imm = 2}, lddw_lo, {}, ldx_w, exit};
+        REQUIRE(rewrite_extern_constant_load(insts, 1, 42, collect_jump_targets(insts)));
+    }
+
+    // Such a jump could reach a folded load in a subprogram appended after (or before) this one.
+    SECTION("jump leaving the program is rejected") {
+        CHECK_THROWS_AS(collect_jump_targets({{.opcode = INST_OP_JA16, .offset = 1}, exit}), UnmarshalError);
+        CHECK_THROWS_AS(collect_jump_targets({{.opcode = INST_OP_JA16, .offset = -2}, exit}), UnmarshalError);
     }
 }
 
