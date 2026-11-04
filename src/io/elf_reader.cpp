@@ -962,23 +962,40 @@ void ProgramReader::process_relocations(std::vector<EbpfInst>& instructions, con
     }
 }
 
+void ProgramReader::build_relocation_section_cache() {
+    relocation_section_cache.clear();
+    for (const auto& sec : reader.sections) {
+        // Keep the first section of each name, as a lookup by name in reader.sections does.
+        if (const std::string name = sec->get_name(); name.starts_with(".rel")) {
+            relocation_section_cache.try_emplace(name, sec.get());
+        }
+    }
+}
+
 const ELFIO::section* ProgramReader::get_relocation_section(const std::string& name) const {
     if (name == ".BTF") {
         return nullptr;
     }
-    const auto* relocs = reader.sections[".rel" + name];
-    if (!relocs) {
-        relocs = reader.sections[".rela" + name];
+    // reader.sections[name] is a linear scan over every section; with one lookup per program
+    // that made reading an object quadratic in its section count.
+    auto it = relocation_section_cache.find(".rel" + name);
+    if (it == relocation_section_cache.end()) {
+        it = relocation_section_cache.find(".rela" + name);
     }
-    if (!relocs || !relocs->get_data()) {
+    if (it == relocation_section_cache.end() || !it->second->get_data()) {
         return nullptr;
     }
-    return relocs;
+    return it->second;
 }
 
-void ProgramReader::read_programs() {
+void ProgramReader::read_programs() { read_programs(false); }
+
+void ProgramReader::read_all_programs() { read_programs(true); }
+
+void ProgramReader::read_programs(const bool all_sections) {
     resolved_subprograms.clear();
     build_ksym_function_resolution_cache();
+    build_relocation_section_cache();
 
     for (const auto& sec : reader.sections) {
         if (!(sec->get_flags() & ELFIO::SHF_EXECINSTR) || !sec->get_size() || !sec->get_data()) {
@@ -1028,6 +1045,12 @@ void ProgramReader::read_programs() {
 
     bool has_relevant_unresolved_symbols = false;
     for (const auto& err : unresolved_symbol_errors) {
+        if (all_sections) {
+            section_error_t& section_error = section_errors[err.section];
+            section_error.reason = "Unresolved symbols found.";
+            section_error.diagnostics.push_back(err.message);
+            continue;
+        }
         if (!parse_params.desired_section.empty() && err.section != parse_params.desired_section) {
             continue;
         }
@@ -1052,12 +1075,17 @@ void ProgramReader::read_programs() {
 
     for (auto& prog : raw_programs) {
         const auto err = append_subprograms(prog);
-        if (!err.empty() && prog.section_name == parse_params.desired_section) {
+        if (err.empty()) {
+            continue;
+        }
+        if (all_sections) {
+            section_errors.try_emplace(prog.section_name, section_error_t{.reason = err});
+        } else if (prog.section_name == parse_params.desired_section) {
             throw UnmarshalError(err);
         }
     }
 
-    if (!parse_params.desired_section.empty()) {
+    if (!all_sections && !parse_params.desired_section.empty()) {
         std::erase_if(raw_programs, [&](const auto& p) { return p.section_name != parse_params.desired_section; });
     }
 

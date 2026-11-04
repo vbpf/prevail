@@ -3,6 +3,7 @@
 #include <cerrno>
 #include <cstring>
 #include <fstream>
+#include <iostream>
 #include <string>
 #include <sys/stat.h>
 #include <unordered_map>
@@ -38,6 +39,7 @@ struct SectionCacheEntry {
     bool loaded{};
     bool valid{};
     std::string error;
+    std::vector<std::string> diagnostics;
     std::vector<RawProgram> programs;
 };
 
@@ -47,6 +49,7 @@ struct ElfObject::ElfObjectState {
     const ebpf_platform_t* platform;
 
     bool catalog_loaded{};
+    bool sections_read{};
     std::vector<ElfProgramInfo> programs;
     std::vector<std::string> section_order;
     std::unordered_map<std::string, std::vector<size_t>> section_program_indices;
@@ -54,7 +57,7 @@ struct ElfObject::ElfObjectState {
     std::unordered_map<QueryKey, std::vector<RawProgram>, QueryKeyHash> query_cache;
 
     // Cached ELF reader and symbol accessor — parsed once in discover_programs(),
-    // reused by load_section() to avoid re-parsing the file.
+    // reused by read_sections() to avoid re-parsing the file.
     std::optional<ELFIO::elfio> reader;
     std::optional<ELFIO::const_symbol_section_accessor> symbols;
 
@@ -62,6 +65,7 @@ struct ElfObject::ElfObjectState {
         : path(std::move(p)), options(std::move(opts)), platform(plat) {}
 
     void discover_programs();
+    void read_sections();
     void load_section(const std::string& section_name);
     void mark_section_validity(const std::string& section_name, bool valid, const std::string& reason);
 };
@@ -127,6 +131,47 @@ void ElfObject::ElfObjectState::mark_section_validity(const std::string& section
     }
 }
 
+// Programs may call into other sections, so loading one section means reading the whole
+// file.  Do that once per object rather than once per section, and fill every section's
+// cache entry from the single pass.
+void ElfObject::ElfObjectState::read_sections() {
+    if (sections_read) {
+        return;
+    }
+    sections_read = true;
+
+    // Use the cached reader/symbols to construct ProgramReader directly,
+    // avoiding re-opening and re-parsing the ELF file.
+    const parse_params_t params{path, options, platform, {}};
+    ElfGlobalData global;
+    ProgramReader program_reader{params, *reader, *symbols, global};
+    std::optional<std::string> file_error;
+    try {
+        global = extract_global_data(params, *reader, *symbols);
+        program_reader.read_all_programs();
+    } catch (const std::exception& e) {
+        file_error = e.what();
+    }
+
+    for (auto& [section_name, cache_entry] : section_cache) {
+        const auto error_it = program_reader.section_errors.find(section_name);
+        if (error_it != program_reader.section_errors.end()) {
+            cache_entry.error = std::move(error_it->second.reason);
+            cache_entry.diagnostics = std::move(error_it->second.diagnostics);
+        } else if (file_error) {
+            cache_entry.error = *file_error;
+        } else {
+            cache_entry.valid = true;
+        }
+    }
+    for (RawProgram& program : program_reader.raw_programs) {
+        const auto it = section_cache.find(program.section_name);
+        if (it != section_cache.end() && it->second.valid) {
+            it->second.programs.push_back(std::move(program));
+        }
+    }
+}
+
 void ElfObject::ElfObjectState::load_section(const std::string& section_name) {
     discover_programs();
     const auto section_it = section_cache.find(section_name);
@@ -140,23 +185,11 @@ void ElfObject::ElfObjectState::load_section(const std::string& section_name) {
     }
 
     cache_entry.loaded = true;
-    try {
-        // Use the cached reader/symbols to construct ProgramReader directly,
-        // avoiding re-opening and re-parsing the ELF file.
-        const parse_params_t params{path, options, platform, section_name};
-        const auto global = extract_global_data(params, *reader, *symbols);
-        ProgramReader program_reader{params, *reader, *symbols, global};
-        program_reader.read_programs();
-        cache_entry.programs = std::move(program_reader.raw_programs);
-        cache_entry.valid = true;
-        cache_entry.error.clear();
-        mark_section_validity(section_name, true, "");
-    } catch (const std::exception& e) {
-        cache_entry.valid = false;
-        cache_entry.error = e.what();
-        cache_entry.programs.clear();
-        mark_section_validity(section_name, false, cache_entry.error);
+    read_sections();
+    for (const std::string& message : cache_entry.diagnostics) {
+        std::cerr << message << std::endl;
     }
+    mark_section_validity(section_name, cache_entry.valid, cache_entry.error);
 }
 std::vector<RawProgram> filter_section_programs(const std::vector<RawProgram>& programs,
                                                 const std::string& desired_program) {
