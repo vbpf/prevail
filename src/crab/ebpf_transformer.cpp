@@ -1192,14 +1192,19 @@ void EbpfTransformer::recompute_stack_numeric_size(TypeToNumDomain& state, const
 
 void EbpfTransformer::add(const Reg& dst_reg, const int64_t imm, const int finite_width) {
     const auto dst = reg_pack(dst_reg);
-    if (dom.state.may_have_type(dst_reg, T_NUM)) {
+    if (dom.state.is_in_group(dst_reg, TS_NUM)) {
         dom.state.values->add_overflow(dst.svalue, dst.uvalue, imm, finite_width);
-        if (!dom.state.is_in_group(dst_reg, TS_NUM)) {
-            // The destination may also be a pointer (a {number, pointer} union). The numeric
-            // path above does not advance any pointer offset, so invalidate them rather than
-            // leaving a stale offset that a later bounds check would reason from.
-            dom.state.havoc_offsets(dst_reg);
-        }
+    } else if (dom.state.may_have_type(dst_reg, T_NUM)) {
+        // The destination may also be a pointer (a {number, pointer} union). svalue describes
+        // only the numeric alternative while uvalue is shared by every alternative, so advance
+        // each on its own: add_overflow() would recompute uvalue from svalue and thereby drop
+        // the pointer's address from it.
+        dom.state.values->apply(ArithBinOp::ADD, dst.svalue, dst.svalue, imm, finite_width);
+        dom.state.values->apply(ArithBinOp::ADD, dst.uvalue, dst.uvalue, imm, finite_width);
+        dom.state.values->overflow_bounds(dst.svalue, dst.uvalue, finite_width);
+        // This path does not advance any pointer offset, so invalidate them rather than
+        // leaving a stale offset that a later bounds check would reason from.
+        dom.state.havoc_offsets(dst_reg);
     } else {
         // Advance the primary kind variable of every type the register may have. Each such
         // variable is meaningful only while the register has its type, so advancing all of them
@@ -1467,14 +1472,16 @@ void EbpfTransformer::operator()(const Bin& bin) {
                 // We're not sure that lhs and rhs are the same type.
                 // Either they're different, or at least one is not a singleton.
                 if (dom.state.is_in_group(std::get<Reg>(bin.v), TS_NUM)) {
-                    if (dom.state.may_have_type(bin.dst, T_NUM)) {
+                    if (dom.state.is_in_group(bin.dst, TS_NUM)) {
                         dom.state.values->sub_overflow(dst.svalue, dst.uvalue, src.svalue, finite_width);
-                        if (!dom.state.is_in_group(bin.dst, TS_NUM)) {
-                            // {number, pointer} union: the numeric path does not advance any
-                            // pointer offset, so invalidate them rather than leaving a stale
-                            // offset (see add()).
-                            dom.state.havoc_offsets(bin.dst);
-                        }
+                    } else if (dom.state.may_have_type(bin.dst, T_NUM)) {
+                        // {number, pointer} union: advance the number-only svalue and the shared
+                        // uvalue each on its own, and invalidate the pointer offsets, which are
+                        // not advanced, rather than leaving a stale offset (see add()).
+                        dom.state.values->apply(ArithBinOp::SUB, dst.svalue, dst.svalue, src.svalue, finite_width);
+                        dom.state.values->apply(ArithBinOp::SUB, dst.uvalue, dst.uvalue, src.uvalue, finite_width);
+                        dom.state.values->overflow_bounds(dst.svalue, dst.uvalue, finite_width);
+                        dom.state.havoc_offsets(bin.dst);
                     } else {
                         if (const auto kind = dom.state.primary_kind_variable_for_type(bin.dst)) {
                             dom.state.values->sub(*kind, src.svalue);
