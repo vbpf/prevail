@@ -1140,8 +1140,12 @@ void EbpfTransformer::do_load_map_address(const Reg& dst_reg, const int mapfd, c
     const auto& desc = context.map_descriptor(mapfd);
     const EbpfMapType& type = context.platform().get_map_type(desc.type);
 
-    if (type.value_type == EbpfMapValueType::PROGRAM) {
-        throw std::invalid_argument("Cannot load address of program map type - only data maps are supported");
+    // A map of maps stores map references, which a later lookup is modelled to return as typed map fds
+    // (see resolve_map_lookup); handing out a data pointer to the same slot would let the program forge
+    // them. Only maps whose values are plain data may have their address taken.
+    if (type.value_type != EbpfMapValueType::ANY) {
+        throw std::invalid_argument("Cannot load address of a value of map type " + type.name +
+                                    " - only data maps are supported");
     }
 
     // Set the shared region size and offset for the map.
