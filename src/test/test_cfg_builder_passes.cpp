@@ -91,25 +91,19 @@ TEST_CASE("pass_connect_edges rejects fallthrough past the last instruction", "[
                         Catch::Matchers::ContainsSubstring("fallthrough in last instruction"));
 }
 
-TEST_CASE("pass_lower_pseudo_loads rewrites VARIABLE_ADDR to an lddw Bin MOV", "[passes]") {
+TEST_CASE("pass_validate_instruction_support rejects VARIABLE_ADDR", "[passes]") {
+    // The immediate is a variable id, not the loaded address: lowering it to a scalar MOV
+    // would let the analysis decide a comparison with that id at verification time.
     const ProgramInfo info = default_info();
     InstructionSeq seq;
     seq.push_back(at(0, LoadPseudo{
                             .dst = Reg{1},
-                            .addr = {.kind = PseudoAddress::Kind::VARIABLE_ADDR, .imm = 0x1234, .next_imm = 0x5678},
+                            .addr = {.kind = PseudoAddress::Kind::VARIABLE_ADDR, .imm = 0x1234, .next_imm = 0},
                         }));
     seq.push_back(at(1, Exit{}));
 
-    const Program prog = Program::from_sequence(seq, info, {});
-    const auto* bin = std::get_if<Bin>(&prog.instruction_at(Label{0}));
-    REQUIRE(bin != nullptr);
-    REQUIRE(bin->op == Bin::Op::MOV);
-    REQUIRE(bin->lddw);
-    const auto* imm = std::get_if<Imm>(&bin->v);
-    REQUIRE(imm != nullptr);
-    constexpr uint64_t expected = (static_cast<uint64_t>(static_cast<uint32_t>(0x5678)) << 32) |
-                                  static_cast<uint64_t>(static_cast<uint32_t>(0x1234));
-    REQUIRE(imm->v == expected);
+    REQUIRE_THROWS_WITH(Program::from_sequence(seq, info, {}),
+                        Catch::Matchers::ContainsSubstring("not implemented: lddw variable_addr pseudo"));
 }
 
 TEST_CASE("pass_lower_pseudo_loads preserves CODE_ADDR as LoadPseudo", "[passes]") {
