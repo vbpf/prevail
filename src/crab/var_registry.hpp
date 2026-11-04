@@ -73,6 +73,9 @@ class VariableRegistry final {
     Variable cell_var(DataKind array, const Number& offset, const Number& size) const;
     Variable kind_var(DataKind kind, Variable type_variable) const;
     Variable meta_offset() const;
+    /// The packet offset held by the context's data_meta field. It is at least meta_offset, the lowest
+    /// accessible offset, but need not equal it.
+    Variable data_meta_offset() const;
     Variable packet_size() const;
 
     /// EXPERIMENTAL: Variables where only the lower bound is semantically meaningful.

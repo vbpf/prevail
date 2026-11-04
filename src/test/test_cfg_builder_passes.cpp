@@ -304,7 +304,28 @@ TEST_CASE("xdp_md.data_meta is not assumed to precede data", "[verify][ctx]") {
         seq.push_back(at(6, Bin{.op = Bin::Op::MOV, .dst = Reg{0}, .v = Imm{2}, .is64 = true}));
         seq.push_back(at(7, Exit{}));
 
-        REQUIRE_FALSE(analyze(Program::from_sequence(seq, info, {}), {}).failed);
+        const AnalysisResult result = analyze(Program::from_sequence(seq, info, {}), {});
+        REQUIRE_FALSE(result.failed);
+        // The read must be reachable, or the check above proves nothing.
+        REQUIRE_FALSE(result.invariants.at(Label{5}).pre.is_bottom());
+    }
+
+    SECTION("a reloaded data_meta carries the bounds check of the first load") {
+        // if (data_meta + 4 > data) goto exit; r5 = ctx->data_meta; r0 = *(u32 *)r5
+        seq.push_back(at(2, Bin{.op = Bin::Op::MOV, .dst = Reg{4}, .v = data_meta, .is64 = true}));
+        seq.push_back(at(3, Bin{.op = Bin::Op::ADD, .dst = Reg{4}, .v = Imm{4}, .is64 = true}));
+        const Condition end_gt_data{.op = Condition::Op::GT, .left = Reg{4}, .right = data, .is64 = true};
+        seq.push_back(at(4, Jmp{.cond = end_gt_data, .target = Label{7}}));
+        seq.push_back(
+            at(5, Mem{.access = {.width = 4, .basereg = Reg{1}, .offset = 8}, .value = Reg{5}, .is_load = true}));
+        seq.push_back(
+            at(6, Mem{.access = {.width = 4, .basereg = Reg{5}, .offset = 0}, .value = Reg{0}, .is_load = true}));
+        seq.push_back(at(7, Bin{.op = Bin::Op::MOV, .dst = Reg{0}, .v = Imm{2}, .is64 = true}));
+        seq.push_back(at(8, Exit{}));
+
+        const AnalysisResult result = analyze(Program::from_sequence(seq, info, {}), {});
+        REQUIRE_FALSE(result.failed);
+        REQUIRE_FALSE(result.invariants.at(Label{6}).pre.is_bottom());
     }
 }
 
