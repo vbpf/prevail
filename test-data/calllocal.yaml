@@ -522,3 +522,31 @@ post:
 messages:
   - "0/9: Upper bound must be at most packet_size (valid_access(r4.offset, width=1) for read)"
   - "0/11:12: Code becomes unreachable (assume r3 >= 100)"
+---
+test-case: pointer reloaded from the callee frame below numeric caller bytes is not a number
+
+# The caller makes the lowest 8 bytes of its frame numeric. These are the bytes
+# right above the callee's r10, so the callee runs with r10.stack_numeric_size=8.
+# That size describes the bytes from r10 upwards and says nothing about a load at
+# a negative offset: the load must be typed by the slot it reads. Comparing the
+# width against stack_numeric_size without the offset typed the reloaded ctx
+# pointer as a number, and the program was accepted (accept-unsafe).
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "r10.type=stack", "r10.stack_offset=4096"]
+
+code:
+  <start>: |
+    r2 = 0
+    *(u64 *)(r10 - 512) = r2
+    call <sub>
+    exit
+  <sub>: |
+    *(u64 *)(r10 - 8) = r1
+    r0 = *(u64 *)(r10 - 8)
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "3: Invalid type (r0.type == number)"
