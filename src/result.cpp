@@ -342,7 +342,10 @@ std::set<Reg> extract_assertion_registers(const Assertion& assertion) {
             } else if constexpr (std::is_same_v<T, Addable>) {
                 return {a.ptr, a.num};
             } else if constexpr (std::is_same_v<T, ValidDivisor>) {
-                return {a.reg};
+                if (const auto* r = std::get_if<Reg>(&a.divisor)) {
+                    return {*r};
+                }
+                return {};
             } else if constexpr (std::is_same_v<T, ValidAccess>) {
                 std::set<Reg> regs{a.reg};
                 if (const auto* r = std::get_if<Reg>(&a.width)) {

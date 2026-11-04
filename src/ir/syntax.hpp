@@ -413,11 +413,11 @@ struct Addable {
     constexpr bool operator==(const Addable&) const = default;
 };
 
-// Condition check whether a register contains a non-zero number. `is64` is the width of the
-// division that consumes it: a 32-bit division divides by the register's low half, so only
-// those bytes have to be non-zero.
+// Condition check whether a divisor -- a register or an immediate -- is a non-zero number.
+// `is64` is the width of the division that consumes it: a 32-bit division divides by the
+// divisor's low half, so only those bytes have to be non-zero.
 struct ValidDivisor {
-    Reg reg;
+    Value divisor;
     bool is_signed{};
     bool is64{};
     constexpr bool operator==(const ValidDivisor&) const = default;

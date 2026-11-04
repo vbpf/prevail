@@ -340,12 +340,10 @@ class AssertExtractor {
         case Bin::Op::UMOD:
         case Bin::Op::SDIV:
         case Bin::Op::SMOD: {
-            if (const auto src = std::get_if<Reg>(&ins.v)) {
-                const bool is_signed = (ins.op == Bin::Op::SDIV || ins.op == Bin::Op::SMOD);
-                return {Assertion{TypeConstraint{ins.dst, TypeGroup::number}},
-                        Assertion{ValidDivisor{.reg = *src, .is_signed = is_signed, .is64 = ins.is64}}};
-            }
-            return {Assertion{TypeConstraint{ins.dst, TypeGroup::number}}};
+            // An immediate divisor carries the same obligation as a register: it can be zero too.
+            const bool is_signed = (ins.op == Bin::Op::SDIV || ins.op == Bin::Op::SMOD);
+            return {Assertion{TypeConstraint{ins.dst, TypeGroup::number}},
+                    Assertion{ValidDivisor{.divisor = ins.v, .is_signed = is_signed, .is64 = ins.is64}}};
         }
             // For all other binary operations, the destination register must be a number and the source must either be
             // an immediate or a number.

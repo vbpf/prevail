@@ -116,6 +116,15 @@ TEST_CASE("extract_assertion_registers for ValidDivisor", "[failure_slice][deps]
     REQUIRE(regs.contains(Reg{3}));
 }
 
+TEST_CASE("extract_assertion_registers for ValidDivisor with an immediate", "[failure_slice][deps]") {
+    ValidDivisor vd{Imm{0}, false};
+    const Assertion assertion = vd;
+
+    const auto regs = extract_assertion_registers(assertion);
+
+    REQUIRE(regs.empty());
+}
+
 TEST_CASE("extract_assertion_registers for BoundedLoopCount", "[failure_slice][deps]") {
     BoundedLoopCount blc{Label{0}};
     const Assertion assertion = blc;
