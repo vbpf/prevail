@@ -15,6 +15,7 @@
 #include "crab/ebpf_domain.hpp"
 #include "crab/region_semantics.hpp"
 #include "crab/var_registry.hpp"
+#include "ir/call_resolver.hpp"
 #include "ir/program.hpp"
 #include "ir/syntax.hpp"
 #include "platform.hpp"
@@ -249,6 +250,11 @@ void EbpfChecker::operator()(const FuncConstraint& s) const {
                 throw_fail("invalid helper function id " + std::to_string(imm));
             }
             const Call call{.func = imm, .kind = CallKind::helper};
+            // The id was unknown to cfg_builder::check_instruction_feature_support, so apply its gate here:
+            // an unsupported call has an empty contract and would produce no preconditions below.
+            if (const ResolvedCall resolved = resolve(call, context.program_info()); !resolved.is_supported) {
+                throw_fail(resolved.unsupported_reason);
+            }
             for (const Assertion& sub_assertion : get_assertions(call, context.program_info(), context.runtime(), {})) {
                 // TODO: create explicit sub assertions elsewhere
                 EbpfChecker{dom, sub_assertion, context}.visit();

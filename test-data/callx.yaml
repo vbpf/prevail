@@ -143,6 +143,39 @@ post:
 messages:
   - "0: invalid helper function id 1000 (r8.type is helper)"
 ---
+test-case: callx to a helper whose argument types are unsupported
+
+pre: ["r1.type=number", "r1.svalue=1094795585", "r1.uvalue=1094795585",
+      "r2.type=number", "r2.svalue=64", "r2.uvalue=64",
+      "r3.type=number", "r3.svalue=1111638594", "r3.uvalue=1111638594",
+      "r4.type=number", "r4.svalue=1128481603", "r4.uvalue=1128481603",
+      "r5.type=number", "r5.svalue=8", "r5.uvalue=8",
+      "r8.type=number", "r8.svalue=165", "r8.uvalue=165"]
+
+code:
+  <start>: |
+    callx r8; bpf_snprintf
+
+post:
+  - "_|_"
+
+messages:
+  - "0: helper argument type is unavailable on this platform: snprintf (r8.type is helper)"
+---
+test-case: callx to a helper whose return type is unsupported
+
+pre: ["r8.type=number", "r8.svalue=0", "r8.uvalue=0"]
+
+code:
+  <start>: |
+    callx r8; bpf_unspec
+
+post:
+  - "_|_"
+
+messages:
+  - "0: helper prototype is unavailable on this platform: unspec (r8.type is helper)"
+---
 test-case: callx with interval
 
 pre: ["r8.type=number", "r8.svalue=[1, 2]", "r8.uvalue=[1, 2]"]
