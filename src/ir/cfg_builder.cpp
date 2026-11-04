@@ -861,6 +861,7 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
     pass_inline_local_calls(builder, inst_seq, options.runtime.max_call_stack_frames);
 
     // --- Pass: ValidateTailCallDepth --------------------------------------
+    // Wto construction throws RuntimeInputError if loops nest deeper than Wto::max_nesting_depth.
     const Wto wto{builder.prog.cfg()};
     pass_validate_tail_call_depth(builder.prog, wto, *info.platform, info.type);
 

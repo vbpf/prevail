@@ -1671,6 +1671,34 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
         REQUIRE_NOTHROW(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}));
     }
+
+    // `depth` nested do-while loops: all the heads, then the back edges from the innermost loop outwards.
+    const auto nested_loops = [&](const int depth) {
+        std::vector<EbpfInst> insts;
+        for (int i = 0; i < depth; i++) {
+            insts.push_back(EbpfInst{.opcode = INST_CLS_ALU64 | INST_ALU_OP_ADD, .dst = 0, .imm = 1});
+        }
+        for (int i = 0; i < depth; i++) {
+            insts.push_back(EbpfInst{.opcode = 0xa5, .dst = 0, .offset = gsl::narrow<int16_t>(-2 * (i + 1)), .imm = 9});
+        }
+        insts.push_back(exit);
+        auto prog_or_error = unmarshal(RawProgram{"", "", 0, "", std::move(insts), info}, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        return std::get<InstructionSeq>(prog_or_error);
+    };
+
+    SECTION("loop nesting depth above 32 is rejected") {
+        REQUIRE_THROWS_WITH(Program::from_sequence(nested_loops(33), info, {}),
+                            Catch::Matchers::ContainsSubstring("loop nesting depth exceeds 32") &&
+                                Catch::Matchers::ContainsSubstring("(at 32)"));
+        // Deep enough that recursing on the nesting depth would overflow the C++ stack.
+        REQUIRE_THROWS_WITH(Program::from_sequence(nested_loops(16000), info, {}),
+                            Catch::Matchers::ContainsSubstring("loop nesting depth exceeds 32"));
+    }
+
+    SECTION("loop nesting depth of exactly 32 is accepted") {
+        REQUIRE_NOTHROW(Program::from_sequence(nested_loops(32), info, {}));
+    }
 }
 
 #define TEST_LEGACY(dirname, filename, sectionname)                                                             \

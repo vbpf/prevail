@@ -70,3 +70,31 @@ TEST_CASE("wto nesting outermost head tracks maximal SCC", "[wto]") {
     REQUIRE(wto.nesting(Label{7}).outermost_head() == std::optional<Label>{Label{3}});
     REQUIRE(wto.nesting(Label{8}).outermost_head() == std::optional<Label>{});
 }
+
+// `depth` cycles nested in one another: 1 -> 2 -> ... -> depth, with a back edge from the last
+// vertex to every vertex (itself included).
+static Cfg make_nested_cycles_cfg(const int depth) {
+    std::map<Label, std::vector<Label>> adjacency{{Label::entry, {Label{1}}}};
+    for (int i = 1; i < depth; i++) {
+        adjacency[Label{i}] = {Label{i + 1}};
+    }
+    for (int i = 1; i <= depth; i++) {
+        adjacency[Label{depth}].push_back(Label{i});
+    }
+    adjacency[Label{depth}].push_back(Label::exit);
+    return cfg_from_adjacency_list(adjacency);
+}
+
+TEST_CASE("wto nesting depth is bounded", "[wto]") {
+    constexpr int limit = Wto::max_nesting_depth;
+
+    const Wto wto(make_nested_cycles_cfg(limit));
+    int heads = 0;
+    wto.for_each_loop_head([&](const Label&) { heads++; });
+    REQUIRE(heads == limit);
+
+    REQUIRE_THROWS_WITH(Wto(make_nested_cycles_cfg(limit + 1)),
+                        Catch::Matchers::ContainsSubstring("loop nesting depth exceeds " + std::to_string(limit)));
+    // Deep enough to overflow the C++ stack in any consumer that recurses on nesting depth.
+    REQUIRE_THROWS_AS(Wto(make_nested_cycles_cfg(20000)), RuntimeInputError);
+}

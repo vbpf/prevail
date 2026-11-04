@@ -8,6 +8,7 @@
 #include "cfg/cfg.hpp"
 #include "cfg/label.hpp"
 #include "cfg/wto.hpp"
+#include "crab_utils/prevail_errors.hpp"
 
 // This file contains an iterative implementation of the recursive algorithm in
 // Bourdoncle, "Efficient chaotic iteration strategies with widenings", 1993
@@ -152,6 +153,16 @@ void WtoBuilder::start_visit(const Label& vertex, WtoPartition& partition,
         Label element = _stack.top();
         _stack.pop();
         if (loop) {
+            // Cycles are created outermost first, so the walk is itself bounded by the limit.
+            int nesting_depth = 1;
+            for (auto outer = containing_cycle.lock(); outer; outer = outer->_containing_cycle.lock()) {
+                ++nesting_depth;
+            }
+            if (nesting_depth > Wto::max_nesting_depth) {
+                throw RuntimeInputError{"loop nesting depth exceeds " + std::to_string(Wto::max_nesting_depth) +
+                                        " (at " + to_string(vertex) + ")"};
+            }
+
             while (element != vertex) {
                 _vertex_data[element].dfn = 0;
                 _vertex_data[element].head_dfn = 0;

@@ -233,6 +233,7 @@ void InterleavedFwdFixpointIterator::operator()(const std::shared_ptr<WtoCycle>&
         for (const auto& component : *cycle) {
             const auto plabel = std::get_if<Label>(&component);
             if (!plabel || *plabel != head) {
+                // Recurses on cycle-nesting depth, which Wto bounds by Wto::max_nesting_depth.
                 std::visit(*this, component);
             }
         }
