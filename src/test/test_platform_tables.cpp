@@ -199,6 +199,90 @@ TEST_CASE("mock map fds number maps of one type adjacently", "[platform][tables]
     REQUIRE(mock_map_fds_by_type({}, 1).empty());
 }
 
+TEST_CASE("generic map helpers only accept map types whose elements they model", "[platform][tables]") {
+    const auto program_type = g_ebpf_platform_linux.get_program_type("xdp", "");
+    const auto allowed_map_types = [&](const int32_t id) {
+        return g_ebpf_platform_linux.get_helper_prototype(id, program_type).allowed_map_types;
+    };
+
+    // HASH, ARRAY, PERCPU_HASH, PERCPU_ARRAY, LRU_HASH, LRU_PERCPU_HASH, LPM_TRIE.
+    uint64_t plain_value = 0;
+    for (const uint32_t type : {1, 2, 5, 6, 9, 10, 11}) {
+        plain_value |= map_type_bit(type);
+    }
+    // map_lookup_elem also models ARRAY_OF_MAPS and HASH_OF_MAPS, returning the inner map.
+    REQUIRE(allowed_map_types(1) == (plain_value | map_type_bit(12) | map_type_bit(13)));
+    REQUIRE(allowed_map_types(2) == plain_value); // map_update_elem
+    REQUIRE(allowed_map_types(3) == plain_value); // map_delete_elem
+}
+
+TEST_CASE("every helper taking a map declares its allowed map types", "[platform][tables]") {
+    for (const char* section : {"socket", "xdp", "kprobe", "sk_skb", "sk_msg", "sockops", "perf_event"}) {
+        const auto program_type = g_ebpf_platform_linux.get_program_type(section, "");
+        for (int32_t id = 0; id <= 211; ++id) {
+            if (!g_ebpf_platform_linux.is_helper_usable(id, program_type)) {
+                continue;
+            }
+            const EbpfHelperPrototype proto = g_ebpf_platform_linux.get_helper_prototype(id, program_type);
+            const bool takes_map = std::ranges::any_of(proto.argument_type, [](const ebpf_argument_type_t type) {
+                return type == EBPF_ARGUMENT_TYPE_PTR_TO_MAP || type == EBPF_ARGUMENT_TYPE_CONST_PTR_TO_MAP;
+            });
+            CAPTURE(section, id, proto.name);
+            REQUIRE((!takes_map || proto.allowed_map_types != 0));
+        }
+    }
+}
+
+TEST_CASE("mock map fds are not shared between maps of different types", "[platform][tables]") {
+    // HASH, SOCKMAP, HASH as {type, key_size, value_size, max_entries, map_flags, inner_map_idx, numa_node}.
+    constexpr uint32_t defs[3][7] = {{1, 4, 4, 16, 0, 0, 0}, {15, 4, 4, 16, 0, 0, 0}, {1, 4, 4, 16, 0, 0, 0}};
+    REQUIRE(sizeof(defs[0]) == g_ebpf_platform_linux.map_record_size);
+    std::vector<EbpfMapDescriptor> descriptors;
+    g_ebpf_platform_linux.parse_maps_section(descriptors, reinterpret_cast<const char*>(defs), sizeof(defs[0]), 3,
+                                             &g_ebpf_platform_linux, VerifierOptions{});
+    REQUIRE(descriptors.size() == 3);
+    REQUIRE(descriptors[0].original_fd != descriptors[1].original_fd);
+    REQUIRE(g_ebpf_platform_linux.get_map_descriptor(descriptors[1].original_fd, descriptors).type == 15);
+}
+
+TEST_CASE("map_lookup_elem result is only a writable map value for plain-value maps", "[platform][verify]") {
+    // r0 = map_lookup_elem(map, &key); if (r0) *(u32*)r0 = 0x41414141
+    const auto lookup_and_store = [](const uint32_t map_type) {
+        constexpr int fd = 1;
+        const EbpfMapDescriptor map{
+            .original_fd = fd, .type = map_type, .key_size = 4, .value_size = 4, .max_entries = 16};
+        const ProgramInfo info{.platform = &g_ebpf_platform_linux,
+                               .map_descriptors = {map},
+                               .type = g_ebpf_platform_linux.get_program_type("xdp", "")};
+        const auto at = [](const int index, Instruction ins) {
+            return LabeledInstruction{Label{index}, std::move(ins), std::nullopt};
+        };
+        const InstructionSeq seq{
+            at(0, Bin{Bin::Op::MOV, Reg{1}, Imm{0}, true, false}),
+            at(1, Mem{Deref{4, Reg{10}, -4}, Reg{1}, false, false}),
+            at(2, Bin{Bin::Op::MOV, Reg{2}, Reg{10}, true, false}),
+            at(3, Bin{Bin::Op::SUB, Reg{2}, Imm{4}, true, false}),
+            at(4, LoadMapFd{Reg{1}, fd}),
+            at(5, Call{.func = 1, .kind = CallKind::helper}),
+            at(6, Jmp{Condition{.op = Condition::Op::EQ, .left = Reg{0}, .right = Imm{0}, .is64 = true}, Label{8}}),
+            at(7, Mem{Deref{4, Reg{0}, 0}, Imm{0x41414141}, false, false}),
+            at(8, Bin{Bin::Op::MOV, Reg{0}, Imm{0}, true, false}),
+            at(9, Exit{}),
+        };
+        const AnalysisResult result = analyze(Program::from_sequence(seq, info, {}), {});
+        const auto error = result.find_first_error();
+        return error ? to_string(*error) : std::string{};
+    };
+    using Catch::Matchers::ContainsSubstring;
+
+    REQUIRE(lookup_and_store(1).empty()); // HASH
+    REQUIRE(lookup_and_store(2).empty()); // ARRAY
+    // SOCKMAP: the kernel returns the stored socket, not a value_size-byte buffer.
+    REQUIRE_THAT(lookup_and_store(15), ContainsSubstring("map type 15 is not allowed for map_lookup_elem"));
+    // PERF_EVENT_ARRAY: the kernel returns an ERR_PTR that is not null.
+    REQUIRE_THAT(lookup_and_store(4), ContainsSubstring("map type 4 is not allowed for map_lookup_elem"));
+}
+
 TEST_CASE("linux builtin relocation resolver maps known libc builtins", "[platform][tables]") {
     REQUIRE(g_ebpf_platform_linux.resolve_builtin_call != nullptr);
     REQUIRE(g_ebpf_platform_linux.get_builtin_call != nullptr);

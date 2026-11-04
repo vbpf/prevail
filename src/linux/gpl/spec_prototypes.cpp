@@ -8,9 +8,13 @@ namespace prevail {
 // Map-type bitmask constants for EbpfHelperPrototype::allowed_map_types.
 // Values match the BPF_MAP_TYPE_* enum in the kernel UAPI.
 namespace {
+constexpr uint64_t MT_HASH = map_type_bit(1);
+constexpr uint64_t MT_ARRAY = map_type_bit(2);
 constexpr uint64_t MT_PERF_EVENT_ARRAY = map_type_bit(4);
 constexpr uint64_t MT_STACK_TRACE = map_type_bit(7);
 constexpr uint64_t MT_CGROUP_ARRAY = map_type_bit(8);
+constexpr uint64_t MT_LRU_HASH = map_type_bit(9);
+constexpr uint64_t MT_LPM_TRIE = map_type_bit(11);
 constexpr uint64_t MT_ARRAY_OF_MAPS = map_type_bit(12);
 constexpr uint64_t MT_HASH_OF_MAPS = map_type_bit(13);
 constexpr uint64_t MT_DEVMAP = map_type_bit(14);
@@ -34,6 +38,11 @@ constexpr uint64_t MT_CGRP_STORAGE = map_type_bit(32);
 constexpr uint64_t MT_PERCPU_ARRAY = map_type_bit(6);
 constexpr uint64_t MT_PERCPU_HASH = map_type_bit(5);
 constexpr uint64_t MT_LRU_PERCPU_HASH = map_type_bit(10);
+// Map types whose elements are plain value_size-byte buffers, which is what the generic map
+// helpers (lookup/update/delete) model. Every other map type either returns something else
+// from a lookup (a socket, an inner map, an ERR_PTR) or has dedicated helpers.
+constexpr uint64_t MT_GENERIC =
+    MT_HASH | MT_ARRAY | MT_PERCPU_HASH | MT_PERCPU_ARRAY | MT_LRU_HASH | MT_LRU_PERCPU_HASH | MT_LPM_TRIE;
 } // namespace
 
 // Most ABI return/argument type constants used below are first-class enum
@@ -218,6 +227,10 @@ static constexpr EbpfHelperPrototype bpf_map_lookup_elem_proto = {
             EBPF_ARGUMENT_TYPE_DONTCARE,
             EBPF_ARGUMENT_TYPE_DONTCARE,
         },
+    // The kernel also allows SOCKMAP, SOCKHASH and XSKMAP (the lookup returns a socket) and
+    // DEVMAP and DEVMAP_HASH (a read-only value); neither is the writable value_size-byte
+    // buffer that the transformer models as the result of a lookup on a non-map-of-maps map.
+    .allowed_map_types = MT_GENERIC | MT_ARRAY_OF_MAPS | MT_HASH_OF_MAPS,
 };
 
 static constexpr EbpfHelperPrototype bpf_map_update_elem_proto = {
@@ -231,6 +244,8 @@ static constexpr EbpfHelperPrototype bpf_map_update_elem_proto = {
             EBPF_ARGUMENT_TYPE_ANYTHING,
             EBPF_ARGUMENT_TYPE_DONTCARE,
         },
+    // The kernel also allows SOCKMAP and SOCKHASH, where the value argument must be a socket.
+    .allowed_map_types = MT_GENERIC,
 };
 
 static constexpr EbpfHelperPrototype bpf_map_delete_elem_proto = {
@@ -244,6 +259,8 @@ static constexpr EbpfHelperPrototype bpf_map_delete_elem_proto = {
             EBPF_ARGUMENT_TYPE_DONTCARE,
             EBPF_ARGUMENT_TYPE_DONTCARE,
         },
+    // The kernel also allows SOCKMAP and SOCKHASH for some program types.
+    .allowed_map_types = MT_GENERIC,
 };
 
 static constexpr EbpfHelperPrototype bpf_get_prandom_u32_proto = {
@@ -1879,6 +1896,8 @@ static constexpr EbpfHelperPrototype bpf_for_each_map_elem_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_STACK_OR_NULL,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    // LPM_TRIE does not implement map_for_each_callback.
+    .allowed_map_types = MT_GENERIC & ~MT_LPM_TRIE,
 };
 
 static constexpr EbpfHelperPrototype bpf_snprintf_proto = {
@@ -1947,6 +1966,8 @@ static constexpr EbpfHelperPrototype bpf_timer_init_proto = {
             EBPF_ARGUMENT_TYPE_CONST_PTR_TO_MAP,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    // Only these map types may hold a bpf_timer in their value.
+    .allowed_map_types = MT_HASH | MT_ARRAY | MT_LRU_HASH,
 };
 
 static constexpr EbpfHelperPrototype bpf_timer_set_callback_proto = {
