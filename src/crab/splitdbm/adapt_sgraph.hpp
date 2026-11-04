@@ -10,6 +10,7 @@
 #include <boost/container/flat_map.hpp>
 
 #include "crab/splitdbm/definitions.hpp"
+#include "crab_utils/prevail_errors.hpp"
 
 namespace splitdbm {
 
@@ -131,7 +132,7 @@ class AdaptGraph final {
     [[nodiscard]]
     auto verts() const {
         // A vertex count of 65536 wraps to 0 through VertId (uint16_t), yielding an
-        // empty range; far beyond any eBPF program's variable count, but guard it.
+        // empty range; new_vertex() refuses to grow that far.
         assert(is_free.size() <= std::numeric_limits<VertId>::max());
         return std::views::iota(VertId{0}, static_cast<VertId>(is_free.size())) |
                std::views::filter([this](const VertId v) { return !is_free[v]; });
@@ -239,9 +240,12 @@ class AdaptGraph final {
             // static_cast<VertId>(_succs.size()) wraps to 0 at 65536 vertices, aliasing the
             // reserved zero vertex; and at size == max() the new vertex would make verts()'s
             // one-past-end (65536) wrap to an empty range. Reject before either can happen.
-            // (An assert, not a hard check: an eBPF program's variable count is orders of
-            // magnitude below 65535, so this is a documented invariant, not a reachable path.)
-            assert(_succs.size() < std::numeric_limits<VertId>::max());
+            // (A hard check, not an assert: termination checking adds a variable per inlined
+            // loop head, so the variable count is chosen by the program being verified.)
+            if (_succs.size() >= std::numeric_limits<VertId>::max()) {
+                throw prevail::RuntimeInputError{"too many variables: the zone domain is limited to " +
+                                                 std::to_string(std::numeric_limits<VertId>::max()) + " vertices"};
+            }
             v = static_cast<VertId>(_succs.size());
             is_free.push_back(false);
             _succs.emplace_back();
