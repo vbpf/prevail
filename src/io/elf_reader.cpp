@@ -713,8 +713,10 @@ int ProgramReader::relocate_map(const std::string& name, const ELFIO::Elf_Word i
 
         val = symbol_value / *record_size;
     } else {
+        // Resolve by the identity of the relocation's symbol, not by its name: another symbol may
+        // share the name while designating a different map, so the name only serves the error message.
         const auto& offsets = std::get<MapOffsets>(global.map_record_size_or_map_offsets);
-        const auto it = offsets.find(name);
+        const auto it = offsets.find(index);
         if (it == offsets.end()) {
             throw UnmarshalError("Map descriptor not found: " + name);
         }
@@ -726,14 +728,11 @@ int ProgramReader::relocate_map(const std::string& name, const ELFIO::Elf_Word i
     return global.map_descriptors.at(val).original_fd;
 }
 
-int ProgramReader::relocate_global_variable(const std::string& name) const {
-    const auto* offsets = std::get_if<MapOffsets>(&global.map_record_size_or_map_offsets);
-    if (!offsets) {
-        throw UnmarshalError("Invalid map offsets");
-    }
-    const auto it = offsets->find(name);
-    if (it == offsets->end()) {
-        throw UnmarshalError("Map descriptor not found: " + name);
+int ProgramReader::relocate_global_variable(const ELFIO::Elf_Half section_index) const {
+    // Resolve by section index, not by section name: ELF section names need not be unique either.
+    const auto it = global.variable_section_indices.find(section_index);
+    if (it == global.variable_section_indices.end()) {
+        throw UnmarshalError("Map descriptor not found for section " + std::to_string(section_index));
     }
     const size_t val = it->second;
     if (val >= global.map_descriptors.size()) {
@@ -882,9 +881,7 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
 
             hi_inst.get().imm = compute_lddw_reloc_offset_imm(addend, index, lo_inst);
             lo_inst.get().src = INST_LD_MODE_MAP_VALUE;
-
-            const std::string section_name = reader.sections[symbol_section_index]->get_name();
-            lo_inst.get().imm = relocate_global_variable(section_name);
+            lo_inst.get().imm = relocate_global_variable(symbol_section_index);
             return true;
         }
         return true;
@@ -906,7 +903,7 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
 
         hi_inst.get().imm = compute_lddw_reloc_offset_imm(addend, index, lo_inst);
         lo_inst.get().src = INST_LD_MODE_MAP_VALUE;
-        lo_inst.get().imm = relocate_global_variable(reader.sections[symbol_section_index]->get_name());
+        lo_inst.get().imm = relocate_global_variable(symbol_section_index);
         return true;
     }
 
