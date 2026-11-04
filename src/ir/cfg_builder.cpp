@@ -237,6 +237,10 @@ static std::optional<RejectionReason> check_instruction_feature_support(const In
         }
         switch (p->addr.kind) {
         case PseudoAddress::Kind::VARIABLE_ADDR:
+            // imm is a variable id, not the address the instruction loads, and the platform
+            // has no hook that describes the variable behind an id. Modelling the result as
+            // the id would let a branch on the loaded address be pruned at verification time.
+            return reject_not_implemented("lddw variable_addr pseudo");
         case PseudoAddress::Kind::CODE_ADDR:
         case PseudoAddress::Kind::MAP_BY_IDX:
         case PseudoAddress::Kind::MAP_VALUE_BY_IDX: break; // Resolved during CFG construction.
@@ -433,32 +437,12 @@ static void add_cfg_nodes(CfgBuilder& builder, const Cfg& original_cfg, const La
     }
 }
 
-struct Imm64Parts {
-    int32_t lo{};
-    int32_t hi{};
-};
-
-static uint64_t merge_imm32_to_u64(const Imm64Parts parts) {
-    return static_cast<uint64_t>(static_cast<uint32_t>(parts.lo)) |
-           (static_cast<uint64_t>(static_cast<uint32_t>(parts.hi)) << 32);
-}
-
 /// Lower a single LoadPseudo to a concrete instruction.
-/// VARIABLE_ADDR is lowered to an immediate scalar MOV; MAP_BY_IDX / MAP_VALUE_BY_IDX are
-/// rewritten against the current map descriptor table. CODE_ADDR is kept as LoadPseudo by
-/// pass_lower_pseudo_loads so the abstract transformer can type it as T_FUNC; this helper
-/// is never called for CODE_ADDR.
+/// MAP_BY_IDX / MAP_VALUE_BY_IDX are rewritten against the current map descriptor table.
+/// CODE_ADDR is kept as LoadPseudo by pass_lower_pseudo_loads so the abstract transformer
+/// can type it as T_FUNC; this helper is never called for CODE_ADDR. VARIABLE_ADDR is
+/// rejected earlier, by pass_validate_instruction_support.
 static Instruction lower_pseudo_load(const LoadPseudo& pseudo, const ProgramInfo& info) {
-    if (pseudo.addr.kind == PseudoAddress::Kind::VARIABLE_ADDR) {
-        return Bin{
-            .op = Bin::Op::MOV,
-            .dst = pseudo.dst,
-            .v = Imm{merge_imm32_to_u64({.lo = pseudo.addr.imm, .hi = pseudo.addr.next_imm})},
-            .is64 = true,
-            .lddw = true,
-        };
-    }
-
     const auto& descriptors = info.map_descriptors;
     if (pseudo.addr.imm < 0 || static_cast<size_t>(pseudo.addr.imm) >= descriptors.size()) {
         throw InvalidControlFlow{"invalid map index " + std::to_string(pseudo.addr.imm) + " (have " +

@@ -1326,16 +1326,9 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
             info};
         auto prog_or_error = unmarshal(raw_prog, {});
         REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
-        const auto* bin = std::get_if<Bin>(&prog.instruction_at(Label{0}));
-        REQUIRE(bin != nullptr);
-        REQUIRE(bin->op == Bin::Op::MOV);
-        REQUIRE(bin->is64);
-        REQUIRE(bin->lddw);
-        REQUIRE(bin->dst == Reg{1});
-        const auto* imm = std::get_if<Imm>(&bin->v);
-        REQUIRE(imm != nullptr);
-        REQUIRE(imm->v == 7ULL);
+        REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
+                            Catch::Matchers::ContainsSubstring("not implemented: lddw variable_addr pseudo") &&
+                                Catch::Matchers::ContainsSubstring("(at 0)"));
     }
 
     SECTION("lddw code_addr pseudo via INST_LD_MODE_CODE_ADDR") {
