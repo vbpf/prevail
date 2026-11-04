@@ -265,13 +265,20 @@ void parse_maps_section_linux(std::vector<EbpfMapDescriptor>& map_descriptors, c
         mapdefs.emplace_back(def);
     }
 
+    // The fd is the only identity a map has in the analysis (get_map_descriptor_linux returns the first
+    // descriptor carrying it), so every definition gets its own mock fd even when its shape matches an
+    // earlier one: maps of the same shape can still differ in type, inner map and address.
+    // +1 so 0 is the null FD.
+    std::vector<uint32_t> types;
     for (const auto& s : mapdefs) {
-        // The fd is the only identity a map has in the analysis (get_map_descriptor_linux returns the first
-        // descriptor carrying it), so every definition gets its own mock fd even when its shape matches an
-        // earlier one: maps of the same shape can still differ in type, inner map and address.
-        // +1 so 0 is the null FD.
-        const int fd = options.mock_map_fds ? gsl::narrow<int>(map_descriptors.size()) + 1
-                                            : create_map_linux(s.type, s.key_size, s.value_size, s.max_entries);
+        types.push_back(s.type);
+    }
+    const std::vector<int> mock_fds = mock_map_fds_by_type(types, gsl::narrow<int>(map_descriptors.size()) + 1);
+
+    for (size_t i = 0; i < mapdefs.size(); i++) {
+        const auto& s = mapdefs[i];
+        const int fd =
+            options.mock_map_fds ? mock_fds[i] : create_map_linux(s.type, s.key_size, s.value_size, s.max_entries);
         map_descriptors.emplace_back(EbpfMapDescriptor{
             .original_fd = fd,
             .type = s.type,

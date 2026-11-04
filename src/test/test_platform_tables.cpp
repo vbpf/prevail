@@ -190,6 +190,15 @@ TEST_CASE("linux legacy map definitions of the same shape get distinct mock fds"
     REQUIRE(descriptors[1].inner_map_fd == descriptors[3].original_fd);
 }
 
+TEST_CASE("mock map fds number maps of one type adjacently", "[platform][tables]") {
+    // A register joined over two maps holds the interval of their fds, and map checks consider every fd in
+    // it. Declared DEVMAP, ARRAY, CPUMAP: numbered by declaration, [DEVMAP, CPUMAP] would cover the ARRAY.
+    const std::vector<uint32_t> types{14, 2, 16, 2};
+    REQUIRE(mock_map_fds_by_type(types, 1) == std::vector<int>{3, 1, 4, 2});
+    REQUIRE(mock_map_fds_by_type(types, 5) == std::vector<int>{7, 5, 8, 6});
+    REQUIRE(mock_map_fds_by_type({}, 1).empty());
+}
+
 TEST_CASE("linux builtin relocation resolver maps known libc builtins", "[platform][tables]") {
     REQUIRE(g_ebpf_platform_linux.resolve_builtin_call != nullptr);
     REQUIRE(g_ebpf_platform_linux.get_builtin_call != nullptr);
