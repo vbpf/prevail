@@ -1008,6 +1008,42 @@ TEST_CASE("helpers that may reallocate the packet do not accept packet pointers"
     require_mem_group(26, "classifier", Reg{3}, TypeGroup::mem); // skb_load_bytes
 }
 
+TEST_CASE("builtin calls that return their destination keep it a pointer", "[disasm][marshal]") {
+    const ProgramInfo info{.platform = &g_ebpf_platform_linux,
+                           .type = g_ebpf_platform_linux.get_program_type("socket", "")};
+    for (const std::string name : {"memset", "memcpy", "memmove"}) {
+        CAPTURE(name);
+        const auto id = g_ebpf_platform_linux.resolve_builtin_call(name);
+        REQUIRE(id.has_value());
+        // r0 = name(r10 - 8, 0 or r10 - 16, 8), optionally followed by r0 = *(u64*)(r0 + 0), then exit.
+        const auto accepts = [&](const bool load_through_r0) {
+            InstructionSeq seq;
+            const auto add = [&](Instruction ins) {
+                seq.emplace_back(Label{static_cast<int>(seq.size())}, std::move(ins), std::nullopt);
+            };
+            add(Mem{.access = {.width = 8, .basereg = Reg{10}, .offset = -16}, .value = Imm{0}, .is_load = false});
+            add(Bin{.op = Bin::Op::MOV, .dst = Reg{1}, .v = Reg{10}, .is64 = true});
+            add(Bin{.op = Bin::Op::ADD, .dst = Reg{1}, .v = Imm{static_cast<uint64_t>(-8)}, .is64 = true});
+            if (name == "memset") {
+                add(Bin{.op = Bin::Op::MOV, .dst = Reg{2}, .v = Imm{0}, .is64 = true});
+            } else {
+                add(Bin{.op = Bin::Op::MOV, .dst = Reg{2}, .v = Reg{10}, .is64 = true});
+                add(Bin{.op = Bin::Op::ADD, .dst = Reg{2}, .v = Imm{static_cast<uint64_t>(-16)}, .is64 = true});
+            }
+            add(Bin{.op = Bin::Op::MOV, .dst = Reg{3}, .v = Imm{8}, .is64 = true});
+            add(Call{.func = *id, .kind = CallKind::builtin});
+            if (load_through_r0) {
+                add(Mem{.access = {.width = 8, .basereg = Reg{0}, .offset = 0}, .value = Reg{0}, .is_load = true});
+            }
+            add(Exit{});
+            return verify(Program::from_sequence(seq, info, {}), {});
+        };
+        // The stack address must not leave the program as if it were a number.
+        REQUIRE_FALSE(accepts(false));
+        REQUIRE(accepts(true));
+    }
+}
+
 #define FAIL_UNMARSHAL(dirname, filename, sectionname)                                                 \
     TEST_CASE("Try unmarshalling bad program: " dirname "/" filename " " sectionname, "[unmarshal]") { \
         ElfObject elf{"ebpf-samples/" dirname "/" filename, {}, &g_ebpf_platform_linux};               \

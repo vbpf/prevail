@@ -1068,6 +1068,9 @@ void EbpfTransformer::operator()(const Call& call) {
     };
     if (resolved.contract.is_map_lookup) {
         resolve_map_lookup();
+    } else if (resolved.contract.return_arg.has_value()) {
+        // r0 is the argument itself, so it keeps the argument's type and offsets.
+        dom.state.assign(r0_reg, *resolved.contract.return_arg);
     } else if (resolved.contract.return_ptr_type.has_value()) {
         dom.state.forget_type_dependent_values(r0_reg);
         dom.state.assign_type(r0_reg, *resolved.contract.return_ptr_type);

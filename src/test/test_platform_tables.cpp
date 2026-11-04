@@ -370,6 +370,10 @@ TEST_CASE("linux builtin relocation resolver maps known libc builtins", "[platfo
     REQUIRE(memcpy_call->name == "memcpy");
     REQUIRE(memmove_call->name == "memmove");
     REQUIRE(memcmp_call->name == "memcmp");
+    REQUIRE(memset_call->contract.return_arg == Reg{1});
+    REQUIRE(memcpy_call->contract.return_arg == Reg{1});
+    REQUIRE(memmove_call->contract.return_arg == Reg{1});
+    REQUIRE_FALSE(memcmp_call->contract.return_arg.has_value());
     const auto unknown_id = resolve("__does_not_exist");
     REQUIRE(unknown_id.has_value());
     const auto unknown_call = get_builtin_call(*unknown_id);
