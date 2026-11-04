@@ -1009,6 +1009,81 @@ TEST_CASE("ELF loader does not cross-apply relocations between same-named progra
     REQUIRE(programs[0].prog.size() == 2);
 }
 
+// Regression test: eBPF objects use SHT_REL, so the addend A of "S + A" lives in the
+// relocated lddw. It must be honored for named data symbols as it is for section
+// symbols; dropping it verifies `arr + 0` where the object file says `arr + 8`.
+TEST_CASE("ELF loader applies the in-instruction addend of an lddw relocation against a named symbol",
+          "[elf][hardening]") {
+    auto append_inst = [](std::string& data, const uint8_t opcode, const uint8_t dst, const uint8_t src,
+                          const int32_t imm) {
+        const EbpfInst inst{.opcode = opcode, .dst = dst, .src = src, .offset = 0, .imm = imm};
+        data.append(reinterpret_cast<const char*>(&inst), sizeof(inst));
+    };
+    constexpr uint8_t MOV64_IMM = 0xb7;
+
+    ELFIO::elfio writer;
+    writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+    writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+    writer.set_type(ELFIO::ET_REL);
+    writer.set_machine(ELFIO::EM_BPF);
+
+    // xdp: r1 = arr+8 ll; r0 = 0; exit
+    ELFIO::section* prog_sec = writer.sections.add("xdp");
+    prog_sec->set_type(ELFIO::SHT_PROGBITS);
+    prog_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+    prog_sec->set_addr_align(8);
+    std::string prog_data;
+    append_inst(prog_data, INST_OP_LDDW_IMM, 1, 0, 8);
+    append_inst(prog_data, 0, 0, 0, 0);
+    append_inst(prog_data, MOV64_IMM, 0, 0, 0);
+    append_inst(prog_data, INST_OP_EXIT, 0, 0, 0);
+    prog_sec->set_data(prog_data);
+
+    ELFIO::section* data_sec = writer.sections.add(".data");
+    data_sec->set_type(ELFIO::SHT_PROGBITS);
+    data_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_WRITE);
+    data_sec->set_addr_align(4);
+    data_sec->set_data(std::string(16, '\0'));
+
+    ELFIO::section* str_sec = writer.sections.add(".strtab");
+    str_sec->set_type(ELFIO::SHT_STRTAB);
+    ELFIO::string_section_accessor str_writer(str_sec);
+
+    ELFIO::section* sym_sec = writer.sections.add(".symtab");
+    sym_sec->set_type(ELFIO::SHT_SYMTAB);
+    sym_sec->set_addr_align(8);
+    sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+    sym_sec->set_link(str_sec->get_index());
+    sym_sec->set_info(1);
+    ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+
+    sym_writer.add_symbol(str_writer, "prog", 0, 32, ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0, prog_sec->get_index());
+    const auto arr_sym =
+        sym_writer.add_symbol(str_writer, "arr", 4, 12, ELFIO::STB_GLOBAL, ELFIO::STT_OBJECT, 0, data_sec->get_index());
+
+    ELFIO::section* rel_sec = writer.sections.add(".relxdp");
+    rel_sec->set_type(ELFIO::SHT_REL);
+    rel_sec->set_addr_align(8);
+    rel_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_REL));
+    rel_sec->set_link(sym_sec->get_index());
+    rel_sec->set_info(prog_sec->get_index());
+    ELFIO::relocation_section_accessor rel_writer(writer, rel_sec);
+    rel_writer.add_entry(0 * sizeof(EbpfInst), arr_sym, R_BPF_64_64_TYPE);
+
+    std::ostringstream out_stream;
+    writer.save(out_stream);
+    std::istringstream in_stream(out_stream.str());
+
+    VerifierOptions options{};
+    const auto programs = read_elf(in_stream, "memory", "xdp", "", options, &g_ebpf_platform_linux);
+    REQUIRE(programs.size() == 1);
+    const auto& prog = programs[0].prog;
+    REQUIRE(prog.size() == 4);
+    // arr is at .data+4, so arr+8 is offset 12 into the .data map value.
+    REQUIRE(prog[0].src == INST_LD_MODE_MAP_VALUE);
+    REQUIRE(prog[1].imm == 12);
+}
+
 // Verify that the ELF loader accepts FUNC symbols at instruction-aligned offsets.
 // Companion to the rejection test above — ensures the alignment check does not
 // reject well-formed ELF files.
