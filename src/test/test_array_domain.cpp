@@ -117,3 +117,30 @@ TEST_CASE("negative offset kill forgets cells on possible partial overlap", "[ar
     REQUIRE(reloaded.has_value());
     REQUIRE_FALSE(values.eval_interval(*reloaded).is_singleton());
 }
+
+TEST_CASE("numeric size of an offset that may leave the stack window is zero", "[array_domain]") {
+    // Regression for a signed overflow in min_all_num_size: both bounds of the offset
+    // fit an int32, but their difference does not, so ub - lb wrapped negative and the
+    // function reported INT_MAX numeric bytes above a pointer about which nothing is known.
+    ArrayDomain stack{8};
+    NumAbsDomain values = NumAbsDomain::top();
+    stack.initialize_numbers(0, 8);
+
+    const Variable offset = variable_registry.reg(DataKind::stack_offsets, 6);
+
+    values.set(offset, Interval{0, 8});
+    REQUIRE(stack.min_all_num_size(values, offset) == 0);
+    values.set(offset, Interval{0, 4});
+    REQUIRE(stack.min_all_num_size(values, offset) == 4);
+    values.set(offset, Interval{4});
+    REQUIRE(stack.min_all_num_size(values, offset) == 4);
+
+    values.set(offset, Interval{-2, 2147483647});
+    REQUIRE(stack.min_all_num_size(values, offset) == 0);
+    values.set(offset, Interval{-2, 8});
+    REQUIRE(stack.min_all_num_size(values, offset) == 0);
+    values.set(offset, Interval{0, 16});
+    REQUIRE(stack.min_all_num_size(values, offset) == 0);
+    values.set(offset, Interval::top());
+    REQUIRE(stack.min_all_num_size(values, offset) == 0);
+}

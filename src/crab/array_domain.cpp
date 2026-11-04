@@ -420,13 +420,15 @@ bool ArrayDomain::all_num_width(const Interval& index, const Interval& width) co
 
 // Get the number of bytes, starting at offset, that are known to be numbers.
 int ArrayDomain::min_all_num_size(const NumAbsDomain& inv, const Variable offset) const {
-    const auto min_lb = inv.eval_interval(offset).lb().number();
-    const auto max_ub = inv.eval_interval(offset).ub().number();
-    if (!min_lb || !max_ub || !min_lb->fits<int32_t>() || !max_ub->fits<int32_t>()) {
+    const Interval range = inv.eval_interval(offset);
+    // No byte outside the stack window is known to be a number, so an offset that may
+    // fall outside it has no numeric size. Bounding the offsets by the window (rather
+    // than by int32_t) also keeps ub - lb from overflowing when the bounds are more
+    // than 2^31 apart, which used to yield a huge bogus size.
+    if (range.is_bottom() || !(range <= Interval{0, total_stack_size()})) {
         return 0;
     }
-    const auto lb = min_lb->narrow<int>();
-    const auto ub = max_ub->narrow<int>();
+    const auto [lb, ub] = range.pair<int>();
     return std::max(0, this->num_bytes.all_num_width(lb) - (ub - lb));
 }
 
