@@ -49,6 +49,9 @@ struct FunctionRelocation {
     ELFIO::Elf_Xword source_offset{};
     std::optional<ELFIO::Elf_Xword> relocation_entry_index;
     ELFIO::Elf_Half target_section_index{};
+    /// Byte offset of the callee in its section. Together with target_section_index this identifies
+    /// the callee; target_function_name is only for diagnostics (ELF symbol names need not be unique).
+    ELFIO::Elf_Xword target_offset{};
     std::string target_function_name;
 };
 
@@ -111,9 +114,6 @@ ELFIO::Elf_Xword compute_reachable_program_span(const std::vector<EbpfInst>& sec
 
 std::vector<ELFIO::section*> global_sections(const ELFIO::elfio& reader);
 
-RawProgram* find_subprogram(std::vector<RawProgram>& programs, const ELFIO::section& subprogram_section,
-                            const std::string& symbol_name);
-
 std::pair<std::reference_wrapper<EbpfInst>, std::reference_wrapper<EbpfInst>>
 validate_and_get_lddw_pair(std::vector<EbpfInst>& instructions, size_t location, const std::string& context);
 
@@ -157,6 +157,8 @@ class ProgramReader {
     const ElfGlobalData& global;
     std::vector<FunctionRelocation> function_relocations;
     std::set<std::pair<size_t, size_t>> function_relocation_index_;
+    /// Maps (section index, byte offset in section) to the index in raw_programs of the program starting there.
+    std::map<std::pair<ELFIO::Elf_Half, ELFIO::Elf_Xword>, size_t> raw_program_index_;
     std::map<std::string, std::optional<KsymBtfId>> ksym_function_resolution_cache;
     std::vector<unresolved_symbol_error_t> unresolved_symbol_errors;
     /// Only negative IDs are platform-internal builtins needing the gate;
@@ -181,6 +183,7 @@ class ProgramReader {
                                        ELFIO::Elf_Xword program_offset);
 
     void record_function_relocation(FunctionRelocation reloc);
+    RawProgram* find_subprogram(ELFIO::Elf_Half section_index, ELFIO::Elf_Xword offset);
 
   public:
     std::vector<RawProgram> raw_programs;
