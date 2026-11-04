@@ -144,7 +144,8 @@ const std::vector<EbpfProgramType> linux_program_types = {
     PTYPE_READONLY_CTX("perf_event", &g_perf_event_descr, BPF_PROG_TYPE_PERF_EVENT,
                        {"perf_section" COMMA "perf_event"}),
     PTYPE("sched_act", &g_sched_descr, BPF_PROG_TYPE_SCHED_ACT, {"action"}),
-    PTYPE("sched_cls", &g_sched_descr, BPF_PROG_TYPE_SCHED_CLS, {"classifier"}),
+    // libbpf also names tc programs "tc", "tc/..." and "tcx/...".
+    PTYPE("sched_cls", &g_sched_descr, BPF_PROG_TYPE_SCHED_CLS, {"classifier" COMMA "tc"}),
     PTYPE("sk_skb", &g_sk_skb_descr, BPF_PROG_TYPE_SK_SKB, {"sk_skb"}),
     PTYPE("sock_ops", &g_sock_ops_descr, BPF_PROG_TYPE_SOCK_OPS, {"sockops"}),
     PTYPE_READONLY_CTX("tracepoint", &g_tracepoint_descr, BPF_PROG_TYPE_TRACEPOINT, {"tracepoint/"}),

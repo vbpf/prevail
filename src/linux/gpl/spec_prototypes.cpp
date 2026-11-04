@@ -56,6 +56,7 @@ constexpr uint64_t MT_GENERIC =
 #define EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE_OR_NULL EBPF_ARGUMENT_TYPE_PTR_TO_MAP_VALUE
 
 const ebpf_ctx_descriptor_t g_sk_buff = sk_buff;
+const ebpf_ctx_descriptor_t g_sk_buff_no_meta = sk_buff_no_meta;
 const ebpf_ctx_descriptor_t g_xdp_md = xdp_md;
 const ebpf_ctx_descriptor_t g_sk_msg_md = sk_msg_md;
 const ebpf_ctx_descriptor_t g_unspec_descr = unspec_descr;
@@ -2759,7 +2760,11 @@ bool is_helper_usable_linux(const int32_t n, const EbpfProgramType& program_type
     }
 
     // If the helper has a ctx_descriptor, it must match the hook's ctx_descriptor.
-    if (prototypes[n].ctx_descriptor && prototypes[n].ctx_descriptor != program_type.ctx_descriptor) {
+    // g_sk_buff_no_meta is the same __sk_buff struct as g_sk_buff without the
+    // tc-only data_meta pointer, so __sk_buff helpers accept both.
+    const ebpf_ctx_descriptor_t* hook_ctx_descriptor =
+        program_type.ctx_descriptor == &g_sk_buff_no_meta ? &g_sk_buff : program_type.ctx_descriptor;
+    if (prototypes[n].ctx_descriptor && prototypes[n].ctx_descriptor != hook_ctx_descriptor) {
         return false;
     }
 

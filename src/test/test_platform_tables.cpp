@@ -11,6 +11,7 @@
 #include "ebpf_verifier.hpp"
 #include "ir/call_resolver.hpp"
 #include "ir/program.hpp"
+#include "ir/syntax.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
 #include "parse.hpp"
 #include "platform.hpp"
@@ -574,4 +575,59 @@ TEST_CASE("new Linux context descriptors keep expected layout constants", "[plat
     REQUIRE(g_cgroup_sysctl_descr.data == -1);
     REQUIRE(g_cgroup_sysctl_descr.end == -1);
     REQUIRE(g_cgroup_sysctl_descr.meta == -1);
+}
+
+TEST_CASE("__sk_buff data_meta is a packet pointer for tc programs only", "[platform][tables]") {
+    // Store 8 bytes through ctx->data_meta once "data_meta + 8 <= data" holds.
+    // Only a program type whose runtime actually computes data_meta may accept this.
+    const auto accepts_store_through_data_meta = [](const EbpfProgramType& type) {
+        const ProgramInfo info{.platform = &g_ebpf_platform_linux, .type = type};
+        InstructionSeq seq;
+        const auto add = [&](Instruction ins) {
+            seq.emplace_back(Label{gsl::narrow<int>(seq.size())}, std::move(ins), std::nullopt);
+        };
+        add(Mem{.access = {.width = 4, .basereg = Reg{1}, .offset = 140}, .value = Reg{2}, .is_load = true});
+        add(Mem{.access = {.width = 4, .basereg = Reg{1}, .offset = 76}, .value = Reg{3}, .is_load = true});
+        add(Bin{.op = Bin::Op::MOV, .dst = Reg{4}, .v = Reg{2}, .is64 = true});
+        add(Bin{.op = Bin::Op::ADD, .dst = Reg{4}, .v = Imm{8}, .is64 = true});
+        add(Jmp{.cond = Condition{.op = Condition::Op::GT, .left = Reg{4}, .right = Reg{3}, .is64 = true},
+                .target = Label{6}});
+        add(Mem{.access = {.width = 8, .basereg = Reg{2}, .offset = 0}, .value = Imm{0}, .is_load = false});
+        add(Bin{.op = Bin::Op::MOV, .dst = Reg{0}, .v = Imm{0}, .is64 = true});
+        add(Exit{});
+        return verify(Program::from_sequence(seq, info, {}), {});
+    };
+
+    for (const char* section : {"classifier", "action", "tc", "tc/ingress", "tcx/egress"}) {
+        const EbpfProgramType type = g_ebpf_platform_linux.get_program_type(section, "");
+        CAPTURE(section);
+        REQUIRE(type.ctx_descriptor == &g_sk_buff);
+        REQUIRE(type.ctx_descriptor->meta == 140);
+        REQUIRE(accepts_store_through_data_meta(type));
+    }
+    const EbpfProgramType lxc_type = g_ebpf_platform_linux.get_program_type("from-container", "cilium/bpf_lxc.o");
+    REQUIRE(accepts_store_through_data_meta(lxc_type));
+
+    // Linux rejects data_meta for these; cgroup_skb, sk_skb and socket_filter never even compute it.
+    // "unknown" exercises the socket_filter fallback for unrecognized section names.
+    for (const char* section : {"socket", "unknown", "cgroup/skb", "sk_skb/stream_verdict", "lwt_in", "lwt_out",
+                                "lwt_xmit", "lwt_seg6local"}) {
+        const EbpfProgramType type = g_ebpf_platform_linux.get_program_type(section, "");
+        CAPTURE(section);
+        REQUIRE(type.ctx_descriptor == &g_sk_buff_no_meta);
+        REQUIRE(type.ctx_descriptor->size == g_sk_buff.size);
+        REQUIRE(type.ctx_descriptor->data == g_sk_buff.data);
+        REQUIRE(type.ctx_descriptor->end == g_sk_buff.end);
+        REQUIRE(type.ctx_descriptor->meta == -1);
+        REQUIRE_FALSE(accepts_store_through_data_meta(type));
+    }
+
+    // Dropping data_meta must not take the __sk_buff helpers away.
+    for (const char* section : {"classifier", "socket", "cgroup/skb", "sk_skb/stream_verdict", "lwt_in", "lwt_xmit"}) {
+        const EbpfProgramType type = g_ebpf_platform_linux.get_program_type(section, "");
+        CAPTURE(section);
+        REQUIRE(g_ebpf_platform_linux.is_helper_usable(26, type)); // skb_load_bytes
+        REQUIRE(g_ebpf_platform_linux.is_helper_usable(47, type)); // get_socket_uid
+    }
+    REQUIRE_FALSE(g_ebpf_platform_linux.is_helper_usable(26, g_ebpf_platform_linux.get_program_type("xdp", "")));
 }
