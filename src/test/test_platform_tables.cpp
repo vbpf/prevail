@@ -256,6 +256,15 @@ TEST_CASE("new helper ABI classes map to modeled call contracts", "[platform][ta
     const ResolvedCall strtoul = require_supported(106);
     REQUIRE(has_single_arg(strtoul, ArgSingle::Kind::PTR_TO_WRITABLE_LONG, Reg{4}));
 
+    const ResolvedCall map_push_elem = require_supported(87);
+    REQUIRE(has_single_arg(map_push_elem, ArgSingle::Kind::PTR_TO_MAP_VALUE, Reg{2}));
+
+    const ResolvedCall map_pop_elem = require_supported(88);
+    REQUIRE(has_single_arg(map_pop_elem, ArgSingle::Kind::PTR_TO_WRITABLE_MAP_VALUE, Reg{2}));
+
+    const ResolvedCall map_peek_elem = require_supported(89);
+    REQUIRE(has_single_arg(map_peek_elem, ArgSingle::Kind::PTR_TO_WRITABLE_MAP_VALUE, Reg{2}));
+
     const ResolvedCall ringbuf_reserve = require_supported(131);
     REQUIRE(ringbuf_reserve.contract.return_ptr_type.has_value());
     REQUIRE(*ringbuf_reserve.contract.return_ptr_type == T_ALLOC_MEM);

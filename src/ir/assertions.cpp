@@ -105,7 +105,10 @@ class AssertExtractor {
                 map_fd_reg = arg.reg;
                 break;
             case ArgSingle::Kind::PTR_TO_MAP_KEY: [[fallthrough]];
-            case ArgSingle::Kind::PTR_TO_MAP_VALUE:
+            case ArgSingle::Kind::PTR_TO_MAP_VALUE: [[fallthrough]];
+            case ArgSingle::Kind::PTR_TO_WRITABLE_MAP_VALUE:
+                // The output buffer is held to the input-value precondition (in bounds, numeric bytes):
+                // map_peek_elem reads it on bloom filters, and the transformer relies on it staying numeric.
                 assert(map_fd_reg);
                 res.emplace_back(TypeConstraint{arg.reg, mem});
                 res.emplace_back(ValidMapKeyValue{arg.reg, *map_fd_reg, arg.kind == ArgSingle::Kind::PTR_TO_MAP_KEY});
