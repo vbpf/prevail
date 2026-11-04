@@ -34,15 +34,19 @@ namespace prevail {
 
 static_assert(sizeof(ELFIO::Elf32_Ehdr) == 52);
 static_assert(offsetof(ELFIO::Elf32_Ehdr, e_shoff) == 32);
+static_assert(offsetof(ELFIO::Elf32_Ehdr, e_phnum) == 44);
 static_assert(offsetof(ELFIO::Elf32_Ehdr, e_shentsize) == 46);
 static_assert(offsetof(ELFIO::Elf32_Ehdr, e_shnum) == 48);
 static_assert(sizeof(ELFIO::Elf64_Ehdr) == 64);
 static_assert(offsetof(ELFIO::Elf64_Ehdr, e_shoff) == 40);
+static_assert(offsetof(ELFIO::Elf64_Ehdr, e_phnum) == 56);
 static_assert(offsetof(ELFIO::Elf64_Ehdr, e_shentsize) == 58);
 static_assert(offsetof(ELFIO::Elf64_Ehdr, e_shnum) == 60);
 static_assert(sizeof(ELFIO::Elf32_Shdr) == 40);
+static_assert(offsetof(ELFIO::Elf32_Shdr, sh_type) == 4);
 static_assert(offsetof(ELFIO::Elf32_Shdr, sh_size) == 20);
 static_assert(sizeof(ELFIO::Elf64_Shdr) == 64);
+static_assert(offsetof(ELFIO::Elf64_Shdr, sh_type) == 4);
 static_assert(offsetof(ELFIO::Elf64_Shdr, sh_size) == 32);
 static_assert(sizeof(ELFIO::Elf32_Rel) == 8);
 static_assert(offsetof(ELFIO::Elf32_Rel, r_offset) == 0);
@@ -430,8 +434,10 @@ read_section_header_table_layout(const std::array<unsigned char, sizeof(ELFIO::E
 
 static void validate_section_header_table_bounds(std::istream& input_stream, const std::string& path,
                                                  const std::uintmax_t data_size) {
-    // This pre-load check validates only the section header table extent.
-    // Individual section payload ranges are checked after ELFIO loads metadata.
+    // This pre-load check validates the section header table extent and bounds the memory ELFIO needs to load
+    // the file: ELFIO copies the file range of every program header and every section header into a buffer of
+    // its own and checks each range against the stream size only, so overlapping ranges would cost
+    // (number of headers) x (file size). Individual section payload ranges are checked after ELFIO loads metadata.
     constexpr size_t min_elf_header_size = sizeof(ELFIO::Elf32_Ehdr);
     constexpr size_t elf64_header_size = sizeof(ELFIO::Elf64_Ehdr);
     constexpr unsigned char elf_magic[] = {0x7f, 'E', 'L', 'F'};
@@ -457,6 +463,15 @@ static void validate_section_header_table_bounds(std::istream& input_stream, con
         return;
     }
     const SectionHeaderTableLayout table = *layout;
+
+    // Relocatable BPF objects have no program headers, and segments are never consulted.
+    const auto program_header_count = read_uint<ELFIO::Elf_Half>(
+        header.data() + (elf_class == ELFIO::ELFCLASS32 ? offsetof(ELFIO::Elf32_Ehdr, e_phnum)
+                                                        : offsetof(ELFIO::Elf64_Ehdr, e_phnum)),
+        little_endian);
+    if (program_header_count != 0) {
+        throw UnmarshalError("ELF file " + path + " has program headers: expected a relocatable object");
+    }
 
     if (table.offset == 0 && table.count == 0) {
         return;
@@ -489,6 +504,33 @@ static void validate_section_header_table_bounds(std::istream& input_stream, con
     }
     if (required_entries > available / table.entry_size) {
         throw UnmarshalError("ELF section header table in " + path + " is out of bounds");
+    }
+
+    // Sections of a well-formed object do not share file bytes, so together they cannot exceed the file size.
+    // ELFIO loads exactly e_shnum sections (table.count), never the extended count.
+    std::uintmax_t remaining = data_size;
+    for (std::uintmax_t i = 0; i < table.count; ++i) {
+        std::array<unsigned char, sizeof(ELFIO::Elf64_Shdr)> section_header{};
+        const auto section_bytes_read = read_stream_bytes_at(input_stream, table.offset + i * table.entry_size,
+                                                             section_header.data(), table.min_entry_size);
+        if (section_bytes_read < gsl::narrow<std::streamsize>(table.min_entry_size)) {
+            throw UnmarshalError("ELF section header table in " + path + " is out of bounds");
+        }
+
+        const auto section_type =
+            read_uint<ELFIO::Elf_Word>(section_header.data() + offsetof(ELFIO::Elf64_Shdr, sh_type), little_endian);
+        if (section_type == ELFIO::SHT_NULL || section_type == ELFIO::SHT_NOBITS) {
+            continue;
+        }
+
+        const std::uintmax_t section_size =
+            elf_class == ELFIO::ELFCLASS32
+                ? read_uint<ELFIO::Elf_Word>(section_header.data() + table.section_size_offset, little_endian)
+                : read_uint<ELFIO::Elf_Xword>(section_header.data() + table.section_size_offset, little_endian);
+        if (section_size > remaining) {
+            throw UnmarshalError("ELF sections in " + path + " exceed the file size");
+        }
+        remaining -= section_size;
     }
 }
 

@@ -251,6 +251,19 @@ void patch_section_table_count(const std::filesystem::path& path, const uint16_t
     write_file_bytes(path, bytes);
 }
 
+void patch_program_header_count(const std::filesystem::path& path, const uint16_t count) {
+    auto bytes = read_file_bytes(path);
+    const unsigned char elf_class = get_elf_class(bytes);
+    if (elf_class == ELFIO::ELFCLASS32) {
+        write_elf_u16(bytes, offsetof(ELFIO::Elf32_Ehdr, e_phnum), count);
+    } else if (elf_class == ELFIO::ELFCLASS64) {
+        write_elf_u16(bytes, offsetof(ELFIO::Elf64_Ehdr, e_phnum), count);
+    } else {
+        throw std::runtime_error("Unexpected ELF class");
+    }
+    write_file_bytes(path, bytes);
+}
+
 size_t get_section_table_offset_from_header(const std::vector<uint8_t>& bytes) {
     const unsigned char elf_class = get_elf_class(bytes);
     if (elf_class == ELFIO::ELFCLASS32) {
@@ -651,6 +664,27 @@ TEST_CASE("ELF loader validates extended section header counts", "[elf][hardenin
 
     REQUIRE_THROWS_WITH((ElfObject{elf.path().string(), {}, &g_ebpf_platform_linux}.get_programs(".text")),
                         Catch::Matchers::ContainsSubstring("section header table"));
+}
+
+// ELFIO copies every section's and segment's file range while loading, so headers that each stay within the
+// file but overlap one another must be refused before the load rather than after it.
+TEST_CASE("ELF loader rejects sections that together exceed the file size", "[elf][hardening]") {
+
+    TempElfFile elf{"ebpf-samples/build/twomaps.o", "overlapping-sections"};
+    patch_section_offset(elf.path(), ".rel.BTF", 0);
+    patch_section_size(elf.path(), ".rel.BTF", std::filesystem::file_size(elf.path()));
+
+    REQUIRE_THROWS_WITH((ElfObject{elf.path().string(), {}, &g_ebpf_platform_linux}.get_programs(".text")),
+                        Catch::Matchers::ContainsSubstring("exceed the file size"));
+}
+
+TEST_CASE("ELF loader rejects program headers", "[elf][hardening]") {
+
+    TempElfFile elf{"ebpf-samples/build/twomaps.o", "program-headers"};
+    patch_program_header_count(elf.path(), 1);
+
+    REQUIRE_THROWS_WITH((ElfObject{elf.path().string(), {}, &g_ebpf_platform_linux}.get_programs(".text")),
+                        Catch::Matchers::ContainsSubstring("has program headers"));
 }
 
 TEST_CASE("ELF loader rejects relocation sections with out-of-bounds file offsets", "[elf][hardening]") {
