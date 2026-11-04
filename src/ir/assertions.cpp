@@ -258,16 +258,24 @@ class AssertExtractor {
     }
 
     vector<Assertion> operator()(const Atomic& ins) const {
+        const Imm width{static_cast<uint32_t>(ins.access.width)};
 
         // An atomic is a read-modify-write: model it as a write so that, like a plain
         // store, it is rejected against read-only context pointer fields (a non-write
-        // access_type would let an atomic corrupt e.g. ctx->data unchecked).
-        return {
+        // access_type would let an atomic corrupt e.g. ctx->data unchecked), and also
+        // as a read so that the old value it operates on is a number: a spilled pointer
+        // would otherwise undergo arithmetic that Bin forbids on the same register.
+        vector<Assertion> res{
             Assertion{TypeConstraint{ins.valreg, TypeGroup::number}},
             Assertion{TypeConstraint{ins.access.basereg, TypeGroup::dereferenceable}},
-            Assertion{make_valid_access(ins.access.basereg, ins.access.offset,
-                                        Imm{static_cast<uint32_t>(ins.access.width)}, false, AccessType::write)},
+            Assertion{make_valid_access(ins.access.basereg, ins.access.offset, width, false, AccessType::write)},
+            Assertion{make_valid_access(ins.access.basereg, ins.access.offset, width, false, AccessType::read)},
         };
+        if (ins.op == Atomic::Op::CMPXCHG) {
+            // R0 is an implicit operand: compared with the old value, then replaced by it.
+            res.emplace_back(TypeConstraint{Reg{R0_RETURN_VALUE}, TypeGroup::number});
+        }
+        return res;
     }
 
     vector<Assertion> operator()(const Un& ins) const {
