@@ -588,12 +588,22 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
 void EbpfChecker::operator()(const ZeroCtxOffset& s) const {
     using namespace dsl_syntax;
     const auto reg = reg_pack(s.reg);
-    // The domain is not expressive enough to handle join of null and non-null ctx,
-    // Since non-null ctx pointers are nonzero numbers.
-    if (s.or_null && dom.state.is_in_group(s.reg, TS_NUM) && dom.state.values.entail(reg.uvalue == 0)) {
-        return;
+    // A kind variable is only meaningful on the paths where the register has that type:
+    // after a join of ctx and number, ctx_offset says nothing about the number paths and
+    // svalue nothing about the ctx paths. So, as in ValidAccess, every possible type is
+    // checked against its own variable rather than relying on ctx_offset alone.
+    for (const auto type : dom.state.enumerate_types(s.reg)) {
+        switch (type) {
+        case T_CTX: require_value(dom.state, reg.ctx_offset == 0, "Nonzero context offset"); break;
+        case T_NUM:
+            if (!s.or_null) {
+                throw_fail("Invalid type");
+            }
+            require_value(dom.state, reg.svalue == 0, "Non-null number");
+            break;
+        default: throw_fail("Invalid type");
+        }
     }
-    require_value(dom.state, reg.ctx_offset == 0, "Nonzero context offset");
 }
 
 } // namespace prevail

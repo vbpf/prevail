@@ -637,3 +637,81 @@ post:
   - r0.type=number
   - r0.svalue=0
   - r0.uvalue=0
+---
+test-case: bpf_get_netns_cookie accepts null
+
+pre: ["r1.type=number", "r1.svalue=0", "r1.uvalue=0"]
+
+code:
+  <start>: |
+    call 122; bpf_get_netns_cookie
+
+post:
+  - r0.type=number
+---
+test-case: bpf_get_netns_cookie rejects a non-null number
+
+pre: ["r1.type=number", "r1.svalue=1", "r1.uvalue=1"]
+
+code:
+  <start>: |
+    call 122; bpf_get_netns_cookie
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Non-null number ((r1.type == number and r1.value == 0) or r1.ctx_offset == 0)"
+---
+test-case: bpf_get_netns_cookie accepts a join of ctx and null
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r6.type=number"]
+
+code:
+  <start>: |
+    if r6 == 0 goto <call>
+    r1 = 0
+  <call>: |
+    call 122; bpf_get_netns_cookie
+
+post:
+  - r0.type=number
+  - r6.type=number
+  - r6.uvalue=[0, +oo]
+---
+test-case: bpf_get_netns_cookie rejects a join of ctx and a non-null number
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r6.type=number"]
+
+code:
+  <start>: |
+    if r6 == 0 goto <call>
+    r1 = 1
+  <call>: |
+    call 122; bpf_get_netns_cookie
+
+post:
+  - "_|_"
+
+messages:
+  - "2: Non-null number ((r1.type == number and r1.value == 0) or r1.ctx_offset == 0)"
+---
+test-case: bpf_get_netns_cookie rejects a join of an offset ctx and null
+
+pre: ["r1.type=ctx", "r1.ctx_offset=8",
+      "r6.type=number"]
+
+code:
+  <start>: |
+    if r6 == 0 goto <call>
+    r1 = 0
+  <call>: |
+    call 122; bpf_get_netns_cookie
+
+post:
+  - "_|_"
+
+messages:
+  - "2: Nonzero context offset ((r1.type == number and r1.value == 0) or r1.ctx_offset == 0)"
