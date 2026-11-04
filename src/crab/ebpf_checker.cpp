@@ -302,10 +302,32 @@ void EbpfChecker::operator()(const ValidCallbackTarget& s) const {
     }
 }
 
+// Join of max_entries over the array maps the fd register may name, or nullopt if none of them is an array.
+// The key must be proved in range for every array map the register may hold, so a single array in a
+// mixed-type range is enough to require the check, and an unknown range counts as an unbounded array.
+static std::optional<Interval> array_map_max_entries(const EbpfDomain& dom, const Reg& map_fd_reg,
+                                                     const AnalysisContext& context) {
+    int32_t start_fd, end_fd;
+    if (!dom.get_map_fd_range(map_fd_reg, &start_fd, &end_fd)) {
+        return Interval::top();
+    }
+
+    std::optional<Interval> result;
+    for (int32_t map_fd = start_fd; map_fd <= end_fd; map_fd++) {
+        const auto& map = context.map_descriptor(map_fd);
+        if (context.platform().get_map_type(map.type).is_array) {
+            result = result.has_value() ? *result | Interval{map.max_entries} : Interval{map.max_entries};
+        }
+    }
+    return result;
+}
+
 void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
     using namespace dsl_syntax;
 
-    const auto fd_type = dom.get_map_type(s.map_fd_reg, context);
+    // In strict mode, an array-map key must be a known in-range index.
+    const std::optional<Interval> array_max_entries =
+        context.runtime().strict ? array_map_max_entries(dom, s.map_fd_reg, context) : std::nullopt;
 
     const auto access_reg = reg_pack(s.access_reg);
     Number width;
@@ -341,29 +363,23 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
                 std::string ub_s = ub_is && ub_is->fits<int32_t>() ? std::to_string(ub_is->narrow<int32_t>()) : "oo";
                 require_value(dom.state, LinearConstraint::false_const(),
                               "Illegal map update with a non-numerical value [" + lb_s + "-" + ub_s + ")");
-            } else if (context.runtime().strict) {
-                if (!fd_type.has_value()) {
-                    throw_fail("Map type is not singleton");
-                }
-                EbpfMapType map_type = context.platform().get_map_type(*fd_type);
-                if (map_type.is_array) {
-                    // Get offset value.
-                    Variable key_ptr = access_reg.stack_offset;
-                    std::optional<Number> offset_num = dom.state.values.eval_interval(key_ptr).singleton();
-                    if (!offset_num.has_value()) {
-                        throw_fail("Pointer must be a singleton");
-                    } else if (s.key) {
-                        // Look up the value pointed to by the key pointer.
-                        Variable key_value =
-                            variable_registry.cell_var(DataKind::svalues, offset_num.value(), sizeof(uint32_t));
+            } else if (array_max_entries.has_value()) {
+                // Get offset value.
+                Variable key_ptr = access_reg.stack_offset;
+                std::optional<Number> offset_num = dom.state.values.eval_interval(key_ptr).singleton();
+                if (!offset_num.has_value()) {
+                    throw_fail("Pointer must be a singleton");
+                } else if (s.key) {
+                    // Look up the value pointed to by the key pointer.
+                    Variable key_value =
+                        variable_registry.cell_var(DataKind::svalues, offset_num.value(), sizeof(uint32_t));
 
-                        if (auto max_entries = dom.get_map_max_entries(s.map_fd_reg, context).lb().number()) {
-                            require_value(dom.state, key_value < *max_entries, "Array index overflow");
-                        } else {
-                            throw_fail("Max entries is not finite");
-                        }
-                        require_value(dom.state, key_value >= 0, "Array index underflow");
+                    if (auto max_entries = array_max_entries->lb().number()) {
+                        require_value(dom.state, key_value < *max_entries, "Array index overflow");
+                    } else {
+                        throw_fail("Max entries is not finite");
                     }
+                    require_value(dom.state, key_value >= 0, "Array index underflow");
                 }
             }
             break;
@@ -374,6 +390,10 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
             require_lower_bound(lb, variable_registry.meta_offset(), "Lower bound must be at least meta_offset");
             require_upper_bound(ub, variable_registry.packet_size(), "Upper bound must be at most packet_size");
             // Packet memory is both readable and writable.
+            if (array_max_entries.has_value() && s.key) {
+                // Packet contents are not tracked, so the index cannot be bounded.
+                throw_fail("Array index must be on the stack");
+            }
             break;
         }
         case T_SHARED: {
@@ -384,6 +404,10 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
                                 "Upper bound must be at most " + variable_registry.name(access_reg.shared_region_size));
             require_value(dom.state, access_reg.uvalue > 0, "Possible null access");
             // Shared memory is zero-initialized when created so is safe to read and write.
+            if (array_max_entries.has_value() && s.key) {
+                // Shared memory contents are not tracked, so the index cannot be bounded.
+                throw_fail("Array index must be on the stack");
+            }
             break;
         }
         default: throw_fail("Only stack, packet, or shared can be used as a parameter");
