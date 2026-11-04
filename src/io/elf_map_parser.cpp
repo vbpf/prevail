@@ -25,6 +25,11 @@ namespace {
 
 constexpr int DEFAULT_MAP_FD = -1;
 
+/// Map type recorded for the implicit single-entry map that backs a global variable section
+/// (.data/.rodata/.bss). Loaders create these as array maps (BPF_MAP_TYPE_ARRAY), and the descriptor must say so:
+/// type 0 means "unknown", which exempts the map from the helpers' map-type restrictions.
+constexpr uint32_t GLOBAL_VARIABLE_MAP_TYPE = 2;
+
 void dump_btf_types(const libbtf::btf_type_data& btf_data, const std::string& path) {
     std::stringstream output;
     std::cout << "Dumping BTF data for " << path << std::endl;
@@ -51,7 +56,7 @@ void add_global_variable_maps(const ELFIO::elfio& reader, ElfGlobalData& global,
 
         global.map_descriptors.push_back(EbpfMapDescriptor{
             .original_fd = gsl::narrow<int>(global.map_descriptors.size() + 1),
-            .type = 0,
+            .type = GLOBAL_VARIABLE_MAP_TYPE,
             .key_size = sizeof(uint32_t),
             .value_size = gsl::narrow<uint32_t>(section->get_size()),
             .max_entries = 1,
@@ -86,9 +91,11 @@ ElfGlobalData parse_btf_section(const parse_params_t& parse_params, const ELFIO:
     try {
         for (const auto& map : parse_btf_map_section(*btf_data)) {
             map_offsets.emplace(map.name, global.map_descriptors.size());
+            // libbtf also reports each global variable section as an array-shaped map with map_type left at 0.
+            const bool is_data_section = btf_data->get_kind_index(map.type_id) == libbtf::BTF_KIND_DATA_SECTION;
             global.map_descriptors.push_back(EbpfMapDescriptor{
                 .original_fd = gsl::narrow<int>(map.type_id), // Temporary: stores BTF type ID
-                .type = map.map_type,
+                .type = is_data_section ? GLOBAL_VARIABLE_MAP_TYPE : map.map_type,
                 .key_size = map.key_size,
                 .value_size = map.value_size,
                 .max_entries = map.max_entries,
@@ -139,7 +146,7 @@ ElfGlobalData create_global_variable_maps(const ELFIO::elfio& reader) {
 
         global.map_descriptors.push_back(EbpfMapDescriptor{
             .original_fd = gsl::narrow<int>(global.map_descriptors.size() + 1),
-            .type = 0,
+            .type = GLOBAL_VARIABLE_MAP_TYPE,
             .key_size = sizeof(uint32_t),
             .value_size = gsl::narrow<uint32_t>(section->get_size()),
             .max_entries = 1,
@@ -280,7 +287,7 @@ ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO
         map_offsets[section->get_name()] = global.map_descriptors.size();
         global.map_descriptors.push_back(EbpfMapDescriptor{
             .original_fd = gsl::narrow<int>(global.map_descriptors.size() + 1),
-            .type = 0,
+            .type = GLOBAL_VARIABLE_MAP_TYPE,
             .key_size = sizeof(uint32_t),
             .value_size = gsl::narrow<uint32_t>(section->get_size()),
             .max_entries = 1,
