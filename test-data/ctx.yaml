@@ -309,3 +309,28 @@ post:
   - r3.svalue=[1, 2147418112]
   - r3.type=shared
   - r3.uvalue=r3.svalue
+
+---
+# max_packet_size (65535 by default) is an inclusive bound: the checker accepts
+# comparison operands up to packet_offset == max_packet_size, so the data_end
+# load must not assume a packet of exactly that size away. Otherwise the
+# fall-through edge below is bottom and the code it guards is never verified.
+test-case: code guarded by a packet of exactly max_packet_size bytes is verified
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "meta_offset=0", "packet_size=[0, 65535]"]
+
+code:
+  <start>: |
+    r2 = *(u32 *)(r1 + 0)
+    r3 = *(u32 *)(r1 + 4)
+    r2 += 65535
+    if r2 > r3 goto <out>
+    r0 = *(u8 *)(r2 + 0)
+  <out>: |
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "4: Upper bound must be at most packet_size (valid_access(r2.offset, width=1) for read)"

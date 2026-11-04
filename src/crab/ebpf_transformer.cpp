@@ -586,7 +586,7 @@ static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, 
             // EXPERIMENTAL: Explicit upper bound since packet_size is min_only.
             // This preserves the relational constraint (packet_offset <= packet_size)
             // while ensuring comparison checks have a concrete upper bound.
-            state.values.add_constraint(target.packet_offset < context.runtime().max_packet_size);
+            state.values.add_constraint(target.packet_offset <= context.runtime().max_packet_size);
         }
     } else if (addr == desc->meta) {
         if (width == offset_width) {
