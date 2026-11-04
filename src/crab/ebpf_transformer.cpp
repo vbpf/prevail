@@ -199,6 +199,22 @@ void EbpfTransformer::havoc_subprogram_stack(const std::string& prefix) {
     for (const DataKind kind : iterate_kinds()) {
         stack.havoc(dom.state.values, kind, Interval{stack_start}, Interval{frame_size}, context.runtime().big_endian);
     }
+
+    // A pointer into the frame can outlive it (in r0, in a saved r6-r9, or spilled in a caller's frame) and be in
+    // bounds again in the next callee, which reuses these offsets. Its stack_numeric_size no longer describes the
+    // stack, so forget it as after a non-numeric store (see do_store_stack).
+    for (const Variable type_variable : dom.state.types.variables_with_type(T_STACK)) {
+        const Variable stack_offset_variable = variable_registry.kind_var(DataKind::stack_offsets, type_variable);
+        const Variable stack_numeric_size_variable =
+            variable_registry.kind_var(DataKind::stack_numeric_sizes, type_variable);
+
+        using namespace dsl_syntax;
+        if (dom.state.values.intersect(stack_start < stack_offset_variable + stack_numeric_size_variable) &&
+            dom.state.values.intersect(stack_offset_variable < stack_start + frame_size)) {
+            dom.state.values.havoc(stack_numeric_size_variable);
+            recompute_stack_numeric_size(dom.state, type_variable);
+        }
+    }
 }
 
 void EbpfTransformer::forget_packet_pointers() {

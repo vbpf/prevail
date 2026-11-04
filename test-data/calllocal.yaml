@@ -630,3 +630,98 @@ post: []
 
 messages:
   - "0/1: illegal recursion"
+---
+test-case: pointer into a returned frame does not make the next callee's frame numeric
+
+# stack_numeric_size caches how many bytes starting at a stack pointer are numeric. <first> returns a pointer
+# into its own frame with stack_numeric_size=8. That frame is forgotten at <first>'s exit, and <second> runs at
+# the same offsets, so the pointer is in bounds there. The cached size must be forgotten with the frame;
+# otherwise <second> reads 8 bytes it never wrote as a number.
+
+pre: ["r10.type=stack", "r10.stack_offset=1536"]
+
+code:
+  <start>: |
+    call <first>
+    r1 = r0
+    call <second>
+    exit
+  <first>: |
+    *(u64 *)(r10 - 8) = 0
+    r0 = r10
+    r0 += -8
+    exit
+  <second>: |
+    r0 = *(u64 *)(r1 + 0)
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "2/8: Stack content is not numeric (valid_access(r1.offset, width=8) for read)"
+---
+test-case: saved pointer into a returned frame does not make the next callee's frame numeric
+
+# As above, but the pointer waits in r6 while <writer> makes the bytes it points to numeric, which updates the
+# stack_numeric_size of the saved r6. It must be forgotten again at <writer>'s exit.
+
+pre: ["r10.type=stack", "r10.stack_offset=1536"]
+
+code:
+  <start>: |
+    call <first>
+    r6 = r0
+    call <writer>
+    r1 = r6
+    call <second>
+    exit
+  <first>: |
+    r0 = r10
+    r0 += -8
+    exit
+  <writer>: |
+    *(u64 *)(r10 - 8) = 0
+    exit
+  <second>: |
+    r0 = *(u64 *)(r1 + 0)
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "4/11: Stack content is not numeric (valid_access(r1.offset, width=8) for read)"
+---
+test-case: pointer into a live frame keeps its numeric size across a call
+
+# After the join no byte is numeric on both paths, so the size of r6 cannot be recomputed from the stack.
+# It describes the caller's frame only and must survive the callee's exit.
+
+pre: ["r10.type=stack", "r10.stack_offset=1536", "r1.type=number"]
+
+code:
+  <start>: |
+    r6 = r10
+    if r1 == 0 goto <low>
+    *(u64 *)(r10 - 8) = 0
+    r6 += -8
+    goto <join>
+  <low>: |
+    *(u64 *)(r10 - 16) = 0
+    r6 += -16
+  <join>: |
+    call <sub>
+    r0 = *(u64 *)(r6 + 0)
+    exit
+  <sub>: |
+    *(u64 *)(r10 - 8) = 0
+    exit
+
+post:
+  - r0.type=number
+  - r6.type=stack
+  - r6.stack_offset=[1520, 1528]
+  - r6.stack_numeric_size=8
+  - r10.type=stack
+  - r10.stack_offset=1536
