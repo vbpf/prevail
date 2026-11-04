@@ -52,14 +52,18 @@ struct FunctionRelocation {
     std::string target_function_name;
 };
 
-using MapOffsets = std::map<std::string, size_t>;
+/// Symbol table index of a map symbol -> index of its descriptor in ElfGlobalData::map_descriptors.
+/// Keyed by the identity of the symbol a relocation refers to, not by its name: ELF symbol names need not be unique.
+using MapOffsets = std::map<ELFIO::Elf_Xword, size_t>;
 
 /// @brief EBPF-Global data extracted from an ELF file during parsing.
 struct ElfGlobalData {
     std::set<ELFIO::Elf_Half> map_section_indices;
     std::vector<EbpfMapDescriptor> map_descriptors;
     std::variant<size_t, MapOffsets> map_record_size_or_map_offsets;
-    std::set<ELFIO::Elf_Half> variable_section_indices;
+    /// Global variable section index -> index of its implicit descriptor in map_descriptors
+    /// (keyed by section index for the same reason: section names need not be unique either).
+    std::map<ELFIO::Elf_Half, size_t> variable_section_indices;
 };
 
 // ---------------------------------------------------------------------------
@@ -208,7 +212,7 @@ class ProgramReader {
     [[nodiscard]]
     int relocate_map(const std::string& name, ELFIO::Elf_Word index) const;
     [[nodiscard]]
-    int relocate_global_variable(const std::string& name) const;
+    int relocate_global_variable(ELFIO::Elf_Half section_index) const;
 
     bool try_reloc(const std::string& symbol_name, ELFIO::Elf_Half symbol_section_index, unsigned char symbol_type,
                    unsigned char symbol_bind, std::vector<EbpfInst>& instructions, size_t location,

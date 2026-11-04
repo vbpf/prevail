@@ -4,6 +4,7 @@
 #include <cassert>
 #include <iostream>
 #include <map>
+#include <optional>
 #include <ranges>
 #include <set>
 #include <sstream>
@@ -50,9 +51,9 @@ std::map<int, int> map_typeid_to_fd(const std::vector<EbpfMapDescriptor>& map_de
 }
 
 /// @brief Add implicit map descriptors for global variable sections.
-void add_global_variable_maps(const ELFIO::elfio& reader, ElfGlobalData& global, MapOffsets& map_offsets) {
+void add_global_variable_maps(const ELFIO::elfio& reader, ElfGlobalData& global) {
     for (const auto section : global_sections(reader)) {
-        map_offsets[section->get_name()] = global.map_descriptors.size();
+        global.variable_section_indices.emplace(section->get_index(), global.map_descriptors.size());
 
         global.map_descriptors.push_back(EbpfMapDescriptor{
             .original_fd = gsl::narrow<int>(global.map_descriptors.size() + 1),
@@ -63,12 +64,53 @@ void add_global_variable_maps(const ELFIO::elfio& reader, ElfGlobalData& global,
             .inner_map_fd = DEFAULT_MAP_FD,
             .name = section->get_name(),
         });
-
-        global.variable_section_indices.insert(section->get_index());
     }
 }
 
-ElfGlobalData parse_btf_section(const parse_params_t& parse_params, const ELFIO::elfio& reader) {
+/// @brief Bind the symbols of the BTF-defined map section to the map descriptors parsed from BTF.
+///
+/// BTF identifies a map by name, whereas a relocation identifies it by symbol, and a loader binds that symbol by
+/// its offset in the section. Neither BTF map names nor ELF symbol names need be unique, so a symbol is bound only
+/// when its name designates exactly one descriptor and exactly one offset, and no other map name shares that
+/// offset. An unbound symbol makes a relocation against it fail instead of verifying against one of the candidates.
+MapOffsets bind_btf_map_symbols(const std::vector<EbpfMapDescriptor>& map_descriptors,
+                                const ELFIO::Elf_Half maps_section_index,
+                                const ELFIO::const_symbol_section_accessor& symbols) {
+    // Descriptor index by map name; nullopt when several descriptors share the name.
+    std::map<std::string, std::optional<size_t>> descriptor_by_name;
+    for (size_t i = 0; i < map_descriptors.size(); ++i) {
+        if (const auto [it, inserted] = descriptor_by_name.emplace(map_descriptors[i].name, i); !inserted) {
+            it->second.reset();
+        }
+    }
+
+    std::map<ELFIO::Elf_Xword, symbol_details_t> map_symbols;
+    std::map<std::string, std::set<ELFIO::Elf64_Addr>> offsets_of_name;
+    std::map<ELFIO::Elf64_Addr, std::set<std::string>> names_at_offset;
+    for (ELFIO::Elf_Xword index = 0; index < symbols.get_symbols_num(); ++index) {
+        auto sym_details = get_symbol_details(symbols, index);
+        if (sym_details.section_index != maps_section_index || sym_details.name.empty() ||
+            !descriptor_by_name.contains(sym_details.name)) {
+            continue;
+        }
+        offsets_of_name[sym_details.name].insert(sym_details.value);
+        names_at_offset[sym_details.value].insert(sym_details.name);
+        map_symbols.emplace(index, std::move(sym_details));
+    }
+
+    MapOffsets map_offsets;
+    for (const auto& [index, sym_details] : map_symbols) {
+        const auto descriptor_index = descriptor_by_name.at(sym_details.name);
+        if (descriptor_index && offsets_of_name.at(sym_details.name).size() == 1 &&
+            names_at_offset.at(sym_details.value).size() == 1) {
+            map_offsets.emplace(index, *descriptor_index);
+        }
+    }
+    return map_offsets;
+}
+
+ElfGlobalData parse_btf_section(const parse_params_t& parse_params, const ELFIO::elfio& reader,
+                                const ELFIO::const_symbol_section_accessor& symbols) {
     const auto btf_section = reader.sections[".BTF"];
     if (!btf_section) {
         return {};
@@ -97,7 +139,6 @@ ElfGlobalData parse_btf_section(const parse_params_t& parse_params, const ELFIO:
             if (btf_data->get_kind_index(map.type_id) == libbtf::BTF_KIND_DATA_SECTION) {
                 continue;
             }
-            map_offsets.emplace(map.name, global.map_descriptors.size());
             global.map_descriptors.push_back(EbpfMapDescriptor{
                 .original_fd = gsl::narrow<int>(map.type_id), // Temporary: stores BTF type ID
                 .type = map.map_type,
@@ -134,9 +175,10 @@ ElfGlobalData parse_btf_section(const parse_params_t& parse_params, const ELFIO:
 
     if (const auto maps_section = reader.sections[".maps"]) {
         global.map_section_indices.insert(maps_section->get_index());
+        map_offsets = bind_btf_map_symbols(global.map_descriptors, maps_section->get_index(), symbols);
     }
 
-    add_global_variable_maps(reader, global, map_offsets);
+    add_global_variable_maps(reader, global);
 
     global.map_record_size_or_map_offsets = std::move(map_offsets);
     return global;
@@ -144,10 +186,9 @@ ElfGlobalData parse_btf_section(const parse_params_t& parse_params, const ELFIO:
 
 ElfGlobalData create_global_variable_maps(const ELFIO::elfio& reader) {
     ElfGlobalData global;
-    MapOffsets offsets;
 
     for (const auto section : global_sections(reader)) {
-        offsets[section->get_name()] = global.map_descriptors.size();
+        global.variable_section_indices.emplace(section->get_index(), global.map_descriptors.size());
 
         global.map_descriptors.push_back(EbpfMapDescriptor{
             .original_fd = gsl::narrow<int>(global.map_descriptors.size() + 1),
@@ -158,11 +199,9 @@ ElfGlobalData create_global_variable_maps(const ELFIO::elfio& reader) {
             .inner_map_fd = DEFAULT_MAP_FD,
             .name = section->get_name(),
         });
-
-        global.variable_section_indices.insert(section->get_index());
     }
 
-    global.map_record_size_or_map_offsets = std::move(offsets);
+    global.map_record_size_or_map_offsets = MapOffsets{};
     return global;
 }
 
@@ -284,12 +323,12 @@ ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO
             throw UnmarshalError("Legacy map symbol index out of range for: " + sym_details.name);
         }
 
-        map_offsets[sym_details.name] = descriptor_index;
+        map_offsets[index] = descriptor_index;
         global.map_descriptors[descriptor_index].name = sym_details.name;
     }
 
     for (const auto section : global_sections(reader)) {
-        map_offsets[section->get_name()] = global.map_descriptors.size();
+        global.variable_section_indices.emplace(section->get_index(), global.map_descriptors.size());
         global.map_descriptors.push_back(EbpfMapDescriptor{
             .original_fd = gsl::narrow<int>(global.map_descriptors.size() + 1),
             .type = GLOBAL_VARIABLE_MAP_TYPE,
@@ -299,7 +338,6 @@ ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO
             .inner_map_fd = DEFAULT_MAP_FD,
             .name = section->get_name(),
         });
-        global.variable_section_indices.insert(section->get_index());
     }
 
     global.map_record_size_or_map_offsets = std::move(map_offsets);
@@ -313,7 +351,7 @@ ElfGlobalData extract_global_data(const parse_params_t& params, const ELFIO::elf
     ElfGlobalData global = [&] {
         if (reader.sections[".BTF"] && reader.sections[".maps"]) {
             try {
-                return parse_btf_section(params, reader);
+                return parse_btf_section(params, reader, symbols);
             } catch (const UnmarshalError& e) {
                 // BTF-defined maps can't be decoded; fall back to section-based map descriptors.
                 std::cerr << "BTF map parsing failed, falling back to section-based maps: " << e.what() << std::endl;
@@ -324,7 +362,7 @@ ElfGlobalData extract_global_data(const parse_params_t& params, const ELFIO::elf
             return parse_map_sections(params, reader, symbols);
         }
         if (reader.sections[".BTF"]) {
-            return parse_btf_section(params, reader);
+            return parse_btf_section(params, reader, symbols);
         }
         return create_global_variable_maps(reader);
     }();

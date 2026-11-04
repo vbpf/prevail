@@ -20,6 +20,7 @@
 #include <boost/endian/conversion.hpp>
 #include <elfio/elfio.hpp>
 #include <gsl/narrow>
+#include <libbtf/btf_map.h>
 #include <libbtf/btf_type_data.h>
 
 #include "config.hpp"
@@ -1542,4 +1543,199 @@ TEST_CASE("ELF loader sizes global variable maps by ELF section, not by BTF DATA
         REQUIRE(descriptors[0].name == section_name);
         REQUIRE(descriptors[0].value_size == 8);
     }
+}
+
+namespace {
+
+// Builds a minimal BPF object whose program "prog" in section "xdp" is one `r1 = 0 ll` per requested symbol,
+// each carrying an R_BPF_64_64 relocation against that symbol, followed by `exit`.
+class LddwRelocationElf {
+  public:
+    LddwRelocationElf() {
+        writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+        writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+        writer.set_type(ELFIO::ET_REL);
+        writer.set_machine(ELFIO::EM_BPF);
+
+        text_sec = writer.sections.add("xdp");
+        text_sec->set_type(ELFIO::SHT_PROGBITS);
+        text_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+        text_sec->set_addr_align(8);
+
+        str_sec = writer.sections.add(".strtab");
+        str_sec->set_type(ELFIO::SHT_STRTAB);
+
+        sym_sec = writer.sections.add(".symtab");
+        sym_sec->set_type(ELFIO::SHT_SYMTAB);
+        sym_sec->set_addr_align(8);
+        sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+        sym_sec->set_link(str_sec->get_index());
+        sym_sec->set_info(1);
+    }
+
+    ELFIO::section* add_data_section(const std::string& name, const std::string& data) {
+        ELFIO::section* sec = writer.sections.add(name);
+        sec->set_type(ELFIO::SHT_PROGBITS);
+        sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_WRITE);
+        sec->set_addr_align(4);
+        sec->set_data(data);
+        return sec;
+    }
+
+    ELFIO::Elf_Word add_symbol(const std::string& name, const ELFIO::Elf64_Addr value, const ELFIO::Elf_Xword size,
+                               const unsigned char bind, const unsigned char type, const ELFIO::section* sec) {
+        ELFIO::string_section_accessor str_writer(str_sec);
+        ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+        return sym_writer.add_symbol(str_writer, name.c_str(), value, size, bind, type, 0, sec->get_index());
+    }
+
+    ELFIO::Elf_Word add_object(const std::string& name, const ELFIO::Elf64_Addr value, const ELFIO::Elf_Xword size,
+                               const ELFIO::section* sec, const unsigned char bind = ELFIO::STB_LOCAL) {
+        return add_symbol(name, value, size, bind, ELFIO::STT_OBJECT, sec);
+    }
+
+    RawProgram load(const std::vector<ELFIO::Elf_Word>& relocation_symbols) {
+        ELFIO::section* rel_sec = writer.sections.add(".relxdp");
+        rel_sec->set_type(ELFIO::SHT_REL);
+        rel_sec->set_addr_align(8);
+        rel_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_REL));
+        rel_sec->set_link(sym_sec->get_index());
+        rel_sec->set_info(text_sec->get_index());
+        ELFIO::relocation_section_accessor rel_writer(writer, rel_sec);
+
+        std::vector<EbpfInst> text;
+        for (const auto symbol : relocation_symbols) {
+            rel_writer.add_entry(text.size() * sizeof(EbpfInst), symbol, R_BPF_64_64_TYPE);
+            text.push_back(EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 1});
+            text.push_back(EbpfInst{});
+        }
+        text.push_back(EbpfInst{.opcode = INST_OP_EXIT});
+        const size_t text_size = text.size() * sizeof(EbpfInst);
+        text_sec->set_data(reinterpret_cast<const char*>(text.data()), text_size);
+        add_symbol("prog", 0, text_size, ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, text_sec);
+
+        std::ostringstream out_stream;
+        writer.save(out_stream);
+        std::istringstream in_stream(out_stream.str());
+        auto programs = read_elf(in_stream, "memory", "xdp", "", VerifierOptions{}, &g_ebpf_platform_linux);
+        REQUIRE(programs.size() == 1);
+        REQUIRE(programs[0].prog.size() == 2 * relocation_symbols.size() + 1);
+        return programs[0];
+    }
+
+  private:
+    ELFIO::elfio writer;
+    ELFIO::section* text_sec{};
+    ELFIO::section* str_sec{};
+    ELFIO::section* sym_sec{};
+};
+
+// The value size of the map that the n-th lddw of a LddwRelocationElf program was relocated to.
+uint32_t relocated_value_size(const RawProgram& program, const size_t n, const uint8_t expected_src) {
+    const EbpfInst& inst = program.prog.at(2 * n);
+    REQUIRE(inst.src == expected_src);
+    for (const auto& descriptor : program.info.map_descriptors) {
+        if (descriptor.original_fd == inst.imm) {
+            return descriptor.value_size;
+        }
+    }
+    FAIL("lddw does not refer to a map descriptor");
+    return 0;
+}
+
+// Two legacy (28-byte BpfLoadMapDef) array map records with 4-byte and 4096-byte values.
+std::string small_and_large_legacy_maps() {
+    constexpr uint32_t records[2][7] = {{2, 4, 4, 1}, {2, 4, 4096, 1}};
+    return {reinterpret_cast<const char*>(records), sizeof(records)};
+}
+
+// BTF with a .maps DATASEC defining array maps with 4-byte and 4096-byte values under the given names.
+std::string small_and_large_btf_maps(const std::string& small_name, const std::string& large_name) {
+    libbtf::btf_type_data btf_data;
+    libbtf::build_btf_map_section(
+        {
+            {.name = small_name, .type_id = 1, .map_type = 2, .key_size = 4, .value_size = 4, .max_entries = 1},
+            {.name = large_name, .type_id = 2, .map_type = 2, .key_size = 4, .value_size = 4096, .max_entries = 1},
+        },
+        btf_data);
+    const auto bytes = btf_data.to_bytes();
+    return {reinterpret_cast<const char*>(bytes.data()), bytes.size()};
+}
+
+} // namespace
+
+// Regression tests: a map or global variable relocation must be resolved from the identity of the symbol it refers
+// to, not from the symbol or section name. ELF names need not be unique, and resolving by name lets a same-named
+// decoy with a larger value size stand in for the map that a loader binds by section and offset.
+TEST_CASE("ELF loader resolves same-named legacy map symbols by identity", "[elf][hardening]") {
+    LddwRelocationElf elf;
+    const auto* maps_sec = elf.add_data_section("maps", small_and_large_legacy_maps());
+    const auto small_sym = elf.add_object("map", 0, 28, maps_sec);
+    const auto large_sym = elf.add_object("map", 28, 28, maps_sec);
+
+    const auto program = elf.load({small_sym, large_sym});
+    REQUIRE(relocated_value_size(program, 0, INST_LD_MODE_MAP_FD) == 4);
+    REQUIRE(relocated_value_size(program, 1, INST_LD_MODE_MAP_FD) == 4096);
+}
+
+TEST_CASE("ELF loader resolves same-named global variable sections by identity", "[elf][hardening]") {
+    LddwRelocationElf elf;
+    const auto* small_sec = elf.add_data_section(".data", std::string(4, '\0'));
+    const auto* large_sec = elf.add_data_section(".data", std::string(4096, '\0'));
+    const auto small_sym = elf.add_object("small_var", 0, 4, small_sec);
+    const auto large_sym = elf.add_object("large_var", 0, 4, large_sec);
+
+    const auto program = elf.load({small_sym, large_sym});
+    REQUIRE(relocated_value_size(program, 0, INST_LD_MODE_MAP_VALUE) == 4);
+    REQUIRE(relocated_value_size(program, 1, INST_LD_MODE_MAP_VALUE) == 4096);
+}
+
+TEST_CASE("ELF loader does not confuse a legacy map symbol with a same-named section", "[elf][hardening]") {
+    LddwRelocationElf elf;
+    const auto* maps_sec = elf.add_data_section("maps", small_and_large_legacy_maps());
+    const auto* data_sec = elf.add_data_section(".data", std::string(64, '\0'));
+    const auto map_sym = elf.add_object(".data", 28, 28, maps_sec);
+    const auto var_sym = elf.add_object("var", 0, 4, data_sec);
+
+    const auto program = elf.load({map_sym, var_sym});
+    REQUIRE(relocated_value_size(program, 0, INST_LD_MODE_MAP_FD) == 4096);
+    REQUIRE(relocated_value_size(program, 1, INST_LD_MODE_MAP_VALUE) == 64);
+}
+
+TEST_CASE("ELF loader resolves unambiguous BTF map symbols", "[elf][hardening]") {
+    LddwRelocationElf elf;
+    elf.add_data_section(".BTF", small_and_large_btf_maps("small", "large"));
+    const auto* maps_sec = elf.add_data_section(".maps", std::string(64, '\0'));
+    const auto small_sym = elf.add_object("small", 0, 32, maps_sec, ELFIO::STB_GLOBAL);
+    const auto large_sym = elf.add_object("large", 32, 32, maps_sec, ELFIO::STB_GLOBAL);
+
+    const auto program = elf.load({small_sym, large_sym});
+    REQUIRE(relocated_value_size(program, 0, INST_LD_MODE_MAP_FD) == 4);
+    REQUIRE(relocated_value_size(program, 1, INST_LD_MODE_MAP_FD) == 4096);
+}
+
+TEST_CASE("ELF loader rejects relocations against ambiguous BTF map symbols", "[elf][hardening]") {
+    LddwRelocationElf elf;
+    ELFIO::Elf_Word relocation_symbol{};
+
+    SECTION("symbol name used at two offsets") {
+        elf.add_data_section(".BTF", small_and_large_btf_maps("small", "large"));
+        const auto* maps_sec = elf.add_data_section(".maps", std::string(64, '\0'));
+        relocation_symbol = elf.add_object("large", 0, 32, maps_sec);
+        elf.add_object("large", 32, 32, maps_sec, ELFIO::STB_GLOBAL);
+    }
+    SECTION("two map names at one offset") {
+        elf.add_data_section(".BTF", small_and_large_btf_maps("small", "large"));
+        const auto* maps_sec = elf.add_data_section(".maps", std::string(64, '\0'));
+        elf.add_object("small", 0, 32, maps_sec, ELFIO::STB_GLOBAL);
+        relocation_symbol = elf.add_object("large", 0, 32, maps_sec, ELFIO::STB_GLOBAL);
+    }
+    SECTION("BTF map name defined twice") {
+        elf.add_data_section(".BTF", small_and_large_btf_maps("large", "large"));
+        const auto* maps_sec = elf.add_data_section(".maps", std::string(64, '\0'));
+        relocation_symbol = elf.add_object("large", 0, 32, maps_sec, ELFIO::STB_GLOBAL);
+    }
+
+    REQUIRE_THROWS_WITH(elf.load({relocation_symbol}),
+                        Catch::Matchers::ContainsSubstring("Map descriptor not found: large"));
 }
