@@ -336,13 +336,20 @@ static ResolvedKfuncCalls pass_resolve_kfunc_calls(const InstructionSeq& insts, 
 }
 
 /// Update a control-flow graph to inline function macros.
-static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const Label& entry_label,
-                          const int max_call_stack_frames) {
+///
+/// The macro's blocks are found in original_cfg, the graph as connected before any call was
+/// inlined, never in the graph under construction: once a call site inside the macro has itself
+/// been inlined, its live successor is that other expansion, and following it would clone another
+/// frame's blocks, Exit included, into this frame. active_call_sites holds the call sites of the
+/// frames being expanded; a macro that reaches one of them calls back into an active frame.
+static void add_cfg_nodes(CfgBuilder& builder, const Cfg& original_cfg, const Label& caller_label,
+                          const Label& entry_label, std::set<int> active_call_sites, const int max_call_stack_frames) {
     const string caller_label_str = to_string(caller_label);
     const long stack_frame_depth = std::ranges::count(caller_label_str, STACK_FRAME_DELIMITER) + 2;
     if (stack_frame_depth > max_call_stack_frames) {
         throw InvalidControlFlow{"too many call stack frames"};
     }
+    active_call_sites.insert(caller_label.from);
 
     bool first = true;
 
@@ -365,7 +372,8 @@ static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const 
         Label macro_label = *macro_labels.begin();
         macro_labels.erase(macro_label);
 
-        if (stack_frame_prefix == macro_label.stack_frame_prefix) {
+        // Only call sites are active, and a jump label's source is never one.
+        if (active_call_sites.contains(macro_label.from)) {
             throw InvalidControlFlow{stack_frame_prefix + ": illegal recursion"};
         }
 
@@ -384,8 +392,8 @@ static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const 
         }
 
         // Walk all successor nodes, enqueuing any not-yet-cloned macro block.
-        for (const auto& next_macro_label : builder.prog.cfg().children_of(macro_label)) {
-            if (next_macro_label != builder.prog.cfg().exit_label() && !seen_labels.contains(next_macro_label)) {
+        for (const auto& next_macro_label : original_cfg.children_of(macro_label)) {
+            if (next_macro_label != original_cfg.exit_label() && !seen_labels.contains(next_macro_label)) {
                 macro_labels.insert(next_macro_label);
                 seen_labels.insert(next_macro_label);
             }
@@ -400,8 +408,8 @@ static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const 
     // insertion, missing a pointer that walks out of bounds across iterations (#1203).
     for (const Label& macro_label : seen_labels) {
         const Label label{macro_label.from, macro_label.to, stack_frame_prefix};
-        for (const auto& next_macro_label : builder.prog.cfg().children_of(macro_label)) {
-            if (next_macro_label == builder.prog.cfg().exit_label()) {
+        for (const auto& next_macro_label : original_cfg.children_of(macro_label)) {
+            if (next_macro_label == original_cfg.exit_label()) {
                 // This is an exit transition, so add an edge to the block to execute
                 // upon returning from the macro.
                 builder.add_child(label, exit_to_label);
@@ -420,7 +428,7 @@ static void add_cfg_nodes(CfgBuilder& builder, const Label& caller_label, const 
     for (const auto& macro_label : seen_labels) {
         const Label label{macro_label.from, macro_label.to, caller_label_str};
         if (const auto pins = std::get_if<CallLocal>(&builder.prog.instruction_at(label))) {
-            add_cfg_nodes(builder, label, pins->target, max_call_stack_frames);
+            add_cfg_nodes(builder, original_cfg, label, pins->target, active_call_sites, max_call_stack_frames);
         }
     }
 }
@@ -587,16 +595,19 @@ static void pass_connect_edges(CfgBuilder& builder, const InstructionSeq& insts,
 // Writes   : for every CallLocal in the sequence, clones the callee region into the CFG
 //            under a unique stack-frame prefix. Recurses into nested calls.
 // Throws   : InvalidControlFlow on illegal recursion or exceeding the call-stack frame bound.
-// Invariant: pass_connect_edges has been applied -- inlining walks existing parents/children.
-//            Restricted to callees that are reachable after edge connection, which is why
-//            this runs as a separate second pass rather than during population.
+// Invariant: pass_connect_edges has been applied -- inlining walks the children it connected,
+//            as they were before this pass, so the result does not depend on the order in
+//            which call sites are expanded. Restricted to callees that are reachable after
+//            edge connection, which is why this runs as a separate second pass rather than
+//            during population.
 static void pass_inline_local_calls(CfgBuilder& builder, const InstructionSeq& insts, const int max_call_stack_frames) {
     // Ordering check: pass_connect_edges must have run. When insts is non-empty, its first
     // label has been wired as a child of Label::entry, so entry has at least one successor.
     assert(insts.empty() || !builder.prog.cfg().children_of(Label::entry).empty());
+    const Cfg original_cfg = builder.prog.cfg();
     for (const auto& [label, inst, _] : insts) {
         if (const auto pins = std::get_if<CallLocal>(&inst)) {
-            add_cfg_nodes(builder, label, pins->target, max_call_stack_frames);
+            add_cfg_nodes(builder, original_cfg, label, pins->target, {}, max_call_stack_frames);
         }
     }
 }
