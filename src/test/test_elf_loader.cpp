@@ -20,6 +20,7 @@
 #include <boost/endian/conversion.hpp>
 #include <elfio/elfio.hpp>
 #include <gsl/narrow>
+#include <libbtf/btf_type_data.h>
 
 #include "config.hpp"
 #include "io/elf_loader.hpp"
@@ -1414,8 +1415,79 @@ TEST_CASE("ELF loader describes global variable sections as array maps", "[elf][
         require_array_maps(read_elf(in_stream, "memory", ".text", "", options, &g_ebpf_platform_linux), 2);
     }
     SECTION("object with BTF") {
-        // .bss, .data and .rodata, each reported once by libbtf and once by the section scan.
+        // .bss, .data and .rodata, each described once, from the section scan.
         ElfObject elf{"ebpf-samples/build/global_variable.o", options, &g_ebpf_platform_linux};
-        require_array_maps(elf.get_programs(".text"), 6);
+        require_array_maps(elf.get_programs(".text"), 3);
+    }
+}
+
+// Regression test: a global variable section (.bss/.data/.rodata) is backed by one map sized from
+// the ELF section header. libbtf also reports such sections as maps, sized by what their BTF DATASEC
+// claims; publishing that copy would let the by-index forms of LDDW bound accesses to an 8-byte
+// section against a size of the file's choosing.
+TEST_CASE("ELF loader sizes global variable maps by ELF section, not by BTF DATASEC", "[elf][hardening]") {
+    for (const std::string section_name : {".bss", ".data", ".rodata"}) {
+        CAPTURE(section_name);
+
+        // BTF for `long v;` placed in the section, with the DATASEC claiming 1 MiB for it.
+        libbtf::btf_type_data btf;
+        const auto int_id =
+            btf.append(libbtf::btf_kind_int{.name = "long", .size_in_bytes = 8, .field_width_in_bits = 64});
+        const auto var_id =
+            btf.append(libbtf::btf_kind_var{.name = "v", .type = int_id, .linkage = libbtf::BTF_LINKAGE_GLOBAL});
+        btf.append(libbtf::btf_kind_data_section{
+            .name = section_name, .members = {{.type = var_id, .offset = 0, .size = 1 << 20}}, .size = 1 << 20});
+        const auto btf_bytes = btf.to_bytes();
+
+        ELFIO::elfio writer;
+        writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+        writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+        writer.set_type(ELFIO::ET_REL);
+        writer.set_machine(ELFIO::EM_BPF);
+
+        ELFIO::section* text_sec = writer.sections.add(".text");
+        text_sec->set_type(ELFIO::SHT_PROGBITS);
+        text_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+        text_sec->set_addr_align(8);
+        const uint8_t insts[16] = {0xb7, 0, 0, 0, 0, 0, 0, 0, 0x95, 0, 0, 0, 0, 0, 0, 0}; // r0 = 0; exit
+        text_sec->set_data(reinterpret_cast<const char*>(insts), sizeof(insts));
+
+        // The section itself is 8 bytes.
+        ELFIO::section* data_sec = writer.sections.add(section_name);
+        data_sec->set_type(ELFIO::SHT_PROGBITS);
+        data_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_WRITE);
+        data_sec->set_addr_align(8);
+        data_sec->set_data(std::string(8, '\0'));
+
+        ELFIO::section* btf_sec = writer.sections.add(".BTF");
+        btf_sec->set_type(ELFIO::SHT_PROGBITS);
+        btf_sec->set_data(reinterpret_cast<const char*>(btf_bytes.data()), btf_bytes.size());
+
+        ELFIO::section* str_sec = writer.sections.add(".strtab");
+        str_sec->set_type(ELFIO::SHT_STRTAB);
+        ELFIO::string_section_accessor str_writer(str_sec);
+
+        ELFIO::section* sym_sec = writer.sections.add(".symtab");
+        sym_sec->set_type(ELFIO::SHT_SYMTAB);
+        sym_sec->set_addr_align(8);
+        sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+        sym_sec->set_link(str_sec->get_index());
+        sym_sec->set_info(1);
+        ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+        sym_writer.add_symbol(str_writer, "prog", 0, sizeof(insts), ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0,
+                              text_sec->get_index());
+        sym_writer.add_symbol(str_writer, "v", 0, 8, ELFIO::STB_GLOBAL, ELFIO::STT_OBJECT, 0, data_sec->get_index());
+
+        std::ostringstream out_stream;
+        writer.save(out_stream);
+        std::istringstream in_stream(out_stream.str());
+
+        VerifierOptions options{};
+        const auto programs = read_elf(in_stream, "memory", ".text", "", options, &g_ebpf_platform_linux);
+        REQUIRE(programs.size() == 1);
+        const auto& descriptors = programs[0].info.map_descriptors;
+        REQUIRE(descriptors.size() == 1);
+        REQUIRE(descriptors[0].name == section_name);
+        REQUIRE(descriptors[0].value_size == 8);
     }
 }

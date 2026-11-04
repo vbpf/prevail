@@ -90,12 +90,17 @@ ElfGlobalData parse_btf_section(const parse_params_t& parse_params, const ELFIO:
     // Parse BTF-defined maps from the .maps DATASEC
     try {
         for (const auto& map : parse_btf_map_section(*btf_data)) {
+            // libbtf also synthesizes one definition per .bss/.data/.rodata DATASEC (marked by using the
+            // DATASEC itself as type_id), sized from BTF alone. Those sections are described from the ELF
+            // section headers by add_global_variable_maps() below; publishing this copy too would let a
+            // by-index map load bound global data by whatever size the BTF claims.
+            if (btf_data->get_kind_index(map.type_id) == libbtf::BTF_KIND_DATA_SECTION) {
+                continue;
+            }
             map_offsets.emplace(map.name, global.map_descriptors.size());
-            // libbtf also reports each global variable section as an array-shaped map with map_type left at 0.
-            const bool is_data_section = btf_data->get_kind_index(map.type_id) == libbtf::BTF_KIND_DATA_SECTION;
             global.map_descriptors.push_back(EbpfMapDescriptor{
                 .original_fd = gsl::narrow<int>(map.type_id), // Temporary: stores BTF type ID
-                .type = is_data_section ? GLOBAL_VARIABLE_MAP_TYPE : map.map_type,
+                .type = map.map_type,
                 .key_size = map.key_size,
                 .value_size = map.value_size,
                 .max_entries = map.max_entries,
