@@ -262,6 +262,11 @@ Node 3 in (2 (3 4) 5):
   nesting = [3, 2]  // head=3, contained in head=2
 ```
 
+Nesting depth is limited to `Wto::max_nesting_depth` (32); constructing a `Wto` for a CFG that
+nests deeper throws `RuntimeInputError`. The fixpoint iterator recurses once per nesting level and
+runs each component body at least twice, so deeper nests would exhaust the native stack, and could
+not be analyzed in reasonable time anyway.
+
 ### Iteration with WTO
 
 The fixpoint iterator uses WTO:

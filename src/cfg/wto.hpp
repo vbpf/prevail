@@ -162,6 +162,16 @@ class Wto final {
     friend class WtoBuilder;
 
   public:
+    // Deepest cycle nesting a Wto may have. Consumers that follow the nesting structurally use
+    // one native stack frame (or more) per level: the fixpoint iterator, operator<<, and the
+    // destructor of the shared_ptr chain itself. Bounding the depth where cycles are created
+    // keeps a crafted CFG from overflowing the C++ stack in any of them.
+    // The bound rejects nothing that could be analyzed in practice: the fixpoint iterator runs
+    // every cycle body at least twice (one ascending and one descending step), so a nest of
+    // depth d takes at least 2^d visits of the innermost head.
+    static constexpr int max_nesting_depth = 32;
+
+    // Throws RuntimeInputError if the cycles of cfg nest deeper than max_nesting_depth.
     explicit Wto(const Cfg& cfg);
 
     [[nodiscard]]
