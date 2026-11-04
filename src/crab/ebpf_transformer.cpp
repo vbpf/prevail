@@ -908,6 +908,25 @@ void EbpfTransformer::operator()(const Call& call) {
         case ArgSingle::Kind::PTR_TO_STACK:
             // Do nothing; the stack is passed as context, not to be modified.
             break;
+        case ArgSingle::Kind::PTR_TO_WRITABLE_MAP_VALUE: {
+            // Map-value-sized writable pointer: the helper may store a number at the pointed-to location.
+            // ValidMapKeyValue already requires these bytes to be numeric, and they remain so whether or
+            // not the helper writes them; only their previous contents must be forgotten.
+            const Interval w = maybe_fd_reg ? dom.get_map_value_size(*maybe_fd_reg, context) : Interval::top();
+            dom.state = dom.state.join_over_types(param.reg, [&](TypeToNumDomain& state, const TypeEncoding type) {
+                if (type == T_STACK) {
+                    const auto offset = primary_kind_variable_for_type(param.reg, type);
+                    if (!offset.has_value()) {
+                        return;
+                    }
+                    const Interval addr = state.values.eval_interval(*offset);
+                    for (const DataKind kind : iterate_kinds()) {
+                        stack.havoc(state.values, kind, addr, w, context.runtime().big_endian);
+                    }
+                }
+            });
+            break;
+        }
         case ArgSingle::Kind::PTR_TO_WRITABLE_LONG:
         case ArgSingle::Kind::PTR_TO_WRITABLE_INT: {
             // Fixed-width writable pointer: the helper may store a number at the pointed-to location.

@@ -274,6 +274,7 @@ std::ostream& operator<<(std::ostream& os, const ArgSingle::Kind kind) {
     case ArgSingle::Kind::MAP_FD_PROGRAMS: return os << "map_fd_programs";
     case ArgSingle::Kind::PTR_TO_MAP_KEY: return os << "map_key";
     case ArgSingle::Kind::PTR_TO_MAP_VALUE: return os << "map_value";
+    case ArgSingle::Kind::PTR_TO_WRITABLE_MAP_VALUE: return os << "out_map_value";
     case ArgSingle::Kind::PTR_TO_SOCKET: return os << "socket";
     case ArgSingle::Kind::PTR_TO_BTF_ID: return os << "btf_id";
     case ArgSingle::Kind::PTR_TO_ALLOC_MEM: return os << "alloc_mem";

@@ -30,6 +30,7 @@ Return types that are classified and propagated into register state:
 ### Implemented
 
 - [x] `PTR_TO_MAP_VALUE` / `PTR_TO_MAP_VALUE_OR_NULL` — map value pointers with offset/size tracking
+- [x] `PTR_TO_UNINIT_MAP_VALUE` — used by `map_pop_elem`, `map_peek_elem`; checked like `PTR_TO_MAP_VALUE` (the buffer must already be numeric), and the covered `value_size` stack bytes are havoced after the call
 - [x] `PTR_TO_CTX` — program context pointer
 - [x] `PTR_TO_STACK` / `PTR_TO_STACK_OR_NULL` — stack pointers with bounds checking
 - [x] `PTR_TO_FUNC` — callback function pointer; validated as singleton code address targeting a label with reachable exit

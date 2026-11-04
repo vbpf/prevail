@@ -170,6 +170,7 @@ struct ArgSingle {
         MAP_FD_PROGRAMS,
         PTR_TO_MAP_KEY,
         PTR_TO_MAP_VALUE,
+        PTR_TO_WRITABLE_MAP_VALUE,
         PTR_TO_CTX,
         PTR_TO_STACK,
         PTR_TO_FUNC,

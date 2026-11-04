@@ -469,6 +469,106 @@ post:
 messages:
   - "0: Invalid type (r3.type in {stack, packet, shared})"
 ---
+# The value argument of map_pop_elem/map_peek_elem is an output: the helper overwrites value_size
+# (4 here) bytes, so the old contents of the covered stack cell must not survive the call.
+test-case: bpf_map_pop_elem forgets the previous stack value
+
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=stack", "r2.stack_offset=508",
+      "s[504...507].type=number", "s[504...507].svalue=7", "s[504...507].uvalue=7",
+      "s[508...511].type=number", "s[508...511].svalue=0", "s[508...511].uvalue=0"]
+
+code:
+  <start>: |
+    call 88; bpf_map_pop_elem
+
+post:
+  - r0.type=number
+  - s[504...511].type=number
+  - s[504...507].svalue=7
+  - s[504...507].uvalue=7
+---
+test-case: bpf_map_peek_elem forgets the previous stack value
+
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=stack", "r2.stack_offset=508",
+      "s[504...507].type=number", "s[504...507].svalue=7", "s[504...507].uvalue=7",
+      "s[508...511].type=number", "s[508...511].svalue=0", "s[508...511].uvalue=0"]
+
+code:
+  <start>: |
+    call 89; bpf_map_peek_elem
+
+post:
+  - r0.type=number
+  - s[504...511].type=number
+  - s[504...507].svalue=7
+  - s[504...507].uvalue=7
+---
+test-case: bpf_map_pop_elem forgets the previous stack value for a stack-or-shared pointer
+
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type in {stack, shared}", "r2.stack_offset=508",
+      "r2.shared_offset=0", "r2.shared_region_size=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=[1, 2147418112]",
+      "s[508...511].type=number", "s[508...511].svalue=0", "s[508...511].uvalue=0"]
+
+code:
+  <start>: |
+    call 88; bpf_map_pop_elem
+
+post:
+  - r0.type=number
+  - s[508...511].type=number
+---
+test-case: bpf_map_pop_elem result guards reachable code
+
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=stack", "r2.stack_offset=508",
+      "r10.type=stack", "r10.stack_offset=512",
+      "s[508...511].type=number", "s[508...511].svalue=0", "s[508...511].uvalue=0"]
+
+code:
+  <start>: |
+    call 88; bpf_map_pop_elem
+    r7 = *(u32 *)(r10 - 4)
+    if r7 == 0 goto <out>
+    r1 = 1094795585
+    *(u64 *)(r1 + 0) = r7
+  <out>: |
+    r0 = 0
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0
+  - r7.type=number
+  - r7.svalue=0
+  - r7.uvalue=0
+  - r10.type=stack
+  - r10.stack_offset=512
+  - s[508...511].type=number
+  - s[508...511].svalue=r7.svalue
+  - s[508...511].uvalue=r7.uvalue
+
+messages:
+  - "4: Invalid type (r1.type in {ctx, stack, packet, shared, socket, alloc_mem})"
+---
+test-case: bpf_map_pop_elem with non-numeric stack value
+
+pre: ["r1.type=map_fd", "r1.map_fd=1",
+      "r2.type=stack", "r2.stack_offset=508"]
+
+code:
+  <start>: |
+    call 88; bpf_map_pop_elem
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Illegal map update with a non-numerical value [508-512) (within(r2:value_size(r1)))"
+---
 test-case: bpf_ringbuf_output with numeric stack value
 
 pre: ["r1.type=map_fd", "r1.map_fd=1",
