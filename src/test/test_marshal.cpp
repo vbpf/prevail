@@ -982,6 +982,32 @@ TEST_CASE("unmarshal builtin calls only when relocation-gated", "[disasm][marsha
     REQUIRE(has_assertion(assertions, ValidSize{Reg{3}, false}));
     REQUIRE(has_assertion(assertions, ValidAccess{1, Reg{1}, 0, Value{Reg{3}}, false, AccessType::write}));
 }
+
+TEST_CASE("helpers that may reallocate the packet do not accept packet pointers", "[assertions]") {
+    const auto require_mem_group = [](const int32_t id, const char* section, const Reg mem, const TypeGroup group) {
+        CAPTURE(id, section);
+        const ProgramInfo info{.platform = &g_ebpf_platform_linux,
+                               .type = g_ebpf_platform_linux.get_program_type(section, "")};
+        const Call call{.func = id, .kind = CallKind::helper};
+        REQUIRE(resolve(call, info).is_supported);
+        const auto assertions = get_assertions(call, info, RuntimeConfig{}, Label{0});
+        REQUIRE(has_assertion(assertions, TypeConstraint{mem, group}));
+        REQUIRE(has_assertion(assertions, TypeConstraint{mem, TypeGroup::mem}) == (group == TypeGroup::mem));
+    };
+    REQUIRE_FALSE(to_typeset(TypeGroup::stack_or_shared).contains(T_PACKET));
+    REQUIRE_FALSE(to_typeset(TypeGroup::stack_or_shared_or_num).contains(T_PACKET));
+
+    // These helpers make the packet writable, which may move it, before they read the source buffer.
+    require_mem_group(9, "classifier", Reg{3}, TypeGroup::stack_or_shared);     // skb_store_bytes
+    require_mem_group(73, "lwt_in", Reg{3}, TypeGroup::stack_or_shared);        // lwt_push_encap
+    require_mem_group(74, "lwt_seg6local", Reg{3}, TypeGroup::stack_or_shared); // lwt_seg6_store_bytes
+    require_mem_group(76, "lwt_seg6local", Reg{3}, TypeGroup::stack_or_shared); // lwt_seg6_action
+    require_mem_group(143, "sockops", Reg{2}, TypeGroup::stack_or_shared);      // store_hdr_opt
+
+    // A helper that leaves the packet in place can still work on it.
+    require_mem_group(26, "classifier", Reg{3}, TypeGroup::mem); // skb_load_bytes
+}
+
 #define FAIL_UNMARSHAL(dirname, filename, sectionname)                                                 \
     TEST_CASE("Try unmarshalling bad program: " dirname "/" filename " " sectionname, "[unmarshal]") { \
         ElfObject elf{"ebpf-samples/" dirname "/" filename, {}, &g_ebpf_platform_linux};               \

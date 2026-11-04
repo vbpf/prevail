@@ -80,6 +80,12 @@ class AssertExtractor {
         // an empty contract and produce no preconditions here -- sound only
         // because the cfg_builder gate ensures we never reach that state.
         const ResolvedCall resolved = resolve(call, info);
+        // A helper that may reallocate the packet can do so before it dereferences its memory arguments
+        // (e.g. bpf_skb_store_bytes makes the packet writable before reading its source), so a packet
+        // pointer passed to it is as stale as one used after the call and must not be accepted here.
+        const bool reallocates = resolved.contract.reallocate_packet;
+        const TypeGroup mem = reallocates ? TypeGroup::stack_or_shared : TypeGroup::mem;
+        const TypeGroup mem_or_num = reallocates ? TypeGroup::stack_or_shared_or_num : TypeGroup::mem_or_num;
         vector<Assertion> res;
         std::optional<Reg> map_fd_reg;
         for (ArgSingle arg : resolved.contract.singles) {
@@ -101,7 +107,7 @@ class AssertExtractor {
             case ArgSingle::Kind::PTR_TO_MAP_KEY: [[fallthrough]];
             case ArgSingle::Kind::PTR_TO_MAP_VALUE:
                 assert(map_fd_reg);
-                res.emplace_back(TypeConstraint{arg.reg, TypeGroup::mem});
+                res.emplace_back(TypeConstraint{arg.reg, mem});
                 res.emplace_back(ValidMapKeyValue{arg.reg, *map_fd_reg, arg.kind == ArgSingle::Kind::PTR_TO_MAP_KEY});
                 break;
             case ArgSingle::Kind::PTR_TO_STACK:
@@ -123,17 +129,17 @@ class AssertExtractor {
                 res.emplace_back(TypeConstraint{arg.reg, TypeGroup::alloc_mem});
                 break;
             case ArgSingle::Kind::PTR_TO_SPIN_LOCK:
-            case ArgSingle::Kind::PTR_TO_TIMER: res.emplace_back(TypeConstraint{arg.reg, TypeGroup::mem}); break;
+            case ArgSingle::Kind::PTR_TO_TIMER: res.emplace_back(TypeConstraint{arg.reg, mem}); break;
             case ArgSingle::Kind::CONST_SIZE_OR_ZERO:
                 res.emplace_back(TypeConstraint{arg.reg, TypeGroup::number});
                 res.emplace_back(ValidSize{arg.reg, true});
                 break;
             case ArgSingle::Kind::PTR_TO_WRITABLE_LONG:
-                res.emplace_back(TypeConstraint{arg.reg, TypeGroup::mem});
+                res.emplace_back(TypeConstraint{arg.reg, mem});
                 res.emplace_back(make_valid_access(arg.reg, 0, Imm{8}, false, AccessType::write));
                 break;
             case ArgSingle::Kind::PTR_TO_WRITABLE_INT:
-                res.emplace_back(TypeConstraint{arg.reg, TypeGroup::mem});
+                res.emplace_back(TypeConstraint{arg.reg, mem});
                 res.emplace_back(make_valid_access(arg.reg, 0, Imm{4}, false, AccessType::write));
                 break;
             }
@@ -142,7 +148,7 @@ class AssertExtractor {
             res.emplace_back(ValidMapType{*map_fd_reg, resolved.contract.allowed_map_types, resolved.name});
         }
         for (ArgPair arg : resolved.contract.pairs) {
-            const auto group = arg.or_null ? TypeGroup::mem_or_num : TypeGroup::mem;
+            const auto group = arg.or_null ? mem_or_num : mem;
             const auto access_type =
                 arg.kind == ArgPair::Kind::PTR_TO_READABLE_MEM ? AccessType::read : AccessType::write;
             res.emplace_back(TypeConstraint{arg.size, TypeGroup::number});
