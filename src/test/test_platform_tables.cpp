@@ -2,12 +2,17 @@
 // SPDX-License-Identifier: MIT
 #include <algorithm>
 #include <array>
+#include <optional>
+#include <string>
+#include <vector>
 
 #include <catch2/catch_all.hpp>
 
+#include "ebpf_verifier.hpp"
 #include "ir/call_resolver.hpp"
 #include "ir/program.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
+#include "parse.hpp"
 #include "platform.hpp"
 #include "spec/function_prototypes.hpp"
 #include "verifier.hpp"
@@ -132,6 +137,59 @@ TEST_CASE("linux program-type table maps modern section prefixes", "[platform][t
         REQUIRE(type.name == expected_name);
         REQUIRE(type.ctx_descriptor == expected_context);
     }
+}
+
+TEST_CASE("linux program-type table marks contexts the kernel keeps read-only", "[platform][tables]") {
+    // Program types whose is_valid_access() rejects every BPF_WRITE.
+    for (const char* section :
+         {"kprobe/f", "kretprobe/f", "perf_event",     "tracepoint/t",   "raw_tp/t",     "raw_tp.w/t", "fentry/f",
+          "fexit/f",  "fmod_ret/f",  "iter/i",         "lsm/f",          "struct_ops/f", "cgroup/dev", "sk_lookup/l",
+          "xdp",      "sk_msg",      "sk_reuseport/r", "flow_dissector", "lirc_mode2",   "netfilter/n"}) {
+        CAPTURE(section);
+        REQUIRE(g_ebpf_platform_linux.get_program_type(section, "").ctx_read_only);
+    }
+    // Program types with at least one field the kernel lets the program store to.
+    for (const char* section :
+         {"socket", "cgroup/skb", "cgroup/sock", "lwt_in", "lwt_out", "lwt_xmit", "lwt_seg6local", "classifier",
+          "action", "sk_skb", "sockops", "cgroup/setsockopt", "cgroup/connect4", "cgroup/sysctl", "syscall/s"}) {
+        CAPTURE(section);
+        REQUIRE_FALSE(g_ebpf_platform_linux.get_program_type(section, "").ctx_read_only);
+    }
+}
+
+namespace {
+
+// Verify a straight-line program under the Linux platform's type for `section`
+// and return the first verification error, if any.
+std::optional<std::string> verify_lines(const std::string& section, const std::vector<std::string>& lines) {
+    const EbpfProgramType type = g_ebpf_platform_linux.get_program_type(section, "");
+    const ProgramInfo info{.platform = &g_ebpf_platform_linux, .type = type};
+    InstructionSeq seq;
+    for (size_t i = 0; i < lines.size(); ++i) {
+        seq.emplace_back(Label{static_cast<int>(i)}, parse_instruction(lines[i], {}, type), std::nullopt);
+    }
+    const VerifierOptions options{};
+    const AnalysisContext context{Program::from_sequence(seq, info, options), options};
+    if (const auto error = analyze(context).find_first_error()) {
+        return to_string(*error);
+    }
+    return std::nullopt;
+}
+
+} // namespace
+
+TEST_CASE("stores through a read-only context are rejected", "[platform][tables]") {
+    // pt_regs.ip on x86-64: where the probed kernel code resumes.
+    REQUIRE(verify_lines("kprobe/f", {"r2 = 1", "*(u64 *)(r1 + 128) = r2", "r0 = 0", "exit"}) ==
+            "1: Context is read-only (valid_access(r1.offset+128, width=8) for write)");
+    REQUIRE(verify_lines("kprobe/f", {"r2 = 1", "lock *(u64 *)(r1 + 128) += r2", "r0 = 0", "exit"}) ==
+            "1: Context is read-only (valid_access(r1.offset+128, width=8) for write)");
+    REQUIRE_FALSE(verify_lines("kprobe/f", {"r2 = *(u64 *)(r1 + 128)", "r0 = 0", "exit"}).has_value());
+    // The first saved argument of the traced function.
+    REQUIRE(verify_lines("fentry/f", {"r2 = 1", "*(u64 *)(r1 + 0) = r2", "r0 = 0", "exit"}) ==
+            "1: Context is read-only (valid_access(r1.offset, width=8) for write)");
+    // __sk_buff.mark, which a tc program may set.
+    REQUIRE_FALSE(verify_lines("classifier", {"r2 = 1", "*(u32 *)(r1 + 8) = r2", "r0 = 0", "exit"}).has_value());
 }
 
 TEST_CASE("linux map-type table covers post-cpumap map ids", "[platform][tables]") {

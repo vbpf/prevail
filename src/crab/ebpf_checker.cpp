@@ -475,7 +475,12 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             require_lower_bound(lb, LinearExpression{0}, "Lower bound must be at least 0");
             require_upper_bound(ub, LinearExpression{ctx_size},
                                 "Upper bound must be at most " + std::to_string(ctx_size));
-            // T_CTX: bounds suffice; non-null when in bounds.
+            // Being in bounds does not make a store safe when the context is live kernel
+            // state (the pt_regs of a probed function, the saved arguments of a traced one).
+            if (s.access_type == AccessType::write && context.program_info().type.ctx_read_only) {
+                throw_fail("Context is read-only");
+            }
+            // T_CTX: non-null when in bounds.
             break;
         }
         case T_PACKET: {

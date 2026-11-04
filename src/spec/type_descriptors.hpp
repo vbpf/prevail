@@ -59,6 +59,9 @@ struct EbpfProgramType {
     std::vector<std::string> section_prefixes{};
     bool is_privileged{};
     bool is_sleepable{};
+    // No store through the context pointer is allowed: the context is live kernel
+    // state (e.g. the pt_regs of a probed function) rather than a scratch structure.
+    bool ctx_read_only{};
 };
 
 enum class EbpfStructFieldPermission { read_only, read_write };
