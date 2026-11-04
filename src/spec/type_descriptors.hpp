@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <numeric>
 #include <set>
 #include <string>
 #include <vector>
@@ -33,6 +35,23 @@ struct EbpfMapDescriptor {
     bool is_inner_map_template{false}; // True if this descriptor is referenced as an inner map template.
 };
 
+/// @brief Distinct mock fds for maps of the given platform-specific types, starting at @p first_fd.
+///
+/// Maps are numbered by type, with declaration order breaking ties. A register that may hold one of several
+/// maps holds an interval of fds, and map checks consider every fd in that interval, so numbering maps of one
+/// type adjacently keeps an interval spanning compatible maps free of unrelated ones.
+inline std::vector<int> mock_map_fds_by_type(const std::vector<uint32_t>& types, const int first_fd) {
+    std::vector<size_t> order(types.size());
+    std::iota(order.begin(), order.end(), size_t{0});
+    std::ranges::stable_sort(order, {}, [&](const size_t i) { return types[i]; });
+    std::vector<int> fds(types.size());
+    int fd = first_fd;
+    for (const size_t i : order) {
+        fds[i] = fd++;
+    }
+    return fds;
+}
+
 struct EbpfProgramType {
     std::string name{}; // For ease of display, not used by the verifier.
     const ebpf_ctx_descriptor_t* ctx_descriptor{};
@@ -60,16 +79,6 @@ struct EbpfStructDescriptor {
     int size{};
     const EbpfStructFieldDescriptor* fields{};
     size_t field_count{};
-};
-
-// Represents the key characteristics that determine equivalence between eBPF maps.
-// Used to cache and compare map configurations across the program.
-struct EquivalenceKey {
-    EbpfMapValueType value_type;
-    uint32_t key_size;
-    uint32_t value_size;
-    uint32_t max_entries;
-    std::strong_ordering operator<=>(const EquivalenceKey&) const = default;
 };
 
 struct btf_line_info_t {
