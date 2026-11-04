@@ -748,6 +748,21 @@ TEST_CASE("ELF loader ignores non-function .ksyms entries", "[elf]") {
     REQUIRE(progs.size() == 1);
 }
 
+TEST_CASE("ELF loader gives BTF maps declared with the same type distinct fds", "[elf]") {
+
+    // outer_map_1 and outer_map_2 are two variables of one typedef, so they share a BTF type ID.
+    ElfObject elf{"ebpf-samples/build/map_in_map_typedef.o", {}, &g_ebpf_platform_linux};
+    const auto& progs = elf.get_programs(".text", "func");
+    REQUIRE(progs.size() == 1);
+
+    const auto& descriptors = progs[0].info.map_descriptors;
+    REQUIRE(descriptors.size() == 3);
+    for (const EbpfMapDescriptor& descriptor : descriptors) {
+        CAPTURE(descriptor.name, descriptor.original_fd);
+        REQUIRE(&g_ebpf_platform_linux.get_map_descriptor(descriptor.original_fd, descriptors) == &descriptor);
+    }
+}
+
 // Regression test: rewrite_extern_constant_load must not crash when the resolved value
 // exceeds INT32_MAX and the load instruction is 8-byte width (LDX DW).
 // BPF MOV imm only has a 32-bit immediate; values that don't fit must cause a

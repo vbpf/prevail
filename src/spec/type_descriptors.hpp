@@ -62,16 +62,6 @@ struct EbpfStructDescriptor {
     size_t field_count{};
 };
 
-// Represents the key characteristics that determine equivalence between eBPF maps.
-// Used to cache and compare map configurations across the program.
-struct EquivalenceKey {
-    EbpfMapValueType value_type;
-    uint32_t key_size;
-    uint32_t value_size;
-    uint32_t max_entries;
-    std::strong_ordering operator<=>(const EquivalenceKey&) const = default;
-};
-
 struct btf_line_info_t {
     std::string file_name{};
     std::string source_line{};

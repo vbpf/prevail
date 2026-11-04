@@ -32,13 +32,14 @@ void dump_btf_types(const libbtf::btf_type_data& btf_data, const std::string& pa
     std::cout << libbtf::pretty_print_json(output.str()) << std::endl;
 }
 
+/// @brief Map each BTF type ID to the pseudo fd of the first map declared with that type, for resolving
+/// inner map templates. Every descriptor gets its own pseudo fd, so several maps declared with one type
+/// (e.g. `outer_map_t a, b;`) stay distinct maps in the analysis.
 std::map<int, int> map_typeid_to_fd(const std::vector<EbpfMapDescriptor>& map_descriptors) {
     std::map<int, int> type_id_to_fd_map;
     int pseudo_fd = 1;
     for (const auto& map_descriptor : map_descriptors) {
-        if (!type_id_to_fd_map.contains(map_descriptor.original_fd)) {
-            type_id_to_fd_map[map_descriptor.original_fd] = pseudo_fd++;
-        }
+        type_id_to_fd_map.try_emplace(map_descriptor.original_fd, pseudo_fd++);
     }
     return type_id_to_fd_map;
 }
@@ -99,14 +100,11 @@ ElfGlobalData parse_btf_section(const parse_params_t& parse_params, const ELFIO:
         throw UnmarshalError(std::string("Unsupported or invalid BTF map metadata: ") + e.what());
     }
 
-    // Remap BTF type IDs to pseudo file descriptors
+    // Remap BTF type IDs to pseudo file descriptors: one distinct fd per map, in declaration order
     const auto type_id_to_fd_map = map_typeid_to_fd(global.map_descriptors);
+    int pseudo_fd = 1;
     for (auto& desc : global.map_descriptors) {
-        if (auto it = type_id_to_fd_map.find(desc.original_fd); it != type_id_to_fd_map.end()) {
-            desc.original_fd = it->second;
-        } else {
-            throw UnmarshalError("Unknown map type ID in BTF: " + std::to_string(desc.original_fd));
-        }
+        desc.original_fd = pseudo_fd++;
 
         if (desc.inner_map_fd != DEFAULT_MAP_FD) {
             auto inner_it = type_id_to_fd_map.find(desc.inner_map_fd);

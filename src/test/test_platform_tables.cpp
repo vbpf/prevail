@@ -163,6 +163,33 @@ TEST_CASE("linux map-type table covers post-cpumap map ids", "[platform][tables]
     }
 }
 
+TEST_CASE("linux legacy map definitions of the same shape get distinct mock fds", "[platform][tables]") {
+    // {type, key_size, value_size, max_entries, map_flags, inner_map_idx, numa_node}
+    constexpr std::array<std::array<uint32_t, 7>, 7> defs{{
+        {12, 4, 4, 1, 0, 2, 0},   // ARRAY_OF_MAPS of defs[2]
+        {12, 4, 4, 1, 0, 3, 0},   // ARRAY_OF_MAPS of defs[3]: same shape as defs[0], different inner map
+        {2, 4, 4096, 1, 0, 0, 0}, // ARRAY
+        {2, 4, 8, 1, 0, 0, 0},    // ARRAY
+        {18, 4, 4, 16, 0, 0, 0},  // SOCKHASH
+        {1, 4, 4, 16, 0, 0, 0},   // HASH: same shape as defs[4], different type
+        {1, 4, 4, 16, 0, 0, 0},   // HASH: identical to defs[5], still a different map
+    }};
+
+    std::vector<EbpfMapDescriptor> descriptors;
+    g_ebpf_platform_linux.parse_maps_section(descriptors, reinterpret_cast<const char*>(defs.data()), sizeof(defs[0]),
+                                             static_cast<int>(defs.size()), &g_ebpf_platform_linux, VerifierOptions{});
+    g_ebpf_platform_linux.resolve_inner_map_references(descriptors);
+
+    // Looking a map up by its fd must yield that map, not an earlier one of the same shape.
+    REQUIRE(descriptors.size() == defs.size());
+    for (const EbpfMapDescriptor& descriptor : descriptors) {
+        CAPTURE(descriptor.original_fd);
+        REQUIRE(&g_ebpf_platform_linux.get_map_descriptor(descriptor.original_fd, descriptors) == &descriptor);
+    }
+    REQUIRE(descriptors[0].inner_map_fd == descriptors[2].original_fd);
+    REQUIRE(descriptors[1].inner_map_fd == descriptors[3].original_fd);
+}
+
 TEST_CASE("linux builtin relocation resolver maps known libc builtins", "[platform][tables]") {
     REQUIRE(g_ebpf_platform_linux.resolve_builtin_call != nullptr);
     REQUIRE(g_ebpf_platform_linux.get_builtin_call != nullptr);
