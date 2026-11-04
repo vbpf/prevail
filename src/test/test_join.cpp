@@ -495,3 +495,68 @@ TEST_CASE("meet does not spuriously bottom on satisfiable cross-SCC system", "[m
         }
     }
 }
+
+// 24) SplitDBM meet closure: chromatic Dijkstra must follow paths that alternate between operands
+TEST_CASE("meet closes over paths that alternate between the operands", "[meet][splitdbm]") {
+    using namespace splitdbm;
+
+    // Left only: 1->2, 3->4 and 3->5. Right only: 2->3. Both: 4->5. Each operand is closed.
+    Graph lg;
+    lg.growTo(6);
+    lg.add_edge(1, Weight(1), 2);
+    lg.add_edge(3, Weight(1), 4);
+    lg.add_edge(4, Weight(1), 5);
+    lg.add_edge(3, Weight(2), 5);
+
+    Graph rg;
+    rg.growTo(6);
+    rg.add_edge(2, Weight(1), 3);
+    rg.add_edge(4, Weight(1), 5);
+
+    const std::vector<Weight> pot(6, Weight(0));
+
+    SplitDBM left(std::move(lg), std::vector<Weight>(pot), VertSet{});
+    SplitDBM right(std::move(rg), std::vector<Weight>(pot), VertSet{});
+
+    AlignedPair aligned{
+        .left = left,
+        .right = right,
+        .left_perm = {0, 1, 2, 3, 4, 5},
+        .right_perm = {0, 1, 2, 3, 4, 5},
+        .initial_potentials = std::vector<Weight>(pot),
+    };
+
+    const std::optional<SplitDBM> result = SplitDBM::meet(aligned);
+    REQUIRE(result.has_value());
+
+    // The closure is the chain 1 -> 2 -> 3 -> 4 -> 5 with unit weights: s -> d with weight d - s for s < d.
+    const Graph& g = result->graph();
+    for (VertId s = 1; s <= 5; s++) {
+        for (VertId d = 1; d <= 5; d++) {
+            CAPTURE(s, d);
+            REQUIRE(g.elem(s, d) == (s < d));
+            if (s < d) {
+                CHECK(g.edge_val(s, d) == Weight(d - s));
+            }
+        }
+    }
+}
+
+// 25) The vertex count is chosen by the program (one loop counter per inlined loop head under
+// --termination): the scratch space must stay linear in it, and VertId must not wrap around.
+TEST_CASE("the number of vertices is limited by a hard check and costs linear scratch space", "[splitdbm]") {
+    using namespace splitdbm;
+
+    SplitDBM dbm;
+    VertId last{};
+    while (dbm.graph().size() < std::numeric_limits<VertId>::max()) {
+        last = dbm.new_vertex();
+    }
+    // Grows the scratch space to the size of the graph. A vertex-by-vertex matrix would take gigabytes.
+    REQUIRE(dbm.update_bound_if_tighter(last, Side::RIGHT, Weight(7)));
+    CHECK(dbm.get_bound(last, Side::RIGHT) == ExtendedNumber{7});
+
+    // Vertex ids would wrap around to the zero vertex if the graph kept growing.
+    REQUIRE_THROWS_AS(dbm.new_vertex(), RuntimeInputError);
+    CHECK(dbm.graph().size() == std::numeric_limits<VertId>::max());
+}

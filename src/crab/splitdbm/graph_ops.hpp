@@ -32,7 +32,6 @@ inline auto make_heap(const std::vector<Weight>& dists) {
 // Scratch space needed by graph algorithms. Lazily grows on demand.
 // Intended to be wrapped in a single LazyAllocator<ScratchSpace> at the call site.
 struct ScratchSpace {
-    std::vector<int> edge_marks;
     std::vector<VertId> dual_queue;
     std::vector<int> vert_marks;
     std::vector<int> stability;
@@ -65,7 +64,6 @@ struct ScratchSpace {
             new_sz *= 2;
         }
 
-        edge_marks.resize(new_sz * new_sz);
         dual_queue.resize(2 * new_sz);
         vert_marks.resize(new_sz);
         stability.resize(new_sz);
@@ -281,6 +279,10 @@ void compute_sccs(ScratchSpace& scratch, const ReadableGraph auto& x, std::vecto
 }
 
 // Chromatic Dijkstra for close_after_meet.
+// colour_succs[2 * v] holds the successors of v over E_LEFT edges and colour_succs[2 * v + 1]
+// those over E_RIGHT edges; every other edge of g is E_BOTH. The colour of an edge is thus
+// implied by the list it is taken from, so no per-edge storage (quadratic in the vertex
+// count) is needed.
 void chromatic_dijkstra(ScratchSpace& scratch, const ReadableGraph auto& g, const auto& p,
                         std::vector<std::vector<VertId>>& colour_succs, VertId src,
                         std::vector<std::tuple<VertId, Weight>>& out) {
@@ -297,8 +299,14 @@ void chromatic_dijkstra(ScratchSpace& scratch, const ReadableGraph auto& g, cons
         scratch.dists.at(dest) = p(src) + e.val - p(dest);
         scratch.dist_ts.at(dest) = scratch.ts;
 
-        scratch.vert_marks.at(dest) = scratch.edge_marks.at(sz * src + dest);
+        scratch.vert_marks.at(dest) = E_BOTH;
         heap.insert(dest);
+    }
+    for (const VertId dest : colour_succs[2 * src]) {
+        scratch.vert_marks.at(dest) = E_LEFT;
+    }
+    for (const VertId dest : colour_succs[2 * src + 1]) {
+        scratch.vert_marks.at(dest) = E_RIGHT;
     }
 
     while (!heap.empty()) {
@@ -316,14 +324,16 @@ void chromatic_dijkstra(ScratchSpace& scratch, const ReadableGraph auto& g, cons
             continue;
         }
 
+        // Continue only over edges of the other colour; every edge in that list carries its mark.
+        const int es_succs_mark = (scratch.vert_marks.at(es) == E_LEFT) ? E_RIGHT : E_LEFT;
         const std::vector<VertId>& es_succs =
-            (scratch.vert_marks.at(es) == E_LEFT) ? colour_succs[2 * es + 1] : colour_succs[2 * es];
+            (es_succs_mark == E_RIGHT) ? colour_succs[2 * es + 1] : colour_succs[2 * es];
         for (VertId ed : es_succs) {
             const Weight v = es_cost + g.edge_val(es, ed) - p(ed);
             if (scratch.dist_ts.at(ed) != scratch.ts || v < scratch.dists.at(ed)) {
                 scratch.dists.at(ed) = v;
                 scratch.dist_ts.at(ed) = scratch.ts;
-                scratch.vert_marks.at(ed) = scratch.edge_marks.at(sz * es + ed);
+                scratch.vert_marks.at(ed) = es_succs_mark;
 
                 if (heap.inHeap(ed)) {
                     heap.decrease(ed);
@@ -331,7 +341,7 @@ void chromatic_dijkstra(ScratchSpace& scratch, const ReadableGraph auto& g, cons
                     heap.insert(ed);
                 }
             } else if (v == scratch.dists.at(ed)) {
-                scratch.vert_marks.at(ed) |= scratch.edge_marks.at(sz * es + ed);
+                scratch.vert_marks.at(ed) |= es_succs_mark;
             }
         }
     }
@@ -573,7 +583,6 @@ EdgeVector close_after_meet(ScratchSpace& scratch, const ReadableGraph auto& g, 
             case E_RIGHT: colour_succs[2 * s + 1].push_back(d); break;
             default: break;
             }
-            scratch.edge_marks.at(sz * s + d) = mark;
         }
     }
 
