@@ -45,7 +45,7 @@ Return types that are classified and propagated into register state:
 
 - [ ] `PTR_TO_SOCK_COMMON` — used by `sk_fullsock`, `tcp_sock`, `get_listener_sock`. Currently accepted as generic socket but lacks the socket-subtype distinction.
 - [ ] `PTR_TO_BTF_ID_SOCK_COMMON` — used by `sk_release`, `tcp_check_syncookie`, socket casting helpers. Requires BTF-ID-level socket type discrimination.
-- [ ] `PTR_TO_SPIN_LOCK` — used by `spin_lock`, `spin_unlock`. Requires map-value field offset validation via BTF.
-- [ ] `PTR_TO_TIMER` — used by `timer_init`, `timer_set_callback`, `timer_start`, `timer_cancel`. Requires map-value field offset validation via BTF.
+- [ ] `PTR_TO_SPIN_LOCK` — used by `spin_lock`, `spin_unlock`. Currently verified as a writable, non-null 4-byte range inside a map value. Requires map-value field offset validation via BTF.
+- [ ] `PTR_TO_TIMER` — used by `timer_init`, `timer_set_callback`, `timer_start`, `timer_cancel`. Currently verified as a writable, non-null 16-byte range inside a map value. Requires map-value field offset validation via BTF.
 - [ ] `PTR_TO_PERCPU_BTF_ID` — used by `per_cpu_ptr`, `this_cpu_ptr`. Requires per-CPU pointer semantics.
 - [ ] `PTR_TO_CONST_STR` — used by `snprintf`, `strncmp`. Requires proof that pointer targets a null-terminated string in a read-only map value at a constant offset.
