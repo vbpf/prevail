@@ -661,7 +661,7 @@ post:
   - "_|_"
 
 messages:
-  - "0: Non-null number ((r1.type == number and r1.value == 0) or r1.ctx_offset == 0)"
+  - "0: Non-null number ((r1.type == number and r1.value == 0) or (r1.type == ctx and r1.ctx_offset == 0))"
 ---
 test-case: bpf_get_netns_cookie accepts a join of ctx and null
 
@@ -696,7 +696,7 @@ post:
   - "_|_"
 
 messages:
-  - "2: Non-null number ((r1.type == number and r1.value == 0) or r1.ctx_offset == 0)"
+  - "2: Non-null number ((r1.type == number and r1.value == 0) or (r1.type == ctx and r1.ctx_offset == 0))"
 ---
 test-case: bpf_get_netns_cookie rejects a join of an offset ctx and null
 
@@ -714,4 +714,4 @@ post:
   - "_|_"
 
 messages:
-  - "2: Nonzero context offset ((r1.type == number and r1.value == 0) or r1.ctx_offset == 0)"
+  - "2: Nonzero context offset ((r1.type == number and r1.value == 0) or (r1.type == ctx and r1.ctx_offset == 0))"
