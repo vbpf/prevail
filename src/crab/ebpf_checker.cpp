@@ -326,7 +326,10 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
                 std::string ub_s = ub_is && ub_is->fits<int32_t>() ? std::to_string(ub_is->narrow<int32_t>()) : "oo";
                 require_value(dom.state, LinearConstraint::false_const(),
                               "Illegal map update with a non-numerical value [" + lb_s + "-" + ub_s + ")");
-            } else if (context.runtime().strict && fd_type.has_value()) {
+            } else if (context.runtime().strict) {
+                if (!fd_type.has_value()) {
+                    throw_fail("Map type is not singleton");
+                }
                 EbpfMapType map_type = context.platform().get_map_type(*fd_type);
                 if (map_type.is_array) {
                     // Get offset value.
@@ -377,15 +380,24 @@ void EbpfChecker::operator()(const ValidMapType& s) const {
     if (dom.state.is_bottom()) {
         return;
     }
-    const auto map_type = dom.get_map_type(s.map_fd_reg, context);
-    if (!map_type.has_value() || *map_type == 0) {
-        return;
+    // The register may refer to any map in its fd range, so every one of them must be allowed;
+    // an unknown range cannot be proven compatible.
+    int32_t start_fd, end_fd;
+    if (!dom.get_map_fd_range(s.map_fd_reg, &start_fd, &end_fd)) {
+        throw_fail("map type is not known for " + s.helper_name);
     }
-    if (*map_type >= 64) {
-        throw_fail("map type " + std::to_string(*map_type) + " is out of supported range for " + s.helper_name);
-    }
-    if ((s.allowed_map_types & (uint64_t{1} << *map_type)) == 0) {
-        throw_fail("map type " + std::to_string(*map_type) + " is not allowed for " + s.helper_name);
+    for (int32_t map_fd = start_fd; map_fd <= end_fd; map_fd++) {
+        const uint32_t map_type = context.map_descriptor(map_fd).type;
+        // UNSPEC (0) means the ELF metadata did not say; allow it rather than reject every such program.
+        if (map_type == 0) {
+            continue;
+        }
+        if (map_type >= 64) {
+            throw_fail("map type " + std::to_string(map_type) + " is out of supported range for " + s.helper_name);
+        }
+        if ((s.allowed_map_types & (uint64_t{1} << map_type)) == 0) {
+            throw_fail("map type " + std::to_string(map_type) + " is not allowed for " + s.helper_name);
+        }
     }
 }
 

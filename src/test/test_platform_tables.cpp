@@ -6,9 +6,11 @@
 #include <catch2/catch_all.hpp>
 
 #include "ir/call_resolver.hpp"
+#include "ir/program.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
 #include "platform.hpp"
 #include "spec/function_prototypes.hpp"
+#include "verifier.hpp"
 
 using namespace prevail;
 
@@ -306,6 +308,47 @@ TEST_CASE("socket cookie helper availability is not treated as fully context-agn
     REQUIRE_FALSE(g_ebpf_platform_linux.is_helper_usable(46, xdp_type));
 
     REQUIRE_FALSE(g_ebpf_platform_linux.is_helper_usable(47, cgroup_type)); // get_socket_uid remains skb-only
+}
+
+TEST_CASE("helper map-type restrictions cover every map the register may refer to", "[platform][tables]") {
+    constexpr uint32_t hash_map = 1;     // BPF_MAP_TYPE_HASH
+    constexpr uint32_t ringbuf_map = 27; // BPF_MAP_TYPE_RINGBUF
+    ProgramInfo info{.platform = &g_ebpf_platform_linux, .type = g_ebpf_platform_linux.get_program_type("xdp", "")};
+    info.map_descriptors.push_back({.original_fd = 1, .type = ringbuf_map, .max_entries = 4096});
+    info.map_descriptors.push_back({.original_fd = 2, .type = ringbuf_map, .max_entries = 4096});
+    // Enough hash maps that the joined fd range [1, 40] is too wide for the analysis to enumerate.
+    for (int fd = 3; fd <= 40; fd++) {
+        info.map_descriptors.push_back(
+            {.original_fd = fd, .type = hash_map, .key_size = 4, .value_size = 4, .max_entries = 1});
+    }
+
+    // ringbuf_reserve(r1, 8, 0) where r1 is one map or the other, depending on a runtime value.
+    const auto first_error = [&](const int32_t fd, const int32_t other_fd) {
+        InstructionSeq seq;
+        const auto add = [&](Instruction ins) {
+            seq.emplace_back(Label{gsl::narrow<int>(seq.size())}, std::move(ins), std::nullopt);
+        };
+        add(Mem{.access = {.width = 4, .basereg = Reg{1}, .offset = 12}, .value = Reg{2}, .is_load = true});
+        add(LoadMapFd{.dst = Reg{1}, .mapfd = fd});
+        add(Jmp{.cond = Condition{.op = Condition::Op::EQ, .left = Reg{2}, .right = Imm{0}, .is64 = true},
+                .target = Label{4}});
+        add(LoadMapFd{.dst = Reg{1}, .mapfd = other_fd});
+        add(Bin{.op = Bin::Op::MOV, .dst = Reg{2}, .v = Imm{8}, .is64 = true});
+        add(Bin{.op = Bin::Op::MOV, .dst = Reg{3}, .v = Imm{0}, .is64 = true});
+        add(Call{.func = 131, .kind = CallKind::helper}); // ringbuf_reserve
+        add(Bin{.op = Bin::Op::MOV, .dst = Reg{0}, .v = Imm{0}, .is64 = true});
+        add(Exit{});
+        const auto error = analyze(Program::from_sequence(seq, info, {}), {}).find_first_error();
+        return error ? error->message : std::string{};
+    };
+    using Catch::Matchers::ContainsSubstring;
+
+    REQUIRE(first_error(1, 1).empty());
+    REQUIRE(first_error(1, 2).empty());
+    REQUIRE_THAT(first_error(3, 3), ContainsSubstring("map type 1 is not allowed for ringbuf_reserve"));
+    REQUIRE_THAT(first_error(1, 3), ContainsSubstring("map type 1 is not allowed for ringbuf_reserve"));
+    REQUIRE_THAT(first_error(3, 2), ContainsSubstring("map type 1 is not allowed for ringbuf_reserve"));
+    REQUIRE_THAT(first_error(1, 40), ContainsSubstring("map type is not known for ringbuf_reserve"));
 }
 
 TEST_CASE("new Linux context descriptors keep expected layout constants", "[platform][tables]") {
