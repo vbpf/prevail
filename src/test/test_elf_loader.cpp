@@ -1294,3 +1294,94 @@ TEST_CASE("CO-RE flexible array offsets cannot wrap or overflow instruction offs
     const auto root = types.append(libbtf::btf_kind_struct{"context", {{"args", array, 0}}, 0});
     REQUIRE_THROWS_WITH(load_core_array_access(types, root, access), Catch::Matchers::ContainsSubstring(error));
 }
+
+// Regression test: the implicit map of a global variable section (.data/.rodata/.bss) is a
+// single-entry array map at run time, and "lddw map_by_idx" can name it like any other map.
+// Describing it as type 0 ("unknown") exempted it from the helpers' map-type restrictions, so
+// e.g. bpf_perf_event_output was accepted on the map backing .bss. Each of the three loader
+// paths (no map metadata, legacy maps section, BTF) must record it as an array map.
+TEST_CASE("ELF loader describes global variable sections as array maps", "[elf][hardening]") {
+    constexpr uint32_t ARRAY_MAP_TYPE = 2; // BPF_MAP_TYPE_ARRAY
+
+    // Build a minimal object: one "exit" program in .text, an 8-byte .data section, and
+    // optionally a legacy "maps" section holding one array map record.
+    const auto make_elf = [](const bool with_legacy_maps_section) {
+        ELFIO::elfio writer;
+        writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+        writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+        writer.set_type(ELFIO::ET_REL);
+        writer.set_machine(ELFIO::EM_BPF);
+
+        ELFIO::section* text_sec = writer.sections.add(".text");
+        text_sec->set_type(ELFIO::SHT_PROGBITS);
+        text_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+        text_sec->set_addr_align(8);
+        const uint8_t exit_inst[8] = {0x95, 0, 0, 0, 0, 0, 0, 0};
+        text_sec->set_data(reinterpret_cast<const char*>(exit_inst), sizeof(exit_inst));
+
+        ELFIO::section* data_sec = writer.sections.add(".data");
+        data_sec->set_type(ELFIO::SHT_PROGBITS);
+        data_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_WRITE);
+        data_sec->set_addr_align(8);
+        data_sec->set_data(std::string(8, '\0'));
+
+        ELFIO::section* str_sec = writer.sections.add(".strtab");
+        str_sec->set_type(ELFIO::SHT_STRTAB);
+        ELFIO::string_section_accessor str_writer(str_sec);
+
+        ELFIO::section* sym_sec = writer.sections.add(".symtab");
+        sym_sec->set_type(ELFIO::SHT_SYMTAB);
+        sym_sec->set_addr_align(8);
+        sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+        sym_sec->set_link(str_sec->get_index());
+        sym_sec->set_info(1);
+        ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+
+        sym_writer.add_symbol(str_writer, "prog", 0, sizeof(exit_inst), ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0,
+                              text_sec->get_index());
+        sym_writer.add_symbol(str_writer, "var", 0, 8, ELFIO::STB_GLOBAL, ELFIO::STT_OBJECT, 0, data_sec->get_index());
+
+        if (with_legacy_maps_section) {
+            // Legacy map record {type, key_size, value_size, max_entries, map_flags, inner_map_idx, numa_node}
+            // describing an ARRAY map with the same shape as the implicit .data map.
+            const uint32_t record[7] = {ARRAY_MAP_TYPE, sizeof(uint32_t), 8, 1, 0, 0, 0};
+            ELFIO::section* maps_sec = writer.sections.add("maps");
+            maps_sec->set_type(ELFIO::SHT_PROGBITS);
+            maps_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_WRITE);
+            maps_sec->set_addr_align(4);
+            maps_sec->set_data(reinterpret_cast<const char*>(record), sizeof(record));
+            sym_writer.add_symbol(str_writer, "legacy_map", 0, sizeof(record), ELFIO::STB_GLOBAL, ELFIO::STT_OBJECT, 0,
+                                  maps_sec->get_index());
+        }
+
+        std::ostringstream out_stream;
+        writer.save(out_stream);
+        return out_stream.str();
+    };
+
+    const auto require_array_maps = [&](const std::vector<RawProgram>& programs, const size_t map_count) {
+        REQUIRE(programs.size() == 1);
+        REQUIRE(programs[0].info.map_descriptors.size() == map_count);
+        for (const auto& descriptor : programs[0].info.map_descriptors) {
+            CAPTURE(descriptor.name);
+            REQUIRE(descriptor.key_size == sizeof(uint32_t));
+            REQUIRE(descriptor.max_entries == 1);
+            REQUIRE(descriptor.type == ARRAY_MAP_TYPE);
+        }
+    };
+
+    VerifierOptions options{};
+    SECTION("object without map definitions") {
+        std::istringstream in_stream(make_elf(false));
+        require_array_maps(read_elf(in_stream, "memory", ".text", "", options, &g_ebpf_platform_linux), 1);
+    }
+    SECTION("object with a legacy maps section") {
+        std::istringstream in_stream(make_elf(true));
+        require_array_maps(read_elf(in_stream, "memory", ".text", "", options, &g_ebpf_platform_linux), 2);
+    }
+    SECTION("object with BTF") {
+        // .bss, .data and .rodata, each reported once by libbtf and once by the section scan.
+        ElfObject elf{"ebpf-samples/build/global_variable.o", options, &g_ebpf_platform_linux};
+        require_array_maps(elf.get_programs(".text"), 6);
+    }
+}
