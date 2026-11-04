@@ -332,6 +332,10 @@ Helper prototypes that declare a writable memory output, such as `PTR_TO_WRITABL
 unconditionally before returning. This includes failure returns. The verifier treats the declared region as initialized
 after the helper call, so a platform helper that only conditionally writes the region must use a different contract.
 
+Helpers that read the region and may also overwrite any part of it, such as `bpf_fib_lookup`, declare it as
+`PTR_TO_READWRITE_MEM` or `PTR_TO_READWRITE_MEM_OR_NULL`. The region must be initialized before the call, and the
+verifier forgets its previous contents after the call.
+
 ```cpp
 void apply_helper_contract(int func) {
     switch (func) {

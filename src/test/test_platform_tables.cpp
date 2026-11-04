@@ -66,6 +66,8 @@ bool has_unmodeled_argument_type(const ebpf_argument_type_t type) {
     case EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM_OR_NULL:
     case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM:
     case EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM_OR_NULL:
+    case EBPF_ARGUMENT_TYPE_PTR_TO_READWRITE_MEM:
+    case EBPF_ARGUMENT_TYPE_PTR_TO_READWRITE_MEM_OR_NULL:
     case EBPF_ARGUMENT_TYPE_PTR_TO_STACK:
     case EBPF_ARGUMENT_TYPE_PTR_TO_STACK_OR_NULL:
     case EBPF_ARGUMENT_TYPE_PTR_TO_CTX_OR_NULL:
@@ -324,6 +326,10 @@ TEST_CASE("new helper ABI classes map to modeled call contracts", "[platform][ta
 
     const ResolvedCall check_mtu = require_supported(163);
     REQUIRE(has_single_arg(check_mtu, ArgSingle::Kind::PTR_TO_WRITABLE_INT, Reg{3}));
+
+    const ResolvedCall fib_lookup = require_supported(69);
+    REQUIRE(fib_lookup.contract.pairs ==
+            std::vector{ArgPair{ArgPair::Kind::PTR_TO_READWRITE_MEM, false, Reg{2}, Reg{3}, false}});
 
     const ResolvedCall timer_init = require_supported(169);
     REQUIRE(has_single_arg(timer_init, ArgSingle::Kind::PTR_TO_TIMER, Reg{1}));

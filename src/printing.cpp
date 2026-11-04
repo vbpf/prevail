@@ -291,6 +291,7 @@ std::ostream& operator<<(std::ostream& os, const ArgPair::Kind kind) {
     switch (kind) {
     case ArgPair::Kind::PTR_TO_READABLE_MEM: return os << "mem";
     case ArgPair::Kind::PTR_TO_WRITABLE_MEM: return os << "out";
+    case ArgPair::Kind::PTR_TO_READWRITE_MEM: return os << "inout";
     }
     std::unreachable();
 }

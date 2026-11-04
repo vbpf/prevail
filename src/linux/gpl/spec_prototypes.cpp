@@ -911,7 +911,7 @@ static constexpr EbpfHelperPrototype bpf_fib_lookup_proto = {
     .argument_type =
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM,
+            EBPF_ARGUMENT_TYPE_PTR_TO_READWRITE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
@@ -1228,7 +1228,7 @@ static constexpr EbpfHelperPrototype bpf_sysctl_get_name_proto = {
     .argument_type =
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM,
+            EBPF_ARGUMENT_TYPE_PTR_TO_READWRITE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
@@ -1433,7 +1433,7 @@ static constexpr EbpfHelperPrototype bpf_read_branch_records_proto = {
     .argument_type =
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL,
+            EBPF_ARGUMENT_TYPE_PTR_TO_READWRITE_MEM_OR_NULL,
             EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
@@ -1698,7 +1698,7 @@ static constexpr EbpfHelperPrototype bpf_d_path_proto = {
     .argument_type =
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID,
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM,
+            EBPF_ARGUMENT_TYPE_PTR_TO_READWRITE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO,
         },
     // .allowed = bpf_d_path_allowed,
@@ -1742,7 +1742,7 @@ static constexpr EbpfHelperPrototype bpf_snprintf_btf_proto = {
     .return_type = EBPF_RETURN_TYPE_INTEGER,
     .argument_type =
         {
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM,
+            EBPF_ARGUMENT_TYPE_PTR_TO_READWRITE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
             EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
@@ -1886,7 +1886,7 @@ static constexpr EbpfHelperPrototype bpf_snprintf_proto = {
     .return_type = EBPF_RETURN_TYPE_INTEGER,
     .argument_type =
         {
-            EBPF_ARGUMENT_TYPE_PTR_TO_READABLE_MEM_OR_NULL,
+            EBPF_ARGUMENT_TYPE_PTR_TO_READWRITE_MEM_OR_NULL,
             EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO,
             EBPF_ARGUMENT_TYPE_PTR_TO_CONST_STR,
             EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM_OR_NULL,
@@ -1900,7 +1900,7 @@ static constexpr EbpfHelperPrototype bpf_sys_bpf_proto = {
     .argument_type =
         {
             EBPF_ARGUMENT_TYPE_ANYTHING,
-            EBPF_ARGUMENT_TYPE_PTR_TO_READONLY_MEM,
+            EBPF_ARGUMENT_TYPE_PTR_TO_READWRITE_MEM,
             EBPF_ARGUMENT_TYPE_CONST_SIZE,
         },
 };
@@ -2263,9 +2263,9 @@ static constexpr EbpfHelperPrototype bpf_load_hdr_opt_proto = {
     .argument_type =
         {
             EBPF_ARGUMENT_TYPE_PTR_TO_CTX,
-            EBPF_ARGUMENT_TYPE_PTR_TO_WRITABLE_MEM, // searchby_res
-            EBPF_ARGUMENT_TYPE_CONST_SIZE,          // len
-            EBPF_ARGUMENT_TYPE_ANYTHING,            // flags
+            EBPF_ARGUMENT_TYPE_PTR_TO_READWRITE_MEM, // searchby_res
+            EBPF_ARGUMENT_TYPE_CONST_SIZE,           // len
+            EBPF_ARGUMENT_TYPE_ANYTHING,             // flags
         },
     .ctx_descriptor = &g_sock_ops_descr,
 };

@@ -964,7 +964,8 @@ void EbpfTransformer::operator()(const Call& call) {
             // Do nothing. No side effect allowed.
             break;
 
-        case ArgPair::Kind::PTR_TO_WRITABLE_MEM: {
+        case ArgPair::Kind::PTR_TO_WRITABLE_MEM:
+        case ArgPair::Kind::PTR_TO_READWRITE_MEM: {
             // The called function may overwrite the pointed-to memory, so a stack-typed
             // pointer requires havocing the covered stack cells. Compute the stack address
             // per type inside join_over_types (mirroring PTR_TO_WRITABLE_LONG/INT above):
