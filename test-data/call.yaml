@@ -981,3 +981,82 @@ post:
 
 messages:
   - "2: Nonzero context offset ((r1.type == number and r1.value == 0) or (r1.type == ctx and r1.ctx_offset == 0))"
+---
+test-case: bpf_spin_unlock with lock inside shared value
+
+pre: ["r1.type=shared", "r1.shared_offset=4", "r1.shared_region_size=8", "r1.svalue=[1, 2147418112]", "r1.uvalue=[1, 2147418112]"]
+
+code:
+  <start>: |
+    call 94; bpf_spin_unlock
+
+post:
+  - r0.type=number
+---
+test-case: bpf_spin_unlock with lock past the end of the shared value
+
+pre: ["r1.type=shared", "r1.shared_offset=8", "r1.shared_region_size=8", "r1.svalue=[1, 2147418112]", "r1.uvalue=[1, 2147418112]"]
+
+code:
+  <start>: |
+    call 94; bpf_spin_unlock
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Upper bound must be at most r1.shared_region_size (valid_access(r1.offset, width=4) for write)"
+---
+test-case: bpf_spin_lock with lock that may be null
+
+pre: ["r1.type=shared", "r1.shared_offset=0", "r1.shared_region_size=8", "r1.svalue=[0, 2147418112]", "r1.uvalue=[0, 2147418112]"]
+
+code:
+  <start>: |
+    call 93; bpf_spin_lock
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Possible null access (valid_access(r1.offset, width=4) for write)"
+---
+test-case: bpf_spin_unlock with lock on the stack
+
+pre: ["r1.type=stack", "r1.stack_offset=504",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    call 94; bpf_spin_unlock
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Invalid type (r1.type == shared)"
+---
+test-case: bpf_timer_cancel with timer inside shared value
+
+pre: ["r1.type=shared", "r1.shared_offset=8", "r1.shared_region_size=24", "r1.svalue=[1, 2147418112]", "r1.uvalue=[1, 2147418112]"]
+
+code:
+  <start>: |
+    call 172; bpf_timer_cancel
+
+post:
+  - r0.type=number
+---
+test-case: bpf_timer_cancel with timer straddling the end of the shared value
+
+pre: ["r1.type=shared", "r1.shared_offset=16", "r1.shared_region_size=24", "r1.svalue=[1, 2147418112]", "r1.uvalue=[1, 2147418112]"]
+
+code:
+  <start>: |
+    call 172; bpf_timer_cancel
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Upper bound must be at most r1.shared_region_size (valid_access(r1.offset, width=16) for write)"

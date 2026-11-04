@@ -146,7 +146,16 @@ class AssertExtractor {
                 res.emplace_back(TypeConstraint{arg.reg, TypeGroup::alloc_mem});
                 break;
             case ArgSingle::Kind::PTR_TO_SPIN_LOCK:
-            case ArgSingle::Kind::PTR_TO_TIMER: res.emplace_back(TypeConstraint{arg.reg, mem}); break;
+                // A struct bpf_spin_lock (4 bytes) lives only inside a map value, and the helper
+                // writes it: require a non-null map-value pointer with the whole object in bounds.
+                res.emplace_back(TypeConstraint{arg.reg, TypeGroup::shared});
+                res.emplace_back(make_valid_access(arg.reg, 0, Imm{4}, false, AccessType::write));
+                break;
+            case ArgSingle::Kind::PTR_TO_TIMER:
+                // Same for a struct bpf_timer (16 bytes).
+                res.emplace_back(TypeConstraint{arg.reg, TypeGroup::shared});
+                res.emplace_back(make_valid_access(arg.reg, 0, Imm{16}, false, AccessType::write));
+                break;
             case ArgSingle::Kind::CONST_SIZE_OR_ZERO:
                 res.emplace_back(TypeConstraint{arg.reg, TypeGroup::number});
                 res.emplace_back(ValidSize{arg.reg, true});
