@@ -32,6 +32,9 @@ struct CallbackMetadata {
 struct CfgBuilder final {
     Program prog;
 
+    // Number of local call instances inlined so far, checked against max_inlined_calls.
+    int inlined_calls = 0;
+
     // TODO: ins should be inserted elsewhere
     void insert_after(const Label& prev_label, const Label& new_label, const Instruction& ins) {
         if (prev_label == new_label) {
@@ -347,11 +350,18 @@ static ResolvedKfuncCalls pass_resolve_kfunc_calls(const InstructionSeq& insts, 
 /// frame's blocks, Exit included, into this frame. active_call_sites holds the call sites of the
 /// frames being expanded; a macro that reaches one of them calls back into an active frame.
 static void add_cfg_nodes(CfgBuilder& builder, const Cfg& original_cfg, const Label& caller_label,
-                          const Label& entry_label, std::set<int> active_call_sites, const int max_call_stack_frames) {
+                          const Label& entry_label, std::set<int> active_call_sites, const RuntimeConfig& runtime) {
     const string caller_label_str = to_string(caller_label);
     const long stack_frame_depth = std::ranges::count(caller_label_str, STACK_FRAME_DELIMITER) + 2;
-    if (stack_frame_depth > max_call_stack_frames) {
+    if (stack_frame_depth > runtime.max_call_stack_frames) {
         throw InvalidControlFlow{"too many call stack frames"};
+    }
+    // The depth bound alone does not bound the size of the inlined program: a chain
+    // of callees that each call the next k times clones the innermost one k^depth
+    // times. Bound the number of call instances so the CFG stays at most
+    // max_inlined_calls times the program size.
+    if (++builder.inlined_calls > runtime.max_inlined_calls) {
+        throw InvalidControlFlow{"too many inlined local calls"};
     }
     active_call_sites.insert(caller_label.from);
 
@@ -432,7 +442,7 @@ static void add_cfg_nodes(CfgBuilder& builder, const Cfg& original_cfg, const La
     for (const auto& macro_label : seen_labels) {
         const Label label{macro_label.from, macro_label.to, caller_label_str};
         if (const auto pins = std::get_if<CallLocal>(&builder.prog.instruction_at(label))) {
-            add_cfg_nodes(builder, original_cfg, label, pins->target, active_call_sites, max_call_stack_frames);
+            add_cfg_nodes(builder, original_cfg, label, pins->target, active_call_sites, runtime);
         }
     }
 }
@@ -575,23 +585,24 @@ static void pass_connect_edges(CfgBuilder& builder, const InstructionSeq& insts,
 }
 
 // Pass: InlineLocalCalls
-// Reads    : instruction sequence, max_call_stack_frames bound.
+// Reads    : instruction sequence, max_call_stack_frames and max_inlined_calls bounds.
 // Writes   : for every CallLocal in the sequence, clones the callee region into the CFG
 //            under a unique stack-frame prefix. Recurses into nested calls.
-// Throws   : InvalidControlFlow on illegal recursion or exceeding the call-stack frame bound.
+// Throws   : InvalidControlFlow on illegal recursion or exceeding the call-stack frame or
+//            inlined-call bound.
 // Invariant: pass_connect_edges has been applied -- inlining walks the children it connected,
 //            as they were before this pass, so the result does not depend on the order in
 //            which call sites are expanded. Restricted to callees that are reachable after
 //            edge connection, which is why this runs as a separate second pass rather than
 //            during population.
-static void pass_inline_local_calls(CfgBuilder& builder, const InstructionSeq& insts, const int max_call_stack_frames) {
+static void pass_inline_local_calls(CfgBuilder& builder, const InstructionSeq& insts, const RuntimeConfig& runtime) {
     // Ordering check: pass_connect_edges must have run. When insts is non-empty, its first
     // label has been wired as a child of Label::entry, so entry has at least one successor.
     assert(insts.empty() || !builder.prog.cfg().children_of(Label::entry).empty());
     const Cfg original_cfg = builder.prog.cfg();
     for (const auto& [label, inst, _] : insts) {
         if (const auto pins = std::get_if<CallLocal>(&inst)) {
-            add_cfg_nodes(builder, original_cfg, label, pins->target, {}, max_call_stack_frames);
+            add_cfg_nodes(builder, original_cfg, label, pins->target, {}, runtime);
         }
     }
 }
@@ -858,7 +869,7 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
     pass_connect_edges(builder, inst_seq, options.must_have_exit);
 
     // --- Pass: InlineLocalCalls -------------------------------------------
-    pass_inline_local_calls(builder, inst_seq, options.runtime.max_call_stack_frames);
+    pass_inline_local_calls(builder, inst_seq, options.runtime);
 
     // --- Pass: ValidateTailCallDepth --------------------------------------
     // Wto construction throws RuntimeInputError if loops nest deeper than Wto::max_nesting_depth.

@@ -99,6 +99,11 @@ int main(int argc, char** argv) {
         ->group("Features")
         ->check(CLI::Range(1, RuntimeConfig::MAX_CALL_STACK_FRAMES_LIMIT));
 
+    app.add_option("--max-inlined-calls", ebpf_verifier_options.runtime.max_inlined_calls,
+                   "Maximum number of inlined local call instances (default: 256)")
+        ->group("Features")
+        ->check(CLI::Range(1, RuntimeConfig::MAX_INLINED_CALLS_LIMIT));
+
     app.add_option("--max-packet-size", ebpf_verifier_options.runtime.max_packet_size,
                    "Maximum packet size in bytes (default: 65535)")
         ->group("Features")
@@ -262,7 +267,7 @@ int main(int argc, char** argv) {
         auto result = analyze(context);
         if (!quiet) {
             if (verbosity.print_invariants) {
-                if(result.failed && !failure_slice) {
+                if (result.failed && !failure_slice) {
                     auto slices = result.compute_failure_slices(context);
                     print_failure_slices(std::cout, context.program, result, slices, verbosity);
                 } else {

@@ -132,6 +132,52 @@ post: []
 messages:
   - "too many call stack frames"
 ---
+test-case: too many inlined calls
+
+pre: []
+
+# Only four frames deep, but each function calls the next eight times, so
+# inlining would clone <sub3> 512 times from <start> alone.
+code:
+  <start>: |
+    call <sub1>
+    call <sub1>
+    call <sub1>
+    call <sub1>
+    call <sub1>
+    call <sub1>
+    call <sub1>
+    call <sub1>
+    exit
+  <sub1>: |
+    call <sub2>
+    call <sub2>
+    call <sub2>
+    call <sub2>
+    call <sub2>
+    call <sub2>
+    call <sub2>
+    call <sub2>
+    exit
+  <sub2>: |
+    call <sub3>
+    call <sub3>
+    call <sub3>
+    call <sub3>
+    call <sub3>
+    call <sub3>
+    call <sub3>
+    call <sub3>
+    exit
+  <sub3>: |
+    r0 = 1
+    exit
+
+post: []
+
+messages:
+  - "too many inlined local calls"
+---
 test-case: infinite recursion
 
 pre: []

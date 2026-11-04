@@ -202,6 +202,24 @@ TEST_CASE("pass_insert_termination_counters is off by default", "[passes]") {
     }
 }
 
+TEST_CASE("pass_inline_local_calls bounds the number of inlined call instances", "[passes]") {
+    const ProgramInfo info = default_info();
+    InstructionSeq seq;
+    // entry -> call subprogram -> call subprogram -> exit: two call instances to inline.
+    seq.push_back(at(0, CallLocal{.target = Label{3}}));
+    seq.push_back(at(1, CallLocal{.target = Label{3}}));
+    seq.push_back(at(2, Exit{}));
+    seq.push_back(at(3, Exit{}));
+
+    VerifierOptions options;
+    options.runtime.max_inlined_calls = 2;
+    REQUIRE_NOTHROW(Program::from_sequence(seq, info, options));
+
+    options.runtime.max_inlined_calls = 1;
+    REQUIRE_THROWS_WITH(Program::from_sequence(seq, info, options),
+                        Catch::Matchers::ContainsSubstring("too many inlined local calls"));
+}
+
 TEST_CASE("AnalysisResult reports maximum nested BPF-to-BPF call depth", "[passes][stats]") {
     const ProgramInfo info = default_info();
 
