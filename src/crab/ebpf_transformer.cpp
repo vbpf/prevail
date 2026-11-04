@@ -94,7 +94,7 @@ class EbpfTransformer final {
     void recompute_stack_numeric_size(TypeToNumDomain& state, Variable type_variable);
 
     void do_load_stack(TypeToNumDomain& state, const Reg& target_reg, const LinearExpression& addr, int width,
-                       const Reg& src_reg);
+                       const Reg& src_reg, int offset);
 
     void do_load(const Mem& b, const Reg& target_reg);
 
@@ -460,10 +460,12 @@ void EbpfTransformer::operator()(const Packet& a) {
 }
 
 void EbpfTransformer::do_load_stack(TypeToNumDomain& state, const Reg& target_reg, const LinearExpression& symb_addr,
-                                    const int width, const Reg& src_reg) {
+                                    const int width, const Reg& src_reg, const int offset) {
     const Interval addr = state.values.eval_interval(symb_addr);
     using namespace dsl_syntax;
-    if (state.values.entail(width <= reg_pack(src_reg).stack_numeric_size)) {
+    // stack_numeric_size counts numeric bytes from src_reg.stack_offset upwards, while the load starts `offset`
+    // bytes away from it: it says nothing about the bytes below, and only size - offset bytes remain above.
+    if (offset >= 0 && state.values.entail(width <= reg_pack(src_reg).stack_numeric_size - offset)) {
         state.assign_type(target_reg, T_NUM);
     } else {
         state.assign_type(target_reg, stack.load_type(addr, width));
@@ -632,13 +634,15 @@ void EbpfTransformer::do_load(const Mem& b, const Reg& target_reg) {
 
     if (b.access.basereg.v == R10_STACK_POINTER) {
         const LinearExpression addr = mem_reg.stack_offset + offset;
-        do_load_stack(dom.state, target_reg, addr, width, b.access.basereg);
+        do_load_stack(dom.state, target_reg, addr, width, b.access.basereg, offset);
         return;
     }
     dom.state = dom.state.join_over_types(b.access.basereg, [&](TypeToNumDomain& state, const TypeEncoding type) {
         switch (type) {
         case T_CTX: do_load_ctx(state, context, target_reg, mem_reg.ctx_offset + offset, width, b.is_signed); break;
-        case T_STACK: do_load_stack(state, target_reg, mem_reg.stack_offset + offset, width, b.access.basereg); break;
+        case T_STACK:
+            do_load_stack(state, target_reg, mem_reg.stack_offset + offset, width, b.access.basereg, offset);
+            break;
         case T_PACKET:
         case T_SHARED:
         case T_ALLOC_MEM:
