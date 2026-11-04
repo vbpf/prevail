@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "config.hpp"
+#include "crab_utils/debug.hpp"
 #include "ir/call_resolver.hpp"
 #include "ir/syntax.hpp"
 #include "platform.hpp"
@@ -115,9 +116,14 @@ class AssertExtractor {
             case ArgSingle::Kind::PTR_TO_MAP_KEY: [[fallthrough]];
             case ArgSingle::Kind::PTR_TO_MAP_VALUE: [[fallthrough]];
             case ArgSingle::Kind::PTR_TO_WRITABLE_MAP_VALUE:
+                // process_arg() refuses to build such a contract, but kfunc/builtin
+                // contracts come from the platform; never size the access against
+                // an unrelated register.
+                if (!map_fd_reg) {
+                    CRAB_ERROR("map key/value argument without a preceding map argument: ", resolved.name);
+                }
                 // The output buffer is held to the input-value precondition (in bounds, numeric bytes):
                 // map_peek_elem reads it on bloom filters, and the transformer relies on it staying numeric.
-                assert(map_fd_reg);
                 res.emplace_back(TypeConstraint{arg.reg, mem});
                 res.emplace_back(ValidMapKeyValue{arg.reg, *map_fd_reg, arg.kind == ArgSingle::Kind::PTR_TO_MAP_KEY});
                 break;
