@@ -130,8 +130,8 @@ TEST_CASE("linux program-type table maps modern section prefixes", "[platform][t
         {"cgroup/getsockname4", "cgroup_sock_addr", &g_sock_addr_descr},
         {"cgroup/getsockopt", "cgroup_sockopt", &g_sockopt_descr},
         {"cgroup/setsockopt", "cgroup_sockopt", &g_sockopt_descr},
-        {"raw_tp/probe", "raw_tracepoint", &g_tracepoint_descr},
-        {"raw_tp.w/probe", "raw_tracepoint_writable", &g_tracepoint_descr},
+        {"raw_tp/probe", "raw_tracepoint", &g_tracing_descr},
+        {"raw_tp.w/probe", "raw_tracepoint_writable", &g_tracing_descr},
         {"sk_reuseport/test", "sk_reuseport", &g_sk_reuseport_descr},
         {"flow_dissector", "flow_dissector", &g_flow_dissector_descr},
         {"cgroup/sysctl", "cgroup_sysctl", &g_cgroup_sysctl_descr},
@@ -753,4 +753,39 @@ TEST_CASE("__sk_buff data_meta is a packet pointer for tc programs only", "[plat
         REQUIRE(g_ebpf_platform_linux.is_helper_usable(47, type)); // get_socket_uid
     }
     REQUIRE_FALSE(g_ebpf_platform_linux.is_helper_usable(26, g_ebpf_platform_linux.get_program_type("xdp", "")));
+}
+
+TEST_CASE("linux context sizes do not exceed the context object", "[platform][tables]") {
+    // The descriptor size is the upper bound of every context access, so an
+    // over-approximation accepts reads and writes past the end of the object.
+    struct ContextSizeExpectation {
+        const char* section;
+        int expected_size;
+    };
+    const std::array<ContextSizeExpectation, 4> expectations{{
+        {"kprobe/test", 168},  // sizeof(pt_regs) on x86_64
+        {"perf_event", 184},   // sizeof(bpf_perf_event_data) on x86_64
+        {"raw_tp/test", 96},   // u64 args[MAX_BPF_FUNC_ARGS]
+        {"raw_tp.w/test", 96}, // u64 args[MAX_BPF_FUNC_ARGS]
+    }};
+
+    for (const auto& [section, expected_size] : expectations) {
+        const ProgramInfo info{.platform = &g_ebpf_platform_linux,
+                               .type = g_ebpf_platform_linux.get_program_type(section, "")};
+        const auto load_u64_passes = [&](const int offset) {
+            const InstructionSeq seq{
+                {Label{0},
+                 Mem{.access = {.width = 8, .basereg = Reg{1}, .offset = offset}, .value = Reg{0}, .is_load = true},
+                 std::nullopt},
+                {Label{1}, Bin{.op = Bin::Op::MOV, .dst = Reg{0}, .v = Imm{0}, .is64 = true}, std::nullopt},
+                {Label{2}, Exit{}, std::nullopt},
+            };
+            return verify(Program::from_sequence(seq, info, {}), {});
+        };
+        CAPTURE(section);
+        REQUIRE(info.type.ctx_descriptor->size == expected_size);
+        REQUIRE(load_u64_passes(expected_size - 8));
+        REQUIRE_FALSE(load_u64_passes(expected_size - 7));
+        REQUIRE_FALSE(load_u64_passes(expected_size));
+    }
 }
