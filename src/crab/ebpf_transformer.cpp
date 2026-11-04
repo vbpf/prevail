@@ -925,6 +925,9 @@ void EbpfTransformer::operator()(const Call& call) {
                     for (const DataKind kind : iterate_kinds()) {
                         stack.havoc(state.values, kind, addr, w, context.runtime().big_endian);
                     }
+                    // iterate_kinds() covers the value kinds only; forget the type cells as well
+                    // (see PTR_TO_WRITABLE_MEM below).
+                    stack.havoc_type(state.types, addr, w);
                     // Keep this scoped to stack-typed pointers only.
                     stack.store_numbers(addr, w);
                 }
@@ -962,6 +965,12 @@ void EbpfTransformer::operator()(const Call& call) {
                     for (const DataKind kind : iterate_kinds()) {
                         stack.havoc(state.values, kind, addr, width, context.runtime().big_endian);
                     }
+                    // iterate_kinds() covers the value kinds only. The type cells must go too:
+                    // store_numbers below only marks the bytes numeric for a constant address and
+                    // width, so otherwise a spilled pointer would keep its type after the helper
+                    // overwrote its bytes. This must follow the value havoc, which can only split a
+                    // partially overwritten numeric cell while its bytes are still marked numeric.
+                    stack.havoc_type(state.types, addr, width);
                 } else {
                     only_stack = false;
                 }

@@ -573,6 +573,130 @@ code:
 post:
   - r0.type=number
 ---
+# A helper that writes through a stack pointer must forget the type cells it may overwrite, not
+# only the value cells. When the write is not a strong update the bytes are not marked numeric,
+# so a surviving type cell would hand the old pointer type back to a later load.
+test-case: bpf_get_stack with variable size forgets the type of a spilled pointer
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r2.type=stack", "r2.stack_offset=504",
+      "r3.type=number", "r3.svalue=[1, 8]", "r3.uvalue=[1, 8]",
+      "r4.type=number",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    *(u64 *)(r10 - 8) = r1
+    call 67; bpf_get_stack
+    r1 = *(u64 *)(r10 - 8)
+
+post:
+  - r0.type=number
+  - r10.type=stack
+  - r10.stack_offset=512
+---
+test-case: bpf_get_stack at variable address forgets the type of a spilled pointer
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r2.type=stack", "r2.stack_offset=[496, 504]",
+      "r3.type=number", "r3.svalue=8", "r3.uvalue=8",
+      "r4.type=number",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    *(u64 *)(r10 - 8) = r1
+    call 67; bpf_get_stack
+    r1 = *(u64 *)(r10 - 8)
+
+post:
+  - r0.type=number
+  - r10.type=stack
+  - r10.stack_offset=512
+---
+test-case: bpf_get_stack leaves no stale type cell under the bytes it marks numeric
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r2.type=stack", "r2.stack_offset=504",
+      "r3.type=number", "r3.svalue=8", "r3.uvalue=8",
+      "r4.type=number",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    *(u64 *)(r10 - 8) = r1
+    call 67; bpf_get_stack
+
+post:
+  - r0.type=number
+  - s[504...511].type=number
+  - r10.type=stack
+  - r10.stack_offset=512
+---
+test-case: bpf_get_stack with variable size keeps numeric bytes numeric
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r2.type=stack", "r2.stack_offset=504",
+      "r3.type=number", "r3.svalue=[1, 8]", "r3.uvalue=[1, 8]",
+      "r4.type=number",
+      "r10.type=stack", "r10.stack_offset=512",
+      "s[504...511].type=number"]
+
+code:
+  <start>: |
+    call 67; bpf_get_stack
+
+post:
+  - r0.type=number
+  - s[504...511].type=number
+  - r10.type=stack
+  - r10.stack_offset=512
+---
+test-case: bpf_get_stack over half of a numeric cell keeps the other half
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r2.type=stack", "r2.stack_offset=504",
+      "r3.type=number", "r3.svalue=4", "r3.uvalue=4",
+      "r4.type=number",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    *(u64 *)(r10 - 8) = 0
+    call 67; bpf_get_stack
+
+post:
+  - r0.type=number
+  - s[504...511].type=number
+  - s[508...511].svalue=0
+  - s[508...511].uvalue=0
+  - r10.type=stack
+  - r10.stack_offset=512
+---
+test-case: bpf_strtol result at variable address forgets the type of a spilled pointer
+
+pre: ["r1.type=stack", "r1.stack_offset=488",
+      "r2.type=number", "r2.svalue=8", "r2.uvalue=8",
+      "r3.type=number", "r3.svalue=0", "r3.uvalue=0",
+      "r4.type=stack", "r4.stack_offset=[496, 504]",
+      "r6.type=ctx", "r6.ctx_offset=0",
+      "r10.type=stack", "r10.stack_offset=512",
+      "s[488...495].type=number"]
+
+code:
+  <start>: |
+    *(u64 *)(r10 - 8) = r6
+    call 105; bpf_strtol
+    r1 = *(u64 *)(r10 - 8)
+
+post:
+  - r0.type=number
+  - r6.type=ctx
+  - r6.ctx_offset=0
+  - s[488...495].type=number
+  - r10.type=stack
+  - r10.stack_offset=512
+---
 test-case: bpf_trace_printk with negative size buffer
 
 pre: ["r1.type=stack", "r1.stack_offset=504",
