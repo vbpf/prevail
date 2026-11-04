@@ -183,6 +183,8 @@ enum class TypeGroup {
     map_fd_programs, ///< reg == T_MAP_PROGRAMS
     mem,             ///< shared | stack | packet
     mem_or_num,      ///< mem | number
+    stack_or_shared, ///< shared | stack: mem that stays valid when the packet is reallocated
+    stack_or_shared_or_num,
     dereferenceable, ///< types whose direct load/store access is modeled
     pointer,         ///< region pointers with modeled arithmetic (ctx | packet | stack | shared)
     ptr_or_num,      ///< pointer | number

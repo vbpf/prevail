@@ -148,6 +148,8 @@ Where:
 | `singleton_ptr` | Pointers to unique memory regions (ctx, stack, packet) |
 | `mem` | packet, stack, shared (memory that can be read/written) |
 | `mem_or_num` | number, stack, packet, shared |
+| `stack_or_shared` | stack, shared (memory arguments of helpers that may reallocate the packet) |
+| `stack_or_shared_or_num` | number, stack, shared |
 | `ptr_or_num` | number, ctx, stack, packet, shared (excluding map FD types) |
 
 ### Common Assertions

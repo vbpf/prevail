@@ -233,6 +233,8 @@ TypeSet to_typeset(const TypeGroup group) {
     case TypeGroup::stack_or_num: return TypeSet{T_NUM, T_STACK};
     case TypeGroup::mem: return TS_MEM;
     case TypeGroup::mem_or_num: return TS_MEM | TS_NUM;
+    case TypeGroup::stack_or_shared: return TypeSet{T_STACK, T_SHARED};
+    case TypeGroup::stack_or_shared_or_num: return TypeSet{T_NUM, T_STACK, T_SHARED};
     case TypeGroup::dereferenceable: return TS_DEREFERENCEABLE;
     case TypeGroup::pointer: return TS_POINTER;
     case TypeGroup::ptr_or_num: return TS_POINTER | TS_NUM;
@@ -287,6 +289,8 @@ std::ostream& operator<<(std::ostream& os, const TypeGroup ts) {
         {TypeGroup::stack_or_packet, typeset_to_string({T_STACK, T_PACKET})},
         {TypeGroup::singleton_ptr, typeset_to_string({T_CTX, T_STACK, T_PACKET})},
         {TypeGroup::mem_or_num, typeset_to_string({T_NUM, T_STACK, T_PACKET, T_SHARED})},
+        {TypeGroup::stack_or_shared, typeset_to_string({T_STACK, T_SHARED})},
+        {TypeGroup::stack_or_shared_or_num, typeset_to_string({T_NUM, T_STACK, T_SHARED})},
     };
     if (string_to_type.contains(ts)) {
         return os << string_to_type.at(ts);
