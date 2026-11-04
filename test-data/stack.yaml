@@ -626,6 +626,28 @@ post:
   - r10.type=stack
   - s[498...511].type=number
 ---
+test-case: stack pointer whose offset bounds are more than 2^31 apart has no numeric size
+
+# Both bounds of r6.stack_offset fit an int32 but their difference does not; the numeric
+# size used to overflow to INT_MAX, letting later reads through r6 bypass the type check.
+
+pre: ["r2.type=number", "r2.svalue=[-4098, 2147479551]",
+      "r10.type=stack", "r10.stack_offset=4096"]
+
+code:
+  <start>: |
+    r6 = r10
+    r6 += r2
+
+post:
+  - r2.type=number
+  - r2.svalue=[-4098, 2147479551]
+  - r6.type=stack
+  - r6.stack_offset=[-2, 2147483647]
+  - r6.stack_offset=r2.svalue+4096
+  - r10.stack_offset=4096
+  - r10.type=stack
+---
 test-case: invalid stack access
 
 pre: ["r10.type=stack", "r10.stack_offset=1024"]
