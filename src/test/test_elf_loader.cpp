@@ -167,6 +167,13 @@ class TempElfFile {
 
 std::optional<KsymBtfId> resolve_no_ksym_symbols(const std::string&) { return std::nullopt; }
 
+size_t get_program_type_calls = 0;
+
+EbpfProgramType counting_get_program_type(const std::string& section, const std::string& path) {
+    ++get_program_type_calls;
+    return g_ebpf_platform_linux.get_program_type(section, path);
+}
+
 struct SectionHeaderInfo {
     unsigned char elf_class;
     size_t section_header_offset;
@@ -781,6 +788,51 @@ TEST_CASE("ELF loader ignores non-function .ksyms entries", "[elf]") {
     ElfObject elf{"ebpf-samples/cilium-ebpf/ksym-el.elf", {}, &platform};
     const auto& progs = elf.get_programs("socket", "ksym_test");
     REQUIRE(progs.size() == 1);
+}
+
+// Regression test: loading a section used to read every executable section of the file again,
+// so listing an object with many sections was cubic in their number (and quadratic in memory).
+TEST_CASE("ELF loader reads the file once for all sections", "[elf][hardening]") {
+
+    ebpf_platform_t platform = g_ebpf_platform_linux;
+    platform.get_program_type = counting_get_program_type;
+    get_program_type_calls = 0;
+
+    ElfObject elf{"ebpf-samples/cilium/bpf_lxc.o", {}, &platform};
+    const size_t program_count = elf.list_programs().size();
+    REQUIRE(program_count > 1);
+    REQUIRE(elf.get_programs().size() == program_count);
+    REQUIRE(elf.get_programs("2/1").size() == 1);
+
+    // Every section of this object holds one program, and a pass over the file asks for the
+    // type of each section once.
+    REQUIRE(get_program_type_calls == program_count);
+}
+
+// The single pass must still attribute errors to the section they belong to: a section that
+// fails to load does not take the other sections of the object with it.
+TEST_CASE("ELF loader keeps load errors local to their section", "[elf]") {
+
+    ebpf_platform_t platform = g_ebpf_platform_linux;
+    platform.resolve_ksym_btf_id = resolve_no_ksym_symbols;
+
+    // "tc" and "fentry/bpf_fentry_test2" call kfuncs that the resolver above does not know;
+    // "tp_btf/task_newtask" only calls weak ones.
+    ElfObject elf{"ebpf-samples/cilium-ebpf/kfunc-el.elf", {}, &platform};
+    for (const ElfProgramInfo& program : elf.list_programs()) {
+        INFO("section=" << program.section_name << " function=" << program.function_name);
+        if (program.section_name == "tp_btf/task_newtask") {
+            REQUIRE_FALSE(program.reject_load);
+        } else {
+            REQUIRE(program.reject_load);
+            REQUIRE(program.reject_load_reason == "Unresolved symbols found.");
+        }
+    }
+    REQUIRE_THROWS_WITH(elf.get_programs("tc"), Catch::Matchers::ContainsSubstring("Unresolved symbols found."));
+    REQUIRE_THROWS_WITH(elf.get_programs("fentry/bpf_fentry_test2"),
+                        Catch::Matchers::ContainsSubstring("Unresolved symbols found."));
+    REQUIRE(elf.get_programs("tp_btf/task_newtask").size() == 2);
+    REQUIRE(elf.get_programs().size() == 2);
 }
 
 TEST_CASE("ELF loader gives BTF maps declared with the same type distinct fds", "[elf]") {

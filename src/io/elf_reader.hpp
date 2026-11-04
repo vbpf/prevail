@@ -162,6 +162,7 @@ class ProgramReader {
     std::vector<FunctionRelocation> function_relocations;
     std::set<std::pair<size_t, size_t>> function_relocation_index_;
     std::map<std::string, std::optional<KsymBtfId>> ksym_function_resolution_cache;
+    std::map<std::string, const ELFIO::section*> relocation_section_cache;
     std::vector<unresolved_symbol_error_t> unresolved_symbol_errors;
     /// Only negative IDs are platform-internal builtins needing the gate;
     /// positive IDs are standard BPF helpers handled via normal prototype lookup.
@@ -182,13 +183,22 @@ class ProgramReader {
     [[nodiscard]]
     bool has_function_relocation(size_t prog_index, size_t source_offset) const;
     void build_ksym_function_resolution_cache();
+    void build_relocation_section_cache();
     void enqueue_synthetic_local_calls(const std::vector<EbpfInst>& instructions, ELFIO::Elf_Half section_index,
                                        ELFIO::Elf_Xword program_offset);
 
     void record_function_relocation(FunctionRelocation reloc);
+    void read_programs(bool all_sections);
 
   public:
+    struct section_error_t {
+        std::string reason;
+        std::vector<std::string> diagnostics;
+    };
+
     std::vector<RawProgram> raw_programs;
+    /// Filled by read_all_programs(): the sections whose programs failed to load, and why.
+    std::map<std::string, section_error_t> section_errors;
 
     ProgramReader(const parse_params_t& p, const ELFIO::elfio& r, const ELFIO::const_symbol_section_accessor& s,
                   const ElfGlobalData& g)
@@ -207,7 +217,13 @@ class ProgramReader {
                              const std::string& section_name, ELFIO::Elf_Xword program_offset, size_t program_size);
     [[nodiscard]]
     const ELFIO::section* get_relocation_section(const std::string& name) const;
+    /// Reads every executable section and keeps the programs of parse_params.desired_section
+    /// (all of them when it is empty); errors that would fail the load of that section are thrown.
     void read_programs();
+    /// Like read_programs() for each section in turn, but in a single pass: keeps the programs of
+    /// every section and records the errors local to one section in section_errors instead of
+    /// throwing them.  Errors that fail the whole file are still thrown.
+    void read_all_programs();
 };
 
 // ---------------------------------------------------------------------------
