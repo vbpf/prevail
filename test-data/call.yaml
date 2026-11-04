@@ -3,7 +3,7 @@
 ---
 test-case: bpf_map_lookup_elem
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "s[504...511].type=number"]
 
@@ -21,7 +21,7 @@ post:
 test-case: bpf_map_lookup_elem null check discards stale destination kind values
 
 pre: ["r0.type=number", "r0.svalue=1", "r0.uvalue=1",
-      "r1.type=map_fd", "r1.map_fd=1",
+      "r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r6.type=stack", "r6.stack_offset=504",
       "s[504...511].type=number"]
@@ -44,7 +44,7 @@ messages:
 ---
 test-case: bpf_map_lookup_elem copied null check discards stale destination kind values
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r6.type=stack", "r6.stack_offset=504",
       "r7.type=number", "r7.svalue=-1",
@@ -232,7 +232,7 @@ messages:
 ---
 test-case: bpf_map_lookup_elem shared key
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=shared", "r2.shared_offset=0", "r2.shared_region_size=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=[1, 2147418112]"]
 
 code:
@@ -248,7 +248,7 @@ post:
 test-case: bpf_map_lookup_elem packet key
 
 pre: ["meta_offset=0",
-      "r1.type=map_fd", "r1.map_fd=1",
+      "r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=packet", "r2.packet_offset=0", "packet_size=4"]
 
 code:
@@ -265,7 +265,7 @@ post:
 ---
 test-case: bpf_map_lookup_elem shared key - maybe null
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=shared", "r2.shared_offset=0", "r2.shared_region_size=4", "r2.svalue=[0, 2147418112]", "r2.uvalue=[0, 2147418112]"]
 
 code:
@@ -281,7 +281,7 @@ messages:
 ---
 test-case: bpf_map_lookup_elem shared key - too small
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=shared", "r2.shared_offset=0", "r2.shared_region_size=2", "r2.svalue=[1, 2147418112]", "r2.uvalue=[1, 2147418112]"]
 
 code:
@@ -296,7 +296,7 @@ messages:
 ---
 test-case: bpf_map_lookup_elem shared key - too small
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=shared", "r2.shared_offset=-2", "r2.shared_region_size=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=[1, 2147418112]"]
 
 code:
@@ -311,7 +311,7 @@ messages:
 ---
 test-case: bpf_map_lookup_elem with non-numeric stack key
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack"]
 
 code:
@@ -326,7 +326,7 @@ messages:
 ---
 test-case: bpf_map_update_elem with numeric stack value
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=stack", "r3.stack_offset=496",
       "r4.type=number",
@@ -343,7 +343,7 @@ post:
 ---
 test-case: bpf_map_update_elem with shared value
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=4", "r3.svalue=[1, 2147418112]", "r3.uvalue=[1, 2147418112]",
       "r4.type=number",
@@ -360,7 +360,7 @@ post:
 ---
 test-case: bpf_map_update_elem with shared value too small
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=2", "r3.svalue=[1, 2147418112]", "r3.uvalue=[1, 2147418112]",
       "r4.type=number",
@@ -379,7 +379,7 @@ messages:
 ---
 test-case: bpf_map_update_elem with shared value larger than target region
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=64", "r3.svalue=[1, 2147418112]", "r3.uvalue=[1, 2147418112]",
       "r4.type=number",
@@ -396,7 +396,7 @@ post:
 ---
 test-case: bpf_map_update_elem with shared value may be null
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=4", "r3.svalue=[0, 2147418112]", "r3.uvalue=[0, 2147418112]",
       "r4.type=number",
@@ -416,7 +416,7 @@ messages:
 test-case: bpf_map_update_elem with packet value
 
 pre: ["meta_offset=0",
-      "r1.type=map_fd", "r1.map_fd=1",
+      "r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=packet", "r3.packet_offset=0", "packet_size=4",
       "r4.type=number",
@@ -435,7 +435,7 @@ post:
 ---
 test-case: bpf_map_update_elem with non-numeric stack value
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=stack", "r3.stack_offset=496",
       "r4.type=number",
@@ -453,7 +453,7 @@ messages:
 ---
 test-case: bpf_map_update_elem with context value
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=ctx", "r3.ctx_offset=0",
       "r4.type=number",
@@ -473,7 +473,7 @@ messages:
 # (4 here) bytes, so the old contents of the covered stack cell must not survive the call.
 test-case: bpf_map_pop_elem forgets the previous stack value
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=508",
       "s[504...507].type=number", "s[504...507].svalue=7", "s[504...507].uvalue=7",
       "s[508...511].type=number", "s[508...511].svalue=0", "s[508...511].uvalue=0"]
@@ -490,7 +490,7 @@ post:
 ---
 test-case: bpf_map_peek_elem forgets the previous stack value
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=508",
       "s[504...507].type=number", "s[504...507].svalue=7", "s[504...507].uvalue=7",
       "s[508...511].type=number", "s[508...511].svalue=0", "s[508...511].uvalue=0"]
@@ -507,7 +507,7 @@ post:
 ---
 test-case: bpf_map_pop_elem forgets the previous stack value for a stack-or-shared pointer
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type in {stack, shared}", "r2.stack_offset=508",
       "r2.shared_offset=0", "r2.shared_region_size=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=[1, 2147418112]",
       "s[508...511].type=number", "s[508...511].svalue=0", "s[508...511].uvalue=0"]
@@ -522,7 +522,7 @@ post:
 ---
 test-case: bpf_map_pop_elem result guards reachable code
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=508",
       "r10.type=stack", "r10.stack_offset=512",
       "s[508...511].type=number", "s[508...511].svalue=0", "s[508...511].uvalue=0"]
@@ -556,7 +556,7 @@ messages:
 ---
 test-case: bpf_map_pop_elem with non-numeric stack value
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=508"]
 
 code:
@@ -571,7 +571,7 @@ messages:
 ---
 test-case: bpf_ringbuf_output with numeric stack value
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=number", "r3.svalue=8", "r3.uvalue=8",
       "r4.type=number",
@@ -590,7 +590,7 @@ post:
 ---
 test-case: bpf_ringbuf_output with non-numeric stack value
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=number", "r3.svalue=8", "r3.uvalue=8",
       "r4.type=number",
@@ -608,7 +608,7 @@ messages:
 ---
 test-case: bpf_ringbuf_output with context value
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=ctx", "r2.ctx_offset=0",
       "r3.type=number", "r3.svalue=8", "r3.uvalue=8",
       "r4.type=number",
@@ -859,7 +859,7 @@ test-case: bpf_tail_call leaves r0 unreadable when it fails
 
 # On Linux bpf_tail_call has no return value: a call that fails (e.g. index out of range)
 # falls through without writing r0, so r0 must not be typed as a number afterwards.
-pre: ["r0.type=number", "r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r3.type=number"]
+pre: ["r0.type=number", "r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r2.uvalue=[1, 2147418112]", "r3.type=number"]
 
 code:
   <start>: |
@@ -875,7 +875,7 @@ messages:
 test-case: bpf_tail_call that fails does not turn a pointer in r0 into a number
 
 pre: ["r0.type=stack", "r0.stack_offset=512",
-      "r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r3.type=number",
+      "r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r2.uvalue=[1, 2147418112]", "r3.type=number",
       "r7.type=shared", "r7.shared_offset=0", "r7.shared_region_size=8", "r7.svalue=[1, 2147418112]", "r7.uvalue=[1, 2147418112]"]
 
 code:
@@ -891,7 +891,7 @@ messages:
 ---
 test-case: bpf_tail_call that fails is followed by an explicit return value
 
-pre: ["r0.type=number", "r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r3.type=number"]
+pre: ["r0.type=number", "r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r2.uvalue=[1, 2147418112]", "r3.type=number"]
 
 code:
   <start>: |
@@ -1060,3 +1060,137 @@ post:
 
 messages:
   - "0: Upper bound must be at most r1.shared_region_size (valid_access(r1.offset, width=16) for write)"
+---
+test-case: bpf_ringbuf_submit rejects unchecked ringbuf_reserve result
+
+pre: ["r1.type=map_fd", "r1.map_fd=27", "r1.uvalue=[1, 2147418112]",
+      "r2.type=number", "r2.svalue=8", "r2.uvalue=8",
+      "r3.type=number", "r3.svalue=0", "r3.uvalue=0"]
+
+code:
+  <start>: |
+    call 131; bpf_ringbuf_reserve
+    r1 = r0
+    r2 = 0
+    call 132; bpf_ringbuf_submit
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "3: Possible null argument (r1 != 0)"
+---
+test-case: bpf_ringbuf_submit accepts checked ringbuf_reserve result
+
+pre: ["r1.type=map_fd", "r1.map_fd=27", "r1.uvalue=[1, 2147418112]",
+      "r2.type=number", "r2.svalue=8", "r2.uvalue=8",
+      "r3.type=number", "r3.svalue=0", "r3.uvalue=0"]
+
+code:
+  <start>: |
+    call 131; bpf_ringbuf_reserve
+    if r0 == 0 goto <exit>
+    r1 = r0
+    r2 = 0
+    call 132; bpf_ringbuf_submit
+  <exit>: |
+    r0 = 0
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0
+---
+test-case: bpf_sk_fullsock rejects unchecked skc_lookup_tcp result
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r10.type=stack", "r10.stack_offset=512",
+      "r2.type=stack", "r2.stack_offset=496",
+      "r3.type=number", "r3.svalue=12", "r3.uvalue=12",
+      "r4.type=number", "r4.svalue=0", "r4.uvalue=0",
+      "r5.type=number", "r5.svalue=0", "r5.uvalue=0",
+      "s[496...507].type=number"]
+
+code:
+  <start>: |
+    call 99; bpf_skc_lookup_tcp
+    r1 = r0
+    call 95; bpf_sk_fullsock
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "2: Possible null argument (r1 != 0)"
+---
+test-case: bpf_sk_fullsock accepts checked skc_lookup_tcp result
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r10.type=stack", "r10.stack_offset=512",
+      "r2.type=stack", "r2.stack_offset=496",
+      "r3.type=number", "r3.svalue=12", "r3.uvalue=12",
+      "r4.type=number", "r4.svalue=0", "r4.uvalue=0",
+      "r5.type=number", "r5.svalue=0", "r5.uvalue=0",
+      "s[496...507].type=number"]
+
+code:
+  <start>: |
+    call 99; bpf_skc_lookup_tcp
+    if r0 == 0 goto <exit>
+    r1 = r0
+    call 95; bpf_sk_fullsock
+  <exit>: |
+    r0 = 0
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0
+  - r10.type=stack
+  - r10.stack_offset=512
+  - s[496...507].type=number
+---
+test-case: bpf_map_lookup_elem rejects possibly-null map descriptor
+
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[0, 2147418112]",
+      "r2.type=stack", "r2.stack_offset=504",
+      "s[504...511].type=number"]
+
+code:
+  <start>: |
+    call 1; bpf_map_lookup_elem
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Possible null argument (r1 != 0)"
+---
+test-case: bpf_spin_lock rejects possibly-null map value
+
+pre: ["r1.type=shared", "r1.shared_offset=0", "r1.shared_region_size=8", "r1.svalue=[0, 2147418112]", "r1.uvalue=[0, 2147418112]"]
+
+code:
+  <start>: |
+    call 93; bpf_spin_lock
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Possible null access (valid_access(r1.offset, width=4) for write)"
+---
+test-case: bpf_spin_lock accepts checked map value
+
+pre: ["r1.type=shared", "r1.shared_offset=0", "r1.shared_region_size=8", "r1.svalue=[1, 2147418112]", "r1.uvalue=[1, 2147418112]"]
+
+code:
+  <start>: |
+    call 93; bpf_spin_lock
+
+post:
+  - r0.type=number

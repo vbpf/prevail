@@ -270,7 +270,7 @@ post:
 ---
 test-case: allow tail call from within a subprogram
 
-pre: ["r0.type=number", "r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r3.type=number"]
+pre: ["r0.type=number", "r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r2.uvalue=[1, 2147418112]", "r3.type=number"]
 
 code:
   <start>: |

@@ -159,7 +159,7 @@ Where:
 | `valid_access(reg.offset, width=N) for read/write` | Memory access is within bounds |
 | `r<N>.type in {types}` | Register has one of the listed types |
 | `r<N>.type == number` | Register is a number (not a pointer) |
-| `r<N> != 0` | Register is non-zero (for division) |
+| `r<N> != 0` | Register is non-zero (for division, or a helper pointer argument that must not be null) |
 | `pc[N] < 100000` | Loop counter is within limit |
 | `within(reg:key_size(map))` | Map key access is valid |
 
@@ -173,6 +173,7 @@ Where:
 | `Lower bound must be at least r10.stack_offset - subprogram_stack_size` | Stack underflow |
 | `Stack content is not numeric` | Reading non-numeric data from stack |
 | `Possible null access` | Pointer might be NULL |
+| `Possible null argument` | Pointer passed to a helper might be NULL |
 | `Nonzero context offset` | Context pointer was modified before passing to helper |
 
 ---

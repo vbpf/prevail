@@ -371,6 +371,8 @@ std::set<Reg> extract_assertion_registers(const Assertion& assertion) {
                 return {};
             } else if constexpr (std::is_same_v<T, ValidArgZero>) {
                 return {a.reg};
+            } else if constexpr (std::is_same_v<T, ValidArgNonNull>) {
+                return {a.reg};
             } else if constexpr (std::is_same_v<T, ValidMapType>) {
                 return {a.map_fd_reg};
             } else {

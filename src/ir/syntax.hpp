@@ -494,6 +494,14 @@ struct ValidArgZero {
     constexpr bool operator==(const ValidArgZero&) const = default;
 };
 
+/// Checks that a pointer argument is provably non-null. Helper results such as a ringbuf
+/// record, a looked-up socket or an inner map are modeled as possibly null until the
+/// program tests them; a helper whose prototype requires the pointer must not get that case.
+struct ValidArgNonNull {
+    Reg reg;
+    constexpr bool operator==(const ValidArgNonNull&) const = default;
+};
+
 /// Checks that the map type passed to a helper is in its allowed set.
 struct ValidMapType {
     Reg map_fd_reg;
@@ -504,7 +512,7 @@ struct ValidMapType {
 
 using Assertion = std::variant<Comparable, Addable, ValidDivisor, ValidAccess, ValidStore, ValidSize, ValidMapKeyValue,
                                ValidCallbackTarget, TypeConstraint, FuncConstraint, ZeroCtxOffset, BoundedLoopCount,
-                               ValidArgZero, ValidMapType>;
+                               ValidArgZero, ValidArgNonNull, ValidMapType>;
 
 std::ostream& operator<<(std::ostream& os, Instruction const& ins);
 std::string to_string(Instruction const& ins);
