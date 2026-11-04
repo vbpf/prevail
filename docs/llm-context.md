@@ -75,7 +75,7 @@ Each register has multiple abstract properties:
 | `r<N>.stack_numeric_size` | Number of contiguous numeric bytes at stack location |
 | `r<N>.map_fd` | Map file descriptor value (if type=map_fd) |
 
-**Interval notation**: `[min, max]` means the value is constrained to that range. `[4098, 2147418112]` is a typical pointer address range.
+**Interval notation**: `[min, max]` means the value is constrained to that range. `[1, 2147418112]` is a typical pointer address range; a lower bound of 0 means the pointer may be null.
 
 **Relational constraints**: Entries like `r2.packet_offset=packet_size` indicate relationships between variables.
 

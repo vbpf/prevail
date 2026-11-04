@@ -606,7 +606,11 @@ static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, 
     }
     if (width == offset_width) {
         state.assign_type(target_reg, T_PACKET);
-        state.values.add_constraint(4098 <= target.uvalue);
+        // The pointer may be null: Linux hands sk_msg programs data == data_end == NULL when the
+        // payload is shared with user space (sendpage/sendfile). A positive lower bound would make
+        // the fall-through edge of a `data == 0` test bottom and leave the code behind it unchecked.
+        // Packet accesses are bounded through packet_offset/packet_size, not through uvalue.
+        state.values.add_constraint(0 <= target.uvalue);
         state.values.add_constraint(target.uvalue <= ptr_max(context.runtime().max_packet_size));
     }
 }
