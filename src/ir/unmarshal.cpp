@@ -378,7 +378,8 @@ struct Unmarshaller {
                                .v = getBinValue(pc, inst),
                                .is64 = is64,
                            };
-                           if (!allow_division_by_zero && (op == Bin::Op::UDIV || op == Bin::Op::UMOD)) {
+                           if (!allow_division_by_zero && (op == Bin::Op::UDIV || op == Bin::Op::UMOD ||
+                                                           op == Bin::Op::SDIV || op == Bin::Op::SMOD)) {
                                if (const auto pimm = std::get_if<Imm>(&res.v)) {
                                    if (pimm->v == 0) {
                                        note("division by zero");

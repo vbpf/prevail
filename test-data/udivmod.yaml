@@ -594,3 +594,90 @@ post:
   - r2.type=number
   - r2.svalue=4294967296
   - r2.uvalue=4294967296
+
+---
+# An immediate divisor carries the same obligation as a register divisor: without
+# allow_division_by_zero, dividing by a literal zero has to be rejected.
+test-case: division by zero immediate with warning
+
+pre: ["r1.type=number", "r1.svalue=6", "r1.uvalue=6"]
+
+options: ["!allow_division_by_zero"]
+
+code:
+  <start>: |
+    r1 /= 0
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Possible division by zero (0 != 0)"
+
+---
+test-case: modulo by zero immediate with warning
+
+pre: ["r1.type=number", "r1.svalue=6", "r1.uvalue=6"]
+
+options: ["!allow_division_by_zero"]
+
+code:
+  <start>: |
+    r1 %= 0
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Possible division by zero (0 != 0)"
+
+---
+test-case: 32-bit division by zero immediate with warning
+
+pre: ["r1.type=number", "r1.svalue=6", "r1.uvalue=6"]
+
+options: ["!allow_division_by_zero"]
+
+code:
+  <start>: |
+    w1 /= 0
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Possible division by zero (0 != 0)"
+
+---
+test-case: 32-bit modulo by zero immediate with warning
+
+pre: ["r1.type=number", "r1.svalue=6", "r1.uvalue=6"]
+
+options: ["!allow_division_by_zero"]
+
+code:
+  <start>: |
+    w1 %= 0
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Possible division by zero (0 != 0)"
+
+---
+# Precision guard: a nonzero immediate is a valid divisor.
+test-case: division by nonzero immediate without allow_division_by_zero
+
+pre: ["r1.type=number", "r1.svalue=6", "r1.uvalue=6"]
+
+options: ["!allow_division_by_zero"]
+
+code:
+  <start>: |
+    r1 /= 2
+
+post:
+  - r1.type=number
+  - r1.svalue=3
+  - r1.uvalue=3

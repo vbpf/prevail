@@ -199,11 +199,20 @@ static bool may_be_zero_at_32_bits(const TypeToNumDomain& state, const RegPack& 
 
 void EbpfChecker::operator()(const ValidDivisor& s) const {
     using namespace dsl_syntax;
-    if (!dom.state.implies_superset(s.reg, TS_POINTER, s.reg, TS_NUM)) {
+    if (const auto imm = std::get_if<Imm>(&s.divisor)) {
+        // As for a register below, a 32-bit division divides by the immediate's low half.
+        const uint64_t divisor = s.is64 ? imm->v : gsl::narrow_cast<uint32_t>(imm->v);
+        if (!context.runtime().allow_division_by_zero && divisor == 0) {
+            throw_fail("Possible division by zero");
+        }
+        return;
+    }
+    const Reg divisor_reg = std::get<Reg>(s.divisor);
+    if (!dom.state.implies_superset(divisor_reg, TS_POINTER, divisor_reg, TS_NUM)) {
         throw_fail("Only numbers can be used as divisors");
     }
     if (!context.runtime().allow_division_by_zero) {
-        const auto reg = reg_pack(s.reg);
+        const auto reg = reg_pack(divisor_reg);
         if (s.is64) {
             const auto v = s.is_signed ? reg.svalue : reg.uvalue;
             require_value(dom.state, v != 0, "Possible division by zero");

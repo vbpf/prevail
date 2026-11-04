@@ -442,7 +442,14 @@ struct AssertionPrinterVisitor {
         _os << TypeConstraint{a.ptr, TypeGroup::pointer} << " -> " << TypeConstraint{a.num, TypeGroup::number};
     }
 
-    void operator()(ValidDivisor const& a) { _os << reg_name(a.reg, a.is64) << " != 0"; }
+    void operator()(ValidDivisor const& a) {
+        if (const auto reg = std::get_if<Reg>(&a.divisor)) {
+            _os << reg_name(*reg, a.is64);
+        } else {
+            _os << a.divisor;
+        }
+        _os << " != 0";
+    }
 
     void operator()(TypeConstraint const& tc) {
         const string cmp_op = is_singleton_type(tc.types) ? "==" : "in";
