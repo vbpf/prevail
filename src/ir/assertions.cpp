@@ -107,10 +107,13 @@ class AssertExtractor {
                 break;
             case ArgSingle::Kind::MAP_FD_PROGRAMS:
                 res.emplace_back(TypeConstraint{arg.reg, TypeGroup::map_fd_programs});
+                // An inner map returned by a lookup on a map-of-maps may be null.
+                res.emplace_back(ValidArgNonNull{arg.reg});
                 // Do not update map_fd_reg
                 break;
             case ArgSingle::Kind::MAP_FD:
                 res.emplace_back(TypeConstraint{arg.reg, TypeGroup::map_fd});
+                res.emplace_back(ValidArgNonNull{arg.reg});
                 map_fd_reg = arg.reg;
                 break;
             case ArgSingle::Kind::PTR_TO_MAP_KEY: [[fallthrough]];
@@ -140,10 +143,19 @@ class AssertExtractor {
                     res.emplace_back(a);
                 }
                 break;
-            case ArgSingle::Kind::PTR_TO_SOCKET: res.emplace_back(TypeConstraint{arg.reg, TypeGroup::socket}); break;
-            case ArgSingle::Kind::PTR_TO_BTF_ID: res.emplace_back(TypeConstraint{arg.reg, TypeGroup::btf_id}); break;
+            // The type test alone would accept the null case of a *_OR_NULL helper result
+            // (socket lookups, bpf_skc_to_*, ringbuf_reserve).
+            case ArgSingle::Kind::PTR_TO_SOCKET:
+                res.emplace_back(TypeConstraint{arg.reg, TypeGroup::socket});
+                res.emplace_back(ValidArgNonNull{arg.reg});
+                break;
+            case ArgSingle::Kind::PTR_TO_BTF_ID:
+                res.emplace_back(TypeConstraint{arg.reg, TypeGroup::btf_id});
+                res.emplace_back(ValidArgNonNull{arg.reg});
+                break;
             case ArgSingle::Kind::PTR_TO_ALLOC_MEM:
                 res.emplace_back(TypeConstraint{arg.reg, TypeGroup::alloc_mem});
+                res.emplace_back(ValidArgNonNull{arg.reg});
                 break;
             case ArgSingle::Kind::PTR_TO_SPIN_LOCK:
                 // A struct bpf_spin_lock (4 bytes) lives only inside a map value, and the helper

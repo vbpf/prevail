@@ -104,6 +104,7 @@ class EbpfChecker final {
     void operator()(const ValidMapType&) const;
     void operator()(const ValidSize&) const;
     void operator()(const ValidArgZero&) const;
+    void operator()(const ValidArgNonNull&) const;
     void operator()(const ValidStore&) const;
     void operator()(const ZeroCtxOffset&) const;
 
@@ -284,6 +285,12 @@ void EbpfChecker::operator()(const ValidArgZero& s) const {
     using namespace dsl_syntax;
     const auto r = reg_pack(s.reg);
     require_value(dom.state, r.svalue == 0, "Argument must be zero");
+}
+
+void EbpfChecker::operator()(const ValidArgNonNull& s) const {
+    using namespace dsl_syntax;
+    const auto r = reg_pack(s.reg);
+    require_value(dom.state, r.uvalue > 0, "Possible null argument");
 }
 
 void EbpfChecker::operator()(const ValidCallbackTarget& s) const {

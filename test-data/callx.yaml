@@ -3,7 +3,7 @@
 ---
 test-case: callx bpf_map_lookup_elem
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r8.type=number", "r8.svalue=1", "r8.uvalue=1",
       "s[504...511].type=number"]
@@ -24,7 +24,7 @@ post:
 ---
 test-case: callx bpf_map_lookup_elem shared key
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=shared", "r2.shared_offset=0", "r2.shared_region_size=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=[1, 2147418112]",
       "r8.type=number", "r8.svalue=1", "r8.uvalue=1"]
 
@@ -44,7 +44,7 @@ post:
 test-case: callx bpf_map_lookup_elem packet key
 
 pre: ["meta_offset=0",
-      "r1.type=map_fd", "r1.map_fd=1",
+      "r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=packet", "r2.packet_offset=0", "packet_size=4",
       "r8.type=number", "r8.svalue=1", "r8.uvalue=1"]
 
@@ -65,7 +65,7 @@ post:
 ---
 test-case: callx bpf_map_lookup_elem shared key - maybe null
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=shared", "r2.shared_offset=0", "r2.shared_region_size=4", "r2.svalue=[0, 2147418112]", "r2.uvalue=[0, 2147418112]",
       "r8.type=number", "r8.svalue=1", "r8.uvalue=1"]
 
@@ -81,7 +81,7 @@ messages:
 ---
 test-case: callx bpf_map_lookup_elem shared key - too small
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=shared", "r2.shared_offset=0", "r2.shared_region_size=2", "r2.svalue=[1, 2147418112]", "r2.uvalue=[1, 2147418112]",
       "r8.type=number", "r8.svalue=1", "r8.uvalue=1"]
 
@@ -98,7 +98,7 @@ messages:
 ---
 test-case: callx bpf_map_lookup_elem shared key - too small
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=shared", "r2.shared_offset=-2", "r2.shared_region_size=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=[1, 2147418112]",
       "r8.type=number", "r8.svalue=1", "r8.uvalue=1"]
 
@@ -192,7 +192,7 @@ messages:
 ---
 test-case: callx validation and dispatch use the same helper id
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r8.type=number", "r8.svalue=1", "r8.uvalue=2",
       "s[504...511].type=number"]
@@ -209,7 +209,7 @@ messages:
 ---
 test-case: callx bpf_map_lookup_elem with non-numeric stack key
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack",
       "r8.type=number", "r8.svalue=1", "r8.uvalue=1"]
 
@@ -226,7 +226,7 @@ messages:
 ---
 test-case: callx bpf_map_update_elem with numeric stack value
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=stack", "r3.stack_offset=496",
       "r4.type=number",
@@ -250,7 +250,7 @@ post:
 ---
 test-case: callx bpf_map_update_elem with shared value
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=4", "r3.svalue=[1, 2147418112]", "r3.uvalue=[1, 2147418112]",
       "r4.type=number",
@@ -271,7 +271,7 @@ post:
 ---
 test-case: callx bpf_map_update_elem with shared value too small
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=2", "r3.svalue=[1, 2147418112]", "r3.uvalue=[1, 2147418112]",
       "r4.type=number",
@@ -292,7 +292,7 @@ messages:
 ---
 test-case: callx bpf_map_update_elem with shared value larger than target region
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=64", "r3.svalue=[1, 2147418112]", "r3.uvalue=[1, 2147418112]",
       "r4.type=number",
@@ -313,7 +313,7 @@ post:
 ---
 test-case: callx bpf_map_update_elem with shared value may be null
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=4", "r3.svalue=[0, 2147418112]", "r3.uvalue=[0, 2147418112]",
       "r4.type=number",
@@ -335,7 +335,7 @@ messages:
 test-case: callx bpf_map_update_elem with packet value
 
 pre: ["meta_offset=0",
-      "r1.type=map_fd", "r1.map_fd=1",
+      "r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=packet", "r3.packet_offset=0", "packet_size=4",
       "r4.type=number",
@@ -357,7 +357,7 @@ post:
 ---
 test-case: callx bpf_map_update_elem with non-numeric stack value
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=stack", "r3.stack_offset=496",
       "r4.type=number",
@@ -377,7 +377,7 @@ messages:
 ---
 test-case: callx bpf_map_update_elem with context value
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=ctx", "r3.ctx_offset=0",
       "r4.type=number",
@@ -397,7 +397,7 @@ messages:
 ---
 test-case: callx bpf_ringbuf_output with numeric stack value
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=number", "r3.svalue=8", "r3.uvalue=8",
       "r4.type=number",
@@ -420,7 +420,7 @@ post:
 ---
 test-case: callx bpf_ringbuf_output with non-numeric stack value
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=number", "r3.svalue=8", "r3.uvalue=8",
       "r4.type=number",
@@ -440,7 +440,7 @@ messages:
 ---
 test-case: callx bpf_ringbuf_output with context value
 
-pre: ["r1.type=map_fd", "r1.map_fd=1",
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
       "r2.type=ctx", "r2.ctx_offset=0",
       "r3.type=number", "r3.svalue=8", "r3.uvalue=8",
       "r4.type=number",
