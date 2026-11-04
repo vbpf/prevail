@@ -219,6 +219,35 @@ post: ["r0.type=number",
        "r6.type=ctx", "r6.ctx_offset=0",
        "r7.type=number", "r7.svalue=23", "r7.uvalue=23"]
 ---
+test-case: legacy packet access with an uninitialized index register
+
+pre: ["r6.type=ctx", "r6.ctx_offset=0"]
+
+code:
+  <start>: |
+    r0 = *(u32 *)skb[r7]
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Invalid type (r7.type == number)"
+---
+test-case: legacy packet access with a pointer as index register
+
+pre: ["r6.type=ctx", "r6.ctx_offset=0",
+      "r7.type=stack", "r7.stack_offset=512"]
+
+code:
+  <start>: |
+    r0 = *(u32 *)skb[r7]
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Invalid type (r7.type == number)"
+---
 test-case: meta_offset lower bound access
 
 pre: ["meta_offset=-8", "packet_size=0",
