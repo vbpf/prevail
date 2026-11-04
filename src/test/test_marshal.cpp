@@ -1159,6 +1159,38 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
                                 Catch::Matchers::ContainsSubstring("(at 0)"));
     }
 
+    SECTION("bpf_cpumask_release is rejected as a release kfunc") {
+        constexpr uint8_t mov64_imm = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
+        RawProgram raw_prog{"",
+                            "",
+                            0,
+                            "",
+                            {EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 0x12345678},
+                             EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1010}, exit},
+                            info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {}),
+                            Catch::Matchers::ContainsSubstring("not implemented: kfunc has unsupported flags") &&
+                                Catch::Matchers::ContainsSubstring("bpf_cpumask_release") &&
+                                Catch::Matchers::ContainsSubstring("(at 1)"));
+    }
+
+    SECTION("bpf_cpumask_create returns a nullable BTF pointer, not a number") {
+        RawProgram raw_prog{
+            "", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1009}, exit}, info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
+        const auto* call = std::get_if<Call>(&prog.instruction_at(Label{0}));
+        REQUIRE(call != nullptr);
+        const ResolvedCall resolved = resolve(*call, info);
+        REQUIRE(resolved.contract.return_ptr_type == T_BTF_ID);
+        REQUIRE(resolved.contract.return_nullable);
+        // The acquired pointer is still in r0 at exit, so the program is rejected.
+        REQUIRE_FALSE(verify(prog, {}));
+    }
+
     SECTION("kfunc program type gating is enforced") {
         RawProgram raw_prog{
             "", "", 0, "", {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_BTF_HELPER, .imm = 1003}, exit}, info};

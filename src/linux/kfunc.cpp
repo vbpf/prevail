@@ -61,11 +61,18 @@ constexpr std::array<KfuncPrototypeEntry, 13> kfunc_prototypes{{
      .proto = {.name = "kfunc_test_release_flag", .return_type = EBPF_RETURN_TYPE_INTEGER},
      .flags = KfuncFlags::release},
     // bpf_cpumask_create/bpf_cpumask_release form an acquire/release pair.
-    // Acquire without enforced release — verifier does not yet track release obligations (see ID 1010).
+    // Acquire without enforced release — verifier does not yet track release obligations.
     {.btf_id = 1009,
-     .proto = {.name = "bpf_cpumask_create", .return_type = EBPF_RETURN_TYPE_INTEGER},
+     .proto = {.name = "bpf_cpumask_create", .return_type = EBPF_RETURN_TYPE_PTR_TO_BTF_ID_OR_NULL},
      .flags = KfuncFlags::acquire},
-    {.btf_id = 1010, .proto = {.name = "bpf_cpumask_release", .return_type = EBPF_RETURN_TYPE_INTEGER}},
+    // Release drops the reference passed in r1 and may free it. Declaring the argument and
+    // the KF_RELEASE flag makes make_kfunc_call reject the call until lifecycle tracking
+    // exists; an untyped, unflagged entry would accept any value in r1.
+    {.btf_id = 1010,
+     .proto = {.name = "bpf_cpumask_release",
+               .return_type = EBPF_RETURN_TYPE_INTEGER,
+               .argument_type = {EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID}},
+     .flags = KfuncFlags::release},
 }};
 
 constexpr bool kfunc_prototypes_are_sorted_by_key() {
