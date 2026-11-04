@@ -763,11 +763,14 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& state, const LinearExpress
         const Variable stack_numeric_size_variable =
             variable_registry.kind_var(DataKind::stack_numeric_sizes, type_variable);
 
-        using namespace dsl_syntax;
-        // See if the variable's numeric interval overlaps with changed bytes.
-        if (state.values.intersect(
-                dsl_syntax::operator<=(symb_addr, stack_offset_variable + stack_numeric_size_variable)) &&
-            state.values.intersect(dsl_syntax::operator>=(symb_addr + exact_width, stack_offset_variable))) {
+        // See if the variable's numeric interval may overlap with changed bytes.
+        // Compare interval bounds instead of calling intersect(): intersect() copies the whole
+        // numeric domain, and this loop runs on every stack store for every stack-typed variable,
+        // including every stack pointer spilled to the stack. The bounds over-approximate the
+        // relational answer, so no required update is skipped; a spurious overlap only recomputes.
+        const Interval numeric_start = state.values.eval_interval(stack_offset_variable);
+        const Interval numeric_end = numeric_start + state.values.eval_interval(stack_numeric_size_variable);
+        if (addr.lb() <= numeric_end.ub() && (addr + width).ub() >= numeric_start.lb()) {
             if (!must_be_num) {
                 state.values.havoc(stack_numeric_size_variable);
             }

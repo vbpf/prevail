@@ -989,3 +989,67 @@ post:
   - s[500...503].type=number
   - s[500...503].svalue=r1.svalue
   - s[500...503].uvalue=r1.svalue
+---
+test-case: store away from a spilled stack pointer keeps its numeric size
+
+# Every stack store refreshes stack_numeric_size of every stack-typed variable,
+# including the cells holding spilled stack pointers. A store that cannot touch
+# the pointer's numeric bytes must leave both the register and its spilled copy
+# alone (and must not pay for it: checking overlap used to copy the numeric
+# domain twice per stack-typed variable).
+
+pre: ["r2.type=stack", "r2.stack_offset=504", "r2.stack_numeric_size=8",
+      "r3.type in {ctx,packet}",
+      "r10.type=stack", "r10.stack_offset=512",
+      "s[504...511].type=number"]
+
+code:
+  <start>: |
+    *(u64 *)(r10 - 16) = r2 ; spill the stack pointer to s[496...503]
+    *(u64 *)(r10 - 24) = r3 ; below the pointer's numeric bytes and the spill slot
+
+post:
+  - r2.type=stack
+  - r2.stack_offset=504
+  - r2.stack_numeric_size=8
+  - r3.type in {ctx, packet}
+  - r10.type=stack
+  - r10.stack_offset=512
+  - s[488...495].type=r3.type
+  - s[488...495].ctx_offset=r3.ctx_offset
+  - s[488...495].packet_offset=r3.packet_offset
+  - s[488...495].svalue=r3.svalue
+  - s[488...495].uvalue=r3.uvalue
+  - s[496...503].type=stack
+  - s[496...503].stack_offset=504
+  - s[496...503].stack_numeric_size=8
+  - s[496...503].svalue=r2.svalue
+  - s[496...503].uvalue=r2.uvalue
+  - s[504...511].type=number
+---
+test-case: store into a spilled stack pointer's numeric bytes shrinks its numeric size
+
+pre: ["r2.type=stack", "r2.stack_offset=504", "r2.stack_numeric_size=8",
+      "r3.type in {ctx,packet}",
+      "r10.type=stack", "r10.stack_offset=512",
+      "s[504...511].type=number"]
+
+code:
+  <start>: |
+    *(u64 *)(r10 - 16) = r2 ; spill the stack pointer to s[496...503]
+    *(u32 *)(r10 - 4) = r3  ; overwrites the upper half of the numeric bytes
+
+post:
+  - r2.type=stack
+  - r2.stack_offset=504
+  - r2.stack_numeric_size=4
+  - r3.type in {ctx, packet}
+  - r10.type=stack
+  - r10.stack_offset=512
+  - s[496...503].type=stack
+  - s[496...503].stack_offset=504
+  - s[496...503].stack_numeric_size=4
+  - s[496...503].svalue=r2.svalue
+  - s[496...503].uvalue=r2.uvalue
+  - s[504...507].type=number
+  - s[508...511].type=r3.type
