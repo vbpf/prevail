@@ -122,7 +122,9 @@ struct RelocationEntry {
     ELFIO::Elf64_Addr offset;
     ELFIO::Elf_Word symbol_index;
     unsigned type;
-    ELFIO::Elf_Sxword addend;
+    // The r_addend of an SHT_RELA entry. SHT_REL entries have no addend field; theirs is carried
+    // in the relocated instruction, so an absent addend is not the same as an explicit 0.
+    std::optional<ELFIO::Elf_Sxword> explicit_addend;
 };
 
 struct RelocationSectionLayout {
@@ -176,10 +178,10 @@ RelocationEntry read_relocation_entry(const ELFIO::section& section, const ELFIO
                 read_reloc_uint<ELFIO::Elf64_Addr>(data, offsetof(ELFIO::Elf64_Rel, r_offset), layout.little_endian),
             .symbol_index = static_cast<ELFIO::Elf_Word>(info >> 32U),
             .type = static_cast<unsigned>(info & 0xffffffffULL),
-            .addend = layout.section_type == ELFIO::SHT_RELA
-                          ? read_reloc_int<ELFIO::Elf_Sxword>(data, offsetof(ELFIO::Elf64_Rela, r_addend),
-                                                              layout.little_endian)
-                          : 0,
+            .explicit_addend = layout.section_type == ELFIO::SHT_RELA
+                                   ? std::optional{read_reloc_int<ELFIO::Elf_Sxword>(
+                                         data, offsetof(ELFIO::Elf64_Rela, r_addend), layout.little_endian)}
+                                   : std::nullopt,
         };
     }
 
@@ -189,10 +191,10 @@ RelocationEntry read_relocation_entry(const ELFIO::section& section, const ELFIO
         .offset = read_reloc_uint<ELFIO::Elf32_Addr>(data, offsetof(ELFIO::Elf32_Rel, r_offset), layout.little_endian),
         .symbol_index = static_cast<ELFIO::Elf_Word>(info >> 8U),
         .type = static_cast<unsigned>(info & 0xffU),
-        .addend =
-            layout.section_type == ELFIO::SHT_RELA
-                ? read_reloc_int<ELFIO::Elf_Sword>(data, offsetof(ELFIO::Elf32_Rela, r_addend), layout.little_endian)
-                : 0,
+        .explicit_addend = layout.section_type == ELFIO::SHT_RELA
+                               ? std::optional<ELFIO::Elf_Sxword>{read_reloc_int<ELFIO::Elf_Sword>(
+                                     data, offsetof(ELFIO::Elf32_Rela, r_addend), layout.little_endian)}
+                               : std::nullopt,
     };
 }
 
@@ -739,14 +741,15 @@ int ProgramReader::relocate_global_variable(const std::string& name) const {
     return global.map_descriptors.at(val).original_fd;
 }
 
-int32_t ProgramReader::compute_lddw_reloc_offset_imm(const ELFIO::Elf_Sxword addend, const ELFIO::Elf_Word index,
+int32_t ProgramReader::compute_lddw_reloc_offset_imm(const std::optional<ELFIO::Elf_Sxword> explicit_addend,
+                                                     const ELFIO::Elf_Word index,
                                                      const std::reference_wrapper<EbpfInst> lo_inst) const {
     // R_BPF_64_64 resolves to S + A for every symbol type, not only for section symbols.
-    // eBPF objects carry SHT_REL entries, which have no addend field: A is the immediate
-    // the lddw already holds (libbpf: insn[1].imm = insn[0].imm + sym_off).
+    // eBPF objects usually carry SHT_REL entries, which have no addend field: A is then the
+    // immediate the lddw already holds (libbpf: insn[1].imm = insn[0].imm + sym_off).
     const auto& sym = get_symbol_details(symbols, index);
-    const int64_t implicit_addend = addend != 0 ? addend : lo_inst.get().imm;
-    return gsl::narrow<int32_t>(static_cast<int64_t>(sym.value + implicit_addend));
+    const int64_t addend = explicit_addend.value_or(lo_inst.get().imm);
+    return gsl::narrow<int32_t>(static_cast<int64_t>(sym.value + addend));
 }
 
 void ProgramReader::build_ksym_function_resolution_cache() {
@@ -797,7 +800,7 @@ void ProgramReader::build_ksym_function_resolution_cache() {
 bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_Half symbol_section_index,
                               const unsigned char symbol_type, const unsigned char symbol_bind,
                               std::vector<EbpfInst>& instructions, const size_t location, const ELFIO::Elf_Word index,
-                              const ELFIO::Elf_Sxword addend) {
+                              const std::optional<ELFIO::Elf_Sxword> explicit_addend) {
     EbpfInst& instruction_to_relocate = instructions[location];
 
     if (symbol_section_index == ELFIO::SHN_UNDEF) {
@@ -844,8 +847,8 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
 
         // The relocation designates the callee by position, S + A: the symbol's value plus the addend,
         // which a REL entry carries in the call's imm (clang encodes it as (imm + 1) * 8 bytes).
-        const int64_t target_addend =
-            addend != 0 ? addend : (gsl::narrow<int64_t>(instruction_to_relocate.imm) + 1) * sizeof(EbpfInst);
+        const int64_t target_addend = explicit_addend.value_or((gsl::narrow<int64_t>(instruction_to_relocate.imm) + 1) *
+                                                               static_cast<int64_t>(sizeof(EbpfInst)));
         const ELFIO::Elf_Xword symbol_value = get_symbol_details(symbols, index).value;
         const ELFIO::Elf_Xword target_offset = symbol_value + to_unsigned(target_addend);
         // The unsigned sum wraps exactly when it lands on the wrong side of the symbol's value.
@@ -883,7 +886,7 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
 
             auto [lo_inst, hi_inst] = validate_and_get_lddw_pair(instructions, location, "global variable");
 
-            hi_inst.get().imm = compute_lddw_reloc_offset_imm(addend, index, lo_inst);
+            hi_inst.get().imm = compute_lddw_reloc_offset_imm(explicit_addend, index, lo_inst);
             lo_inst.get().src = INST_LD_MODE_MAP_VALUE;
 
             const std::string section_name = reader.sections[symbol_section_index]->get_name();
@@ -907,7 +910,7 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
         auto [lo_inst, hi_inst] =
             validate_and_get_lddw_pair(instructions, location, "global variable '" + symbol_name + "'");
 
-        hi_inst.get().imm = compute_lddw_reloc_offset_imm(addend, index, lo_inst);
+        hi_inst.get().imm = compute_lddw_reloc_offset_imm(explicit_addend, index, lo_inst);
         lo_inst.get().src = INST_LD_MODE_MAP_VALUE;
         lo_inst.get().imm = relocate_global_variable(reader.sections[symbol_section_index]->get_name());
         return true;
@@ -930,7 +933,6 @@ void ProgramReader::process_relocations(std::vector<EbpfInst>& instructions, con
         ELFIO::Elf64_Addr o = entry.offset;
         const ELFIO::Elf_Word idx = entry.symbol_index;
         const unsigned type = entry.type;
-        const ELFIO::Elf_Sxword addend = entry.addend;
         if (!is_supported_bpf_relocation_type(type)) {
             throw UnmarshalError("Unsupported relocation type " + std::to_string(type) + " in section " + section_name);
         }
@@ -955,7 +957,8 @@ void ProgramReader::process_relocations(std::vector<EbpfInst>& instructions, con
         }
         auto sym = get_symbol_details(symbols, idx);
 
-        if (!try_reloc(sym.name, sym.section_index, sym.type, sym.bind, instructions, loc, idx, addend)) {
+        if (!try_reloc(sym.name, sym.section_index, sym.type, sym.bind, instructions, loc, idx,
+                       entry.explicit_addend)) {
             unresolved_symbol_errors.push_back(unresolved_symbol_error_t{
                 .section = section_name,
                 .message = "Unresolved external symbol " + (sym.name.empty() ? "<anonymous>" : sym.name) +

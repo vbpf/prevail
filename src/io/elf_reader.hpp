@@ -180,7 +180,7 @@ class ProgramReader {
                                       std::string_view access_string, const libbtf::btf_type_data& btf_data);
     void process_core_relocations(const libbtf::btf_type_data& btf_data);
 
-    int32_t compute_lddw_reloc_offset_imm(ELFIO::Elf_Sxword addend, ELFIO::Elf_Word index,
+    int32_t compute_lddw_reloc_offset_imm(std::optional<ELFIO::Elf_Sxword> explicit_addend, ELFIO::Elf_Word index,
                                           std::reference_wrapper<EbpfInst> lo_inst) const;
     [[nodiscard]]
     bool has_function_relocation(size_t prog_index, size_t source_offset) const;
@@ -215,7 +215,7 @@ class ProgramReader {
 
     bool try_reloc(const std::string& symbol_name, ELFIO::Elf_Half symbol_section_index, unsigned char symbol_type,
                    unsigned char symbol_bind, std::vector<EbpfInst>& instructions, size_t location,
-                   ELFIO::Elf_Word index, ELFIO::Elf_Sxword addend);
+                   ELFIO::Elf_Word index, std::optional<ELFIO::Elf_Sxword> explicit_addend);
     void process_relocations(std::vector<EbpfInst>& instructions, const ELFIO::section& reloc,
                              const std::string& section_name, ELFIO::Elf_Xword program_offset, size_t program_size);
     [[nodiscard]]

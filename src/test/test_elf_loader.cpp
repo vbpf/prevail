@@ -1305,6 +1305,77 @@ TEST_CASE("ELF loader links local calls to the relocation target among same-name
     REQUIRE(prog[3] == EbpfInst{.opcode = MOV64_IMM, .imm = 1});
 }
 
+// Regression test: an SHT_RELA entry carries the addend A of "S + A" explicitly, so an explicit 0
+// is the addend even when the call's imm would encode another offset in an SHT_REL object.
+TEST_CASE("ELF loader honors an explicit zero addend of a RELA local-call relocation", "[elf][hardening]") {
+    auto set_instructions = [](ELFIO::section* section, const std::vector<EbpfInst>& instructions) {
+        section->set_type(ELFIO::SHT_PROGBITS);
+        section->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+        section->set_addr_align(8);
+        section->set_data(reinterpret_cast<const char*>(instructions.data()), instructions.size() * sizeof(EbpfInst));
+    };
+    constexpr uint8_t MOV64_IMM = 0xb7;
+    constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
+
+    ELFIO::elfio writer;
+    writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+    writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+    writer.set_type(ELFIO::ET_REL);
+    writer.set_machine(ELFIO::EM_BPF);
+
+    // "callee" starts at index 2 of .text; index 3 is inside it.
+    const std::vector<EbpfInst> text{
+        {.opcode = MOV64_IMM, .imm = 0}, exit, {.opcode = MOV64_IMM, .imm = 1}, {.opcode = MOV64_IMM, .imm = 2}, exit,
+    };
+    ELFIO::section* text_sec = writer.sections.add(".text");
+    set_instructions(text_sec, text);
+
+    // imm 0 would place the target one instruction past the symbol under REL; the RELA addend says 0.
+    const std::vector<EbpfInst> xdp{{.opcode = INST_OP_CALL, .src = INST_CALL_LOCAL, .imm = 0}, exit};
+    ELFIO::section* prog_sec = writer.sections.add("xdp");
+    set_instructions(prog_sec, xdp);
+
+    ELFIO::section* str_sec = writer.sections.add(".strtab");
+    str_sec->set_type(ELFIO::SHT_STRTAB);
+    ELFIO::string_section_accessor str_writer(str_sec);
+
+    ELFIO::section* sym_sec = writer.sections.add(".symtab");
+    sym_sec->set_type(ELFIO::SHT_SYMTAB);
+    sym_sec->set_addr_align(8);
+    sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+    sym_sec->set_link(str_sec->get_index());
+    sym_sec->set_info(3); // First global symbol index.
+    ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+
+    const auto text_index = text_sec->get_index();
+    sym_writer.add_symbol(str_writer, "first", 0, 16, ELFIO::STB_LOCAL, ELFIO::STT_FUNC, 0, text_index);
+    const auto callee_sym =
+        sym_writer.add_symbol(str_writer, "callee", 16, 24, ELFIO::STB_LOCAL, ELFIO::STT_FUNC, 0, text_index);
+    sym_writer.add_symbol(str_writer, "prog", 0, 16, ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0, prog_sec->get_index());
+
+    ELFIO::section* rel_sec = writer.sections.add(".relaxdp");
+    rel_sec->set_type(ELFIO::SHT_RELA);
+    rel_sec->set_addr_align(8);
+    rel_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_RELA));
+    rel_sec->set_link(sym_sec->get_index());
+    rel_sec->set_info(prog_sec->get_index());
+    ELFIO::relocation_section_accessor rel_writer(writer, rel_sec);
+    rel_writer.add_entry(0, callee_sym, R_BPF_64_32_TYPE, 0);
+
+    std::ostringstream out_stream;
+    writer.save(out_stream);
+    std::istringstream in_stream(out_stream.str());
+
+    VerifierOptions options{};
+    const auto programs = read_elf(in_stream, "memory", "xdp", "", options, &g_ebpf_platform_linux);
+    REQUIRE(programs.size() == 1);
+    // The whole three-instruction callee is appended at index 2.
+    const auto& prog = programs[0].prog;
+    REQUIRE(prog.size() == 5);
+    REQUIRE(prog[0].imm == 1);
+    REQUIRE(prog[2] == EbpfInst{.opcode = MOV64_IMM, .imm = 1});
+}
+
 // Verify that the ELF loader accepts FUNC symbols at instruction-aligned offsets.
 // Companion to the rejection test above — ensures the alignment check does not
 // reject well-formed ELF files.
