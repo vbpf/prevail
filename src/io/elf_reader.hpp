@@ -127,7 +127,11 @@ ELFIO::const_symbol_section_accessor read_and_validate_symbol_section(const ELFI
 
 std::optional<uint64_t> resolve_known_linux_extern_symbol(std::string_view symbol_name);
 EbpfInst make_mov_reg_nop(uint8_t reg);
-bool rewrite_extern_constant_load(std::vector<EbpfInst>& instructions, size_t location, uint64_t value);
+/// Indices of the instructions that some jump or local call in the program lands on.
+/// Throws UnmarshalError if a jump leaves the program.
+std::set<size_t> collect_jump_targets(const std::vector<EbpfInst>& instructions);
+bool rewrite_extern_constant_load(std::vector<EbpfInst>& instructions, size_t location, uint64_t value,
+                                  const std::set<size_t>& jump_targets);
 bool rewrite_extern_address_load_to_zero(std::vector<EbpfInst>& instructions, size_t location);
 bool rewrite_extern_kfunc_call(EbpfInst& instruction, const KsymBtfId& resolved_target);
 
@@ -162,6 +166,7 @@ class ProgramReader {
     /// Only negative IDs are platform-internal builtins needing the gate;
     /// positive IDs are standard BPF helpers handled via normal prototype lookup.
     std::set<size_t> builtin_offsets_for_current_program;
+    std::set<size_t> jump_targets_for_current_program;
 
     // loop detection for recursive subprogram resolution
     std::map<const RawProgram*, bool> resolved_subprograms;

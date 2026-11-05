@@ -763,7 +763,7 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
 
     if (symbol_section_index == ELFIO::SHN_UNDEF) {
         if (const auto value = resolve_known_linux_extern_symbol(symbol_name)) {
-            if (rewrite_extern_constant_load(instructions, location, *value)) {
+            if (rewrite_extern_constant_load(instructions, location, *value, jump_targets_for_current_program)) {
                 return true;
             }
         }
@@ -953,6 +953,7 @@ void ProgramReader::read_programs() {
                 throw UnmarshalError("Program span exceeds section bounds in section " + sec->get_name());
             }
             auto instructions = vector_of<EbpfInst>(sec->get_data() + offset, extracted_size);
+            jump_targets_for_current_program = collect_jump_targets(instructions);
             if (const auto reloc_sec = get_relocation_section(sec_name)) {
                 process_relocations(instructions, *reloc_sec, sec_name, offset, extracted_size);
             }

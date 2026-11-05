@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include <cstdint>
 #include <optional>
+#include <set>
 #include <string_view>
 #include <vector>
 
@@ -52,7 +53,33 @@ EbpfInst make_mov_reg_nop(const uint8_t reg) {
     };
 }
 
-bool rewrite_extern_constant_load(std::vector<EbpfInst>& instructions, const size_t location, const uint64_t value) {
+std::set<size_t> collect_jump_targets(const std::vector<EbpfInst>& instructions) {
+    std::set<size_t> targets;
+    for (size_t pc = 0; pc < instructions.size(); ++pc) {
+        const EbpfInst& inst = instructions[pc];
+        const uint8_t cls = inst.opcode & INST_CLS_MASK;
+        if (cls != INST_CLS_JMP && cls != INST_CLS_JMP32) {
+            continue;
+        }
+        const uint8_t op = (inst.opcode >> 4) & 0xF;
+        if (op == INST_EXIT || (op == INST_CALL && inst.src != INST_CALL_LOCAL)) {
+            continue;
+        }
+        const int32_t offset = (op == INST_CALL || inst.opcode == INST_OP_JA32) ? inst.imm : inst.offset;
+        const int64_t target = gsl::narrow<int64_t>(pc) + 1 + offset;
+        if (target >= 0 && target < gsl::narrow<int64_t>(instructions.size())) {
+            targets.insert(gsl::narrow<size_t>(target));
+        } else if (op != INST_CALL) {
+            // Local calls leaving the program are resolved later; a jump leaving it would land
+            // in a subprogram appended after this one, past any rewrite done for that program.
+            throw UnmarshalError("Jump target out of program bounds");
+        }
+    }
+    return targets;
+}
+
+bool rewrite_extern_constant_load(std::vector<EbpfInst>& instructions, const size_t location, const uint64_t value,
+                                  const std::set<size_t>& jump_targets) {
     if (instructions.size() <= location + 2) {
         return false;
     }
@@ -67,6 +94,12 @@ bool rewrite_extern_constant_load(std::vector<EbpfInst>& instructions, const siz
         return false;
     }
     if (load_inst.src != lo_inst.get().dst || load_inst.offset != 0) {
+        return false;
+    }
+    // The load reads the extern only when it is reached through the LDDW; on a path that
+    // jumps to the load (or into the LDDW's second slot) the base register holds something
+    // else, so the caller falls back to the LDDW+LDX sequence, which keeps such a path unsafe.
+    if (jump_targets.contains(location + 1) || jump_targets.contains(location + 2)) {
         return false;
     }
 
@@ -94,7 +127,7 @@ bool rewrite_extern_constant_load(std::vector<EbpfInst>& instructions, const siz
     const auto truncated = static_cast<int32_t>(narrowed_value);
 
     // Use mov-imm to materialize the resolved constant in the destination register of
-    // the load, and neutralize the preceding LDDW pair.
+    // the load, and replace the preceding LDDW pair.
     const uint8_t mov_opcode = width == 8 || mode == INST_MODE_MEMSX
                                    ? static_cast<uint8_t>(INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM)
                                    : static_cast<uint8_t>(INST_CLS_ALU | INST_ALU_OP_MOV | INST_SRC_IMM);
@@ -103,8 +136,21 @@ bool rewrite_extern_constant_load(std::vector<EbpfInst>& instructions, const siz
     load_inst.offset = 0;
     load_inst.imm = truncated;
 
-    lo_inst.get() = make_mov_reg_nop(lo_inst.get().dst);
-    hi_inst.get() = make_mov_reg_nop(hi_inst.get().dst);
+    // The LDDW overwrites its destination register, so its replacement must too: a plain
+    // no-op would leave the register holding its previous value (possibly a valid pointer),
+    // and later accesses through it would be checked against that instead of the extern's
+    // address. As for every other extern address, the register becomes 0. A mov-imm rather
+    // than a zeroed LDDW, so that no further relocation can retarget it now that the load
+    // is gone.
+    const uint8_t address_reg = lo_inst.get().dst;
+    lo_inst.get() = EbpfInst{
+        .opcode = static_cast<uint8_t>(INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM),
+        .dst = address_reg,
+        .src = 0,
+        .offset = 0,
+        .imm = 0,
+    };
+    hi_inst.get() = make_mov_reg_nop(address_reg);
     return true;
 }
 
