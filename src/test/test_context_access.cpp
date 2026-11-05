@@ -13,8 +13,9 @@ using namespace prevail;
 
 namespace {
 
-AnalysisContext context_program(const ebpf_platform_t& platform, const std::vector<std::string>& lines) {
-    const ProgramInfo info{.platform = &platform, .type = platform.get_program_type("xdp", "")};
+AnalysisContext context_program(const ebpf_platform_t& platform, const std::vector<std::string>& lines,
+                                const std::string& section = "xdp") {
+    const ProgramInfo info{.platform = &platform, .type = platform.get_program_type(section, "")};
     InstructionSeq instructions;
     for (size_t i = 0; i < lines.size(); ++i) {
         instructions.emplace_back(Label{static_cast<int>(i)}, parse_instruction(lines[i], {}, info.type), std::nullopt);
@@ -22,10 +23,14 @@ AnalysisContext context_program(const ebpf_platform_t& platform, const std::vect
     return {Program::from_sequence(instructions, info, {}), {}};
 }
 
-bool accepts_context_program(const ebpf_platform_t& platform, std::vector<std::string> lines) {
+// Stores need a program type whose context is writable; Linux keeps the XDP context read-only.
+const std::string writable_ctx_section = "classifier";
+
+bool accepts_context_program(const ebpf_platform_t& platform, std::vector<std::string> lines,
+                             const std::string& section = "xdp") {
     lines.emplace_back("r0 = 0");
     lines.emplace_back("exit");
-    return !analyze(context_program(platform, lines)).failed;
+    return !analyze(context_program(platform, lines, section)).failed;
 }
 
 } // namespace
@@ -45,12 +50,16 @@ TEST_CASE("Linux context accesses require an unshifted base", "[context][platfor
         CHECK_FALSE(accepts_context_program(platform, {"r1 += 8", "r2 = r1", "r3 = *(u32 *)(r2 + 0)"}));
     }
     SECTION("store through a shifted base") {
-        CHECK_FALSE(accepts_context_program(platform, {"r1 += 12", "*(u32 *)(r1 + 0) = 0"}));
+        CHECK_FALSE(accepts_context_program(platform, {"r1 += 12", "*(u32 *)(r1 + 0) = 0"}, writable_ctx_section));
     }
     SECTION("atomic through a shifted base") {
-        CHECK_FALSE(accepts_context_program(platform, {"r1 += 16", "r2 = 1", "lock *(u32 *)(r1 + 0) += r2"}));
+        CHECK_FALSE(accepts_context_program(platform, {"r1 += 16", "r2 = 1", "lock *(u32 *)(r1 + 0) += r2"},
+                                            writable_ctx_section));
     }
     SECTION("constant instruction offset") { CHECK(accepts_context_program(platform, {"r3 = *(u32 *)(r1 + 8)"})); }
+    SECTION("unshifted store") {
+        CHECK(accepts_context_program(platform, {"*(u32 *)(r1 + 12) = 0"}, writable_ctx_section));
+    }
     SECTION("unmodified copy") { CHECK(accepts_context_program(platform, {"r2 = r1", "r3 = *(u32 *)(r2 + 8)"})); }
     SECTION("zero register offset") {
         CHECK(accepts_context_program(platform, {"r2 = 0", "r1 += r2", "r3 = *(u32 *)(r1 + 8)"}));
@@ -81,5 +90,5 @@ TEST_CASE("Flat context platforms retain shifted base accesses", "[context][plat
     auto flat = g_ebpf_platform_linux;
     flat.context_access_requires_zero_offset = false;
     CHECK(accepts_context_program(flat, {"r2 = 8", "r1 += r2", "r3 = *(u32 *)(r1 + 0)"}));
-    CHECK(accepts_context_program(flat, {"r1 += 12", "*(u32 *)(r1 + 0) = 0"}));
+    CHECK(accepts_context_program(flat, {"r1 += 12", "*(u32 *)(r1 + 0) = 0"}, writable_ctx_section));
 }
