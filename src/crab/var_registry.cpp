@@ -135,6 +135,7 @@ static std::vector<std::string> default_variable_names() {
         "meta_size",
         "meta_offset",
         "packet_size",
+        "data_meta_offset",
     };
 }
 
@@ -189,6 +190,7 @@ Variable VariableRegistry::kind_var(const DataKind kind, const Variable type_var
 }
 
 Variable VariableRegistry::meta_offset() const { return intern("meta_offset"); }
+Variable VariableRegistry::data_meta_offset() const { return intern("data_meta_offset"); }
 Variable VariableRegistry::packet_size() const { return intern("packet_size"); }
 
 bool VariableRegistry::is_min_only(const Variable& v) const {

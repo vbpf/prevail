@@ -592,7 +592,10 @@ static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, 
         }
     } else if (addr == desc->meta) {
         if (width == offset_width) {
-            state.values.assign(target.packet_offset, variable_registry.meta_offset());
+            // The field holds data_meta_offset, which need not be meta_offset (the lowest accessible
+            // offset): aliasing the two would make data_meta > data unreachable and leave whatever a
+            // program hides behind that guard unchecked. Every load reads the same field value.
+            state.values.assign(target.packet_offset, variable_registry.data_meta_offset());
         }
     } else {
         if (may_touch_ptr) {

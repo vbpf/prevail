@@ -363,12 +363,17 @@ void EbpfDomain::initialize_packet(const AnalysisContext& context) {
     EbpfDomain& inv = *this;
     inv.havoc(variable_registry.packet_size());
     inv.havoc(variable_registry.meta_offset());
+    inv.havoc(variable_registry.data_meta_offset());
 
     inv.add_value_constraint(0 <= variable_registry.packet_size());
     inv.add_value_constraint(variable_registry.packet_size() <= context.runtime().max_packet_size);
     if (context.program_info().type.ctx_descriptor->meta >= 0) {
         inv.add_value_constraint(variable_registry.meta_offset() <= 0);
         inv.add_value_constraint(variable_registry.meta_offset() >= -4098);
+        // Linux sets xdp_md.data_meta to data + 1 on a driver without XDP metadata support, so the field
+        // holds either the start of the metadata or one byte past data.
+        inv.add_value_constraint(variable_registry.meta_offset() <= variable_registry.data_meta_offset());
+        inv.add_value_constraint(variable_registry.data_meta_offset() <= variable_registry.meta_offset() + 1);
     } else {
         inv.state.values.assign(variable_registry.meta_offset(), 0);
     }
