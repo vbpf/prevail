@@ -418,7 +418,16 @@ struct AssertionPrinterVisitor {
 
     void operator()(ValidMapType const& a) { _os << "valid_map_type(" << a.map_fd_reg << ", " << a.helper_name << ")"; }
 
-    void operator()(ZeroCtxOffset const& a) { _os << variable_registry.reg(DataKind::ctx_offsets, a.reg.v) << " == 0"; }
+    void operator()(ZeroCtxOffset const& a) {
+        const auto ctx_offset = variable_registry.reg(DataKind::ctx_offsets, a.reg.v);
+        if (a.or_null) {
+            // Each possible type is checked on its own paths: numbers must be null, contexts unshifted.
+            _os << "(" << TypeConstraint{a.reg, TypeGroup::number} << " and " << a.reg << ".value == 0) or ("
+                << TypeConstraint{a.reg, TypeGroup::ctx} << " and " << ctx_offset << " == 0)";
+        } else {
+            _os << ctx_offset << " == 0";
+        }
+    }
 
     void operator()(Comparable const& a) {
         if (a.or_r2_is_number) {
