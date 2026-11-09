@@ -208,10 +208,8 @@ void EbpfChecker::operator()(const ValidDivisor& s) const {
         }
         return;
     }
+    // The divisor's type is checked by the TypeConstraint emitted alongside this assertion.
     const Reg divisor_reg = std::get<Reg>(s.divisor);
-    if (!dom.state.implies_superset(divisor_reg, TS_POINTER, divisor_reg, TS_NUM)) {
-        throw_fail("Only numbers can be used as divisors");
-    }
     if (!context.runtime().allow_division_by_zero) {
         const auto reg = reg_pack(divisor_reg);
         if (s.is64) {

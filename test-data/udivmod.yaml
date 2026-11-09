@@ -14,7 +14,94 @@ post:
   - "_|_"
 
 messages:
-  - "0: Only numbers can be used as divisors (r2 != 0)"
+  - "0: Invalid type (r2.type == number)"
+---
+test-case: integer divided by map_fd
+
+pre: ["r1.type=number", "r1.svalue=6", "r1.uvalue=6",
+      "r2.type=map_fd", "r2.map_fd=1"]
+
+code:
+  <start>: |
+    r1 /= r2
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Invalid type (r2.type == number)"
+---
+test-case: integer modulo map_fd
+
+pre: ["r1.type=number", "r1.svalue=6", "r1.uvalue=6",
+      "r2.type=map_fd", "r2.map_fd=1"]
+
+code:
+  <start>: |
+    r1 %= r2
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Invalid type (r2.type == number)"
+---
+test-case: integer divided by map_fd_programs
+
+pre: ["r1.type=number", "r1.svalue=6", "r1.uvalue=6",
+      "r2.type=map_fd_programs", "r2.map_fd_programs=1"]
+
+code:
+  <start>: |
+    r1 /= r2
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Invalid type (r2.type == number)"
+---
+test-case: integer divided by alloc_mem
+
+pre: ["r1.type=map_fd", "r1.map_fd=27", "r1.uvalue=[1, 2147418112]",
+      "r2.type=number", "r2.svalue=8", "r2.uvalue=8",
+      "r3.type=number", "r3.svalue=0", "r3.uvalue=0"]
+
+code:
+  <start>: |
+    call 131; bpf_ringbuf_reserve
+    assume r0 != 0
+    r6 = 6
+    r6 /= r0
+
+post:
+  - "_|_"
+
+messages:
+  - "3: Invalid type (r0.type == number)"
+---
+test-case: integer divided by socket
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r10.type=stack", "r10.stack_offset=512",
+      "r2.type=stack", "r2.stack_offset=496",
+      "r3.type=number", "r3.svalue=12", "r3.uvalue=12",
+      "r4.type=number", "r4.svalue=0", "r4.uvalue=0",
+      "r5.type=number", "r5.svalue=0", "r5.uvalue=0",
+      "s[496...507].type=number"]
+
+code:
+  <start>: |
+    call 99; bpf_skc_lookup_tcp
+    assume r0 != 0
+    r6 = 6
+    r6 /= r0
+
+post:
+  - "_|_"
+
+messages:
+  - "3: Invalid type (r0.type == number)"
 ---
 test-case: non-zero divided by zero immediate
 
