@@ -14,7 +14,37 @@ post:
   - "_|_"
 
 messages:
-  - "0: Only numbers can be used as divisors (r2 != 0)"
+  - "0: Invalid type (r2.type == number)"
+---
+test-case: integer divided by map_fd
+
+pre: ["r1.type=number", "r1.svalue=6", "r1.uvalue=6",
+      "r2.type=map_fd", "r2.map_fd=1"]
+
+code:
+  <start>: |
+    r1 s/= r2
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Invalid type (r2.type == number)"
+---
+test-case: integer modulo map_fd
+
+pre: ["r1.type=number", "r1.svalue=6", "r1.uvalue=6",
+      "r2.type=map_fd", "r2.map_fd=1"]
+
+code:
+  <start>: |
+    r1 s%= r2
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Invalid type (r2.type == number)"
 ---
 test-case: non-zero divided by zero immediate
 

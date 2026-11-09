@@ -368,8 +368,16 @@ class AssertExtractor {
         case Bin::Op::UMOD:
         case Bin::Op::SDIV:
         case Bin::Op::SMOD: {
-            // An immediate divisor carries the same obligation as a register: it can be zero too.
             const bool is_signed = (ins.op == Bin::Op::SDIV || ins.op == Bin::Op::SMOD);
+            if (const auto src = std::get_if<Reg>(&ins.v)) {
+                // The divisor must be a number like any other arithmetic source; ValidDivisor only
+                // checks its value. A pointer-typed divisor (map_fd, socket, alloc_mem, ...) would
+                // otherwise leak its modelled address into the numeric quotient.
+                return {Assertion{TypeConstraint{ins.dst, TypeGroup::number}},
+                        Assertion{TypeConstraint{*src, TypeGroup::number}},
+                        Assertion{ValidDivisor{.divisor = ins.v, .is_signed = is_signed, .is64 = ins.is64}}};
+            }
+            // An immediate divisor carries the same obligation as a register: it can be zero too.
             return {Assertion{TypeConstraint{ins.dst, TypeGroup::number}},
                     Assertion{ValidDivisor{.divisor = ins.v, .is_signed = is_signed, .is64 = ins.is64}}};
         }

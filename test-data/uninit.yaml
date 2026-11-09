@@ -70,7 +70,7 @@ post:
   - "_|_"
 
 messages:
-  - "0: Only numbers can be used as divisors (r3 != 0)"
+  - "0: Invalid type (r3.type == number)"
 
 ---
 test-case: signed division of a number and an uninitialized register
@@ -88,7 +88,7 @@ post:
   - "_|_"
 
 messages:
-  - "0: Only numbers can be used as divisors (r3 != 0)"
+  - "0: Invalid type (r3.type == number)"
 
 ---
 test-case: modulo of a number and an uninitialized register
@@ -106,7 +106,7 @@ post:
   - "_|_"
 
 messages:
-  - "0: Only numbers can be used as divisors (r3 != 0)"
+  - "0: Invalid type (r3.type == number)"
 
 ---
 test-case: signed modulo of a number and an uninitialized register
@@ -124,7 +124,7 @@ post:
   - "_|_"
 
 messages:
-  - "0: Only numbers can be used as divisors (r3 != 0)"
+  - "0: Invalid type (r3.type == number)"
 
 ---
 test-case: AND of a number and an uninitialized register
