@@ -63,6 +63,19 @@ struct FunctionRelocation {
     std::string target_function_name;
 };
 
+/// The named STT_FUNC symbols of one section, as indices into the symbol table.
+struct SectionFunctionSymbols {
+    /// Offset in the section -> the first and the last symbol at that offset, in symbol table order.
+    std::map<ELFIO::Elf_Xword, std::pair<ELFIO::Elf_Xword, ELFIO::Elf_Xword>> by_offset;
+    /// The first symbol whose offset is not a multiple of the instruction size.
+    std::optional<ELFIO::Elf_Xword> misaligned;
+};
+
+/// Named STT_FUNC symbols by section index. The symbol table is walked once per load to build this: the
+/// number of programs, local calls and symbols, and the length of each symbol name, are all chosen by the
+/// file, so looking a function up must not rescan the table.
+using FunctionSymbols = std::map<ELFIO::Elf_Half, SectionFunctionSymbols>;
+
 /// Symbol table index of a map symbol -> index of its descriptor in ElfGlobalData::map_descriptors.
 /// Keyed by the identity of the symbol a relocation refers to, not by its name: ELF symbol names need not be unique.
 using MapOffsets = std::map<ELFIO::Elf_Xword, size_t>;
@@ -114,11 +127,14 @@ bool is_supported_bpf_relocation_type(unsigned type);
 
 symbol_details_t get_symbol_details(const ELFIO::const_symbol_section_accessor& symbols, ELFIO::Elf_Xword index);
 
-std::tuple<std::string, ELFIO::Elf_Xword>
-get_program_name_and_size(const ELFIO::section& sec, ELFIO::Elf_Xword start,
-                          const ELFIO::const_symbol_section_accessor& symbols);
+FunctionSymbols collect_function_symbols(const ELFIO::const_symbol_section_accessor& symbols);
+
+std::tuple<std::string, ELFIO::Elf_Xword> get_program_name_and_size(const ELFIO::section& sec, ELFIO::Elf_Xword start,
+                                                                    const ELFIO::const_symbol_section_accessor& symbols,
+                                                                    const FunctionSymbols& function_symbols);
 
 std::optional<std::string> find_function_symbol_at_offset(const ELFIO::const_symbol_section_accessor& symbols,
+                                                          const FunctionSymbols& function_symbols,
                                                           ELFIO::Elf_Half section_index, ELFIO::Elf_Xword offset);
 
 ELFIO::Elf_Xword compute_reachable_program_span(const std::vector<EbpfInst>& section_instructions,
@@ -171,6 +187,7 @@ class ProgramReader {
     const ELFIO::elfio& reader;
     const ELFIO::const_symbol_section_accessor& symbols;
     const ElfGlobalData& global;
+    const FunctionSymbols function_symbols;
     std::vector<FunctionRelocation> function_relocations;
     std::set<std::pair<size_t, size_t>> function_relocation_index_;
     /// Maps the position where each program starts to its index in raw_programs.
@@ -217,7 +234,7 @@ class ProgramReader {
 
     ProgramReader(const parse_params_t& p, const ELFIO::elfio& r, const ELFIO::const_symbol_section_accessor& s,
                   const ElfGlobalData& g)
-        : parse_params{p}, reader{r}, symbols{s}, global{g} {}
+        : parse_params{p}, reader{r}, symbols{s}, global{g}, function_symbols{collect_function_symbols(s)} {}
 
     std::string append_subprograms(RawProgram& prog);
     [[nodiscard]]

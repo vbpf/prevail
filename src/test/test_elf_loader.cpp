@@ -1042,6 +1042,72 @@ TEST_CASE("ELF loader rejects non-instruction-aligned FUNC symbol", "[elf][harde
                         Catch::Matchers::ContainsSubstring("Non-instruction-aligned FUNC symbol"));
 }
 
+// Regression test: the name and size of each program were found by walking the whole symbol
+// table and copying every symbol name on the way. The number of programs, the number of symbols
+// and the length of a name (which any number of symbols may share) are all cheap for the file,
+// so load time was cubic in its size: this object of under 200 KiB took tens of seconds.
+TEST_CASE("ELF loader does not rescan the symbol table for every program", "[elf][hardening]") {
+    constexpr size_t function_count = 2048;
+    constexpr size_t unrelated_symbol_count = 2730;
+
+    ELFIO::elfio writer;
+    writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+    writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+    writer.set_type(ELFIO::ET_REL);
+    writer.set_machine(ELFIO::EM_BPF);
+
+    // Every function is a single "exit".
+    ELFIO::section* text_sec = writer.sections.add(".text");
+    text_sec->set_type(ELFIO::SHT_PROGBITS);
+    text_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+    text_sec->set_addr_align(8);
+    const uint8_t exit_inst[8] = {0x95, 0, 0, 0, 0, 0, 0, 0};
+    std::string inst_data;
+    for (size_t i = 0; i < function_count; ++i) {
+        inst_data.append(reinterpret_cast<const char*>(exit_inst), sizeof(exit_inst));
+    }
+    text_sec->set_data(inst_data);
+
+    ELFIO::section* str_sec = writer.sections.add(".strtab");
+    str_sec->set_type(ELFIO::SHT_STRTAB);
+    ELFIO::string_section_accessor str_writer(str_sec);
+
+    ELFIO::section* sym_sec = writer.sections.add(".symtab");
+    sym_sec->set_type(ELFIO::SHT_SYMTAB);
+    sym_sec->set_addr_align(8);
+    sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+    sym_sec->set_link(str_sec->get_index());
+    sym_sec->set_info(1); // First global symbol index.
+    ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+
+    const ELFIO::Elf_Word function_name = str_writer.add_string("f");
+    for (size_t i = 0; i < function_count; ++i) {
+        sym_writer.add_symbol(function_name, i * sizeof(exit_inst), sizeof(exit_inst), ELFIO::STB_GLOBAL,
+                              ELFIO::STT_FUNC, 0, text_sec->get_index());
+    }
+    // Symbols outside the section are scanned too, and they may all share one long name.
+    const ELFIO::Elf_Word long_name = str_writer.add_string(std::string(64 * 1024, 'x'));
+    for (size_t i = 0; i < unrelated_symbol_count; ++i) {
+        sym_writer.add_symbol(long_name, 0, 0, ELFIO::STB_GLOBAL, ELFIO::STT_NOTYPE, 0, ELFIO::SHN_ABS);
+    }
+    // Of several function symbols at one offset, the last one names the program.
+    sym_writer.add_symbol(str_writer, "alias", 0, sizeof(exit_inst), ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0,
+                          text_sec->get_index());
+
+    std::ostringstream out_stream;
+    writer.save(out_stream);
+    std::istringstream in_stream(out_stream.str());
+
+    VerifierOptions options{};
+    const auto programs = read_elf(in_stream, "memory", ".text", "", options, &g_ebpf_platform_linux);
+    REQUIRE(programs.size() == function_count);
+    for (size_t i = 0; i < function_count; ++i) {
+        REQUIRE(programs[i].insn_off == i * sizeof(exit_inst));
+        REQUIRE(programs[i].function_name == (i == 0 ? "alias" : "f"));
+        REQUIRE(programs[i].prog.size() == 1);
+    }
+}
+
 // Regression test: subprogram relocations must be matched to their owning program
 // by identity, not by function_name. ELF symbol names need not be unique, so two
 // programs can share a name; a relocation's source_offset is an instruction index

@@ -207,48 +207,67 @@ symbol_details_t get_symbol_details(const ELFIO::const_symbol_section_accessor& 
     return details;
 }
 
-std::tuple<std::string, ELFIO::Elf_Xword>
-get_program_name_and_size(const ELFIO::section& sec, const ELFIO::Elf_Xword start,
-                          const ELFIO::const_symbol_section_accessor& symbols) {
+FunctionSymbols collect_function_symbols(const ELFIO::const_symbol_section_accessor& symbols) {
+    FunctionSymbols function_symbols;
     const ELFIO::Elf_Xword symbol_count = symbols.get_symbols_num();
-    const ELFIO::Elf_Half section_index = sec.get_index();
+    for (ELFIO::Elf_Xword index = 0; index < symbol_count; index++) {
+        const auto symbol = get_symbol_details(symbols, index);
+        if (symbol.type != ELFIO::STT_FUNC || symbol.name.empty()) {
+            continue;
+        }
+        auto& section_symbols = function_symbols[symbol.section_index];
+        auto [at_offset, inserted] = section_symbols.by_offset.try_emplace(symbol.value, index, index);
+        if (!inserted) {
+            at_offset->second.second = index;
+        }
+        if (symbol.value % sizeof(EbpfInst) != 0 && !section_symbols.misaligned) {
+            section_symbols.misaligned = index;
+        }
+    }
+    return function_symbols;
+}
+
+std::tuple<std::string, ELFIO::Elf_Xword> get_program_name_and_size(const ELFIO::section& sec,
+                                                                    const ELFIO::Elf_Xword start,
+                                                                    const ELFIO::const_symbol_section_accessor& symbols,
+                                                                    const FunctionSymbols& function_symbols) {
     std::string program_name = sec.get_name();
     ELFIO::Elf_Xword size = sec.get_size() - start;
-    for (ELFIO::Elf_Xword index = 0; index < symbol_count; index++) {
-        auto symbol_details = get_symbol_details(symbols, index);
-        if (symbol_details.section_index == section_index && !symbol_details.name.empty()) {
-            if (symbol_details.type != ELFIO::STT_FUNC) {
-                continue;
-            }
-            const auto relocation_offset = symbol_details.value;
-            if (relocation_offset % sizeof(EbpfInst) != 0) {
-                throw UnmarshalError("Non-instruction-aligned FUNC symbol '" + symbol_details.name + "' at offset " +
-                                     std::to_string(relocation_offset) + " in section " + sec.get_name());
-            }
-            if (relocation_offset == start) {
-                program_name = symbol_details.name;
-            } else if (relocation_offset > start && relocation_offset < start + size) {
-                size = relocation_offset - start;
-            }
-        }
+    const auto section_symbols = function_symbols.find(sec.get_index());
+    if (section_symbols == function_symbols.end()) {
+        return {program_name, size};
+    }
+    const auto& [by_offset, misaligned] = section_symbols->second;
+    if (misaligned) {
+        const auto symbol_details = get_symbol_details(symbols, *misaligned);
+        throw UnmarshalError("Non-instruction-aligned FUNC symbol '" + symbol_details.name + "' at offset " +
+                             std::to_string(symbol_details.value) + " in section " + sec.get_name());
+    }
+    // The last symbol at `start` names the program, and the next function in the section ends it.
+    auto it = by_offset.lower_bound(start);
+    if (it != by_offset.end() && it->first == start) {
+        program_name = get_symbol_details(symbols, it->second.second).name;
+        ++it;
+    }
+    if (it != by_offset.end() && it->first < start + size) {
+        size = it->first - start;
     }
     return {program_name, size};
 }
 
 std::optional<std::string> find_function_symbol_at_offset(const ELFIO::const_symbol_section_accessor& symbols,
+                                                          const FunctionSymbols& function_symbols,
                                                           const ELFIO::Elf_Half section_index,
                                                           const ELFIO::Elf_Xword offset) {
-    const ELFIO::Elf_Xword symbol_count = symbols.get_symbols_num();
-    for (ELFIO::Elf_Xword index = 0; index < symbol_count; index++) {
-        const auto symbol = get_symbol_details(symbols, index);
-        if (symbol.section_index != section_index || symbol.type != ELFIO::STT_FUNC || symbol.name.empty()) {
-            continue;
-        }
-        if (symbol.value == offset) {
-            return symbol.name;
-        }
+    const auto section_symbols = function_symbols.find(section_index);
+    if (section_symbols == function_symbols.end()) {
+        return std::nullopt;
     }
-    return std::nullopt;
+    const auto it = section_symbols->second.by_offset.find(offset);
+    if (it == section_symbols->second.by_offset.end()) {
+        return std::nullopt;
+    }
+    return get_symbol_details(symbols, it->second.first).name;
 }
 
 ELFIO::Elf_Xword compute_reachable_program_span(const std::vector<EbpfInst>& section_instructions,
@@ -626,7 +645,8 @@ void ProgramReader::enqueue_synthetic_local_calls(const std::vector<EbpfInst>& i
         }
 
         const auto target_offset = gsl::narrow<ELFIO::Elf_Xword>(target * sizeof(EbpfInst));
-        const auto target_name = find_function_symbol_at_offset(symbols, section_index, target_offset);
+        const auto target_name =
+            find_function_symbol_at_offset(symbols, function_symbols, section_index, target_offset);
         if (!target_name) {
             throw UnmarshalError("Subprogram not found at section offset " + std::to_string(target_offset));
         }
@@ -856,7 +876,8 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
 
         std::string target_function_name = symbol_name;
         if (target_function_name.empty() && symbol_type == ELFIO::STT_SECTION) {
-            if (const auto target = find_function_symbol_at_offset(symbols, symbol_section_index, target_offset)) {
+            if (const auto target =
+                    find_function_symbol_at_offset(symbols, function_symbols, symbol_section_index, target_offset)) {
                 target_function_name = *target;
             }
         }
@@ -1007,7 +1028,7 @@ void ProgramReader::read_programs(const bool all_sections) {
         const auto prog_type = parse_params.platform->get_program_type(sec_name, parse_params.path);
         for (ELFIO::Elf_Xword offset = 0; offset < sec->get_size();) {
             builtin_offsets_for_current_program.clear();
-            auto [name, symbol_size] = get_program_name_and_size(*sec, offset, symbols);
+            auto [name, symbol_size] = get_program_name_and_size(*sec, offset, symbols, function_symbols);
             const auto extracted_size = compute_reachable_program_span(section_instructions, offset, symbol_size);
             if (offset + extracted_size > sec->get_size()) {
                 throw UnmarshalError("Program span exceeds section bounds in section " + sec->get_name());

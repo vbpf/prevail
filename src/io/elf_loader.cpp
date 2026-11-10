@@ -82,6 +82,7 @@ void ElfObject::ElfObjectState::discover_programs() {
     if (std::ifstream stream{path, std::ios::in | std::ios::binary}) {
         reader.emplace(load_elf(stream, path));
         symbols.emplace(read_and_validate_symbol_section(*reader, path));
+        const auto function_symbols = collect_function_symbols(*symbols);
 
         for (const auto& section : reader->sections) {
             if (!(section->get_flags() & ELFIO::SHF_EXECINSTR) || !section->get_size() || !section->get_data()) {
@@ -95,7 +96,7 @@ void ElfObject::ElfObjectState::discover_programs() {
             }
 
             for (ELFIO::Elf_Xword offset = 0; offset < section->get_size();) {
-                auto [function_name, size] = get_program_name_and_size(*section, offset, *symbols);
+                auto [function_name, size] = get_program_name_and_size(*section, offset, *symbols, function_symbols);
                 programs.push_back(ElfProgramInfo{
                     .section_name = section_name,
                     .function_name = function_name,
