@@ -77,6 +77,69 @@ TEST_CASE("TypeToNumDomain register assignment clears stale destination kind val
     REQUIRE(dom.values.eval_interval(dst.svalue).is_top());
 }
 
+TEST_CASE("TypeToNumDomain meet keeps only the interval of a kind value of a type alternative", "[type_to_num]") {
+    using namespace dsl_syntax;
+
+    const RegPack alt = reg_pack(r0);
+    const RegPack num = reg_pack(r1);
+
+    // r0.svalue describes r0 only where it is a number, so both operands contain "r0 is a ctx pointer, r1 is -4096":
+    // the first with r0.svalue=0, the second with r0.svalue=4104.
+    TypeToNumDomain related;
+    related.types.restrict_to(reg_type(r0), TypeSet{T_NUM, T_CTX});
+    related.assign_type(r1, T_NUM);
+    related.values.set(num.svalue, Interval{-4096, 8});
+    related.values.assign(alt.svalue, num.svalue + 4096);
+
+    TypeToNumDomain constant;
+    constant.types.restrict_to(reg_type(r0), TypeSet{T_NUM, T_CTX});
+    constant.assign_type(r1, T_NUM);
+    constant.values.set(num.svalue, Interval{-4096, 8});
+    constant.values.assign(alt.svalue, 4104);
+
+    for (const TypeToNumDomain& res : {related & constant, constant & related}) {
+        REQUIRE(res.values.eval_interval(alt.svalue) == Interval{4104});
+        REQUIRE(res.values.eval_interval(num.svalue) == Interval{-4096, 8});
+    }
+
+    // Disjoint intervals rule out the number alternative, not the ctx pointer.
+    constant.values.assign(alt.svalue, 4105);
+    for (const TypeToNumDomain& res : {related & constant, constant & related}) {
+        REQUIRE_FALSE(res.is_bottom());
+        REQUIRE(res.values.eval_interval(num.svalue) == Interval{-4096, 8});
+    }
+
+    // Once the type is certain, the variable means the same in both operands.
+    constant.values.assign(alt.svalue, 4104);
+    related.assign_type(r0, T_NUM);
+    for (const TypeToNumDomain& res : {related & constant, constant & related}) {
+        REQUIRE(res.get_type(r0) == T_NUM);
+        REQUIRE(res.values.eval_interval(num.svalue) == Interval{8});
+    }
+}
+
+TEST_CASE("TypeToNumDomain meet drops kind values of a type the type meet rules out", "[type_to_num]") {
+    const RegPack pack = reg_pack(r0);
+
+    // The number alternative of the first operand is dead in the second: its stale svalue must not refute the meet.
+    TypeToNumDomain left;
+    left.types.restrict_to(reg_type(r0), TypeSet{T_NUM, T_CTX});
+    left.values.assign(pack.ctx_offset, 0);
+    left.values.assign(pack.svalue, 0);
+
+    TypeToNumDomain right;
+    right.assign_type(r0, T_CTX);
+    right.values.assign(pack.ctx_offset, 0);
+    right.values.assign(pack.svalue, 1);
+
+    for (const TypeToNumDomain& res : {left & right, right & left}) {
+        REQUIRE_FALSE(res.is_bottom());
+        REQUIRE(res.get_type(r0) == T_CTX);
+        REQUIRE(res.values.eval_interval(pack.ctx_offset) == Interval{0});
+        REQUIRE(res.values.eval_interval(pack.svalue).is_top());
+    }
+}
+
 TEST_CASE("TypeToNumDomain self assignment keeps kind values", "[type_to_num]") {
     TypeToNumDomain dom;
     const RegPack pack = reg_pack(r0);

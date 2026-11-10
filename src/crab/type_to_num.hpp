@@ -43,6 +43,12 @@ inline const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
  *   constraints from a slot that exists on only one side are carried across unchanged.
  * - At subsumption time, type-irrelevant kind variables are havocked to top in the wider domain
  *   so that the numeric check correctly treats "absent type = bottom" on the narrower side.
+ * - At meet time, kind variables of types absent from the resulting TypeSet are havocked in both
+ *   operands first, so that a value held for a ruled-out alternative cannot refute the remaining ones.
+ *   Kind variables of a type that remains one of several alternatives keep only the intersection of
+ *   their intervals: in a state of another alternative each operand may hold them at a different
+ *   value, so conjoining the relations they take part in could refute a state that both operands
+ *   contain.
  *
  * There is no Num-to-Type reduction: the numeric domain does not narrow the type set. The old
  * zone-based TypeDomain had an implicit Num-to-Type reduction via zone closure over integer-encoded
