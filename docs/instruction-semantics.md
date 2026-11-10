@@ -447,7 +447,7 @@ Each instruction type generates specific assertions:
 | Store | `ValidStore` (type check) |
 | DIV/MOD | `ValidDivisor` (non-zero) |
 | Call | Type/size/map assertions for helper arguments |
-| Pointer arith | `Addable` (valid operands) |
+| Pointer arith | `Addable` (valid operands), `NonNull` (null-checked pointer operands) |
 | Comparison | `Comparable` (compatible types) |
 
 `ValidCall` was removed as a separate assertion kind, but its safety role is preserved by explicit per-argument checks.

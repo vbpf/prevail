@@ -623,3 +623,181 @@ post:
 
 messages:
   - "2: Invalid type (r0.type == number)"
+
+---
+# Regression tests: a nullable pointer records "may be null" only as 0 being a
+# possible uvalue. Arithmetic used to shift uvalue along with the offset, so
+# after r0 += 4 the interval started at 4, the pointer counted as non-null, and
+# an access at -4 (address 0 when the lookup misses) was accepted without any
+# null check. ADD and SUB now assert that their pointer operands are non-null.
+test-case: possibly-null pointer arithmetic - add immediate
+
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
+      "r2.type=stack", "r2.stack_offset=504",
+      "s[504...511].type=number"]
+
+code:
+  <start>: |
+    call 1; bpf_map_lookup_elem
+    r0 += 4
+    r1 = *(u32 *)(r0 - 4)
+
+post:
+  - "_|_"
+
+messages:
+  - "1: Pointer arithmetic on a possibly null pointer (non_null(r0))"
+
+---
+test-case: possibly-null pointer arithmetic - subtract immediate
+
+pre: ["r0.type=shared", "r0.shared_offset=0", "r0.shared_region_size=4", "r0.uvalue=[0, 2147418112]"]
+
+code:
+  <start>: |
+    r0 -= -4
+    r1 = *(u32 *)(r0 - 4)
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Pointer arithmetic on a possibly null pointer (non_null(r0))"
+
+---
+test-case: possibly-null pointer arithmetic - add register
+
+pre: ["r0.type=shared", "r0.shared_offset=0", "r0.shared_region_size=4", "r0.uvalue=[0, 2147418112]",
+      "r2.type=number", "r2.svalue=4", "r2.uvalue=4"]
+
+code:
+  <start>: |
+    r0 += r2
+    r1 = *(u32 *)(r0 - 4)
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Pointer arithmetic on a possibly null pointer (non_null(r0))"
+
+---
+test-case: possibly-null pointer arithmetic - add to number register
+
+pre: ["r0.type=shared", "r0.shared_offset=0", "r0.shared_region_size=4", "r0.uvalue=[0, 2147418112]",
+      "r2.type=number", "r2.svalue=4", "r2.uvalue=4"]
+
+code:
+  <start>: |
+    r2 += r0
+    r1 = *(u32 *)(r2 - 4)
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Pointer arithmetic on a possibly null pointer (non_null(r0))"
+
+---
+test-case: possibly-null pointer arithmetic - subtract register
+
+pre: ["r0.type=shared", "r0.shared_offset=0", "r0.shared_region_size=4", "r0.uvalue=[0, 2147418112]",
+      "r2.type=number", "r2.svalue=-4", "r2.uvalue=18446744073709551612"]
+
+code:
+  <start>: |
+    r0 -= r2
+    r1 = *(u32 *)(r0 - 4)
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Pointer arithmetic on a possibly null pointer (non_null(r0))"
+
+---
+# The null branch keeps the shared type with uvalue=0; moving it must not yield a valid pointer.
+test-case: possibly-null pointer arithmetic - null branch
+
+pre: ["r0.type=shared", "r0.shared_offset=0", "r0.shared_region_size=4", "r0.uvalue=[0, 2147418112]"]
+
+code:
+  <start>: |
+    assume r0 == 0
+    r0 += 4
+    r1 = *(u32 *)(r0 - 4)
+
+post:
+  - "_|_"
+
+messages:
+  - "1: Pointer arithmetic on a possibly null pointer (non_null(r0))"
+
+---
+# An atomic add to a stack slot does not go through the ADD assertions; it must not move a
+# spilled pointer either. The atomic itself requires the slot to hold a number.
+test-case: possibly-null pointer arithmetic - atomic add to spilled pointer
+
+pre: ["r0.type=shared", "r0.shared_offset=0", "r0.shared_region_size=4", "r0.uvalue=[0, 2147418112]",
+      "r2.type=number", "r2.svalue=4", "r2.uvalue=4",
+      "r10.type=stack", "r10.stack_offset=4096"]
+
+code:
+  <start>: |
+    *(u64 *)(r10 - 8) = r0
+    lock *(u64 *)(r10 - 8) += r2
+    r0 = *(u64 *)(r10 - 8)
+    r1 = *(u32 *)(r0 - 4)
+
+post:
+  - "_|_"
+
+messages:
+  - "1: Stack content is not numeric (valid_access(r10.offset-8, width=8) for read)"
+
+---
+# Register arithmetic on a socket is rejected by type; the atomic form is rejected because the slot is not a number.
+test-case: possibly-null pointer arithmetic - atomic add to spilled socket
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r10.type=stack", "r10.stack_offset=512",
+      "r2.type=stack", "r2.stack_offset=496",
+      "r3.type=number", "r3.svalue=12", "r3.uvalue=12",
+      "r4.type=number", "r4.svalue=0", "r4.uvalue=0",
+      "r5.type=number", "r5.svalue=0", "r5.uvalue=0",
+      "s[496...507].type=number"]
+
+code:
+  <start>: |
+    call 99; bpf_skc_lookup_tcp
+    r2 = 4
+    *(u64 *)(r10 - 32) = r0
+    lock *(u64 *)(r10 - 32) += r2
+    r0 = *(u64 *)(r10 - 32)
+    r1 = *(u32 *)(r0 + 68)
+
+post:
+  - "_|_"
+
+messages:
+  - "3: Stack content is not numeric (valid_access(r10.offset-32, width=8) for read)"
+
+---
+# Companion: once the null check has been made, arithmetic is modelled as before.
+test-case: null-checked pointer arithmetic still passes
+
+pre: ["r0.type=shared", "r0.shared_offset=0", "r0.shared_region_size=4", "r0.uvalue=[0, 2147418112]"]
+
+code:
+  <start>: |
+    assume r0 != 0
+    r0 += 4
+    r1 = *(u32 *)(r0 - 4)
+
+post:
+  - r0.type=shared
+  - r0.shared_offset=4
+  - r0.shared_region_size=4
+  - r0.svalue=[5, 2147418116]
+  - r0.uvalue=r0.svalue
+  - r1.type=number

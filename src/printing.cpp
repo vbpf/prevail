@@ -442,6 +442,8 @@ struct AssertionPrinterVisitor {
         _os << TypeConstraint{a.ptr, TypeGroup::pointer} << " -> " << TypeConstraint{a.num, TypeGroup::number};
     }
 
+    void operator()(NonNull const& a) { _os << "non_null(" << a.reg << ")"; }
+
     void operator()(ValidDivisor const& a) {
         if (const auto reg = std::get_if<Reg>(&a.divisor)) {
             _os << reg_name(*reg, a.is64);

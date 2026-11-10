@@ -300,6 +300,11 @@ void check_map_access(Reg ptr, int offset, int width) {
 | NUMBER    | + pointer | Same as pointer       |
 | Pointer   | - pointer | NUMBER (if same type) |
 
+A SHARED pointer that may still be null (a map lookup result before its null check) cannot be
+moved: `NULL + K` is not a valid address, and comparing the moved value to 0 says nothing
+about the original pointer. ADD and SUB assert that their pointer operands are non-null, so
+programs must check for NULL before doing arithmetic on the pointer.
+
 ### Offset Tracking
 
 ```cpp

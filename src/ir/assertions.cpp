@@ -347,22 +347,27 @@ class AssertExtractor {
                 return {Assertion{TypeConstraint{*src, TypeGroup::number}}};
             }
             return {};
+        // A pointer operand must have been null-checked: the result of moving a possibly-null
+        // pointer would pass the null check of a later dereference.
         case Bin::Op::ADD: {
             if (const auto src = std::get_if<Reg>(&ins.v)) {
                 return {Assertion{TypeConstraint{ins.dst, TypeGroup::ptr_or_num}},
-                        Assertion{TypeConstraint{*src, TypeGroup::ptr_or_num}}, Assertion{Addable{*src, ins.dst}},
-                        Assertion{Addable{ins.dst, *src}}};
+                        Assertion{TypeConstraint{*src, TypeGroup::ptr_or_num}},
+                        Assertion{Addable{*src, ins.dst}},
+                        Assertion{Addable{ins.dst, *src}},
+                        Assertion{NonNull{ins.dst}},
+                        Assertion{NonNull{*src}}};
             }
-            return {Assertion{TypeConstraint{ins.dst, TypeGroup::ptr_or_num}}};
+            return {Assertion{TypeConstraint{ins.dst, TypeGroup::ptr_or_num}}, Assertion{NonNull{ins.dst}}};
         }
         case Bin::Op::SUB: {
             if (const auto reg = std::get_if<Reg>(&ins.v)) {
                 // disallow map-map since same type does not mean same offset
                 // TODO: map identities
                 return {TypeConstraint{ins.dst, TypeGroup::ptr_or_num},
-                        Comparable{.r1 = ins.dst, .r2 = *reg, .or_r2_is_number = true}};
+                        Comparable{.r1 = ins.dst, .r2 = *reg, .or_r2_is_number = true}, NonNull{ins.dst}};
             }
-            return {Assertion{TypeConstraint{ins.dst, TypeGroup::ptr_or_num}}};
+            return {Assertion{TypeConstraint{ins.dst, TypeGroup::ptr_or_num}}, Assertion{NonNull{ins.dst}}};
         }
         case Bin::Op::UDIV:
         case Bin::Op::UMOD:
