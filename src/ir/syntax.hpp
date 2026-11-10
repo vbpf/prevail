@@ -414,6 +414,15 @@ struct Addable {
     constexpr bool operator==(const Addable&) const = default;
 };
 
+/// Condition check that a pointer operand of arithmetic has been null-checked. A nullable
+/// pointer (map value, socket, allocated memory) records "may be null" only as 0 being a
+/// possible value; moving it would move that value along with the offset, after which
+/// neither a dereference nor a comparison with 0 can tell the null case apart.
+struct NonNull {
+    Reg reg;
+    constexpr bool operator==(const NonNull&) const = default;
+};
+
 // Condition check whether a divisor -- a register or an immediate -- is a non-zero number.
 // `is64` is the width of the division that consumes it: a 32-bit division divides by the
 // divisor's low half, so only those bytes have to be non-zero.
@@ -510,9 +519,9 @@ struct ValidMapType {
     bool operator==(const ValidMapType&) const = default;
 };
 
-using Assertion = std::variant<Comparable, Addable, ValidDivisor, ValidAccess, ValidStore, ValidSize, ValidMapKeyValue,
-                               ValidCallbackTarget, TypeConstraint, FuncConstraint, ZeroCtxOffset, BoundedLoopCount,
-                               ValidArgZero, ValidArgNonNull, ValidMapType>;
+using Assertion = std::variant<Comparable, Addable, NonNull, ValidDivisor, ValidAccess, ValidStore, ValidSize,
+                               ValidMapKeyValue, ValidCallbackTarget, TypeConstraint, FuncConstraint, ZeroCtxOffset,
+                               BoundedLoopCount, ValidArgZero, ValidArgNonNull, ValidMapType>;
 
 std::ostream& operator<<(std::ostream& os, Instruction const& ins);
 std::string to_string(Instruction const& ins);

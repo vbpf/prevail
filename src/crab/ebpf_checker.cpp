@@ -96,6 +96,7 @@ class EbpfChecker final {
     void operator()(const BoundedLoopCount&) const;
     void operator()(const Comparable&) const;
     void operator()(const FuncConstraint&) const;
+    void operator()(const NonNull&) const;
     void operator()(const ValidDivisor&) const;
     void operator()(const TypeConstraint&) const;
     void operator()(const ValidAccess&) const;
@@ -187,6 +188,16 @@ void EbpfChecker::operator()(const Addable& s) const {
     if (!dom.state.implies_superset(s.ptr, TS_POINTER, s.num, TS_NUM)) {
         throw_fail("Only numbers can be added to pointers");
     }
+}
+
+void EbpfChecker::operator()(const NonNull& s) const {
+    using namespace dsl_syntax;
+    // Numbers and pointers to the singleton regions are never null. Any other pointer is
+    // null unless uvalue > 0 has been established, the same fact a dereference requires.
+    if (dom.state.is_in_group(s.reg, TS_NUM | TS_SINGLETON_PTR)) {
+        return;
+    }
+    require_value(dom.state, reg_pack(s.reg).uvalue > 0, "Pointer arithmetic on a possibly null pointer");
 }
 
 // Whether the low half of a register can be zero. Zero has the same representation in the

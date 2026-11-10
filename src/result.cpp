@@ -341,6 +341,8 @@ std::set<Reg> extract_assertion_registers(const Assertion& assertion) {
                 return {a.r1, a.r2};
             } else if constexpr (std::is_same_v<T, Addable>) {
                 return {a.ptr, a.num};
+            } else if constexpr (std::is_same_v<T, NonNull>) {
+                return {a.reg};
             } else if constexpr (std::is_same_v<T, ValidDivisor>) {
                 if (const auto* r = std::get_if<Reg>(&a.divisor)) {
                     return {*r};
