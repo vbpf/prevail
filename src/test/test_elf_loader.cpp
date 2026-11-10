@@ -1359,6 +1359,112 @@ TEST_CASE("ELF loader does not cross-apply relocations between same-named progra
     REQUIRE(programs[0].prog.size() == 2);
 }
 
+// Regression test: linking local calls must append every function of a program's call
+// graph once. Appending each callee together with its own, already appended, callees
+// duplicates a shared callee at every call level: with f(i) calling f(i+1) and f(i+2)
+// the linked size of f0 is a Fibonacci number, and a few KB of ELF exhaust memory
+// while loading.
+TEST_CASE("ELF loader appends a shared subprogram once", "[elf][hardening]") {
+    // callees[i] lists the functions called by function i, which is laid out as
+    // `call ...; r0 = i; exit`. Function 0 is the program under test.
+    std::vector<std::vector<size_t>> callees;
+
+    SECTION("callees sharing their own callees") {
+        constexpr size_t function_count = 24;
+        callees.resize(function_count);
+        for (size_t i = 0; i + 2 < function_count; ++i) {
+            callees[i] = {i + 1, i + 2};
+        }
+    }
+
+    SECTION("callee first reached through an earlier call than its other caller") {
+        // 0 calls 1 before 2, but 2 calls 1 as well, so 1 has to be placed after 2.
+        callees = {{1, 2}, {3, 3}, {1}, {}};
+    }
+
+    ELFIO::elfio writer;
+    writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+    writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+    writer.set_type(ELFIO::ET_REL);
+    writer.set_machine(ELFIO::EM_BPF);
+
+    ELFIO::section* text_sec = writer.sections.add(".text");
+    text_sec->set_type(ELFIO::SHT_PROGBITS);
+    text_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+    text_sec->set_addr_align(8);
+
+    ELFIO::section* str_sec = writer.sections.add(".strtab");
+    str_sec->set_type(ELFIO::SHT_STRTAB);
+    ELFIO::string_section_accessor str_writer(str_sec);
+
+    ELFIO::section* sym_sec = writer.sections.add(".symtab");
+    sym_sec->set_type(ELFIO::SHT_SYMTAB);
+    sym_sec->set_addr_align(8);
+    sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+    sym_sec->set_link(str_sec->get_index());
+    sym_sec->set_info(1);
+    ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+
+    ELFIO::section* rel_sec = writer.sections.add(".rel.text");
+    rel_sec->set_type(ELFIO::SHT_REL);
+    rel_sec->set_addr_align(8);
+    rel_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_REL));
+    rel_sec->set_link(sym_sec->get_index());
+    rel_sec->set_info(text_sec->get_index());
+    ELFIO::relocation_section_accessor rel_writer(writer, rel_sec);
+
+    constexpr uint8_t MOV64_IMM = 0xb7;
+    std::vector<ELFIO::Elf_Word> function_symbols;
+    size_t text_size = 0;
+    for (size_t i = 0; i < callees.size(); ++i) {
+        const std::string name = "f" + std::to_string(i);
+        const size_t size = (callees[i].size() + 2) * sizeof(EbpfInst);
+        function_symbols.push_back(sym_writer.add_symbol(str_writer, name.c_str(), text_size, size, ELFIO::STB_GLOBAL,
+                                                         ELFIO::STT_FUNC, 0, text_sec->get_index()));
+        text_size += size;
+    }
+    std::vector<EbpfInst> instructions;
+    for (size_t i = 0; i < callees.size(); ++i) {
+        for (const size_t callee : callees[i]) {
+            rel_writer.add_entry(instructions.size() * sizeof(EbpfInst), function_symbols[callee], R_BPF_64_32_TYPE);
+            instructions.push_back(EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_LOCAL, .imm = -1});
+        }
+        instructions.push_back(EbpfInst{.opcode = MOV64_IMM, .imm = gsl::narrow<int32_t>(i)});
+        instructions.push_back(EbpfInst{.opcode = INST_OP_EXIT});
+    }
+    text_sec->set_data(reinterpret_cast<const char*>(instructions.data()), text_size);
+
+    std::ostringstream out_stream;
+    writer.save(out_stream);
+    std::istringstream in_stream(out_stream.str());
+
+    VerifierOptions options{};
+    const auto programs = read_elf(in_stream, "memory", ".text", "f0", options, &g_ebpf_platform_linux);
+    REQUIRE(programs.size() == 1);
+    const std::vector<EbpfInst>& prog = programs[0].prog;
+
+    // Every function is reachable from f0, so f0 consists of exactly one copy of each.
+    REQUIRE(prog.size() == instructions.size());
+
+    // The function starting at `pc` is identified by the immediate of its `r0 = i`.
+    const auto function_at = [&](size_t pc) {
+        while (prog.at(pc).opcode == INST_OP_CALL) {
+            ++pc;
+        }
+        return gsl::narrow<size_t>(prog.at(pc).imm);
+    };
+    REQUIRE(function_at(0) == 0);
+    for (size_t pc = 0; pc < prog.size();) {
+        for (const size_t callee : callees[function_at(pc)]) {
+            // Callers precede their callees, which pass_inline_local_calls() depends on.
+            REQUIRE(prog[pc].imm >= 0);
+            REQUIRE(function_at(pc + 1 + prog[pc].imm) == callee);
+            ++pc;
+        }
+        pc += 2;
+    }
+}
+
 // Regression test: eBPF objects use SHT_REL, so the addend A of "S + A" lives in the
 // relocated lddw. It must be honored for named data symbols as it is for section
 // symbols; dropping it verifies `arr + 0` where the object file says `arr + 8`.

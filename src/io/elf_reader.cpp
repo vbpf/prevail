@@ -14,7 +14,9 @@
 #include <iostream>
 #include <map>
 #include <optional>
+#include <ranges>
 #include <set>
+#include <span>
 #include <string>
 #include <sys/stat.h>
 #include <type_traits>
@@ -607,11 +609,6 @@ bool ProgramReader::has_function_relocation(const size_t prog_index, const size_
     return function_relocation_index_.contains({prog_index, source_offset});
 }
 
-RawProgram* ProgramReader::find_subprogram(const SectionOffset start) {
-    const auto it = raw_program_index_.find(start);
-    return it != raw_program_index_.end() ? &raw_programs[it->second] : nullptr;
-}
-
 void ProgramReader::enqueue_synthetic_local_calls(const std::vector<EbpfInst>& instructions,
                                                   const ELFIO::Elf_Half section_index,
                                                   const ELFIO::Elf_Xword program_offset) {
@@ -661,62 +658,99 @@ void ProgramReader::enqueue_synthetic_local_calls(const std::vector<EbpfInst>& i
     }
 }
 
-std::string ProgramReader::append_subprograms(RawProgram& prog) {
-    if (resolved_subprograms[&prog]) {
-        return {};
-    }
+std::span<const FunctionRelocation> ProgramReader::function_relocations_of(const size_t prog_index) const {
+    // Match relocations to their owning program by index, not by name.
+    // reloc.source_offset is an instruction index into raw_programs[reloc.prog_index];
+    // applying it to a different program that merely shares function_name (ELF symbol
+    // names need not be unique) can index that program's instruction vector out of bounds.
+    // function_relocations is sorted by prog_index (resolve_function_relocation_targets).
+    return std::ranges::equal_range(function_relocations, prog_index, {}, &FunctionRelocation::prog_index);
+}
 
-    if (currently_visiting.contains(&prog)) {
-        throw UnmarshalError("Mutual recursion in subprogram calls");
+void ProgramReader::resolve_function_relocation_targets() {
+    std::ranges::stable_sort(function_relocations, {}, &FunctionRelocation::prog_index);
+    for (auto& reloc : function_relocations) {
+        if (reloc.target.section_index >= reader.sections.size()) {
+            throw UnmarshalError("Invalid section index");
+        }
+        // The callee is the program at the position the relocation designates, not the first
+        // program that happens to share its section name and function name.
+        if (const auto it = raw_program_index_.find(reloc.target); it != raw_program_index_.end()) {
+            reloc.target_prog_index = it->second;
+        }
     }
-    currently_visiting.insert(&prog);
+}
 
-    std::map<SectionOffset, ELFIO::Elf_Xword> subprogram_offsets;
-    for (const auto& reloc : function_relocations) {
-        // Match the relocation to its owning program by identity, not by name.
-        // reloc.source_offset is an instruction index into raw_programs[reloc.prog_index];
-        // applying it to a different program that merely shares function_name (ELF symbol
-        // names need not be unique) can index prog.prog out of bounds.
-        if (reloc.prog_index >= raw_programs.size() || &raw_programs[reloc.prog_index] != &prog) {
+/// Link `prog`, a copy of raw_programs[prog_index], against raw_programs, which stay unlinked:
+/// every function in the transitive call graph of `prog` is appended exactly once, however many
+/// callers share it, so the linked program is never larger than all programs together.
+/// (Appending each callee together with its own, already appended, callees duplicates a shared
+/// callee at every call level, which is exponential in the number of functions.)
+std::string ProgramReader::append_subprograms(RawProgram& prog, const size_t prog_index) const {
+    // Depth-first walk of the call graph, with an explicit stack rather than recursion: the call
+    // depth is only bounded later, by the CFG builder.
+    enum class Visit : uint8_t { unvisited, in_progress, done };
+    std::vector<Visit> visit(raw_programs.size(), Visit::unvisited);
+    std::vector<std::pair<size_t, std::span<const FunctionRelocation>>> path;
+    std::vector<size_t> postorder;
+    visit[prog_index] = Visit::in_progress;
+    path.emplace_back(prog_index, function_relocations_of(prog_index));
+    while (!path.empty()) {
+        auto& [caller, pending] = path.back();
+        if (pending.empty()) {
+            visit[caller] = Visit::done;
+            postorder.push_back(caller);
+            path.pop_back();
             continue;
         }
-        // Likewise, the callee is the program at the position the relocation designates,
-        // not the first program that happens to share its section name and function name.
-        const SectionOffset& target = reloc.target;
-        if (!subprogram_offsets.contains(target)) {
-            subprogram_offsets[target] = prog.prog.size();
-            if (target.section_index >= reader.sections.size()) {
-                throw UnmarshalError("Invalid section index");
-            }
-            if (const auto sub = find_subprogram(target)) {
-                if (sub == &prog) {
-                    throw UnmarshalError("Recursive subprogram call");
-                }
-                const std::string err = append_subprograms(*sub);
-                if (!err.empty()) {
-                    return err;
-                }
-                const size_t base = subprogram_offsets[target];
+        // Last call first, so that the reversed postorder below keeps siblings in call order.
+        const FunctionRelocation& reloc = pending.back();
+        pending = pending.first(pending.size() - 1);
+        if (!reloc.target_prog_index) {
+            return "Subprogram not found: " + reloc.target_function_name;
+        }
+        const size_t callee = *reloc.target_prog_index;
+        if (callee == caller) {
+            throw UnmarshalError("Recursive subprogram call");
+        }
+        if (visit[callee] == Visit::in_progress) {
+            throw UnmarshalError("Mutual recursion in subprogram calls");
+        }
+        if (visit[callee] == Visit::unvisited) {
+            visit[callee] = Visit::in_progress;
+            path.emplace_back(callee, function_relocations_of(callee));
+        }
+    }
 
-                prog.prog.insert(prog.prog.end(), sub->prog.begin(), sub->prog.end());
-                if (parse_params.options.verbosity_opts.print_line_info) {
-                    for (const auto& [k, info] : sub->info.line_info) {
-                        prog.info.line_info[base + k] = info;
-                    }
-                }
-                for (const size_t builtin_offset : sub->info.builtin_call_offsets) {
-                    prog.info.builtin_call_offsets.insert(base + builtin_offset);
-                }
-            } else {
-                return "Subprogram not found: " + reloc.target_function_name;
+    // Place the callees in reversed postorder, which puts every caller before all of its
+    // callees. The CFG builder relies on that: it inlines call sites in instruction order and
+    // has to clone a callee before the calls in the callee's own body are expanded in place.
+    std::vector<size_t> subprogram_offsets(raw_programs.size(), 0);
+    for (const size_t sub_index : postorder | std::views::reverse | std::views::drop(1)) {
+        const RawProgram& sub = raw_programs[sub_index];
+        const size_t base = prog.prog.size();
+        subprogram_offsets[sub_index] = base;
+
+        prog.prog.insert(prog.prog.end(), sub.prog.begin(), sub.prog.end());
+        if (parse_params.options.verbosity_opts.print_line_info) {
+            for (const auto& [k, info] : sub.info.line_info) {
+                prog.info.line_info[base + k] = info;
             }
         }
-        const auto target_offset = gsl::narrow<int64_t>(subprogram_offsets[target]);
-        const auto source_offset = gsl::narrow<int64_t>(reloc.source_offset);
-        prog.prog[reloc.source_offset].imm = gsl::narrow<int32_t>(target_offset - source_offset - 1);
+        for (const size_t builtin_offset : sub.info.builtin_call_offsets) {
+            prog.info.builtin_call_offsets.insert(base + builtin_offset);
+        }
     }
-    currently_visiting.erase(&prog);
-    resolved_subprograms[&prog] = true;
+
+    // Patch every relocated call, in `prog` itself and in each placed callee.
+    for (const size_t caller : postorder) {
+        const auto base = gsl::narrow<int64_t>(subprogram_offsets[caller]);
+        for (const auto& reloc : function_relocations_of(caller)) {
+            const auto target_offset = gsl::narrow<int64_t>(subprogram_offsets[*reloc.target_prog_index]);
+            const auto source_offset = base + gsl::narrow<int64_t>(reloc.source_offset);
+            prog.prog[source_offset].imm = gsl::narrow<int32_t>(target_offset - source_offset - 1);
+        }
+    }
     return {};
 }
 
@@ -1015,7 +1049,6 @@ void ProgramReader::read_programs() { read_programs(false); }
 void ProgramReader::read_all_programs() { read_programs(true); }
 
 void ProgramReader::read_programs(const bool all_sections) {
-    resolved_subprograms.clear();
     build_ksym_function_resolution_cache();
     build_relocation_section_cache();
 
@@ -1097,8 +1130,11 @@ void ProgramReader::read_programs(const bool all_sections) {
         }
     }
 
-    for (auto& prog : raw_programs) {
-        const auto err = append_subprograms(prog);
+    resolve_function_relocation_targets();
+    std::vector<RawProgram> linked_programs = raw_programs;
+    for (size_t i = 0; i < linked_programs.size(); ++i) {
+        RawProgram& prog = linked_programs[i];
+        const auto err = append_subprograms(prog, i);
         if (err.empty()) {
             continue;
         }
@@ -1108,6 +1144,7 @@ void ProgramReader::read_programs(const bool all_sections) {
             throw UnmarshalError(err);
         }
     }
+    raw_programs = std::move(linked_programs);
 
     if (!all_sections && !parse_params.desired_section.empty()) {
         std::erase_if(raw_programs, [&](const auto& p) { return p.section_name != parse_params.desired_section; });

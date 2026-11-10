@@ -11,6 +11,7 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -61,6 +62,7 @@ struct FunctionRelocation {
     /// diagnostics (ELF symbol names need not be unique).
     SectionOffset target;
     std::string target_function_name;
+    std::optional<size_t> target_prog_index; // Index into raw_programs, once every program has been read.
 };
 
 /// The named STT_FUNC symbols of one section, as indices into the symbol table.
@@ -200,10 +202,6 @@ class ProgramReader {
     std::set<size_t> builtin_offsets_for_current_program;
     std::set<size_t> jump_targets_for_current_program;
 
-    // loop detection for recursive subprogram resolution
-    std::map<const RawProgram*, bool> resolved_subprograms;
-    std::set<const RawProgram*> currently_visiting;
-
     // CO-RE relocation (elf_core_reloc.cpp)
     static void apply_core_relocation(RawProgram& prog, const struct bpf_core_relo& relo,
                                       std::string_view access_string, const libbtf::btf_type_data& btf_data);
@@ -213,6 +211,9 @@ class ProgramReader {
                                           std::reference_wrapper<EbpfInst> lo_inst) const;
     [[nodiscard]]
     bool has_function_relocation(size_t prog_index, size_t source_offset) const;
+    [[nodiscard]]
+    std::span<const FunctionRelocation> function_relocations_of(size_t prog_index) const;
+    void resolve_function_relocation_targets();
     void build_ksym_function_resolution_cache();
     void build_relocation_section_cache();
     void enqueue_synthetic_local_calls(const std::vector<EbpfInst>& instructions, ELFIO::Elf_Half section_index,
@@ -220,7 +221,6 @@ class ProgramReader {
 
     void record_function_relocation(FunctionRelocation reloc);
     void read_programs(bool all_sections);
-    RawProgram* find_subprogram(SectionOffset start);
 
   public:
     struct section_error_t {
@@ -236,7 +236,7 @@ class ProgramReader {
                   const ElfGlobalData& g)
         : parse_params{p}, reader{r}, symbols{s}, global{g}, function_symbols{collect_function_symbols(s)} {}
 
-    std::string append_subprograms(RawProgram& prog);
+    std::string append_subprograms(RawProgram& prog, size_t prog_index) const;
     [[nodiscard]]
     int relocate_map(const std::string& name, ELFIO::Elf_Word index) const;
     [[nodiscard]]
