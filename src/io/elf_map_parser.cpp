@@ -354,13 +354,12 @@ ElfGlobalData extract_global_data(const parse_params_t& params, const ELFIO::elf
                                   const ELFIO::const_symbol_section_accessor& symbols) {
     ElfGlobalData global = [&] {
         if (reader.sections[".BTF"] && reader.sections[".maps"]) {
-            try {
-                return parse_btf_section(params, reader, symbols);
-            } catch (const UnmarshalError& e) {
-                // BTF-defined maps can't be decoded; fall back to section-based map descriptors.
-                std::cerr << "BTF map parsing failed, falling back to section-based maps: " << e.what() << std::endl;
-                return parse_map_sections(params, reader, symbols);
-            }
+            // BTF-defined maps are described only by the .BTF section; the bytes of .maps are
+            // the (normally zero-initialized) storage of the map variables, not bpf_map_def
+            // records. If the BTF map definitions can't be decoded there is no trustworthy
+            // descriptor to verify against, so the error must reach the caller rather than
+            // falling back to reading the object-controlled .maps bytes as legacy records.
+            return parse_btf_section(params, reader, symbols);
         }
         if (std::ranges::any_of(reader.sections, [](const auto& s) { return is_map_section(s->get_name()); })) {
             return parse_map_sections(params, reader, symbols);

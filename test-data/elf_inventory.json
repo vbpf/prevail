@@ -633,14 +633,14 @@
               {
                 "function": "func",
                 "reject_load": true,
-                "reject_load_reason": "Subprogram not found: ebpf_map_update_elem"
+                "reject_load_reason": "Unsupported or invalid BTF map metadata: map 'map': cannot determine value size for type 'type_id=7'"
               }
             ]
           },
           "test_overrides": {
             "sections": {
               ".text": {
-                "status": "reject"
+                "status": "reject_load"
               }
             }
           }
