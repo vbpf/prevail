@@ -39,7 +39,7 @@ void verify_printed_string(const std::string& file) {
     auto program = std::get_if<InstructionSeq>(&prog_or_error);
     REQUIRE(program != nullptr);
     print(*program, generated_output, {}, false, &raw_prog.info);
-    print_map_descriptors(raw_prog.info.map_descriptors, generated_output);
+    print_map_descriptors(*raw_prog.info.map_descriptors, generated_output);
     std::ifstream expected_stream(std::string(TEST_ASM_FILE_DIRECTORY) + file + std::string(".asm"));
     REQUIRE(expected_stream);
     std::string expected_line;

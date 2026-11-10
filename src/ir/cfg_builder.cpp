@@ -453,7 +453,7 @@ static void add_cfg_nodes(CfgBuilder& builder, const Cfg& original_cfg, const La
 /// can type it as T_FUNC; this helper is never called for CODE_ADDR. VARIABLE_ADDR is
 /// rejected earlier, by pass_validate_instruction_support.
 static Instruction lower_pseudo_load(const LoadPseudo& pseudo, const ProgramInfo& info) {
-    const auto& descriptors = info.map_descriptors;
+    const auto& descriptors = *info.map_descriptors;
     if (pseudo.addr.imm < 0 || static_cast<size_t>(pseudo.addr.imm) >= descriptors.size()) {
         throw InvalidControlFlow{"invalid map index " + std::to_string(pseudo.addr.imm) + " (have " +
                                  std::to_string(descriptors.size()) + " maps)"};

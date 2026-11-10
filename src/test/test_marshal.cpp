@@ -1477,12 +1477,12 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         // r1 = map_val(map) + 0; *(u32 *)(r1 + 0) = 7; r0 = 0; exit
         const auto verify_store_to_map_val = [&](const uint32_t map_type, const uint8_t lddw_mode, const int32_t map) {
             ProgramInfo map_info = info;
-            map_info.map_descriptors.push_back(EbpfMapDescriptor{.original_fd = 1,
-                                                                 .type = map_type,
-                                                                 .key_size = 4,
-                                                                 .value_size = 4,
-                                                                 .max_entries = 4,
-                                                                 .inner_map_fd = 1});
+            map_info.map_descriptors.get_mutable().push_back(EbpfMapDescriptor{.original_fd = 1,
+                                                                               .type = map_type,
+                                                                               .key_size = 4,
+                                                                               .value_size = 4,
+                                                                               .max_entries = 4,
+                                                                               .inner_map_fd = 1});
             RawProgram raw_prog{
                 "",
                 "",

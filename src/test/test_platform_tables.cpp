@@ -320,7 +320,7 @@ TEST_CASE("map_lookup_elem result is only a writable map value for plain-value m
         const EbpfMapDescriptor map{
             .original_fd = fd, .type = map_type, .key_size = 4, .value_size = 4, .max_entries = 16};
         const ProgramInfo info{.platform = &g_ebpf_platform_linux,
-                               .map_descriptors = {map},
+                               .map_descriptors = Cow<std::vector<EbpfMapDescriptor>>::make(std::vector{map}),
                                .type = g_ebpf_platform_linux.get_program_type("xdp", "")};
         const auto at = [](const int index, Instruction ins) {
             return LabeledInstruction{Label{index}, std::move(ins), std::nullopt};
@@ -631,11 +631,11 @@ TEST_CASE("helper map-type restrictions cover every map the register may refer t
     constexpr uint32_t hash_map = 1;     // BPF_MAP_TYPE_HASH
     constexpr uint32_t ringbuf_map = 27; // BPF_MAP_TYPE_RINGBUF
     ProgramInfo info{.platform = &g_ebpf_platform_linux, .type = g_ebpf_platform_linux.get_program_type("xdp", "")};
-    info.map_descriptors.push_back({.original_fd = 1, .type = ringbuf_map, .max_entries = 4096});
-    info.map_descriptors.push_back({.original_fd = 2, .type = ringbuf_map, .max_entries = 4096});
+    info.map_descriptors.get_mutable().push_back({.original_fd = 1, .type = ringbuf_map, .max_entries = 4096});
+    info.map_descriptors.get_mutable().push_back({.original_fd = 2, .type = ringbuf_map, .max_entries = 4096});
     // Enough hash maps that the joined fd range [1, 40] is too wide for the analysis to enumerate.
     for (int fd = 3; fd <= 40; fd++) {
-        info.map_descriptors.push_back(
+        info.map_descriptors.get_mutable().push_back(
             {.original_fd = fd, .type = hash_map, .key_size = 4, .value_size = 4, .max_entries = 1});
     }
 

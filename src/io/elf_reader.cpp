@@ -720,10 +720,10 @@ int ProgramReader::relocate_map(const std::string& name, const ELFIO::Elf_Word i
         }
         val = it->second;
     }
-    if (val >= global.map_descriptors.size()) {
+    if (val >= global.map_descriptors->size()) {
         throw UnmarshalError(bad_reloc_value(val));
     }
-    return global.map_descriptors.at(val).original_fd;
+    return global.map_descriptors->at(val).original_fd;
 }
 
 int ProgramReader::relocate_global_variable(const ELFIO::Elf_Half section_index) const {
@@ -733,10 +733,10 @@ int ProgramReader::relocate_global_variable(const ELFIO::Elf_Half section_index)
         throw UnmarshalError("Map descriptor not found for section " + std::to_string(section_index));
     }
     const size_t val = it->second;
-    if (val >= global.map_descriptors.size()) {
+    if (val >= global.map_descriptors->size()) {
         throw UnmarshalError(bad_reloc_value(val));
     }
-    return global.map_descriptors.at(val).original_fd;
+    return global.map_descriptors->at(val).original_fd;
 }
 
 int32_t ProgramReader::compute_lddw_reloc_offset_imm(const std::optional<ELFIO::Elf_Sxword> explicit_addend,

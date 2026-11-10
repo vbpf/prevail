@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "crab/cow.hpp"
 #include "spec/ebpf_base.h"
 #include "spec/vm_isa.hpp"
 
@@ -99,7 +100,8 @@ struct ProgramInfo {
     const struct ebpf_platform_t* platform{};
 
     // --- Loader outputs (populated during ELF parse; stable thereafter) ---
-    std::vector<EbpfMapDescriptor> map_descriptors{};
+    // One table per ELF object, shared by all of its programs rather than copied into each.
+    Cow<std::vector<EbpfMapDescriptor>> map_descriptors = Cow<std::vector<EbpfMapDescriptor>>::make();
     EbpfProgramType type{};
     std::map<size_t, btf_line_info_t> line_info{};
     // Instruction indices rewritten from builtin-call relocations.

@@ -44,7 +44,7 @@ const EbpfMapDescriptor hash_map = {.original_fd = HASH_MAP_FD,
 ProgramInfo xdp_info() {
     return ProgramInfo{
         .platform = &g_ebpf_platform_linux,
-        .map_descriptors = {array_map, hash_map},
+        .map_descriptors = Cow<std::vector<EbpfMapDescriptor>>::make(std::vector{array_map, hash_map}),
         .type = g_ebpf_platform_linux.get_program_type("xdp", ""),
     };
 }
