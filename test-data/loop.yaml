@@ -641,6 +641,47 @@ post:
 
 messages: []
 ---
+test-case: descending meet keeps apart what its operands say about a type alternative
+
+# r3 is a number on entry and a pointer in every later iteration. <never> is feasible only while r2 is widened, and
+# puts r3.svalue and r4.svalue on the line r3 - r4 == 4096. The next evaluation of the loop drops <never>, so r3.svalue
+# is 4104 again. Both facts hold only where r3 is a number: together they must not imply r4 == 8.
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "r10.type=stack", "r10.stack_offset=4096"]
+
+code:
+  <start>: |
+    r6 = r1
+    r3 = 4104
+    r4 = 8
+    r2 = 0
+  <head>: |
+    if r2 > 100 goto <never>
+  <guard>: |
+    if r2 >= 10 goto <out>
+  <body>: |
+    r3 = r6
+    goto <next>
+  <never>: |
+    r3 = 0
+    r2 = 5
+  <next>: |
+    r4 = -4096
+    r2 += 1
+    goto <head>
+  <out>: |
+    r5 = r10
+    r5 -= r4
+    *(u64 *)(r5 + 0) = r2
+    r0 = 0
+    exit
+
+post: ["_|_"]
+
+messages:
+  - "4:8: Code becomes unreachable (assume r2 > 100)"
+  - "15: Upper bound must be at most total_stack_size (valid_access(r5.offset, width=8) for write)"
+---
 test-case: bounded 32-bit stack counter loop with local call
 
 # The induction variable lives in a 4-byte stack slot that each iteration

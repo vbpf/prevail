@@ -96,7 +96,32 @@ TypeToNumDomain TypeToNumDomain::operator&(TypeToNumDomain&& other) const {
             res.values.havoc(v);
             other.values.havoc(v);
         }
+        // A kind variable of a type that is one of several alternatives is free in the states of the other
+        // alternatives, so the operands may hold it at different values there, each related to variables that
+        // are always meaningful; conjoining those relations would refute states that both operands contain.
+        // Keep only the intersection of its intervals, as join does: an interval alone cannot constrain another
+        // variable, and an empty intersection rules out the alternative, not the state.
+        std::vector<std::tuple<Variable, Interval>> alternative_intervals;
+        for (const Variable type_var : res.types.variables()) {
+            for (const auto& [type, kinds] : type_to_kinds) {
+                if (res.types.entail_type(type_var, type) || !res.types.may_have_type(type_var, type)) {
+                    continue;
+                }
+                for (const DataKind kind : kinds) {
+                    const Variable var = variable_registry.kind_var(kind, type_var);
+                    const Interval interval = res.values.eval_interval(var) & other.values.eval_interval(var);
+                    if (!interval.is_bottom() && !interval.is_top()) {
+                        alternative_intervals.emplace_back(var, interval);
+                    }
+                    res.values.havoc(var);
+                    other.values.havoc(var);
+                }
+            }
+        }
         res.values = res.values & std::move(other.values);
+        for (const auto& [var, interval] : alternative_intervals) {
+            res.values.set(var, interval);
+        }
         return res;
     }
     return {TypeDomain::top(), NumAbsDomain::bottom()};
