@@ -9,7 +9,7 @@
 
 ## Tail calls
 
-- [x] **Tail calls in subprograms** — no longer rejected unconditionally.
+- [x] **Tail calls in subprograms** — no longer rejected unconditionally. A successful tail call replaces only the subprogram's frame, so each inlined tail-call site also has a successor that returns to the subprogram's caller with an unknown numeric `r0`, as if the subprogram had exited there. Like Linux, `bpf_tail_call` is treated as a packet-reallocating helper, since the target program may change packet data before that return.
 - [x] **Tail call chain depth tracking** — verifier enforces a tail-call chain limit of 33 during CFG validation.
 - [x] **Failed tail call leaves `r0` unwritten** — `bpf_tail_call` is `RET_VOID` on Linux; after the call `r0` is unreadable (as in Linux), not a number.
 

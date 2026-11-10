@@ -329,8 +329,127 @@ code:
 
 post:
   - r0.type=number
-  - r0.svalue=0
-  - r0.uvalue=0
+  - meta_offset=0
+  - packet_size=0
+---
+test-case: tail call from within a subprogram returns the target's r0 to the caller
+
+# A successful tail call replaces only the subprogram's frame, so the target program's
+# exit returns to <start> with the target's r0, not with the 0 that <sub> sets when the
+# tail call fails. The store must be checked against both.
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r2.uvalue=[1, 2147418112]", "r3.type=number",
+      "r10.type=stack", "r10.stack_offset=4096"]
+
+code:
+  <start>: |
+    call <sub>
+    r1 = r10
+    r1 += r0
+    *(u8 *)(r1 - 1) = 0
+    r0 = 0
+    exit
+  <sub>: |
+    call 12; bpf_tail_call
+    r0 = 0
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "3: Lower bound must be at least r10.stack_offset - subprogram_stack_size (valid_access(r1.offset-1, width=1) for write)"
+---
+test-case: callx tail call from within a subprogram returns the target's r0 to the caller
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r2.uvalue=[1, 2147418112]", "r3.type=number"]
+
+code:
+  <start>: |
+    call <sub>
+    exit
+  <sub>: |
+    r8 = 12
+    callx r8; bpf_tail_call
+    r0 = 0
+    exit
+
+post:
+  - r0.type=number
+  - meta_offset=0
+  - packet_size=0
+---
+test-case: tail call from within a nested subprogram returns to the innermost caller
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r2.uvalue=[1, 2147418112]", "r3.type=number"]
+
+code:
+  <start>: |
+    call <mid>
+    exit
+  <mid>: |
+    call <sub>
+    r0 &= 1
+    exit
+  <sub>: |
+    call 12; bpf_tail_call
+    r0 = 0
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=[0, 1]
+  - r0.uvalue=r0.svalue
+  - meta_offset=0
+  - packet_size=0
+---
+test-case: tail call from within a subprogram skips the rest of the subprogram
+
+# The caller's stack slot is written by <sub> only if the tail call fails.
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r2.uvalue=[1, 2147418112]", "r3.type=number",
+      "r10.type=stack", "r10.stack_offset=4096"]
+
+code:
+  <start>: |
+    r6 = r10
+    call <sub>
+    r0 = *(u64 *)(r10 - 8)
+    exit
+  <sub>: |
+    call 12; bpf_tail_call
+    *(u64 *)(r6 - 8) = 0
+    r0 = 0
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "3: Invalid type (r0.type == number)"
+---
+test-case: tail call from within a subprogram invalidates packet pointers in the caller
+
+# The tail-called program may reallocate the packet before its exit returns to <start>.
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r2.uvalue=[1, 2147418112]", "r3.type=number",
+      "r6.type=packet", "r6.packet_offset=0", "packet_size=[1, 65534]", "meta_offset=0"]
+
+code:
+  <start>: |
+    call <sub>
+    r0 = *(u8 *)(r6 + 0)
+    exit
+  <sub>: |
+    call 12; bpf_tail_call
+    r0 = 0
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "1: Invalid type (r6.type in {ctx, stack, packet, shared, socket, alloc_mem})"
 ---
 test-case: fail infinite self-recursion
 

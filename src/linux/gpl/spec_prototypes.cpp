@@ -96,6 +96,9 @@ constexpr EbpfHelperPrototype bpf_tail_call_proto = {
             EBPF_ARGUMENT_TYPE_PTR_TO_MAP_OF_PROGRAMS,
             EBPF_ARGUMENT_TYPE_ANYTHING,
         },
+    // The target of a successful tail call from a subprogram runs before control returns to the
+    // subprogram's caller and may reallocate the packet; like Linux, treat the call as doing so.
+    .reallocate_packet = true,
 };
 
 static constexpr EbpfHelperPrototype bpf_override_return_proto = {

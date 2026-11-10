@@ -342,6 +342,9 @@ static ResolvedKfuncCalls pass_resolve_kfunc_calls(const InstructionSeq& insts, 
     return resolved;
 }
 
+static bool is_tail_call_site(const Instruction& ins, const ebpf_platform_t& platform,
+                              const EbpfProgramType& program_type);
+
 /// Update a control-flow graph to inline function macros.
 ///
 /// The macro's blocks are found in original_cfg, the graph as connected before any call was
@@ -431,6 +434,18 @@ static void add_cfg_nodes(CfgBuilder& builder, const Cfg& original_cfg, const La
                 const Label next_label{next_macro_label.from, next_macro_label.to, stack_frame_prefix};
                 builder.add_child(label, next_label);
             }
+        }
+        if (is_tail_call_site(builder.prog.instruction_at(label), *builder.prog.info().platform,
+                              builder.prog.info().type)) {
+            // A successful tail call replaces only the current frame: the target program's exit
+            // returns to the caller of this subprogram, with the target's r0 and without running
+            // the rest of the subprogram. Give the site a second successor that pops the frame
+            // like an Exit would and sets r0 to the target's return value. The call itself, as a
+            // packet-reallocating helper, forgets packet pointers that the target may have invalidated.
+            const Label tail_exit_label{label.from, exit_to_label.from, stack_frame_prefix};
+            builder.insert(tail_exit_label, Exit{.stack_frame_prefix = stack_frame_prefix, .after_tail_call = true});
+            builder.add_child(label, tail_exit_label);
+            builder.add_child(tail_exit_label, exit_to_label);
         }
     }
 
@@ -587,7 +602,9 @@ static void pass_connect_edges(CfgBuilder& builder, const InstructionSeq& insts,
 // Pass: InlineLocalCalls
 // Reads    : instruction sequence, max_call_stack_frames and max_inlined_calls bounds.
 // Writes   : for every CallLocal in the sequence, clones the callee region into the CFG
-//            under a unique stack-frame prefix. Recurses into nested calls.
+//            under a unique stack-frame prefix. Recurses into nested calls. Every cloned
+//            tail-call site also gets a synthetic Exit back to the caller, for the case
+//            where the tail call succeeds.
 // Throws   : InvalidControlFlow on illegal recursion or exceeding the call-stack frame or
 //            inlined-call bound.
 // Invariant: pass_connect_edges has been applied -- inlining walks the children it connected,
