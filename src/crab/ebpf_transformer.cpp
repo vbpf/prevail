@@ -712,6 +712,11 @@ void EbpfTransformer::do_store_stack(TypeToNumDomain& state, const LinearExpress
     }
     bool must_be_num = false;
     if (opt_val_reg && !state.is_initialized(*opt_val_reg)) {
+        // The register may hold anything, including a pointer, so treat this as a non-numeric store of unknown
+        // type: every byte the store may reach must stop being numeric. havoc_type above only clears num_bytes
+        // for a constant address; store_type also covers the whole range of a non-constant one. The type cell it
+        // returns, if any, is left unconstrained.
+        stack.store_type(state.types, addr, width, must_be_num);
         stack.havoc(state.values, DataKind::svalues, addr, width, big_endian);
         stack.havoc(state.values, DataKind::uvalues, addr, width, big_endian);
     } else {

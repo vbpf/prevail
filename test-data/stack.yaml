@@ -814,6 +814,57 @@ post:
   - r5.stack_offset=[504, 508]
   - r5.type=stack
 ---
+test-case: uninitialized store through imprecise pointer havocs num_bytes
+
+# r3 is never written, so it may hold anything, including a pointer. Every byte
+# the store may reach must stop being numeric, exactly as for a constant address.
+
+pre: ["r2.type=stack", "r2.stack_offset=496",
+      "r5.type=stack", "r5.stack_offset=[496, 504]",
+      "r10.type=stack", "r10.stack_offset=512",
+      "s[496...511].type=number"]
+
+code:
+  <start>: |
+    *(u64 *)(r5 + 0) = r3
+
+post:
+  - r10.stack_offset=512
+  - r10.type=stack
+  - r2.stack_offset=496
+  - r2.type=stack
+  - r5.stack_offset=[496, 504]
+  - r5.type=stack
+---
+test-case: maybe-uninitialized pointer stored through imprecise pointer is not reloaded as a number
+
+# r4 is a ctx pointer on one path and never written on the other. Reloading the
+# slot as a number would launder the pointer into a scalar.
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r3.type=number",
+      "r5.type=stack", "r5.stack_offset=[496, 504]",
+      "r10.type=stack", "r10.stack_offset=512",
+      "s[496...511].type=number"]
+
+code:
+  <start>: |
+    if r3 != 0 goto <store>
+    r4 = r1
+  <store>: |
+    *(u64 *)(r5 + 0) = r4
+    r0 = *(u64 *)(r10 - 16)
+
+post:
+  - r1.ctx_offset=0
+  - r1.type=ctx
+  - r3.type=number
+  - r3.uvalue=[0, +oo]
+  - r5.stack_offset=[496, 504]
+  - r5.type=stack
+  - r10.stack_offset=512
+  - r10.type=stack
+---
 test-case: stack store 32bit records number type
 
 pre: ["r6.type=stack", "r6.stack_offset=0",
