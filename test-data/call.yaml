@@ -1194,3 +1194,52 @@ code:
 
 post:
   - r0.type=number
+---
+test-case: bpf_csum_diff with possibly-null shared pointer and non-zero size
+
+# "or null" admits a null pointer only together with size 0; an unchecked map value is no exception.
+pre: ["r1.type=shared", "r1.shared_offset=0", "r1.shared_region_size=8", "r1.svalue=[0, 2147418112]", "r1.uvalue=[0, 2147418112]",
+      "r2.type=number", "r2.svalue=4", "r2.uvalue=4",
+      "r3.type=number", "r3.svalue=0", "r3.uvalue=0",
+      "r4.type=number", "r4.svalue=0", "r4.uvalue=0",
+      "r5.type=number", "r5.svalue=0", "r5.uvalue=0"]
+
+code:
+  <start>: |
+    call 28; bpf_csum_diff
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Non-zero access size with null pointer ((r1.type == number and r1.value == 0) or valid_access(r1.offset, width=r2) for read)"
+---
+test-case: bpf_csum_diff with possibly-null shared pointer and zero size
+
+pre: ["r1.type=shared", "r1.shared_offset=0", "r1.shared_region_size=8", "r1.svalue=[0, 2147418112]", "r1.uvalue=[0, 2147418112]",
+      "r2.type=number", "r2.svalue=0", "r2.uvalue=0",
+      "r3.type=number", "r3.svalue=0", "r3.uvalue=0",
+      "r4.type=number", "r4.svalue=0", "r4.uvalue=0",
+      "r5.type=number", "r5.svalue=0", "r5.uvalue=0"]
+
+code:
+  <start>: |
+    call 28; bpf_csum_diff
+
+post:
+  - r0.type=number
+---
+test-case: bpf_csum_diff with non-null shared pointer and non-zero size
+
+pre: ["r1.type=shared", "r1.shared_offset=0", "r1.shared_region_size=8", "r1.svalue=[1, 2147418112]", "r1.uvalue=[1, 2147418112]",
+      "r2.type=number", "r2.svalue=4", "r2.uvalue=4",
+      "r3.type=number", "r3.svalue=0", "r3.uvalue=0",
+      "r4.type=number", "r4.svalue=0", "r4.uvalue=0",
+      "r5.type=number", "r5.svalue=0", "r5.uvalue=0"]
+
+code:
+  <start>: |
+    call 28; bpf_csum_diff
+
+post:
+  - r0.type=number
