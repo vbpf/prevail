@@ -1,6 +1,7 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
 
+#include <algorithm>
 #include <catch2/catch_all.hpp>
 #include <chrono>
 #include <concepts>
@@ -576,9 +577,11 @@ std::vector<RawProgram> load_core_array_access(const libbtf::btf_type_data& type
 FAIL_LOAD_ELF("cilium", "not-found.o", "2/1")
 FAIL_LOAD_ELF("cilium", "bpf_lxc.o", "not-found")
 FAIL_LOAD_ELF("invalid", "badsymsize.o", "xdp_redirect_map")
+// badrelo.o declares a BTF map whose value type has size 0 (`__uint(value, 0)`), so its BTF map
+// definitions can't be decoded. There is no fallback to the .maps section bytes: the load fails.
+FAIL_LOAD_ELF_SECTION("build", "badrelo.o", ".text")
 
 // Sections that used to be loader failures and now load successfully (verification may still reject later).
-LOAD_ELF_SECTION("build", "badrelo.o", ".text")
 LOAD_ELF_SECTION("linux-selftests", "bpf_cubic.o", "struct_ops")
 LOAD_ELF_SECTION("linux-selftests", "bpf_dctcp.o", "struct_ops")
 LOAD_ELF_SECTION("linux-selftests", "map_ptr_kern.o", "cgroup_skb/egress")
@@ -735,6 +738,134 @@ TEST_CASE("ELF loader shares one map descriptor table between all programs", "[e
     REQUIRE_FALSE(programs.front().info.map_descriptors->empty());
     for (const RawProgram& program : programs) {
         REQUIRE(program.info.map_descriptors.get() == programs.front().info.map_descriptors.get());
+    }
+}
+
+// Regression test: when an object carries BTF-defined maps (.BTF + .maps), the map
+// descriptors must come from the BTF definitions only. The bytes of .maps are the
+// storage of the map variables and are chosen by the object; reading them as legacy
+// bpf_map_def records (as a fallback when the BTF map definitions can't be decoded)
+// would let the object pick the key/value sizes it is verified against.
+TEST_CASE("ELF loader does not read .maps bytes as legacy map records when BTF maps are invalid", "[elf][hardening]") {
+    // .maps holds one 32-byte map variable "m". As a legacy bpf_map_def record its bytes read
+    // as {type = ARRAY, key_size = 4, value_size = 4096, max_entries = 1}.
+    constexpr uint32_t map_record_size = 32;
+    constexpr uint32_t legacy_value_size = 4096;
+    const std::vector<uint32_t> legacy_record = {2 /* BPF_MAP_TYPE_ARRAY */, 4, legacy_value_size, 1, 0, 0, 0, 0};
+
+    // Build an object with a program that references "m" through a map relocation.
+    auto build_object = [&](const std::vector<std::byte>& btf_bytes) {
+        ELFIO::elfio writer;
+        writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+        writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+        writer.set_type(ELFIO::ET_REL);
+        writer.set_machine(ELFIO::EM_BPF);
+
+        // r1 = map_fd m (lddw pair, relocated); exit.
+        ELFIO::section* text_sec = writer.sections.add(".text");
+        text_sec->set_type(ELFIO::SHT_PROGBITS);
+        text_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+        text_sec->set_addr_align(8);
+        std::vector<EbpfInst> insts(3);
+        insts[0].opcode = INST_OP_LDDW_IMM;
+        insts[0].dst = 1;
+        insts[1] = {};
+        insts[2].opcode = INST_OP_EXIT;
+        text_sec->set_data(reinterpret_cast<const char*>(insts.data()), insts.size() * sizeof(EbpfInst));
+
+        ELFIO::section* maps_sec = writer.sections.add(".maps");
+        maps_sec->set_type(ELFIO::SHT_PROGBITS);
+        maps_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_WRITE);
+        maps_sec->set_addr_align(8);
+        maps_sec->set_data(reinterpret_cast<const char*>(legacy_record.data()), map_record_size);
+
+        ELFIO::section* btf_sec = writer.sections.add(".BTF");
+        btf_sec->set_type(ELFIO::SHT_PROGBITS);
+        btf_sec->set_data(reinterpret_cast<const char*>(btf_bytes.data()), btf_bytes.size());
+
+        ELFIO::section* str_sec = writer.sections.add(".strtab");
+        str_sec->set_type(ELFIO::SHT_STRTAB);
+        ELFIO::string_section_accessor str_writer(str_sec);
+
+        ELFIO::section* sym_sec = writer.sections.add(".symtab");
+        sym_sec->set_type(ELFIO::SHT_SYMTAB);
+        sym_sec->set_addr_align(8);
+        sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+        sym_sec->set_link(str_sec->get_index());
+        sym_sec->set_info(1);
+        ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+        sym_writer.add_symbol(str_writer, "prog", 0, insts.size() * sizeof(EbpfInst), ELFIO::STB_GLOBAL,
+                              ELFIO::STT_FUNC, 0, text_sec->get_index());
+        const auto map_sym = sym_writer.add_symbol(str_writer, "m", 0, map_record_size, ELFIO::STB_GLOBAL,
+                                                   ELFIO::STT_OBJECT, 0, maps_sec->get_index());
+
+        ELFIO::section* rel_sec = writer.sections.add(".rel.text");
+        rel_sec->set_type(ELFIO::SHT_REL);
+        rel_sec->set_addr_align(8);
+        rel_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_REL));
+        rel_sec->set_link(sym_sec->get_index());
+        rel_sec->set_info(text_sec->get_index());
+        ELFIO::relocation_section_accessor rel_writer(writer, rel_sec);
+        rel_writer.add_entry(0, map_sym, R_BPF_64_64_TYPE);
+
+        std::ostringstream out_stream;
+        writer.save(out_stream);
+        return out_stream.str();
+    };
+
+    // BTF for `struct { int (*type)[BPF_MAP_TYPE_ARRAY]; int (*max_entries)[1]; int *key; int *value; } m`,
+    // i.e. an array map with 4-byte keys and 4-byte values. With `with_type_member == false` the
+    // struct lacks the mandatory `type` member and is not a decodable map definition.
+    auto build_btf = [](const bool with_type_member) {
+        libbtf::btf_type_data btf;
+        const auto int_id = btf.append(libbtf::btf_kind_int{.name = "int",
+                                                            .size_in_bytes = 4,
+                                                            .offset_from_start_in_bits = 0,
+                                                            .field_width_in_bits = 32,
+                                                            .is_signed = true});
+        const auto int_ptr_id = btf.append(libbtf::btf_kind_ptr{.type = int_id});
+        // __uint(name, val) is declared as `int (*name)[val]`.
+        auto uint_member = [&](const uint32_t value) {
+            const auto array_id = btf.append(
+                libbtf::btf_kind_array{.element_type = int_id, .index_type = int_id, .count_of_elements = value});
+            return btf.append(libbtf::btf_kind_ptr{.type = array_id});
+        };
+        std::vector<libbtf::btf_kind_struct_member> members;
+        if (with_type_member) {
+            members.push_back(
+                {.name = "type", .type = uint_member(2 /* BPF_MAP_TYPE_ARRAY */), .offset_from_start_in_bits = 0});
+        }
+        members.push_back({.name = "max_entries", .type = uint_member(1), .offset_from_start_in_bits = 64});
+        members.push_back({.name = "key", .type = int_ptr_id, .offset_from_start_in_bits = 128});
+        members.push_back({.name = "value", .type = int_ptr_id, .offset_from_start_in_bits = 192});
+        const auto map_struct_id = btf.append(
+            libbtf::btf_kind_struct{.name = std::nullopt, .members = members, .size_in_bytes = map_record_size});
+        const auto var_id =
+            btf.append(libbtf::btf_kind_var{.name = "m", .type = map_struct_id, .linkage = libbtf::BTF_LINKAGE_GLOBAL});
+        btf.append(libbtf::btf_kind_data_section{.name = ".maps",
+                                                 .members = {{.type = var_id, .offset = 0, .size = map_record_size}},
+                                                 .size = map_record_size});
+        return btf.to_bytes();
+    };
+
+    const VerifierOptions options{};
+
+    SECTION("decodable BTF map definition: sizes come from BTF, not from the .maps bytes") {
+        std::istringstream in_stream(build_object(build_btf(/*with_type_member=*/true)));
+        const auto programs = read_elf(in_stream, "memory", ".text", "", options, &g_ebpf_platform_linux);
+        REQUIRE(programs.size() == 1);
+        const auto& descriptors = *programs[0].info.map_descriptors;
+        const auto it = std::ranges::find_if(descriptors, [](const auto& d) { return d.name == "m"; });
+        REQUIRE(it != descriptors.end());
+        REQUIRE(it->key_size == 4);
+        REQUIRE(it->value_size == 4);
+        REQUIRE(it->max_entries == 1);
+    }
+
+    SECTION("undecodable BTF map definition: the object is rejected at load") {
+        std::istringstream in_stream(build_object(build_btf(/*with_type_member=*/false)));
+        REQUIRE_THROWS_WITH(read_elf(in_stream, "memory", ".text", "", options, &g_ebpf_platform_linux),
+                            Catch::Matchers::ContainsSubstring("Unsupported or invalid BTF map metadata"));
     }
 }
 
