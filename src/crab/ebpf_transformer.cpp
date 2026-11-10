@@ -445,6 +445,11 @@ void EbpfTransformer::operator()(const Exit& a) {
     if (dom.is_bottom()) {
         return;
     }
+    if (a.after_tail_call) {
+        constexpr Reg r0_reg{R0_RETURN_VALUE};
+        dom.state.havoc_register_except_type(r0_reg);
+        dom.state.assign_type(r0_reg, T_NUM);
+    }
     // Clean up any state for the current stack frame.
     const std::string prefix = a.stack_frame_prefix;
     if (prefix.empty()) {

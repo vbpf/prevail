@@ -134,6 +134,26 @@ TEST_CASE("pass_lower_pseudo_loads rejects an out-of-range map index", "[passes]
                         Catch::Matchers::ContainsSubstring("invalid map index 5"));
 }
 
+TEST_CASE("pass_inline_local_calls returns a successful tail call to the caller of the subprogram", "[passes]") {
+    const ProgramInfo info = default_info();
+    InstructionSeq seq;
+    seq.push_back(at(0, CallLocal{.target = Label{2}}));
+    seq.push_back(at(1, Exit{}));
+    seq.push_back(at(2, Call{.func = 12})); // bpf_tail_call
+    seq.push_back(at(3, Bin{.op = Bin::Op::MOV, .dst = Reg{0}, .v = Imm{0}, .is64 = true}));
+    seq.push_back(at(4, Exit{}));
+
+    const Program prog = Program::from_sequence(seq, info, {});
+    // The inlined tail-call site has the fall-through (tail call failed) and a synthetic
+    // Exit of the inlined frame (tail call succeeded, the target returned to the caller).
+    const Label tail_exit{2, 1, "0"};
+    REQUIRE(prog.cfg().children_of(Label{2, -1, "0"}) == std::set{tail_exit, Label{3, -1, "0"}});
+    REQUIRE(prog.instruction_at(tail_exit) == Instruction{Exit{.stack_frame_prefix = "0", .after_tail_call = true}});
+    REQUIRE(prog.cfg().children_of(tail_exit) == std::set{Label{1}});
+    // Outside an inlined frame nothing under verification runs after a successful tail call.
+    REQUIRE(prog.cfg().children_of(Label{2}) == std::set{Label{3}});
+}
+
 TEST_CASE("pass_compute_callback_metadata excludes Exit labels and synthetic jump labels", "[passes]") {
     const ProgramInfo info = default_info();
     InstructionSeq seq;

@@ -296,6 +296,9 @@ struct CallLocal {
 
 struct Exit {
     std::string stack_frame_prefix; ///< Variable prefix to clean up when exiting.
+    /// Control returns here from a program reached by a tail call, not from this frame's own code,
+    /// so r0 holds that program's return value: some number.
+    bool after_tail_call = false;
     bool operator==(const Exit& other) const noexcept = default;
 };
 

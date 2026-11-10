@@ -133,6 +133,11 @@ void inline_function(Label call_site, Label target) {
 }
 ```
 
+A successful tail call replaces only the current frame, so the target program's exit returns to the
+subprogram's caller. Each inlined tail-call site therefore gets a second successor next to its fall-through:
+a synthetic `Exit` for the inlined frame that leads to the instruction after the call. That `Exit` is marked
+`after_tail_call`, so `r0` holds the target program's return value, an unknown number.
+
 ## Basic Block Simplification
 
 Basic blocks can be merged for efficiency:
