@@ -588,8 +588,8 @@ bool ProgramReader::has_function_relocation(const size_t prog_index, const size_
     return function_relocation_index_.contains({prog_index, source_offset});
 }
 
-RawProgram* ProgramReader::find_subprogram(const ELFIO::Elf_Half section_index, const ELFIO::Elf_Xword offset) {
-    const auto it = raw_program_index_.find({section_index, offset});
+RawProgram* ProgramReader::find_subprogram(const SectionOffset start) {
+    const auto it = raw_program_index_.find(start);
     return it != raw_program_index_.end() ? &raw_programs[it->second] : nullptr;
 }
 
@@ -635,8 +635,7 @@ void ProgramReader::enqueue_synthetic_local_calls(const std::vector<EbpfInst>& i
             .prog_index = raw_programs.size(),
             .source_offset = loc,
             .relocation_entry_index = std::nullopt,
-            .target_section_index = section_index,
-            .target_offset = target_offset,
+            .target = {.section_index = section_index, .offset = target_offset},
             .target_function_name = *target_name,
         });
     }
@@ -652,7 +651,7 @@ std::string ProgramReader::append_subprograms(RawProgram& prog) {
     }
     currently_visiting.insert(&prog);
 
-    std::map<std::pair<ELFIO::Elf_Half, ELFIO::Elf_Xword>, ELFIO::Elf_Xword> subprogram_offsets;
+    std::map<SectionOffset, ELFIO::Elf_Xword> subprogram_offsets;
     for (const auto& reloc : function_relocations) {
         // Match the relocation to its owning program by identity, not by name.
         // reloc.source_offset is an instruction index into raw_programs[reloc.prog_index];
@@ -663,13 +662,13 @@ std::string ProgramReader::append_subprograms(RawProgram& prog) {
         }
         // Likewise, the callee is the program at the position the relocation designates,
         // not the first program that happens to share its section name and function name.
-        const std::pair target{reloc.target_section_index, reloc.target_offset};
+        const SectionOffset& target = reloc.target;
         if (!subprogram_offsets.contains(target)) {
             subprogram_offsets[target] = prog.prog.size();
-            if (reloc.target_section_index >= reader.sections.size()) {
+            if (target.section_index >= reader.sections.size()) {
                 throw UnmarshalError("Invalid section index");
             }
-            if (const auto sub = find_subprogram(reloc.target_section_index, reloc.target_offset)) {
+            if (const auto sub = find_subprogram(target)) {
                 if (sub == &prog) {
                     throw UnmarshalError("Recursive subprogram call");
                 }
@@ -868,8 +867,7 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
                 .prog_index = raw_programs.size(),
                 .source_offset = location,
                 .relocation_entry_index = index,
-                .target_section_index = symbol_section_index,
-                .target_offset = target_offset,
+                .target = {.section_index = symbol_section_index, .offset = target_offset},
                 .target_function_name = target_function_name,
             });
             return true;
@@ -1029,7 +1027,8 @@ void ProgramReader::read_programs(const bool all_sections) {
                 .type = prog_type,
                 .builtin_call_offsets = std::move(builtin_offsets_for_current_program),
             };
-            raw_program_index_.emplace(std::pair{sec->get_index(), offset}, raw_programs.size());
+            raw_program_index_.emplace(SectionOffset{.section_index = sec->get_index(), .offset = offset},
+                                       raw_programs.size());
             raw_programs.emplace_back(RawProgram{
                 parse_params.path,
                 sec_name,

@@ -5,6 +5,7 @@
 // elf_core_reloc.cpp and elf_extern_resolve.cpp.  Not part of the public API.
 #pragma once
 
+#include <compare>
 #include <cstring>
 #include <limits>
 #include <map>
@@ -44,14 +45,21 @@ struct symbol_details_t {
     unsigned char other{};
 };
 
+/// A position in an ELF object: a section and a byte offset in that section.
+struct SectionOffset {
+    ELFIO::Elf_Half section_index{};
+    ELFIO::Elf_Xword offset{};
+
+    auto operator<=>(const SectionOffset&) const = default;
+};
+
 struct FunctionRelocation {
     size_t prog_index{};
     ELFIO::Elf_Xword source_offset{};
     std::optional<ELFIO::Elf_Xword> relocation_entry_index;
-    ELFIO::Elf_Half target_section_index{};
-    /// Byte offset of the callee in its section. Together with target_section_index this identifies
-    /// the callee; target_function_name is only for diagnostics (ELF symbol names need not be unique).
-    ELFIO::Elf_Xword target_offset{};
+    /// Where the callee starts. This identifies the callee; target_function_name is only for
+    /// diagnostics (ELF symbol names need not be unique).
+    SectionOffset target;
     std::string target_function_name;
 };
 
@@ -161,8 +169,8 @@ class ProgramReader {
     const ElfGlobalData& global;
     std::vector<FunctionRelocation> function_relocations;
     std::set<std::pair<size_t, size_t>> function_relocation_index_;
-    /// Maps (section index, byte offset in section) to the index in raw_programs of the program starting there.
-    std::map<std::pair<ELFIO::Elf_Half, ELFIO::Elf_Xword>, size_t> raw_program_index_;
+    /// Maps the position where each program starts to its index in raw_programs.
+    std::map<SectionOffset, size_t> raw_program_index_;
     std::map<std::string, std::optional<KsymBtfId>> ksym_function_resolution_cache;
     std::map<std::string, const ELFIO::section*> relocation_section_cache;
     std::vector<unresolved_symbol_error_t> unresolved_symbol_errors;
@@ -191,7 +199,7 @@ class ProgramReader {
 
     void record_function_relocation(FunctionRelocation reloc);
     void read_programs(bool all_sections);
-    RawProgram* find_subprogram(ELFIO::Elf_Half section_index, ELFIO::Elf_Xword offset);
+    RawProgram* find_subprogram(SectionOffset start);
 
   public:
     struct section_error_t {
