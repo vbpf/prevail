@@ -385,6 +385,15 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
     for (const auto access_reg_type : dom.state.enumerate_types(s.access_reg)) {
         switch (access_reg_type) {
         case T_STACK: {
+            // The helper reads or writes all `width` bytes through the pointer, so the whole range
+            // must lie inside the stack, with the same floor and ceiling as a direct dereference.
+            // all_num_width() alone is not enough: it clips the range to the stack before testing it.
+            Variable lb = access_reg.stack_offset;
+            LinearExpression ub = LinearExpression{lb} + LinearExpression{width};
+            require_lower_bound(lb, reg_pack(R10_STACK_POINTER).stack_offset - context.runtime().subprogram_stack_size,
+                                "Lower bound must be at least r10.stack_offset - subprogram_stack_size");
+            require_upper_bound(ub, LinearExpression{context.runtime().total_stack_size()},
+                                "Upper bound must be at most total_stack_size");
             Interval offset = dom.state.values.eval_interval(access_reg.stack_offset);
             if (!dom.stack->all_num_width(offset, Interval{width})) {
                 auto lb_is = offset.lb().number();

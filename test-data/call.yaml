@@ -4,6 +4,7 @@
 test-case: bpf_map_lookup_elem
 
 pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=512",
       "r2.type=stack", "r2.stack_offset=504",
       "s[504...511].type=number"]
 
@@ -16,12 +17,15 @@ post:
   - r0.shared_offset=0
   - r0.shared_region_size=4
   - r0.uvalue=[0, 2147418112]
+  - r10.type=stack
+  - r10.stack_offset=512
   - s[504...511].type=number
 ---
 test-case: bpf_map_lookup_elem null check discards stale destination kind values
 
 pre: ["r0.type=number", "r0.svalue=1", "r0.uvalue=1",
       "r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=512",
       "r2.type=stack", "r2.stack_offset=504",
       "r6.type=stack", "r6.stack_offset=504",
       "s[504...511].type=number"]
@@ -45,6 +49,7 @@ messages:
 test-case: bpf_map_lookup_elem copied null check discards stale destination kind values
 
 pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=512",
       "r2.type=stack", "r2.stack_offset=504",
       "r6.type=stack", "r6.stack_offset=504",
       "r7.type=number", "r7.svalue=-1",
@@ -312,6 +317,7 @@ messages:
 test-case: bpf_map_lookup_elem with non-numeric stack key
 
 pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=512",
       "r2.type=stack"]
 
 code:
@@ -322,11 +328,46 @@ post:
   - "_|_"
 
 messages:
-  - "0: Illegal map update with a non-numerical value [-oo-oo) (within(r2:key_size(r1)))"
+  - "0: Lower bound must be at least r10.stack_offset - subprogram_stack_size (within(r2:key_size(r1)))"
+---
+test-case: bpf_map_lookup_elem with stack key running past the top of the stack
+
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=4096",
+      "r2.type=stack", "r2.stack_offset=4094",
+      "s[4094...4095].type=number"]
+
+code:
+  <start>: |
+    call 1; bpf_map_lookup_elem
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Upper bound must be at most total_stack_size (within(r2:key_size(r1)))"
+---
+test-case: bpf_map_lookup_elem with stack key running below the current frame
+
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=512",
+      "r2.type=stack", "r2.stack_offset=-2",
+      "s[0...1].type=number"]
+
+code:
+  <start>: |
+    call 1; bpf_map_lookup_elem
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Lower bound must be at least r10.stack_offset - subprogram_stack_size (within(r2:key_size(r1)))"
 ---
 test-case: bpf_map_update_elem with numeric stack value
 
 pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=512",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=stack", "r3.stack_offset=496",
       "r4.type=number",
@@ -338,12 +379,15 @@ code:
 
 post:
   - r0.type=number
+  - r10.type=stack
+  - r10.stack_offset=512
   - s[496...511].type=number
 
 ---
 test-case: bpf_map_update_elem with shared value
 
 pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=512",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=4", "r3.svalue=[1, 2147418112]", "r3.uvalue=[1, 2147418112]",
       "r4.type=number",
@@ -355,12 +399,15 @@ code:
 
 post:
   - r0.type=number
+  - r10.type=stack
+  - r10.stack_offset=512
   - s[496...511].type=number
 
 ---
 test-case: bpf_map_update_elem with shared value too small
 
 pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=512",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=2", "r3.svalue=[1, 2147418112]", "r3.uvalue=[1, 2147418112]",
       "r4.type=number",
@@ -380,6 +427,7 @@ messages:
 test-case: bpf_map_update_elem with shared value larger than target region
 
 pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=512",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=64", "r3.svalue=[1, 2147418112]", "r3.uvalue=[1, 2147418112]",
       "r4.type=number",
@@ -391,12 +439,15 @@ code:
 
 post:
   - r0.type=number
+  - r10.type=stack
+  - r10.stack_offset=512
   - s[496...511].type=number
 
 ---
 test-case: bpf_map_update_elem with shared value may be null
 
 pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=512",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=shared", "r3.shared_offset=0", "r3.shared_region_size=4", "r3.svalue=[0, 2147418112]", "r3.uvalue=[0, 2147418112]",
       "r4.type=number",
@@ -417,6 +468,7 @@ test-case: bpf_map_update_elem with packet value
 
 pre: ["meta_offset=0",
       "r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=512",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=packet", "r3.packet_offset=0", "packet_size=4",
       "r4.type=number",
@@ -428,6 +480,8 @@ code:
 
 post:
   - r0.type=number
+  - r10.type=stack
+  - r10.stack_offset=512
   - s[496...511].type=number
   - meta_offset=0
   - packet_size=4
@@ -436,6 +490,7 @@ post:
 test-case: bpf_map_update_elem with non-numeric stack value
 
 pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=512",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=stack", "r3.stack_offset=496",
       "r4.type=number",
@@ -451,9 +506,29 @@ post:
 messages:
   - "0: Illegal map update with a non-numerical value [496-500) (within(r3:value_size(r1)))"
 ---
+test-case: bpf_map_update_elem with stack value running past the top of the stack
+
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=4096",
+      "r2.type=stack", "r2.stack_offset=4088",
+      "r3.type=stack", "r3.stack_offset=4094",
+      "r4.type=number",
+      "s[4088...4095].type=number"]
+
+code:
+  <start>: |
+    call 2; bpf_map_update_elem
+
+post:
+  - "_|_"
+
+messages:
+  - "0: Upper bound must be at most total_stack_size (within(r3:value_size(r1)))"
+---
 test-case: bpf_map_update_elem with context value
 
 pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=512",
       "r2.type=stack", "r2.stack_offset=504",
       "r3.type=ctx", "r3.ctx_offset=0",
       "r4.type=number",
@@ -474,6 +549,7 @@ messages:
 test-case: bpf_map_pop_elem forgets the previous stack value
 
 pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=512",
       "r2.type=stack", "r2.stack_offset=508",
       "s[504...507].type=number", "s[504...507].svalue=7", "s[504...507].uvalue=7",
       "s[508...511].type=number", "s[508...511].svalue=0", "s[508...511].uvalue=0"]
@@ -484,6 +560,8 @@ code:
 
 post:
   - r0.type=number
+  - r10.type=stack
+  - r10.stack_offset=512
   - s[504...511].type=number
   - s[504...507].svalue=7
   - s[504...507].uvalue=7
@@ -491,6 +569,7 @@ post:
 test-case: bpf_map_peek_elem forgets the previous stack value
 
 pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=512",
       "r2.type=stack", "r2.stack_offset=508",
       "s[504...507].type=number", "s[504...507].svalue=7", "s[504...507].uvalue=7",
       "s[508...511].type=number", "s[508...511].svalue=0", "s[508...511].uvalue=0"]
@@ -501,6 +580,8 @@ code:
 
 post:
   - r0.type=number
+  - r10.type=stack
+  - r10.stack_offset=512
   - s[504...511].type=number
   - s[504...507].svalue=7
   - s[504...507].uvalue=7
@@ -508,6 +589,7 @@ post:
 test-case: bpf_map_pop_elem forgets the previous stack value for a stack-or-shared pointer
 
 pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=512",
       "r2.type in {stack, shared}", "r2.stack_offset=508",
       "r2.shared_offset=0", "r2.shared_region_size=4", "r2.svalue=[1, 2147418112]", "r2.uvalue=[1, 2147418112]",
       "s[508...511].type=number", "s[508...511].svalue=0", "s[508...511].uvalue=0"]
@@ -518,6 +600,8 @@ code:
 
 post:
   - r0.type=number
+  - r10.type=stack
+  - r10.stack_offset=512
   - s[508...511].type=number
 ---
 test-case: bpf_map_pop_elem result guards reachable code
@@ -557,6 +641,7 @@ messages:
 test-case: bpf_map_pop_elem with non-numeric stack value
 
 pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=512",
       "r2.type=stack", "r2.stack_offset=508"]
 
 code:
