@@ -134,6 +134,32 @@ class EbpfChecker final {
         require_value(dom.state, access_ub <= ceiling, msg);
     }
 
+    // A null pointer access is only valid with zero width.
+    void require_zero_width(const Value& width) const {
+        using namespace dsl_syntax;
+        if (std::holds_alternative<Imm>(width)) {
+            if (std::get<Imm>(width).v != 0) {
+                throw_fail("Non-zero access size with null pointer");
+            }
+        } else {
+            require_value(dom.state, reg_pack(std::get<Reg>(width)).svalue == 0,
+                          "Non-zero access size with null pointer");
+        }
+    }
+
+    // A nullable pointer (e.g. an unchecked map lookup result) keeps its pointer type,
+    // so null is ruled out by value. Where null is admitted, a pointer that may be null
+    // is held to the same rule as a literal null: the access width must be zero.
+    void require_non_null_or_zero_width(const ValidAccess& s) const {
+        using namespace dsl_syntax;
+        const auto non_null = reg_pack(s.reg).uvalue > 0;
+        if (s.or_null && !dom.state.values.entail(non_null)) {
+            require_zero_width(s.width);
+        } else {
+            require_value(dom.state, non_null, "Possible null access");
+        }
+    }
+
     const Assertion assertion;
 
     const EbpfDomain& dom;
@@ -547,8 +573,8 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             require_lower_bound(lb, LinearExpression{0}, "Lower bound must be at least 0");
             require_upper_bound(ub, reg.shared_region_size,
                                 "Upper bound must be at most " + variable_registry.name(reg.shared_region_size));
-            if (!is_comparison_check && !s.or_null) {
-                require_value(dom.state, reg.uvalue > 0, "Possible null access");
+            if (!is_comparison_check) {
+                require_non_null_or_zero_width(s);
             }
             break;
         }
@@ -578,9 +604,7 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
                 if (!is_valid_struct_access(socket_layout, exact_offset->cast_to<int32_t>(), width, s.access_type)) {
                     throw_fail("Invalid socket access");
                 }
-                if (!s.or_null) {
-                    require_value(dom.state, reg.uvalue > 0, "Possible null access");
-                }
+                require_non_null_or_zero_width(s);
             }
             break;
         }
@@ -589,8 +613,8 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             require_lower_bound(lb, LinearExpression{0}, "Lower bound must be at least 0");
             require_upper_bound(ub, reg.alloc_mem_size,
                                 "Upper bound must be at most " + variable_registry.name(reg.alloc_mem_size));
-            if (!is_comparison_check && !s.or_null) {
-                require_value(dom.state, reg.uvalue > 0, "Possible null access");
+            if (!is_comparison_check) {
+                require_non_null_or_zero_width(s);
             }
             break;
         }
@@ -598,15 +622,7 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             if (!is_comparison_check) {
                 if (s.or_null) {
                     require_value(dom.state, reg.svalue == 0, "Non-null number");
-                    // A null pointer access is only valid with zero width.
-                    if (std::holds_alternative<Imm>(s.width)) {
-                        if (std::get<Imm>(s.width).v != 0) {
-                            throw_fail("Non-zero access size with null pointer");
-                        }
-                    } else {
-                        const auto width_svalue = reg_pack(std::get<Reg>(s.width)).svalue;
-                        require_value(dom.state, width_svalue == 0, "Non-zero access size with null pointer");
-                    }
+                    require_zero_width(s.width);
                 } else {
                     throw_fail("Only pointers can be dereferenced");
                 }
