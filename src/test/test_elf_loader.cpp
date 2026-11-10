@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <catch2/catch_all.hpp>
+#include <chrono>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -1903,4 +1904,84 @@ TEST_CASE("ELF loader rejects relocations against ambiguous BTF map symbols", "[
 
     REQUIRE_THROWS_WITH(elf.load({relocation_symbol}),
                         Catch::Matchers::ContainsSubstring("Map descriptor not found: large"));
+}
+
+// Regression test: marking inner-map templates used to scan the whole descriptor table once
+// per inner-map reference, and on the legacy maps path every record has one, so an object
+// defining n legacy maps cost O(n^2) before analysis started; n is chosen by the file
+// (24 bytes per record, and several `maps` section headers may describe the same bytes).
+TEST_CASE("ELF loader handles large legacy maps sections in linear time", "[elf][hardening]") {
+    constexpr uint32_t record_count = 262144;
+    constexpr uint32_t bpf_map_type_hash = 1;
+    constexpr uint32_t bpf_map_type_hash_of_maps = 13;
+
+    ELFIO::elfio writer;
+    writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+    writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+    writer.set_type(ELFIO::ET_REL);
+    writer.set_machine(ELFIO::EM_BPF);
+
+    // `r0 = 2; exit`: the program does not need to reference any map.
+    ELFIO::section* text_sec = writer.sections.add("xdp");
+    text_sec->set_type(ELFIO::SHT_PROGBITS);
+    text_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+    text_sec->set_addr_align(8);
+    const uint8_t insts[16] = {0xb7, 0, 0, 0, 2, 0, 0, 0, 0x95, 0, 0, 0, 0, 0, 0, 0};
+    text_sec->set_data(reinterpret_cast<const char*>(insts), sizeof(insts));
+
+    // Legacy `struct bpf_map_def` records: {type, key_size, value_size, max_entries, map_flags, inner_map_idx}.
+    // The last record is a map of maps whose inner map is record 1.
+    std::string maps_data;
+    const auto append_record = [&maps_data](const uint32_t type, const uint32_t value_size,
+                                            const uint32_t inner_map_idx) {
+        const uint32_t record[6] = {type, sizeof(uint32_t), value_size, 1, 0, inner_map_idx};
+        maps_data.append(reinterpret_cast<const char*>(record), sizeof(record));
+    };
+    for (uint32_t i = 0; i + 1 < record_count; ++i) {
+        append_record(bpf_map_type_hash, i % 2 == 0 ? 8 : 8 + i, 0);
+    }
+    append_record(bpf_map_type_hash_of_maps, sizeof(uint32_t), 1);
+    ELFIO::section* maps_sec = writer.sections.add("maps");
+    maps_sec->set_type(ELFIO::SHT_PROGBITS);
+    maps_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_WRITE);
+    maps_sec->set_addr_align(4);
+    maps_sec->set_data(maps_data);
+
+    ELFIO::section* str_sec = writer.sections.add(".strtab");
+    str_sec->set_type(ELFIO::SHT_STRTAB);
+    ELFIO::string_section_accessor str_writer(str_sec);
+
+    ELFIO::section* sym_sec = writer.sections.add(".symtab");
+    sym_sec->set_type(ELFIO::SHT_SYMTAB);
+    sym_sec->set_addr_align(8);
+    sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+    sym_sec->set_link(str_sec->get_index());
+    sym_sec->set_info(1);
+    ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+    sym_writer.add_symbol(str_writer, "prog", 0, sizeof(insts), ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0,
+                          text_sec->get_index());
+    // One named symbol is needed for the section to be parsed; its size sets the record size.
+    sym_writer.add_symbol(str_writer, "map0", 0, 6 * sizeof(uint32_t), ELFIO::STB_GLOBAL, ELFIO::STT_OBJECT, 0,
+                          maps_sec->get_index());
+
+    std::ostringstream out_stream;
+    writer.save(out_stream);
+    std::istringstream in_stream(out_stream.str());
+
+    VerifierOptions options{};
+    const auto start = std::chrono::steady_clock::now();
+    const auto programs = read_elf(in_stream, "memory", "xdp", "", options, &g_ebpf_platform_linux);
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    // Takes tens of seconds with a quadratic loader, well under a second with a linear one.
+    REQUIRE(elapsed < std::chrono::seconds(10));
+
+    REQUIRE(programs.size() == 1);
+    const auto& descriptors = *programs[0].info.map_descriptors;
+    REQUIRE(descriptors.size() == record_count);
+    for (size_t i = 0; i < record_count; ++i) {
+        // Every definition gets its own mock FD, in order, since all but the last share a map type.
+        REQUIRE(descriptors[i].original_fd == gsl::narrow<int>(i + 1));
+    }
+    REQUIRE(descriptors[1].is_inner_map_template);
+    REQUIRE_FALSE(descriptors[3].is_inner_map_template);
 }

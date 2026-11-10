@@ -375,13 +375,15 @@ ElfGlobalData extract_global_data(const parse_params_t& params, const ELFIO::elf
     /// At runtime the actual inner map can be any map with matching structure,
     /// not necessarily the template defined in the ELF.
     auto& map_descriptors = global.map_descriptors.get_mutable();
+    std::set<int> inner_map_fds;
     for (const auto& desc : map_descriptors) {
         if (desc.inner_map_fd != DEFAULT_MAP_FD) {
-            for (auto& inner_desc : map_descriptors) {
-                if (inner_desc.original_fd == desc.inner_map_fd) {
-                    inner_desc.is_inner_map_template = true;
-                }
-            }
+            inner_map_fds.insert(desc.inner_map_fd);
+        }
+    }
+    for (auto& desc : map_descriptors) {
+        if (inner_map_fds.contains(desc.original_fd)) {
+            desc.is_inner_map_template = true;
         }
     }
     return global;
