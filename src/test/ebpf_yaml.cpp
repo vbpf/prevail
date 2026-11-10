@@ -462,7 +462,8 @@ std::optional<Failure> run_yaml_test_case(TestCase test_case, bool debug) {
     ebpf_ctx_descriptor_t ctx_descriptor{64, 0, 4, -1};
     EbpfProgramType program_type = make_program_type(test_case.name, &ctx_descriptor);
 
-    ProgramInfo info{&g_platform_test, {test_map_descriptor}, program_type};
+    ProgramInfo info{.platform = &g_platform_test, .type = program_type};
+    info.map_descriptors.get_mutable().push_back(test_map_descriptor);
     try {
         Program prog = Program::from_sequence(test_case.instruction_seq, info, test_case.options);
         const AnalysisContext context{std::move(prog), test_case.options};
@@ -579,7 +580,7 @@ ConformanceTestResult run_conformance_test_case(const std::vector<uint8_t>& memo
     ebpf_ctx_descriptor_t ctx_descriptor{64, -1, -1, -1};
     EbpfProgramType program_type = make_program_type("conformance_check", &ctx_descriptor);
 
-    ProgramInfo info{&g_platform_test, {}, program_type};
+    ProgramInfo info{.platform = &g_platform_test, .type = program_type};
 
     std::vector<EbpfInst> insts(instructions.begin(), instructions.end());
 

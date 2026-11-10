@@ -235,7 +235,7 @@ int main(int argc, char** argv) {
     if (!asmfile.empty()) {
         std::ofstream out{asmfile};
         print(inst_seq, out, {});
-        print_map_descriptors(raw_prog.info.map_descriptors, out);
+        print_map_descriptors(*raw_prog.info.map_descriptors, out);
     }
 
     // Convert the instruction sequence to a control-flow graph.

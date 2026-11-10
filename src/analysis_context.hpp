@@ -41,7 +41,7 @@ struct AnalysisContext {
 
     // Look up `map_fd` in this program's descriptor table.
     const EbpfMapDescriptor& map_descriptor(const int map_fd) const {
-        return platform().get_map_descriptor(map_fd, program_info().map_descriptors);
+        return platform().get_map_descriptor(map_fd, *program_info().map_descriptors);
     }
 
     // Whether `helper_id` is callable from this program's type.

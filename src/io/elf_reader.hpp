@@ -59,7 +59,7 @@ using MapOffsets = std::map<ELFIO::Elf_Xword, size_t>;
 /// @brief EBPF-Global data extracted from an ELF file during parsing.
 struct ElfGlobalData {
     std::set<ELFIO::Elf_Half> map_section_indices;
-    std::vector<EbpfMapDescriptor> map_descriptors;
+    Cow<std::vector<EbpfMapDescriptor>> map_descriptors = Cow<std::vector<EbpfMapDescriptor>>::make();
     std::variant<size_t, MapOffsets> map_record_size_or_map_offsets;
     /// Global variable section index -> index of its implicit descriptor in map_descriptors
     /// (keyed by section index for the same reason: section names need not be unique either).

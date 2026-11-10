@@ -725,6 +725,18 @@ TEST_CASE("ELF loader rejects malformed legacy maps section record size", "[elf]
                         Catch::Matchers::ContainsSubstring("Malformed legacy maps section"));
 }
 
+// A private copy of the table in every program makes loading take programs * maps memory.
+TEST_CASE("ELF loader shares one map descriptor table between all programs", "[elf][hardening]") {
+
+    ElfObject elf{"ebpf-samples/bpf_cilium_test/bpf_lb-DLB_L3.o", {}, &g_ebpf_platform_linux};
+    const auto& programs = elf.get_programs();
+    REQUIRE(programs.size() > 1);
+    REQUIRE_FALSE(programs.front().info.map_descriptors->empty());
+    for (const RawProgram& program : programs) {
+        REQUIRE(program.info.map_descriptors.get() == programs.front().info.map_descriptors.get());
+    }
+}
+
 TEST_CASE("CO-RE access string offset out-of-bounds fails cleanly", "[elf][core][hardening]") {
 
     TempElfFile elf{"ebpf-samples/cilium-examples/tcprtt_bpf_bpfel.o", "bad-core-access"};
@@ -843,7 +855,7 @@ TEST_CASE("ELF loader gives BTF maps declared with the same type distinct fds", 
     const auto& progs = elf.get_programs(".text", "func");
     REQUIRE(progs.size() == 1);
 
-    const auto& descriptors = progs[0].info.map_descriptors;
+    const auto& descriptors = *progs[0].info.map_descriptors;
     REQUIRE(descriptors.size() == 3);
     for (const EbpfMapDescriptor& descriptor : descriptors) {
         CAPTURE(descriptor.name, descriptor.original_fd);
@@ -1449,8 +1461,8 @@ TEST_CASE("ELF loader describes global variable sections as array maps", "[elf][
 
     const auto require_array_maps = [&](const std::vector<RawProgram>& programs, const size_t map_count) {
         REQUIRE(programs.size() == 1);
-        REQUIRE(programs[0].info.map_descriptors.size() == map_count);
-        for (const auto& descriptor : programs[0].info.map_descriptors) {
+        REQUIRE(programs[0].info.map_descriptors->size() == map_count);
+        for (const auto& descriptor : *programs[0].info.map_descriptors) {
             CAPTURE(descriptor.name);
             REQUIRE(descriptor.key_size == sizeof(uint32_t));
             REQUIRE(descriptor.max_entries == 1);
@@ -1538,7 +1550,7 @@ TEST_CASE("ELF loader sizes global variable maps by ELF section, not by BTF DATA
         VerifierOptions options{};
         const auto programs = read_elf(in_stream, "memory", ".text", "", options, &g_ebpf_platform_linux);
         REQUIRE(programs.size() == 1);
-        const auto& descriptors = programs[0].info.map_descriptors;
+        const auto& descriptors = *programs[0].info.map_descriptors;
         REQUIRE(descriptors.size() == 1);
         REQUIRE(descriptors[0].name == section_name);
         REQUIRE(descriptors[0].value_size == 8);
@@ -1634,7 +1646,7 @@ class LddwRelocationElf {
 uint32_t relocated_value_size(const RawProgram& program, const size_t n, const uint8_t expected_src) {
     const EbpfInst& inst = program.prog.at(2 * n);
     REQUIRE(inst.src == expected_src);
-    for (const auto& descriptor : program.info.map_descriptors) {
+    for (const auto& descriptor : *program.info.map_descriptors) {
         if (descriptor.original_fd == inst.imm) {
             return descriptor.value_size;
         }
