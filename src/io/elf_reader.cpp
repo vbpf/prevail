@@ -122,7 +122,9 @@ struct RelocationEntry {
     ELFIO::Elf64_Addr offset;
     ELFIO::Elf_Word symbol_index;
     unsigned type;
-    ELFIO::Elf_Sxword addend;
+    // The r_addend of an SHT_RELA entry. SHT_REL entries have no addend field; theirs is carried
+    // in the relocated instruction, so an absent addend is not the same as an explicit 0.
+    std::optional<ELFIO::Elf_Sxword> explicit_addend;
 };
 
 struct RelocationSectionLayout {
@@ -176,10 +178,10 @@ RelocationEntry read_relocation_entry(const ELFIO::section& section, const ELFIO
                 read_reloc_uint<ELFIO::Elf64_Addr>(data, offsetof(ELFIO::Elf64_Rel, r_offset), layout.little_endian),
             .symbol_index = static_cast<ELFIO::Elf_Word>(info >> 32U),
             .type = static_cast<unsigned>(info & 0xffffffffULL),
-            .addend = layout.section_type == ELFIO::SHT_RELA
-                          ? read_reloc_int<ELFIO::Elf_Sxword>(data, offsetof(ELFIO::Elf64_Rela, r_addend),
-                                                              layout.little_endian)
-                          : 0,
+            .explicit_addend = layout.section_type == ELFIO::SHT_RELA
+                                   ? std::optional{read_reloc_int<ELFIO::Elf_Sxword>(
+                                         data, offsetof(ELFIO::Elf64_Rela, r_addend), layout.little_endian)}
+                                   : std::nullopt,
         };
     }
 
@@ -189,10 +191,10 @@ RelocationEntry read_relocation_entry(const ELFIO::section& section, const ELFIO
         .offset = read_reloc_uint<ELFIO::Elf32_Addr>(data, offsetof(ELFIO::Elf32_Rel, r_offset), layout.little_endian),
         .symbol_index = static_cast<ELFIO::Elf_Word>(info >> 8U),
         .type = static_cast<unsigned>(info & 0xffU),
-        .addend =
-            layout.section_type == ELFIO::SHT_RELA
-                ? read_reloc_int<ELFIO::Elf_Sword>(data, offsetof(ELFIO::Elf32_Rela, r_addend), layout.little_endian)
-                : 0,
+        .explicit_addend = layout.section_type == ELFIO::SHT_RELA
+                               ? std::optional<ELFIO::Elf_Sxword>{read_reloc_int<ELFIO::Elf_Sword>(
+                                     data, offsetof(ELFIO::Elf32_Rela, r_addend), layout.little_endian)}
+                               : std::nullopt,
     };
 }
 
@@ -339,16 +341,6 @@ std::vector<ELFIO::section*> global_sections(const ELFIO::elfio& reader) {
         }
     }
     return result;
-}
-
-RawProgram* find_subprogram(std::vector<RawProgram>& programs, const ELFIO::section& subprogram_section,
-                            const std::string& symbol_name) {
-    for (auto& subprog : programs) {
-        if (subprog.section_name == subprogram_section.get_name() && subprog.function_name == symbol_name) {
-            return &subprog;
-        }
-    }
-    return nullptr;
 }
 
 static std::uintmax_t get_data_size(std::istream& input_stream, const std::string& path) {
@@ -596,6 +588,11 @@ bool ProgramReader::has_function_relocation(const size_t prog_index, const size_
     return function_relocation_index_.contains({prog_index, source_offset});
 }
 
+RawProgram* ProgramReader::find_subprogram(const SectionOffset start) {
+    const auto it = raw_program_index_.find(start);
+    return it != raw_program_index_.end() ? &raw_programs[it->second] : nullptr;
+}
+
 void ProgramReader::enqueue_synthetic_local_calls(const std::vector<EbpfInst>& instructions,
                                                   const ELFIO::Elf_Half section_index,
                                                   const ELFIO::Elf_Xword program_offset) {
@@ -638,7 +635,7 @@ void ProgramReader::enqueue_synthetic_local_calls(const std::vector<EbpfInst>& i
             .prog_index = raw_programs.size(),
             .source_offset = loc,
             .relocation_entry_index = std::nullopt,
-            .target_section_index = section_index,
+            .target = {.section_index = section_index, .offset = target_offset},
             .target_function_name = *target_name,
         });
     }
@@ -654,7 +651,7 @@ std::string ProgramReader::append_subprograms(RawProgram& prog) {
     }
     currently_visiting.insert(&prog);
 
-    std::map<std::string, ELFIO::Elf_Xword> subprogram_offsets;
+    std::map<SectionOffset, ELFIO::Elf_Xword> subprogram_offsets;
     for (const auto& reloc : function_relocations) {
         // Match the relocation to its owning program by identity, not by name.
         // reloc.source_offset is an instruction index into raw_programs[reloc.prog_index];
@@ -663,14 +660,15 @@ std::string ProgramReader::append_subprograms(RawProgram& prog) {
         if (reloc.prog_index >= raw_programs.size() || &raw_programs[reloc.prog_index] != &prog) {
             continue;
         }
-        const auto& target_function_name = reloc.target_function_name;
-        if (!subprogram_offsets.contains(target_function_name)) {
-            subprogram_offsets[target_function_name] = prog.prog.size();
-            if (reloc.target_section_index >= reader.sections.size()) {
+        // Likewise, the callee is the program at the position the relocation designates,
+        // not the first program that happens to share its section name and function name.
+        const SectionOffset& target = reloc.target;
+        if (!subprogram_offsets.contains(target)) {
+            subprogram_offsets[target] = prog.prog.size();
+            if (target.section_index >= reader.sections.size()) {
                 throw UnmarshalError("Invalid section index");
             }
-            const auto& sub_sec = *reader.sections[reloc.target_section_index];
-            if (const auto sub = find_subprogram(raw_programs, sub_sec, target_function_name)) {
+            if (const auto sub = find_subprogram(target)) {
                 if (sub == &prog) {
                     throw UnmarshalError("Recursive subprogram call");
                 }
@@ -678,7 +676,7 @@ std::string ProgramReader::append_subprograms(RawProgram& prog) {
                 if (!err.empty()) {
                     return err;
                 }
-                const size_t base = subprogram_offsets[target_function_name];
+                const size_t base = subprogram_offsets[target];
 
                 prog.prog.insert(prog.prog.end(), sub->prog.begin(), sub->prog.end());
                 if (parse_params.options.verbosity_opts.print_line_info) {
@@ -690,10 +688,10 @@ std::string ProgramReader::append_subprograms(RawProgram& prog) {
                     prog.info.builtin_call_offsets.insert(base + builtin_offset);
                 }
             } else {
-                return "Subprogram not found: " + target_function_name;
+                return "Subprogram not found: " + reloc.target_function_name;
             }
         }
-        const auto target_offset = gsl::narrow<int64_t>(subprogram_offsets[target_function_name]);
+        const auto target_offset = gsl::narrow<int64_t>(subprogram_offsets[target]);
         const auto source_offset = gsl::narrow<int64_t>(reloc.source_offset);
         prog.prog[reloc.source_offset].imm = gsl::narrow<int32_t>(target_offset - source_offset - 1);
     }
@@ -741,14 +739,15 @@ int ProgramReader::relocate_global_variable(const ELFIO::Elf_Half section_index)
     return global.map_descriptors.at(val).original_fd;
 }
 
-int32_t ProgramReader::compute_lddw_reloc_offset_imm(const ELFIO::Elf_Sxword addend, const ELFIO::Elf_Word index,
+int32_t ProgramReader::compute_lddw_reloc_offset_imm(const std::optional<ELFIO::Elf_Sxword> explicit_addend,
+                                                     const ELFIO::Elf_Word index,
                                                      const std::reference_wrapper<EbpfInst> lo_inst) const {
     // R_BPF_64_64 resolves to S + A for every symbol type, not only for section symbols.
-    // eBPF objects carry SHT_REL entries, which have no addend field: A is the immediate
-    // the lddw already holds (libbpf: insn[1].imm = insn[0].imm + sym_off).
+    // eBPF objects usually carry SHT_REL entries, which have no addend field: A is then the
+    // immediate the lddw already holds (libbpf: insn[1].imm = insn[0].imm + sym_off).
     const auto& sym = get_symbol_details(symbols, index);
-    const int64_t implicit_addend = addend != 0 ? addend : lo_inst.get().imm;
-    return gsl::narrow<int32_t>(static_cast<int64_t>(sym.value + implicit_addend));
+    const int64_t addend = explicit_addend.value_or(lo_inst.get().imm);
+    return gsl::narrow<int32_t>(static_cast<int64_t>(sym.value + addend));
 }
 
 void ProgramReader::build_ksym_function_resolution_cache() {
@@ -799,7 +798,7 @@ void ProgramReader::build_ksym_function_resolution_cache() {
 bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_Half symbol_section_index,
                               const unsigned char symbol_type, const unsigned char symbol_bind,
                               std::vector<EbpfInst>& instructions, const size_t location, const ELFIO::Elf_Word index,
-                              const ELFIO::Elf_Sxword addend) {
+                              const std::optional<ELFIO::Elf_Sxword> explicit_addend) {
     EbpfInst& instruction_to_relocate = instructions[location];
 
     if (symbol_section_index == ELFIO::SHN_UNDEF) {
@@ -844,15 +843,20 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
             return false;
         }
 
+        // The relocation designates the callee by position, S + A: the symbol's value plus the addend,
+        // which a REL entry carries in the call's imm (clang encodes it as (imm + 1) * 8 bytes).
+        const int64_t target_addend = explicit_addend.value_or((gsl::narrow<int64_t>(instruction_to_relocate.imm) + 1) *
+                                                               static_cast<int64_t>(sizeof(EbpfInst)));
+        const ELFIO::Elf_Xword symbol_value = get_symbol_details(symbols, index).value;
+        const ELFIO::Elf_Xword target_offset = symbol_value + to_unsigned(target_addend);
+        // The unsigned sum wraps exactly when it lands on the wrong side of the symbol's value.
+        if ((target_offset < symbol_value) != (target_addend < 0) || target_offset % sizeof(EbpfInst) != 0) {
+            throw UnmarshalError("Invalid section-local call target offset");
+        }
+
         std::string target_function_name = symbol_name;
         if (target_function_name.empty() && symbol_type == ELFIO::STT_SECTION) {
-            const int64_t target_byte_offset =
-                addend != 0 ? addend : (gsl::narrow<int64_t>(instruction_to_relocate.imm) + 1) * sizeof(EbpfInst);
-            if (target_byte_offset < 0 || target_byte_offset % sizeof(EbpfInst) != 0) {
-                throw UnmarshalError("Invalid section-local call target offset");
-            }
-            if (const auto target = find_function_symbol_at_offset(symbols, symbol_section_index,
-                                                                   gsl::narrow<ELFIO::Elf_Xword>(target_byte_offset))) {
+            if (const auto target = find_function_symbol_at_offset(symbols, symbol_section_index, target_offset)) {
                 target_function_name = *target;
             }
         }
@@ -862,7 +866,7 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
                 .prog_index = raw_programs.size(),
                 .source_offset = location,
                 .relocation_entry_index = index,
-                .target_section_index = symbol_section_index,
+                .target = {.section_index = symbol_section_index, .offset = target_offset},
                 .target_function_name = target_function_name,
             });
             return true;
@@ -879,7 +883,7 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
 
             auto [lo_inst, hi_inst] = validate_and_get_lddw_pair(instructions, location, "global variable");
 
-            hi_inst.get().imm = compute_lddw_reloc_offset_imm(addend, index, lo_inst);
+            hi_inst.get().imm = compute_lddw_reloc_offset_imm(explicit_addend, index, lo_inst);
             lo_inst.get().src = INST_LD_MODE_MAP_VALUE;
             lo_inst.get().imm = relocate_global_variable(symbol_section_index);
             return true;
@@ -901,7 +905,7 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
         auto [lo_inst, hi_inst] =
             validate_and_get_lddw_pair(instructions, location, "global variable '" + symbol_name + "'");
 
-        hi_inst.get().imm = compute_lddw_reloc_offset_imm(addend, index, lo_inst);
+        hi_inst.get().imm = compute_lddw_reloc_offset_imm(explicit_addend, index, lo_inst);
         lo_inst.get().src = INST_LD_MODE_MAP_VALUE;
         lo_inst.get().imm = relocate_global_variable(symbol_section_index);
         return true;
@@ -924,7 +928,6 @@ void ProgramReader::process_relocations(std::vector<EbpfInst>& instructions, con
         ELFIO::Elf64_Addr o = entry.offset;
         const ELFIO::Elf_Word idx = entry.symbol_index;
         const unsigned type = entry.type;
-        const ELFIO::Elf_Sxword addend = entry.addend;
         if (!is_supported_bpf_relocation_type(type)) {
             throw UnmarshalError("Unsupported relocation type " + std::to_string(type) + " in section " + section_name);
         }
@@ -949,7 +952,8 @@ void ProgramReader::process_relocations(std::vector<EbpfInst>& instructions, con
         }
         auto sym = get_symbol_details(symbols, idx);
 
-        if (!try_reloc(sym.name, sym.section_index, sym.type, sym.bind, instructions, loc, idx, addend)) {
+        if (!try_reloc(sym.name, sym.section_index, sym.type, sym.bind, instructions, loc, idx,
+                       entry.explicit_addend)) {
             unresolved_symbol_errors.push_back(unresolved_symbol_error_t{
                 .section = section_name,
                 .message = "Unresolved external symbol " + (sym.name.empty() ? "<anonymous>" : sym.name) +
@@ -1020,6 +1024,8 @@ void ProgramReader::read_programs(const bool all_sections) {
                 .type = prog_type,
                 .builtin_call_offsets = std::move(builtin_offsets_for_current_program),
             };
+            raw_program_index_.emplace(SectionOffset{.section_index = sec->get_index(), .offset = offset},
+                                       raw_programs.size());
             raw_programs.emplace_back(RawProgram{
                 parse_params.path,
                 sec_name,

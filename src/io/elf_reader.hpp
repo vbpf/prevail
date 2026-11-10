@@ -5,6 +5,7 @@
 // elf_core_reloc.cpp and elf_extern_resolve.cpp.  Not part of the public API.
 #pragma once
 
+#include <compare>
 #include <cstring>
 #include <limits>
 #include <map>
@@ -44,11 +45,21 @@ struct symbol_details_t {
     unsigned char other{};
 };
 
+/// A position in an ELF object: a section and a byte offset in that section.
+struct SectionOffset {
+    ELFIO::Elf_Half section_index{};
+    ELFIO::Elf_Xword offset{};
+
+    auto operator<=>(const SectionOffset&) const = default;
+};
+
 struct FunctionRelocation {
     size_t prog_index{};
     ELFIO::Elf_Xword source_offset{};
     std::optional<ELFIO::Elf_Xword> relocation_entry_index;
-    ELFIO::Elf_Half target_section_index{};
+    /// Where the callee starts. This identifies the callee; target_function_name is only for
+    /// diagnostics (ELF symbol names need not be unique).
+    SectionOffset target;
     std::string target_function_name;
 };
 
@@ -115,9 +126,6 @@ ELFIO::Elf_Xword compute_reachable_program_span(const std::vector<EbpfInst>& sec
 
 std::vector<ELFIO::section*> global_sections(const ELFIO::elfio& reader);
 
-RawProgram* find_subprogram(std::vector<RawProgram>& programs, const ELFIO::section& subprogram_section,
-                            const std::string& symbol_name);
-
 std::pair<std::reference_wrapper<EbpfInst>, std::reference_wrapper<EbpfInst>>
 validate_and_get_lddw_pair(std::vector<EbpfInst>& instructions, size_t location, const std::string& context);
 
@@ -165,6 +173,8 @@ class ProgramReader {
     const ElfGlobalData& global;
     std::vector<FunctionRelocation> function_relocations;
     std::set<std::pair<size_t, size_t>> function_relocation_index_;
+    /// Maps the position where each program starts to its index in raw_programs.
+    std::map<SectionOffset, size_t> raw_program_index_;
     std::map<std::string, std::optional<KsymBtfId>> ksym_function_resolution_cache;
     std::map<std::string, const ELFIO::section*> relocation_section_cache;
     std::vector<unresolved_symbol_error_t> unresolved_symbol_errors;
@@ -182,7 +192,7 @@ class ProgramReader {
                                       std::string_view access_string, const libbtf::btf_type_data& btf_data);
     void process_core_relocations(const libbtf::btf_type_data& btf_data);
 
-    int32_t compute_lddw_reloc_offset_imm(ELFIO::Elf_Sxword addend, ELFIO::Elf_Word index,
+    int32_t compute_lddw_reloc_offset_imm(std::optional<ELFIO::Elf_Sxword> explicit_addend, ELFIO::Elf_Word index,
                                           std::reference_wrapper<EbpfInst> lo_inst) const;
     [[nodiscard]]
     bool has_function_relocation(size_t prog_index, size_t source_offset) const;
@@ -193,6 +203,7 @@ class ProgramReader {
 
     void record_function_relocation(FunctionRelocation reloc);
     void read_programs(bool all_sections);
+    RawProgram* find_subprogram(SectionOffset start);
 
   public:
     struct section_error_t {
@@ -216,7 +227,7 @@ class ProgramReader {
 
     bool try_reloc(const std::string& symbol_name, ELFIO::Elf_Half symbol_section_index, unsigned char symbol_type,
                    unsigned char symbol_bind, std::vector<EbpfInst>& instructions, size_t location,
-                   ELFIO::Elf_Word index, ELFIO::Elf_Sxword addend);
+                   ELFIO::Elf_Word index, std::optional<ELFIO::Elf_Sxword> explicit_addend);
     void process_relocations(std::vector<EbpfInst>& instructions, const ELFIO::section& reloc,
                              const std::string& section_name, ELFIO::Elf_Xword program_offset, size_t program_size);
     [[nodiscard]]
