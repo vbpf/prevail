@@ -633,6 +633,7 @@ messages:
 test-case: possibly-null pointer arithmetic - add immediate
 
 pre: ["r1.type=map_fd", "r1.map_fd=1", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=512",
       "r2.type=stack", "r2.stack_offset=504",
       "s[504...511].type=number"]
 
