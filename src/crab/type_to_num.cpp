@@ -41,6 +41,16 @@ bool TypeToNumDomain::operator<=(const TypeToNumDomain& other) const {
     return values <= tmp.values;
 }
 
+bool TypeToNumDomain::is_included_in_raw_basis(const TypeToNumDomain& basis) const {
+    if (is_bottom()) {
+        return true;
+    }
+    if (basis.is_bottom() || !(types <= basis.types)) {
+        return false;
+    }
+    return values <= basis.values;
+}
+
 void TypeToNumDomain::join_selective(const TypeToNumDomain& right) {
     if (is_bottom()) {
         *this = right;

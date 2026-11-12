@@ -437,6 +437,108 @@ TEST_CASE("close_after_widen recovers transitive edge through unstable vertex", 
     CHECK(rg.edge_val(1, 3) == Weight(10));
 }
 
+// 22a) widen_raw keeps exactly the retained edges; normalize recovers closure.
+TEST_CASE("SplitDBM widen_raw defers closure recovery to normalize", "[join][splitdbm]") {
+    using namespace splitdbm;
+    // Same operands as the recovery test above: 1->3 is dropped (12 > 10).
+    auto make_graph = [](const Weight w13) {
+        Graph g;
+        g.growTo(4);
+        for (VertId v = 1; v <= 3; v++) {
+            g.add_edge(0, Weight(100), v);
+            g.add_edge(v, Weight(0), 0);
+        }
+        g.add_edge(1, Weight(5), 2);
+        g.add_edge(2, Weight(5), 3);
+        g.add_edge(1, w13, 3);
+        return g;
+    };
+    std::vector<Weight> pot = {Weight(0), Weight(0), Weight(5), Weight(10)};
+    SplitDBM left(make_graph(Weight(10)), std::vector<Weight>(pot), VertSet{});
+    SplitDBM right(make_graph(Weight(12)), std::vector<Weight>(pot), VertSet{});
+    AlignedPair aligned{
+        .left = left,
+        .right = right,
+        .left_perm = {0, 1, 2, 3},
+        .right_perm = {0, 1, 2, 3},
+        .initial_potentials = std::vector<Weight>(pot),
+    };
+
+    SplitDBM raw = SplitDBM::widen_raw(aligned);
+    CHECK_FALSE(raw.graph().elem(1, 3));
+    CHECK(raw.graph().edge_val(1, 2) == Weight(5));
+    CHECK(raw.graph().edge_val(2, 3) == Weight(5));
+
+    raw.normalize();
+    REQUIRE(raw.graph().elem(1, 3));
+    CHECK(raw.graph().edge_val(1, 3) == Weight(10));
+}
+
+// 22c) widen_raw renumbers inherited unstable vertices into the aligned space.
+TEST_CASE("SplitDBM widen_raw remaps inherited unstable vertices", "[join][splitdbm]") {
+    using namespace splitdbm;
+    auto graph = [](const bool back_edge) {
+        Graph g;
+        g.growTo(4);
+        g.add_edge(2, Weight(1), 3);
+        if (back_edge) {
+            g.add_edge(3, Weight(5), 2);
+        }
+        return g;
+    };
+    const std::vector<Weight> pot(4, Weight(0));
+    const SplitDBM with_back(graph(true), std::vector<Weight>(pot), VertSet{});
+    const SplitDBM without_back(graph(false), std::vector<Weight>(pot), VertSet{});
+
+    // First raw widen drops 3 -> 2, so vertex 3 becomes unstable.
+    const AlignedPair first{
+        .left = with_back,
+        .right = without_back,
+        .left_perm = {0, 1, 2, 3},
+        .right_perm = {0, 1, 2, 3},
+        .initial_potentials = std::vector<Weight>(pot),
+    };
+    const SplitDBM basis = SplitDBM::widen_raw(first);
+    REQUIRE(basis.unstable() == VertSet{3});
+
+    // Second raw widen drops old vertex 1; old vertices 2 and 3 become 1 and 2.
+    const AlignedPair second{
+        .left = basis,
+        .right = without_back,
+        .left_perm = {0, 2, 3},
+        .right_perm = {0, 2, 3},
+        .initial_potentials = std::vector<Weight>(3, Weight(0)),
+    };
+    const SplitDBM result = SplitDBM::widen_raw(second);
+    CHECK(result.graph().size() == 3);
+    CHECK(result.unstable() == VertSet{2});
+    REQUIRE(result.graph().elem(1, 2));
+    CHECK(result.graph().edge_val(1, 2) == Weight(1));
+}
+
+// 22b) close_over_edge must not store a cycle as a self-loop edge.
+TEST_CASE("close_over_edge never adds a self-loop", "[join][splitdbm]") {
+    using namespace splitdbm;
+    // 3 -> 1 and 2 -> 3 exist; closing over the new edge 1 -> 2 finds both
+    // 3 -> 1 -> 2 and 1 -> 2 -> 3, whose combination 3 -> 1 -> 2 -> 3 is a
+    // cycle. Storing it as an edge 3 -> 3 would be a vacuous `x - x <= 14`.
+    Graph g;
+    g.growTo(4);
+    g.add_edge(1, Weight(5), 2);
+    g.add_edge(2, Weight(7), 3);
+    g.add_edge(3, Weight(2), 1);
+
+    splitdbm::close_over_edge(g, 1, 2);
+
+    for (VertId v = 0; v < 4; v++) {
+        CHECK_FALSE(g.elem(v, v));
+    }
+    REQUIRE(g.elem(3, 2));
+    CHECK(g.edge_val(3, 2) == Weight(7));
+    REQUIRE(g.elem(1, 3));
+    CHECK(g.edge_val(1, 3) == Weight(12));
+}
+
 // 23) SplitDBM meet must not spuriously report bottom (issue #1201)
 TEST_CASE("meet does not spuriously bottom on satisfiable cross-SCC system", "[meet][splitdbm]") {
     using namespace splitdbm;

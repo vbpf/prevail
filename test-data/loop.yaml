@@ -777,3 +777,169 @@ post: ["_|_"]
 messages:
   - "6:13: Code becomes unreachable (assume r4 > 100)"
   - "18: Invalid type (r3.type in {ctx, stack, packet, shared, socket, alloc_mem})"
+---
+test-case: counted loop with an unrelated constant live (zero)
+options: ["termination"]
+pre: []
+code:
+  <start>: |
+    r0 = 0
+    r1 = 0
+  <loop>: |
+    r1 += 1
+    if r1 < 10 goto <loop>
+  <out>: |
+    exit
+post:
+  - "pc[2]=10"
+  - "r0.svalue=0"
+  - "r0.type=number"
+  - "r0.uvalue=0"
+  - "r1.svalue=pc[2]"
+  - "r1.type=number"
+  - "r1.uvalue=pc[2]"
+---
+test-case: counted loop with an unrelated constant live (nonzero)
+options: ["termination"]
+pre: []
+code:
+  <start>: |
+    r0 = 5
+    r1 = 0
+  <loop>: |
+    r1 += 1
+    if r1 < 10 goto <loop>
+  <out>: |
+    exit
+post:
+  - "pc[2]=10"
+  - "r0.svalue=5"
+  - "r0.type=number"
+  - "r0.uvalue=5"
+  - "r1.svalue=pc[2]"
+  - "r1.type=number"
+  - "r1.uvalue=pc[2]"
+---
+test-case: counted loop with an unrelated negative constant live
+options: ["termination"]
+pre: []
+code:
+  <start>: |
+    r5 = -3
+    r0 = 0
+    r1 = 0
+  <loop>: |
+    r1 += 1
+    if r1 < 10 goto <loop>
+  <out>: |
+    exit
+post:
+  - "pc[3]=10"
+  - "r0.svalue=0"
+  - "r0.type=number"
+  - "r0.uvalue=0"
+  - "r1.svalue=pc[3]"
+  - "r1.type=number"
+  - "r1.uvalue=pc[3]"
+  - "r5.svalue=-3"
+  - "r5.type=number"
+  - "r5.uvalue=18446744073709551613"
+---
+test-case: counted loop with an unrelated 64-bit constant live
+options: ["termination"]
+pre: []
+code:
+  <start>: |
+    r5 = 0x100000000 ll
+    r0 = 0
+    r1 = 0
+  <loop>: |
+    r1 += 1
+    if r1 < 10 goto <loop>
+  <out>: |
+    exit
+post:
+  - "pc[3]=10"
+  - "r0.svalue=0"
+  - "r0.type=number"
+  - "r0.uvalue=0"
+  - "r1.svalue=pc[3]"
+  - "r1.type=number"
+  - "r1.uvalue=pc[3]"
+  - "r5.svalue=4294967296"
+  - "r5.type=number"
+  - "r5.uvalue=4294967296"
+---
+test-case: counted loop with an unrelated range above the early counter live
+options: ["termination"]
+pre: ["r0.type=number", "r0.svalue=[5, 6]", "r0.uvalue=r0.svalue"]
+code:
+  <start>: |
+    r1 = 0
+  <loop>: |
+    r1 += 1
+    if r1 < 10 goto <loop>
+  <out>: |
+    exit
+post:
+  - "pc[1]=10"
+  - "r0.svalue=[5, 6]"
+  - "r0.type=number"
+  - "r0.uvalue=r0.svalue"
+  - "r1.svalue=pc[1]"
+  - "r1.type=number"
+  - "r1.uvalue=pc[1]"
+---
+test-case: stack-carried counted loop with an unrelated constant live
+options: ["termination"]
+pre: ["r10.type=stack", "r10.stack_offset=4096", "r10.svalue=[4096, 2147418112]"]
+code:
+  <start>: |
+    r0 = 0
+    r1 = 0
+    *(u64 *)(r10 - 8) = r1
+  <loop>: |
+    r1 = *(u64 *)(r10 - 8)
+    r1 += 1
+    *(u64 *)(r10 - 8) = r1
+    if r1 < 10 goto <loop>
+  <out>: |
+    exit
+post:
+  - "pc[3]=10"
+  - "r0.svalue=0"
+  - "r0.type=number"
+  - "r0.uvalue=0"
+  - "r1.svalue=pc[3]"
+  - "r1.type=number"
+  - "r1.uvalue=pc[3]"
+  - "r10.stack_offset=4096"
+  - "r10.svalue=[4096, 2147418112]"
+  - "r10.type=stack"
+  - "s[4088...4095].svalue=pc[3]"
+  - "s[4088...4095].type=number"
+  - "s[4088...4095].uvalue=pc[3]"
+---
+test-case: loop above the iteration limit with an unrelated constant live
+options: ["termination"]
+pre: []
+code:
+  <start>: |
+    r0 = 0
+    r1 = 0
+  <loop>: |
+    r1 += 1
+    if r1 < 200000 goto <loop>
+  <out>: |
+    exit
+post:
+  - "pc[2]=200000"
+  - "r0.svalue=0"
+  - "r0.type=number"
+  - "r0.uvalue=0"
+  - "r1.svalue=pc[2]"
+  - "r1.type=number"
+  - "r1.uvalue=pc[2]"
+
+messages:
+  - "2 (counter): Loop counter is too large (pc[2] < 100000)"

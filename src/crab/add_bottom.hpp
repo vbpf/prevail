@@ -110,6 +110,25 @@ class AddBottom final {
         return AddBottom(dom->widen(*o.dom));
     }
 
+    [[nodiscard]]
+    AddBottom widen_raw(const AddBottom& o) const {
+        if (!dom) {
+            return o;
+        }
+        if (!o.dom) {
+            return *this;
+        }
+        AddBottom res;
+        res.dom.emplace(dom->widen_raw(*o.dom));
+        return res;
+    }
+
+    void normalize_closure() {
+        if (dom) {
+            dom->normalize_closure();
+        }
+    }
+
     AddBottom operator&(const AddBottom& o) const {
         if (!dom || !o.dom) {
             return bottom();

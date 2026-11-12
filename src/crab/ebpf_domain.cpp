@@ -79,6 +79,19 @@ bool EbpfDomain::operator<=(const EbpfDomain& other) const {
     return state <= other.state;
 }
 
+bool EbpfDomain::is_included_in_raw_basis(const EbpfDomain& basis) const {
+    if (is_bottom()) {
+        return true;
+    }
+    if (basis.is_bottom()) {
+        return false;
+    }
+    if (!(*stack <= *basis.stack)) {
+        return false;
+    }
+    return state.is_included_in_raw_basis(basis.state);
+}
+
 bool EbpfDomain::operator<=(EbpfDomain&& other) const {
     if (is_bottom()) {
         return true;
@@ -161,29 +174,57 @@ EbpfDomain EbpfDomain::operator&(const EbpfDomain& other) const {
     return EbpfDomain{std::move(res_state), *stack & *other.stack};
 }
 
-EbpfDomain EbpfDomain::calculate_constant_limits(const AnalysisContext& context,
-                                                 const std::span<const Variable> loop_counters) {
-    EbpfDomain inv = top(context);
+std::vector<LinearConstraint> EbpfDomain::calculate_widening_thresholds(const AnalysisContext& context,
+                                                                        const std::span<const Variable> loop_counters) {
     using namespace dsl_syntax;
+    std::vector<LinearConstraint> thresholds;
     for (const int i : {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}) {
         const auto r = variable_registry.reg_pack(i);
-        inv.add_value_constraint(r.svalue <= std::numeric_limits<int32_t>::max());
-        inv.add_value_constraint(r.svalue >= std::numeric_limits<int32_t>::min());
-        inv.add_value_constraint(r.uvalue <= std::numeric_limits<uint32_t>::max());
-        inv.add_value_constraint(r.uvalue >= 0);
-        inv.add_value_constraint(r.stack_offset <= context.runtime().total_stack_size());
-        inv.add_value_constraint(r.stack_offset >= 0);
-        inv.add_value_constraint(r.shared_offset <= r.shared_region_size);
-        inv.add_value_constraint(r.shared_offset >= 0);
-        inv.add_value_constraint(r.packet_offset <= variable_registry.packet_size());
-        inv.add_value_constraint(r.packet_offset >= 0);
-        for (const Variable counter : loop_counters) {
-            inv.add_value_constraint(counter <= std::numeric_limits<int32_t>::max());
-            inv.add_value_constraint(counter >= 0);
-            inv.add_value_constraint(counter <= r.svalue);
+        thresholds.push_back(r.svalue <= std::numeric_limits<int32_t>::max());
+        thresholds.push_back(r.svalue >= std::numeric_limits<int32_t>::min());
+        thresholds.push_back(r.uvalue <= std::numeric_limits<uint32_t>::max());
+        thresholds.push_back(r.uvalue >= 0);
+        thresholds.push_back(r.stack_offset <= context.runtime().total_stack_size());
+        thresholds.push_back(r.stack_offset >= 0);
+        thresholds.push_back(r.shared_offset <= r.shared_region_size);
+        thresholds.push_back(r.shared_offset >= 0);
+        thresholds.push_back(r.packet_offset <= variable_registry.packet_size());
+        thresholds.push_back(r.packet_offset >= 0);
+    }
+    for (const Variable counter : loop_counters) {
+        thresholds.push_back(counter <= std::numeric_limits<int32_t>::max());
+        thresholds.push_back(counter >= 0);
+    }
+    return thresholds;
+}
+
+void EbpfDomain::add_widening_thresholds(const EbpfDomain& before, const std::vector<LinearConstraint>& thresholds,
+                                         const std::span<const Variable> loop_counters) {
+    using namespace dsl_syntax;
+    const auto& b = before.state.values;
+    for (const LinearConstraint& cst : thresholds) {
+        if (b.entail(cst)) {
+            add_value_constraint(cst);
         }
     }
-    return inv;
+    // `counter <= rN.svalue` is a useful threshold when the state relates the
+    // counter to a bound register (e.g. `for (i = 0; i < n; i++)`). It is not
+    // one when it only holds because the counter has not yet reached an
+    // unrelated register's range: imposing it would cut off later states.
+    for (const int i : {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}) {
+        const auto r = variable_registry.reg_pack(i);
+        const Interval rv = b.eval_interval(r.svalue);
+        for (const Variable counter : loop_counters) {
+            const LinearConstraint link = counter <= r.svalue;
+            if (!b.entail(link)) {
+                continue;
+            }
+            if (b.eval_interval(counter).ub() <= rv.lb()) {
+                continue; // implied by the intervals alone: not a loop relation
+            }
+            add_value_constraint(link);
+        }
+    }
 }
 
 EbpfDomain EbpfDomain::widen(const EbpfDomain& other) const {
@@ -194,6 +235,16 @@ EbpfDomain EbpfDomain::widen(const EbpfDomain& other) const {
         return *this;
     }
     return EbpfDomain{this->state.widen(other.state), stack->widen(*other.stack)};
+}
+
+EbpfDomain EbpfDomain::widen_raw(const EbpfDomain& other) const {
+    if (is_bottom()) {
+        return other;
+    }
+    if (other.is_bottom()) {
+        return *this;
+    }
+    return EbpfDomain{this->state.widen_raw(other.state), stack->widen(*other.stack)};
 }
 
 EbpfDomain EbpfDomain::narrow(const EbpfDomain& other) const {
