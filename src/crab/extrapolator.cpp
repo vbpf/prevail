@@ -7,26 +7,45 @@
 namespace prevail {
 
 Extrapolator::Extrapolator(const AnalysisContext& context, const std::span<const Variable> loop_counters)
-    : constant_limits_(EbpfDomain::calculate_constant_limits(context, loop_counters)),
+    : widening_thresholds_(EbpfDomain::calculate_widening_thresholds(context, loop_counters)),
       loop_counters_(loop_counters.begin(), loop_counters.end()) {}
 
 EbpfDomain Extrapolator::compute_fixpoint(EbpfDomain invariant, const Step& step) const {
-    // Ascending (widening) sequence.
+    // Ascending (widening) sequence. `basis` is the raw widened state: the left
+    // operand of the next widen and the target of the inclusion test.
+    // `invariant` is its normalized form (same concretization, plus
+    // closure-implied edges), used to run the loop body. Widening the
+    // normalized form instead lets closure recover each dropped relation at a
+    // slightly larger weight, and the sequence need not stabilize. Testing
+    // inclusion against the basis ties the exit to what the widening
+    // stabilizes: once a widen leaves the basis unchanged, the syntactic
+    // inclusion test succeeds. The type-aware `operator<=` is not usable here:
+    // it projects kind variables out of the right operand, which is unsound on
+    // an unclosed DBM.
+    EbpfDomain basis = invariant;
     for (unsigned int iteration = 0;;) {
         EbpfDomain new_pre = step(invariant);
-        if (new_pre <= invariant) {
+        if (new_pre.is_included_in_raw_basis(basis)) {
             invariant = std::move(new_pre);
             break;
         }
         ++iteration;
         if (iteration < widening_delay_) {
-            invariant = invariant | new_pre;
+            basis = basis | new_pre;
+        } else if (iteration == widening_delay_) {
+            // First widen: widening with thresholds. Only thresholds the state
+            // being widened already satisfies are kept, so the result is still
+            // an upper bound of every state seen so far. (Adding them goes
+            // through the ordinary constraint operations, which normalize;
+            // that happens once.)
+            const EbpfDomain before = basis | new_pre;
+            basis = basis.widen_raw(new_pre);
+            basis.add_widening_thresholds(before, widening_thresholds_, loop_counters_);
         } else {
-            invariant = invariant.widen(new_pre);
-            if (iteration == widening_delay_) {
-                invariant = invariant & constant_limits_;
-            }
+            basis = basis.widen_raw(new_pre);
         }
+        invariant = basis;
+        invariant.normalize_closure();
     }
 
     // Descending (narrowing) sequence.

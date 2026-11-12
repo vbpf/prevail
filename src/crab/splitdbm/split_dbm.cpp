@@ -353,6 +353,12 @@ SplitDBM SplitDBM::join(const AlignedPair& aligned) {
 }
 
 SplitDBM SplitDBM::widen(const AlignedPair& aligned) {
+    SplitDBM res = widen_raw(aligned);
+    res.normalize();
+    return res;
+}
+
+SplitDBM SplitDBM::widen_raw(const AlignedPair& aligned) {
     const size_t sz = aligned.size();
 
     // Build potentials from left (widen uses left's potentials)
@@ -367,11 +373,18 @@ SplitDBM SplitDBM::widen(const AlignedPair& aligned) {
     const GraphPerm gx(aligned.left_perm, aligned.left.g_);
     const GraphPerm gy(aligned.right_perm, aligned.right.g_);
 
-    // Perform the widening
-    VertSet result_unstable(aligned.left.unstable_);
+    // Inherited unstable vertices are in the left operand's numbering;
+    // translate them to the result's (aligned) numbering, dropping any vertex
+    // the alignment removed.
+    VertSet result_unstable;
+    for (size_t i = 0; i < sz; ++i) {
+        if (aligned.left.unstable_.contains(aligned.left_perm[i])) {
+            result_unstable.insert(static_cast<VertId>(i));
+        }
+    }
     Graph result_g(graph_widen(gx, gy, result_unstable));
 
-    return {std::move(result_g), std::move(result_pot), std::move(result_unstable)};
+    return SplitDBM{RawTag{}, std::move(result_g), std::move(result_pot), std::move(result_unstable)};
 }
 
 std::optional<SplitDBM> SplitDBM::meet(AlignedPair& aligned) {
