@@ -1657,6 +1657,29 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
                                 Catch::Matchers::ContainsSubstring("(at 0)"));
     }
 
+    SECTION("mergeable 64-bit shift pair requires base64 conformance group") {
+        // rX <<= 32; rX >>= 32 is normally merged into wX = rX; the merged form must not hide the base64 opcodes.
+        ebpf_platform_t p = g_ebpf_platform_linux;
+        p.supported_conformance_groups &= ~bpf_conformance_groups_t::base64;
+        ProgramInfo pinfo{.platform = &p, .type = p.get_program_type("unspec", "unspec")};
+        for (const auto rsh_op : {INST_ALU_OP_RSH, INST_ALU_OP_ARSH}) {
+            RawProgram raw_prog{
+                "",
+                "",
+                0,
+                "",
+                {EbpfInst{.opcode = INST_ALU_OP_LSH | INST_SRC_IMM | INST_CLS_ALU64, .dst = 1, .imm = 32},
+                 EbpfInst{.opcode = gsl::narrow<uint8_t>(rsh_op | INST_SRC_IMM | INST_CLS_ALU64), .dst = 1, .imm = 32},
+                 exit},
+                pinfo};
+            auto prog_or_error = unmarshal(raw_prog, {});
+            REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+            REQUIRE_THROWS_WITH(Program::from_sequence(std::get<InstructionSeq>(prog_or_error), pinfo, {}),
+                                Catch::Matchers::ContainsSubstring("rejected: requires conformance group base64") &&
+                                    Catch::Matchers::ContainsSubstring("(at 0)"));
+        }
+    }
+
     SECTION("call btf cannot use register-call opcode form") {
         RawProgram raw_prog{
             "",  "", 0, "", {EbpfInst{.opcode = INST_OP_CALLX, .dst = 0, .src = INST_CALL_BTF_HELPER, .imm = 1}, exit},
