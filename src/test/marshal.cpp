@@ -111,13 +111,23 @@ struct MarshalVisitor {
 
     vector<EbpfInst> operator()(LoadPseudo const& b) const {
         uint8_t src{};
+        int32_t imm = b.addr.imm;
         switch (b.addr.kind) {
         case PseudoAddress::Kind::VARIABLE_ADDR: src = INST_LD_MODE_VARIABLE_ADDR; break;
-        case PseudoAddress::Kind::CODE_ADDR: src = INST_LD_MODE_CODE_ADDR; break;
+        case PseudoAddress::Kind::CODE_ADDR: {
+            src = INST_LD_MODE_CODE_ADDR;
+            // The IR carries the target label; the encoding carries an offset from the next slot, like a local call.
+            const Label target{b.addr.imm};
+            imm = label_to_offset32(target);
+            if (imm == 0) { // label_to_offset32 yields 0 when the offset fits in 16 bits.
+                imm = label_to_offset16(target);
+            }
+            break;
+        }
         case PseudoAddress::Kind::MAP_BY_IDX: src = INST_LD_MODE_MAP_BY_IDX; break;
         case PseudoAddress::Kind::MAP_VALUE_BY_IDX: src = INST_LD_MODE_MAP_VALUE_BY_IDX; break;
         }
-        return makeLddw(b.dst, src, b.addr.imm, b.addr.next_imm);
+        return makeLddw(b.dst, src, imm, b.addr.next_imm);
     }
 
     vector<EbpfInst> operator()(Bin const& b) const {
