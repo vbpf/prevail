@@ -616,6 +616,28 @@ struct Unmarshaller {
         }
     }
 
+    /// Mark the slots targeted by a jump or a local call. Such a slot must keep a label of its own.
+    static vector<bool> findJumpTargets(const vector<EbpfInst>& insts) {
+        vector<bool> is_target(insts.size());
+        for (Pc pc = 0; pc < insts.size(); pc++) {
+            const EbpfInst inst = insts[pc];
+            // The second slot of an lddw has opcode 0, so it is never mistaken for a jump.
+            if ((inst.opcode & INST_CLS_MASK) != INST_CLS_JMP && (inst.opcode & INST_CLS_MASK) != INST_CLS_JMP32) {
+                continue;
+            }
+            const int op = (inst.opcode >> 4) & 0xF;
+            if (op == INST_EXIT || (op == INST_CALL && inst.src != INST_CALL_LOCAL)) {
+                continue;
+            }
+            const int32_t offset = (op == INST_CALL || inst.opcode == INST_OP_JA32) ? inst.imm : inst.offset;
+            // Out-of-bounds targets are rejected by getJumpTarget.
+            if (const Pc target = pc + 1 + offset; target < insts.size()) {
+                is_target[target] = true;
+            }
+        }
+        return is_target;
+    }
+
     vector<LabeledInstruction> unmarshal(vector<EbpfInst> const& insts, const prevail::VerifierOptions& options) {
         options.runtime.validate();
         subprogram_stack_size = options.runtime.subprogram_stack_size;
@@ -625,6 +647,7 @@ struct Unmarshaller {
         if (insts.empty()) {
             throw std::invalid_argument("Zero length programs are not allowed");
         }
+        const vector<bool> is_target = findJumpTargets(insts);
         for (size_t pc = 0; pc < insts.size();) {
             const EbpfInst inst = insts[pc];
             Instruction new_ins;
@@ -649,7 +672,8 @@ struct Unmarshaller {
 
                 // Merge (rX <<= 32; rX >>>= 32) into wX = rX
                 //       (rX <<= 32; rX >>= 32)  into rX s32= rX
-                if (pc >= insts.size() - 1) {
+                // unless the second slot is a jump target: merging would drop its label.
+                if (pc >= insts.size() - 1 || is_target[pc + 1]) {
                     break;
                 }
                 const EbpfInst next = insts[pc + 1];

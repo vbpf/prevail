@@ -649,6 +649,39 @@ TEST_CASE("unmarshal extension opcodes", "[disasm][marshal]") {
         EbpfInst{.opcode = INST_ALU_OP_MOV | INST_SRC_REG | INST_CLS_ALU64, .dst = 1, .src = 1, .offset = 32});
 }
 
+TEST_CASE("unmarshal keeps a shift pair whose second slot is a jump target", "[disasm][marshal]") {
+    // Merging the pair drops the label of its second slot, so a jump or local call to it would dangle.
+    const ProgramInfo info{.platform = &g_ebpf_platform_linux,
+                           .type = g_ebpf_platform_linux.get_program_type("unspec", "unspec")};
+    constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
+    constexpr EbpfInst lsh{.opcode = INST_ALU_OP_LSH | INST_SRC_IMM | INST_CLS_ALU64, .dst = 1, .imm = 32};
+    constexpr EbpfInst jeq{.opcode = (0x1 << 4) | INST_SRC_IMM | INST_CLS_JMP, .dst = 1, .offset = 1};
+    constexpr EbpfInst ja16{.opcode = INST_OP_JA16, .offset = 1};
+    constexpr EbpfInst ja32{.opcode = INST_OP_JA32, .imm = 1};
+    constexpr EbpfInst call_local{.opcode = INST_OP_CALL, .src = INST_CALL_LOCAL, .imm = 1};
+    // A helper call is not a jump: its imm is a helper id, not an offset.
+    constexpr EbpfInst call_helper{.opcode = INST_OP_CALL, .imm = 1};
+    const auto decode = [&](const std::vector<EbpfInst>& insts) {
+        return std::get<InstructionSeq>(unmarshal(RawProgram{"", "", 0, "", insts, info}, VerifierOptions{}));
+    };
+
+    for (const auto rsh_op : {INST_ALU_OP_RSH, INST_ALU_OP_ARSH}) {
+        const EbpfInst rsh{.opcode = gsl::narrow<uint8_t>(rsh_op | INST_SRC_IMM | INST_CLS_ALU64), .dst = 1, .imm = 32};
+
+        REQUIRE(decode({call_helper, lsh, rsh, exit}).size() == 3);
+
+        for (const EbpfInst jump : {jeq, ja16, ja32, call_local}) {
+            const InstructionSeq seq = decode({jump, lsh, rsh, exit});
+            REQUIRE(seq.size() == 4);
+            REQUIRE(std::get<0>(seq[2]) == Label{2});
+        }
+
+        // Backward jump, decoded after the pair.
+        constexpr EbpfInst jeq_back{.opcode = (0x1 << 4) | INST_SRC_IMM | INST_CLS_JMP, .dst = 1, .offset = -2};
+        REQUIRE(decode({lsh, rsh, jeq_back, exit}).size() == 4);
+    }
+}
+
 // Check that unmarshaling an invalid instruction fails with a given message.
 static void check_unmarshal_instruction_fail(EbpfInst& inst, const std::string& message,
                                              const ebpf_platform_t& platform = g_ebpf_platform_linux) {
