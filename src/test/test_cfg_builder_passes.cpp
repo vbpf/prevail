@@ -361,6 +361,28 @@ TEST_CASE("xdp_md.data_meta is not assumed to precede data", "[verify][ctx]") {
     }
 }
 
+TEST_CASE("AnalysisResult reports the loop iterations of all loops together", "[passes][stats]") {
+    const ProgramInfo info = default_info();
+    VerifierOptions options;
+    options.runtime.check_for_termination = true;
+
+    // A chain of loops, each of which advances r0 by 10: `do { r0 += 1; } while (r0 < 10 * (i + 1));`
+    const int loops = GENERATE(0, 1, 3);
+    InstructionSeq seq;
+    seq.push_back(at(0, Bin{.op = Bin::Op::MOV, .dst = Reg{0}, .v = Imm{0}, .is64 = true}));
+    for (int i = 0; i < loops; i++) {
+        const Imm bound{static_cast<uint64_t>(10 * (i + 1))};
+        const Condition more{.op = Condition::Op::LT, .left = Reg{0}, .right = bound, .is64 = true};
+        seq.push_back(at(2 * i + 1, Bin{.op = Bin::Op::ADD, .dst = Reg{0}, .v = Imm{1}, .is64 = true}));
+        seq.push_back(at(2 * i + 2, Jmp{.cond = more, .target = Label{2 * i + 1}}));
+    }
+    seq.push_back(at(2 * loops + 1, Exit{}));
+
+    const AnalysisResult result = analyze(Program::from_sequence(seq, info, options), options);
+    REQUIRE_FALSE(result.failed);
+    REQUIRE(result.max_loop_count == 10 * loops);
+}
+
 TEST_CASE("pass_extract_assertions populates assertions for every label in the CFG", "[passes]") {
     const ProgramInfo info = default_info();
     InstructionSeq seq;
