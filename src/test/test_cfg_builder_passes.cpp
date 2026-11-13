@@ -5,6 +5,7 @@
 // Each test exercises an invariant that is otherwise implicit in the pipeline and
 // would silently break if a pass were reordered, skipped, or modified.
 
+#include <chrono>
 #include <optional>
 
 #include <catch2/catch_all.hpp>
@@ -182,6 +183,39 @@ TEST_CASE("pass_compute_callback_metadata marks callbacks that reach an Exit", "
     const Program prog = Program::from_sequence(seq, info, {});
     REQUIRE(prog.callback_target_labels().contains(0));
     REQUIRE(prog.callback_targets_with_exit().contains(0));
+}
+
+TEST_CASE("pass_compute_callback_metadata does not mark callbacks that cannot reach an Exit", "[passes]") {
+    const ProgramInfo info = default_info();
+    InstructionSeq seq;
+    // label 0 -> label 1 -> unconditional jump back to label 0: no path to an Exit.
+    seq.push_back(at(0, Bin{.op = Bin::Op::MOV, .dst = Reg{0}, .v = Imm{0}, .is64 = true}));
+    seq.push_back(at(1, Jmp{.cond = std::nullopt, .target = Label{0}}));
+
+    VerifierOptions options;
+    options.must_have_exit = false; // cycle without an exit is fine for this test
+    const Program prog = Program::from_sequence(seq, info, options);
+    REQUIRE(prog.callback_target_labels().contains(0));
+    REQUIRE(prog.callback_target_labels().contains(1));
+    REQUIRE(prog.callback_targets_with_exit().empty());
+}
+
+TEST_CASE("pass_compute_callback_metadata is not quadratic in program size", "[passes]") {
+    // A long straight-line program with a single Exit at the end: a forward search per label
+    // visits O(n^2) nodes, which takes over a minute at this size instead of a fraction of a second.
+    constexpr int n = 20000;
+    const ProgramInfo info = default_info();
+    InstructionSeq seq;
+    for (int i = 0; i < n; i++) {
+        seq.push_back(at(i, Bin{.op = Bin::Op::MOV, .dst = Reg{0}, .v = Imm{0}, .is64 = true}));
+    }
+    seq.push_back(at(n, Exit{}));
+
+    const auto start = std::chrono::steady_clock::now();
+    const Program prog = Program::from_sequence(seq, info, {});
+    REQUIRE(std::chrono::steady_clock::now() - start < std::chrono::seconds(10));
+    REQUIRE(prog.callback_target_labels().size() == n);
+    REQUIRE(prog.callback_targets_with_exit().size() == n);
 }
 
 TEST_CASE("pass_insert_termination_counters adds a counter at a WTO loop head", "[passes]") {
