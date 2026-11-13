@@ -271,6 +271,25 @@ struct TypeToNumDomain {
     [[nodiscard]]
     TypeToNumDomain widen(const TypeToNumDomain& other) const;
 
+    /// Inclusion in a raw (unnormalized) widening basis. Unlike `operator<=`,
+    /// this does not project out the kind variables of types absent from
+    /// `*this`: forgetting a variable in an unclosed DBM deletes the paths
+    /// through it, so the projection can lose relations the basis implies and
+    /// report a false inclusion. Comparing the numeric domains directly is
+    /// stricter, hence sound, and still succeeds once the raw widening
+    /// stabilizes (every retained basis edge then has a matching edge).
+    [[nodiscard]]
+    bool is_included_in_raw_basis(const TypeToNumDomain& basis) const;
+
+    /// `widen` without the zone's post-widen closure recovery; see
+    /// `SplitDBM::widen_raw`.
+    [[nodiscard]]
+    TypeToNumDomain widen_raw(const TypeToNumDomain& other) const {
+        return TypeToNumDomain{types.widen(other.types), values.widen_raw(other.values)};
+    }
+
+    void normalize_closure() { values.normalize_closure(); }
+
     [[nodiscard]]
     TypeToNumDomain narrow(const TypeToNumDomain& other) const;
 

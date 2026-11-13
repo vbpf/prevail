@@ -45,6 +45,10 @@ class SplitDBM {
     void apply_delta(const EdgeVector& delta);
     void close_after_assign_vertex(VertId v);
 
+    struct RawTag {};
+    SplitDBM(RawTag, Graph&& g, std::vector<Weight>&& pot, VertSet&& unstable)
+        : g_(std::move(g)), potential_(std::move(pot)), unstable_(std::move(unstable)) {}
+
   public:
     SplitDBM();
 
@@ -149,7 +153,9 @@ class SplitDBM {
     // non-normalized until needed.
     //
     // A proper fix requires lazy normalization (e.g., mutable on SplitDBM internals
-    // or a normalized_ flag checked by const methods). This is non-trivial.
+    // or a normalized_ flag checked by const methods). This is non-trivial. The
+    // ascending fixpoint sequence sidesteps it: the Extrapolator widens a raw
+    // basis (`widen_raw`) and normalizes only a copy.
     void normalize();
 
     // Clear the thread-local scratch space used by graph algorithms.
@@ -161,6 +167,19 @@ class SplitDBM {
 
     static SplitDBM join(const AlignedPair& aligned);
     static SplitDBM widen(const AlignedPair& aligned);
+    /// `widen` without the post-widen closure recovery: exactly the edges
+    /// `graph_widen` retained (at the left operand's weights) plus the unstable
+    /// set, so a later `normalize()` still recovers the closure. This is the
+    /// left operand an ascending widening sequence must keep: widening a
+    /// normalized result lets closure recover each dropped relation at a
+    /// slightly larger weight, and the sequence need not stabilize.
+    static SplitDBM widen_raw(const AlignedPair& aligned);
+
+    /// Vertices whose closure a later `normalize()` will recover.
+    [[nodiscard]]
+    const VertSet& unstable() const {
+        return unstable_;
+    }
     static std::optional<SplitDBM> meet(AlignedPair& aligned);
     static bool is_subsumed_by(const SplitDBM& left, const SplitDBM& right, const std::vector<VertId>& perm);
 };

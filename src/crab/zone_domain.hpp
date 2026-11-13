@@ -156,6 +156,15 @@ class ZoneDomain final {
     [[nodiscard]]
     ZoneDomain widen(const ZoneDomain& o) const;
 
+    /// `widen` without normalizing the result; see `SplitDBM::widen_raw`.
+    /// Call `normalize_closure()` on a copy before using it for transfers or
+    /// queries.
+    [[nodiscard]]
+    ZoneDomain widen_raw(const ZoneDomain& o) const;
+
+    /// Run the closure recovery a raw widen deferred.
+    void normalize_closure() { normalize(); }
+
     std::optional<ZoneDomain> meet(const ZoneDomain& o) const;
 
     [[nodiscard]]

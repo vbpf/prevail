@@ -210,6 +210,15 @@ inline void close_over_edge(Graph& g, const VertId ii, const VertId jj) {
         Weight wt_sij = c + p1;
         for (const auto& [de, p2] : dest_dec) {
             Weight wt_sijd = wt_sij + p2;
+            if (se == de) {
+                // se -> ii -> jj -> se is a cycle, not a difference constraint.
+                // Storing it would leave a self-loop `x - x <= k` that closure
+                // later tightens to 0, so the state is never syntactically
+                // included in its own closure. A negative cycle here would mean
+                // the caller's potential repair missed an infeasible constraint.
+                assert(wt_sijd >= 0);
+                continue;
+            }
             if (Weight* pw = g.lookup(se, de)) {
                 if (*pw <= wt_sijd) {
                     continue;
