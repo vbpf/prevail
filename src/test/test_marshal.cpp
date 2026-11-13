@@ -916,9 +916,16 @@ TEST_CASE("unmarshal 64bit immediate", "[disasm][marshal]") {
     compare_unmarshal_marshal(EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 3, .imm = 7}, EbpfInst{},
                               EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 3, .imm = 7},
                               EbpfInst{});
-    compare_unmarshal_marshal(EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 4, .imm = 7}, EbpfInst{},
-                              EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 4, .imm = 7},
+    // src=4 (code_addr) carries an offset relative to the next slot, which must name an instruction of the program.
+    compare_unmarshal_marshal(EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 4, .imm = 2}, EbpfInst{},
+                              EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 4, .imm = 2},
                               EbpfInst{});
+    check_unmarshal_fail(EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 4, .imm = 1}, EbpfInst{},
+                         "0: jump out of bounds\n");
+    check_unmarshal_fail(EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 4, .imm = -2}, EbpfInst{},
+                         "0: jump out of bounds\n");
+    check_unmarshal_fail(EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 4, .imm = 0}, EbpfInst{},
+                         "0: jump to middle of lddw\n");
     compare_unmarshal_marshal(EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 5, .imm = 7}, EbpfInst{},
                               EbpfInst{.opcode = /* 0x18 */ INST_OP_LDDW_IMM, .dst = 1, .src = 5, .imm = 7},
                               EbpfInst{});
@@ -1401,7 +1408,7 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
 
     SECTION("lddw code_addr pseudo via INST_LD_MODE_CODE_ADDR") {
         RawProgram raw_prog{
-            "",  "", 0, "", {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = 4, .imm = 11}, EbpfInst{}, exit},
+            "",  "", 0, "", {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = 4, .imm = 1}, EbpfInst{}, exit},
             info};
         auto prog_or_error = unmarshal(raw_prog, {});
         REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
@@ -1410,7 +1417,7 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         REQUIRE(pseudo != nullptr);
         REQUIRE(pseudo->dst == Reg{2});
         REQUIRE(pseudo->addr.kind == PseudoAddress::Kind::CODE_ADDR);
-        REQUIRE(pseudo->addr.imm == 11);
+        REQUIRE(pseudo->addr.imm == 2);
     }
 
     SECTION("lddw immediate merges high and low words") {
@@ -1463,7 +1470,7 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
             "",
             0,
             "",
-            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 7}, EbpfInst{}, exit},
+            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 1}, EbpfInst{}, exit},
             info};
         auto prog_or_error = unmarshal(raw_prog, {});
         REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
@@ -1536,7 +1543,7 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
             "",
             0,
             "",
-            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 7}, EbpfInst{},
+            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 6}, EbpfInst{},
              EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 1}, EbpfInst{.opcode = mov64_imm, .dst = 3, .imm = 0},
              EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0}, EbpfInst{.opcode = INST_OP_CALL, .imm = 181}, exit,
              EbpfInst{.opcode = mov64_imm, .dst = 0, .imm = 0}, exit},
@@ -1568,7 +1575,7 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
             "",
             0,
             "",
-            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 7}, EbpfInst{},
+            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 6}, EbpfInst{},
              EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 1}, EbpfInst{.opcode = mov64_imm, .dst = 3, .imm = 0},
              EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0}, EbpfInst{.opcode = INST_OP_CALL, .imm = 181}, exit,
              EbpfInst{.opcode = mov64_imm, .dst = 0, .imm = 0}, exit},
@@ -1578,20 +1585,48 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         const Program good_prog = Program::from_sequence(std::get<InstructionSeq>(good_prog_or_error), info, {});
         REQUIRE(verify(good_prog, {}));
 
-        RawProgram bad_raw_prog{
-            "",
-            "",
-            0,
-            "",
-            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 1}, EbpfInst{},
-             EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 1}, EbpfInst{.opcode = mov64_imm, .dst = 3, .imm = 0},
-             EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0}, EbpfInst{.opcode = INST_OP_CALL, .imm = 181}, exit,
-             EbpfInst{.opcode = mov64_imm, .dst = 0, .imm = 0}, exit},
-            info};
+        // Offsets that name no instruction are rejected while decoding: the second slot of the lddw itself,
+        // and the first slot past the end of the program.
+        for (const int32_t bad_imm : {0, 8}) {
+            RawProgram bad_raw_prog = good_raw_prog;
+            bad_raw_prog.prog[0].imm = bad_imm;
+            REQUIRE(std::holds_alternative<std::string>(unmarshal(bad_raw_prog, {})));
+        }
+
+        // The top-level exit at slot 6 is an instruction, but not a callback entry.
+        RawProgram bad_raw_prog = good_raw_prog;
+        bad_raw_prog.prog[0].imm = 5;
         auto bad_prog_or_error = unmarshal(bad_raw_prog, {});
         REQUIRE(std::holds_alternative<InstructionSeq>(bad_prog_or_error));
         const Program bad_prog = Program::from_sequence(std::get<InstructionSeq>(bad_prog_or_error), info, {});
         REQUIRE_FALSE(verify(bad_prog, {}));
+    }
+
+    SECTION("lddw code_addr immediate is relative to the next slot") {
+        constexpr uint8_t mov64_imm = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
+        // The lddw is at slot 3 and the callback at slot 8.
+        RawProgram raw_prog{
+            "",
+            "",
+            0,
+            "",
+            {EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 1}, EbpfInst{.opcode = mov64_imm, .dst = 3, .imm = 0},
+             EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0},
+             EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 4}, EbpfInst{},
+             EbpfInst{.opcode = INST_OP_CALL, .imm = 181}, EbpfInst{.opcode = mov64_imm, .dst = 0, .imm = 0}, exit,
+             EbpfInst{.opcode = mov64_imm, .dst = 0, .imm = 0}, exit},
+            info};
+        auto prog_or_error = unmarshal(raw_prog, {});
+        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
+        const auto* pseudo = std::get_if<LoadPseudo>(&prog.instruction_at(Label{3}));
+        REQUIRE(pseudo != nullptr);
+        REQUIRE(pseudo->addr.imm == 8);
+        REQUIRE(verify(prog, {}));
+
+        // Slot 12 of a 10-slot program.
+        raw_prog.prog[3].imm = 8;
+        REQUIRE(std::holds_alternative<std::string>(unmarshal(raw_prog, {})));
     }
 
     SECTION("ptr_to_func callback target must have reachable exit") {
@@ -1601,7 +1636,7 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
             "",
             0,
             "",
-            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 7}, EbpfInst{},
+            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 6}, EbpfInst{},
              EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 1}, EbpfInst{.opcode = mov64_imm, .dst = 3, .imm = 0},
              EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0}, EbpfInst{.opcode = INST_OP_CALL, .imm = 181}, exit,
              EbpfInst{.opcode = INST_OP_JA16, .offset = -1}},
