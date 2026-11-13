@@ -440,9 +440,11 @@ struct Unmarshaller {
             if (next.imm != 0) {
                 throw InvalidInstruction(pc, "lddw uses reserved fields");
             }
-            return LoadPseudo{
-                .dst = Reg{inst.dst},
-                .addr = PseudoAddress{.kind = PseudoAddress::Kind::CODE_ADDR, .imm = inst.imm, .next_imm = next_imm}};
+            // The encoded imm is relative to the next slot, like a local call; the IR carries the target's label.
+            return LoadPseudo{.dst = Reg{inst.dst},
+                              .addr = PseudoAddress{.kind = PseudoAddress::Kind::CODE_ADDR,
+                                                    .imm = getJumpTarget(inst.imm, insts, pc).from,
+                                                    .next_imm = next_imm}};
         case INST_LD_MODE_MAP_BY_IDX:
             if (next.imm != 0) {
                 throw InvalidInstruction(pc, "lddw uses reserved fields");

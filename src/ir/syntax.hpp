@@ -105,7 +105,7 @@ struct LoadMapAddress {
 struct PseudoAddress {
     enum class Kind {
         VARIABLE_ADDR,    // src=3
-        CODE_ADDR,        // src=4
+        CODE_ADDR,        // src=4; imm holds the label of the target, not the encoded relative offset
         MAP_BY_IDX,       // src=5
         MAP_VALUE_BY_IDX, // src=6
     } kind{};
