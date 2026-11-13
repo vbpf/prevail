@@ -73,6 +73,11 @@ struct core_field_resolution_t {
     std::optional<uint32_t> member_offset_encoding;
 };
 
+struct core_field_storage_t {
+    uint64_t byte_offset;
+    uint64_t byte_size;
+};
+
 template <typename T>
     requires std::is_trivially_copyable_v<T>
 T read_struct_at(const char* data, const size_t data_size, const size_t offset, const std::string& context) {
@@ -254,6 +259,31 @@ uint32_t core_field_bit_width(const libbtf::btf_type_data& btf_data, const core_
     return btf_data.get_size(field.type_id) * 8;
 }
 
+// The memory a field is loaded from. A bitfield is not addressed at the byte holding its first bit: as in
+// libbpf's bpf_core_calc_field_relo(), it is read through the smallest naturally aligned unit, no smaller than
+// its declared type, that covers all of its bits. FIELD_BYTE_OFFSET, FIELD_BYTE_SIZE and FIELD_LSHIFT_U64 must
+// all describe that same unit, or the analyzed constants differ from the ones a CO-RE loader patches in.
+core_field_storage_t core_field_storage(const libbtf::btf_type_data& btf_data, const core_field_resolution_t& field) {
+    core_field_storage_t storage{field.offset_bits / 8, btf_data.get_size(field.type_id)};
+    if (!field.member_offset_encoding || BTF_MEMBER_BITFIELD_SIZE(*field.member_offset_encoding) == 0) {
+        return storage;
+    }
+    if (storage.byte_size == 0) {
+        throw UnmarshalError("CO-RE bitfield has zero-sized type");
+    }
+
+    const uint64_t end_bits = field.offset_bits + BTF_MEMBER_BITFIELD_SIZE(*field.member_offset_encoding);
+    storage.byte_offset = field.offset_bits / 8 / storage.byte_size * storage.byte_size;
+    while (end_bits - storage.byte_offset * 8 > storage.byte_size * 8) {
+        if (storage.byte_size >= 8) {
+            throw UnmarshalError("CO-RE bitfield cannot be read with a 64-bit load");
+        }
+        storage.byte_size *= 2;
+        storage.byte_offset = field.offset_bits / 8 / storage.byte_size * storage.byte_size;
+    }
+    return storage;
+}
+
 bool core_field_offset_uses_offset_field(const EbpfInst& inst) {
     const uint8_t cls = inst.opcode & INST_CLS_MASK;
     if (cls != INST_CLS_LDX && cls != INST_CLS_ST && cls != INST_CLS_STX) {
@@ -305,7 +335,7 @@ void ProgramReader::apply_core_relocation(RawProgram& prog, const bpf_core_relo&
 
     switch (relo.kind) {
     case BPF_CORE_FIELD_BYTE_OFFSET: {
-        const auto core_field_byte_offset = gsl::narrow<int64_t>(get_field().offset_bits / 8);
+        const auto core_field_byte_offset = gsl::narrow<int64_t>(core_field_storage(btf_data, get_field()).byte_offset);
         if (core_field_offset_uses_offset_field(inst)) {
             if (core_field_byte_offset < std::numeric_limits<int16_t>::min() ||
                 core_field_byte_offset > std::numeric_limits<int16_t>::max()) {
@@ -317,7 +347,9 @@ void ProgramReader::apply_core_relocation(RawProgram& prog, const bpf_core_relo&
         }
         break;
     }
-    case BPF_CORE_FIELD_BYTE_SIZE: inst.imm = gsl::narrow<int32_t>(btf_data.get_size(get_field().type_id)); break;
+    case BPF_CORE_FIELD_BYTE_SIZE:
+        inst.imm = gsl::narrow<int32_t>(core_field_storage(btf_data, get_field()).byte_size);
+        break;
     case BPF_CORE_FIELD_EXISTS: inst.imm = 1; break;
     case BPF_CORE_FIELD_SIGNED: {
         switch (btf_data.get_kind_index(get_field().type_id)) {
@@ -337,11 +369,11 @@ void ProgramReader::apply_core_relocation(RawProgram& prog, const bpf_core_relo&
     case BPF_CORE_FIELD_LSHIFT_U64: {
         const auto& field = get_field();
         const auto field_bit_width = core_field_bit_width(btf_data, field);
-        const uint32_t bit_offset_in_byte = static_cast<uint32_t>(field.offset_bits % 8);
-        if (field_bit_width == 0 || field_bit_width > 64 || bit_offset_in_byte + field_bit_width > 64) {
+        const uint64_t bit_offset_in_storage = field.offset_bits - core_field_storage(btf_data, field).byte_offset * 8;
+        if (field_bit_width == 0 || field_bit_width > 64 || bit_offset_in_storage + field_bit_width > 64) {
             throw UnmarshalError("CO-RE field bit width exceeds 64 bits");
         }
-        inst.imm = gsl::narrow<int32_t>(64 - (bit_offset_in_byte + field_bit_width));
+        inst.imm = gsl::narrow<int32_t>(64 - (bit_offset_in_storage + field_bit_width));
         break;
     }
     case BPF_CORE_FIELD_RSHIFT_U64: {
