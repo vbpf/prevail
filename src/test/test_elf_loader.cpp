@@ -2288,3 +2288,137 @@ TEST_CASE("ELF loader handles large legacy maps sections in linear time", "[elf]
     REQUIRE(descriptors[1].is_inner_map_template);
     REQUIRE_FALSE(descriptors[3].is_inner_map_template);
 }
+
+// Regression test: a CO-RE TYPE_ID_LOCAL relocation must write the relocation's own
+// type id (modifiers included, as libbpf does) and, on an LDDW, must replace the whole
+// 64-bit immediate. Stripping the typedef made `foo_t` compare equal to `struct foo`,
+// and leaving the continuation slot untouched kept the object's hi32 bits, so the
+// analysed constant differed from the one a libbpf-compatible loader produces.
+TEST_CASE("CO-RE type id relocation keeps modifiers and patches both LDDW slots", "[elf][core]") {
+    auto append_u32 = [](std::string& data, const uint32_t value) {
+        const uint32_t le = boost::endian::native_to_little(value);
+        data.append(reinterpret_cast<const char*>(&le), sizeof(le));
+    };
+    auto append_inst = [](std::string& data, const uint8_t opcode, const uint8_t dst, const int32_t imm) {
+        const uint8_t bytes[8] = {
+            opcode,
+            dst,
+            0,
+            0,
+            static_cast<uint8_t>(imm & 0xFF),
+            static_cast<uint8_t>((imm >> 8) & 0xFF),
+            static_cast<uint8_t>((imm >> 16) & 0xFF),
+            static_cast<uint8_t>((imm >> 24) & 0xFF),
+        };
+        data.append(reinterpret_cast<const char*>(bytes), sizeof(bytes));
+    };
+
+    ELFIO::elfio writer;
+    writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+    writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+    writer.set_type(ELFIO::ET_REL);
+    writer.set_machine(ELFIO::EM_BPF);
+
+    // r2 = 0x100000000 ll (hi32 set); r3 = 0 ll; exit.
+    ELFIO::section* text_sec = writer.sections.add("xdp");
+    text_sec->set_type(ELFIO::SHT_PROGBITS);
+    text_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+    text_sec->set_addr_align(8);
+    std::string inst_data;
+    append_inst(inst_data, INST_OP_LDDW_IMM, 2, 0);
+    append_inst(inst_data, 0, 0, 1);
+    append_inst(inst_data, INST_OP_LDDW_IMM, 3, 0);
+    append_inst(inst_data, 0, 0, 0);
+    append_inst(inst_data, INST_OP_EXIT, 0, 0);
+    text_sec->set_data(inst_data);
+
+    ELFIO::section* str_sec = writer.sections.add(".strtab");
+    str_sec->set_type(ELFIO::SHT_STRTAB);
+    ELFIO::string_section_accessor str_writer(str_sec);
+
+    ELFIO::section* sym_sec = writer.sections.add(".symtab");
+    sym_sec->set_type(ELFIO::SHT_SYMTAB);
+    sym_sec->set_addr_align(8);
+    sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+    sym_sec->set_link(str_sec->get_index());
+    sym_sec->set_info(1);
+    ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+    sym_writer.add_symbol(str_writer, "prog", 0, inst_data.size(), ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0,
+                          text_sec->get_index());
+
+    // .BTF: id 1 = int, id 2 = struct foo { int a; }, id 3 = typedef foo_t -> struct foo.
+    const std::string btf_strings{"\0int\0foo\0a\0foo_t\0xdp\0"
+                                  "0\0",
+                                  23};
+    constexpr uint32_t str_int = 1, str_foo = 5, str_a = 9, str_foo_t = 11, str_xdp = 17, str_0 = 21;
+    constexpr uint32_t int_id = 1, struct_id = 2, typedef_id = 3;
+    std::string btf_types;
+    append_u32(btf_types, str_int);
+    append_u32(btf_types, 1U << 24); // BTF_KIND_INT, vlen 0
+    append_u32(btf_types, 4);
+    append_u32(btf_types, 32); // 32 bits, unsigned
+    append_u32(btf_types, str_foo);
+    append_u32(btf_types, (4U << 24) | 1); // BTF_KIND_STRUCT, 1 member
+    append_u32(btf_types, 4);
+    append_u32(btf_types, str_a);
+    append_u32(btf_types, int_id);
+    append_u32(btf_types, 0);
+    append_u32(btf_types, str_foo_t);
+    append_u32(btf_types, 8U << 24); // BTF_KIND_TYPEDEF
+    append_u32(btf_types, struct_id);
+
+    std::string btf_data{"\x9f\xeb\x01\x00", 4};
+    append_u32(btf_data, 24); // hdr_len
+    append_u32(btf_data, 0);  // type_off
+    append_u32(btf_data, gsl::narrow<uint32_t>(btf_types.size()));
+    append_u32(btf_data, gsl::narrow<uint32_t>(btf_types.size())); // str_off
+    append_u32(btf_data, gsl::narrow<uint32_t>(btf_strings.size()));
+    btf_data += btf_types + btf_strings;
+
+    ELFIO::section* btf_sec = writer.sections.add(".BTF");
+    btf_sec->set_type(ELFIO::SHT_PROGBITS);
+    btf_sec->set_data(btf_data);
+
+    // .BTF.ext: two TYPE_ID_LOCAL records in section "xdp": the first LDDW names the
+    // typedef, the second the struct.
+    constexpr uint32_t BPF_CORE_TYPE_ID_LOCAL = 6;
+    std::string core_relo;
+    append_u32(core_relo, 16); // record size
+    append_u32(core_relo, str_xdp);
+    append_u32(core_relo, 2); // num_info
+    for (const auto [insn_off, type_id] : {std::pair{0U, typedef_id}, std::pair{16U, struct_id}}) {
+        append_u32(core_relo, insn_off);
+        append_u32(core_relo, type_id);
+        append_u32(core_relo, str_0);
+        append_u32(core_relo, BPF_CORE_TYPE_ID_LOCAL);
+    }
+
+    std::string btf_ext_data{"\x9f\xeb\x01\x00", 4};
+    append_u32(btf_ext_data, 32); // hdr_len
+    for (int i = 0; i < 4; ++i) {
+        append_u32(btf_ext_data, 0); // func_info / line_info off+len
+    }
+    append_u32(btf_ext_data, 0); // core_relo_off
+    append_u32(btf_ext_data, gsl::narrow<uint32_t>(core_relo.size()));
+    btf_ext_data += core_relo;
+
+    ELFIO::section* btf_ext_sec = writer.sections.add(".BTF.ext");
+    btf_ext_sec->set_type(ELFIO::SHT_PROGBITS);
+    btf_ext_sec->set_data(btf_ext_data);
+
+    std::ostringstream out_stream;
+    writer.save(out_stream);
+    std::istringstream in_stream(out_stream.str());
+
+    VerifierOptions options{};
+    const auto programs = read_elf(in_stream, "memory", "xdp", "", options, &g_ebpf_platform_linux);
+    REQUIRE(programs.size() == 1);
+    const auto& prog = programs[0].prog;
+    REQUIRE(prog.size() == 5);
+    REQUIRE(programs[0].core_relocation_count == 2);
+    // r2 = typedef id, with the shipped hi32 bits cleared; r3 = struct id.
+    CHECK(prog[0].imm == typedef_id);
+    CHECK(prog[1].imm == 0);
+    CHECK(prog[2].imm == struct_id);
+    CHECK(prog[3].imm == 0);
+}
