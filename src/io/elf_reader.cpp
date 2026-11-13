@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cerrno>
 #include <concepts>
 #include <cstddef>
@@ -558,6 +559,16 @@ ELFIO::elfio load_elf(std::istream& input_stream, const std::string& path) {
 
     if (reader.get_machine() != ELFIO::EM_BPF && reader.get_machine() != ELFIO::EM_NONE) {
         throw UnmarshalError("Unsupported ELF machine in file " + path + ": expected EM_BPF");
+    }
+
+    // ELFIO converts the ELF metadata, but section payloads (instructions via
+    // vector_of<EbpfInst>, legacy map records) are memcpy'd in host byte order,
+    // so an object of the other byte order would be decoded, and verified, as a
+    // different program than the one it encodes.
+    constexpr unsigned char native_encoding =
+        std::endian::native == std::endian::little ? ELFIO::ELFDATA2LSB : ELFIO::ELFDATA2MSB;
+    if (reader.get_encoding() != native_encoding) {
+        throw UnmarshalError("Unsupported ELF byte order in file " + path + ": expected host byte order");
     }
 
     for (const auto& section : reader.sections) {

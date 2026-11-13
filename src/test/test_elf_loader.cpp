@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 #include <algorithm>
+
+#include <bit>
 #include <catch2/catch_all.hpp>
 #include <chrono>
 #include <concepts>
@@ -630,6 +632,52 @@ TEST_CASE("ELF loader rejects non-BPF e_machine", "[elf][hardening]") {
 
     REQUIRE_THROWS_WITH((ElfObject{elf.path().string(), {}, &g_ebpf_platform_linux}.get_programs(".text")),
                         Catch::Matchers::ContainsSubstring("Unsupported ELF machine"));
+}
+
+// Instructions are copied out of their section in host byte order, so an object of the
+// other byte order must be rejected rather than verified as a different program.
+TEST_CASE("ELF loader rejects objects of non-host byte order", "[elf][hardening]") {
+
+    constexpr bool host_is_little_endian = std::endian::native == std::endian::little;
+
+    ELFIO::elfio writer;
+    writer.create(ELFIO::ELFCLASS64, host_is_little_endian ? ELFIO::ELFDATA2MSB : ELFIO::ELFDATA2LSB);
+    writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+    writer.set_type(ELFIO::ET_REL);
+    writer.set_machine(ELFIO::EM_BPF);
+
+    // "*(u64 *)(r10 - 1793) = r10; r0 = 0; exit" in the object's byte order.
+    // Byte-swapped, the store offset 0xf8ff reads as 0xfff8, i.e. a valid r10 - 8.
+    ELFIO::section* text_sec = writer.sections.add(".text");
+    text_sec->set_type(ELFIO::SHT_PROGBITS);
+    text_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+    text_sec->set_addr_align(8);
+    const uint8_t off0 = host_is_little_endian ? 0xf8 : 0xff;
+    const uint8_t off1 = host_is_little_endian ? 0xff : 0xf8;
+    const uint8_t insts[] = {0x7b, 0xaa, off0, off1, 0, 0, 0, 0, 0xb7, 0, 0, 0, 0, 0, 0, 0, 0x95, 0, 0, 0, 0, 0, 0, 0};
+    text_sec->set_data(reinterpret_cast<const char*>(insts), sizeof(insts));
+
+    ELFIO::section* str_sec = writer.sections.add(".strtab");
+    str_sec->set_type(ELFIO::SHT_STRTAB);
+    ELFIO::string_section_accessor str_writer(str_sec);
+
+    ELFIO::section* sym_sec = writer.sections.add(".symtab");
+    sym_sec->set_type(ELFIO::SHT_SYMTAB);
+    sym_sec->set_addr_align(8);
+    sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+    sym_sec->set_link(str_sec->get_index());
+    sym_sec->set_info(1); // First global symbol index.
+    ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+    sym_writer.add_symbol(str_writer, "prog", 0, sizeof(insts), ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0,
+                          text_sec->get_index());
+
+    std::ostringstream out_stream;
+    writer.save(out_stream);
+    std::istringstream in_stream(out_stream.str());
+
+    VerifierOptions options{};
+    REQUIRE_THROWS_WITH(read_elf(in_stream, "memory", ".text", "", options, &g_ebpf_platform_linux),
+                        Catch::Matchers::ContainsSubstring("Unsupported ELF byte order"));
 }
 
 TEST_CASE("ELF loader accepts valid section header table metadata", "[elf][hardening]") {
