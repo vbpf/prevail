@@ -2767,10 +2767,13 @@ bool is_helper_usable_linux(const int32_t n, const EbpfProgramType& program_type
     // Some helpers support multiple incompatible ctx layouts in Linux.
     // Until attach-type-level helper gating is modeled, keep a conservative
     // program-type allowlist here instead of treating them as fully generic.
+    // Only list program types whose Linux variant takes the ctx pointer: sk_reuseport, tracing
+    // and lsm bind the same id to bpf_get_socket_ptr_cookie(sk), which takes a `struct sock *`
+    // that the PTR_TO_CTX prototype row does not describe.
     if (n == 46) { // bpf_get_socket_cookie
         static const std::set<std::string_view> socket_cookie_types = {
-            "socket_filter", "sched_act",        "sched_cls", "sk_skb",       "cgroup_skb",
-            "cgroup_sock",   "cgroup_sock_addr", "sock_ops",  "sk_reuseport", "tracing",
+            "socket_filter", "sched_act",   "sched_cls",        "sk_skb",
+            "cgroup_skb",    "cgroup_sock", "cgroup_sock_addr", "sock_ops",
         };
         if (!socket_cookie_types.contains(program_type.name)) {
             return false;
