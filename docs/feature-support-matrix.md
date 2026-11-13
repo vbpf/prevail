@@ -33,7 +33,7 @@ Capability and configuration checks are described in `Notes / Evidence`; they do
 |---|---|---|
 | ALU/ALU64 arithmetic and bitwise core ops | Supported | `src/ir/unmarshal.cpp`: `getAluOp`, `makeAluOp` |
 | Signed DIV/MOD variants via `offset==1` | Supported | `src/ir/unmarshal.cpp`: `getAluOp` |
-| MOVSX ALU variants (8/16/32 sign-extend) | Supported | `src/ir/unmarshal.cpp`: `getAluOp`; `src/crab/ebpf_transformer.cpp`: `operator()(const Bin&)` |
+| MOVSX ALU variants (8/16 sign-extend; 32 for ALU64 only) | Supported | `src/ir/unmarshal.cpp`: `getAluOp`; `src/crab/ebpf_transformer.cpp`: `operator()(const Bin&)` |
 | Endianness and bswap ops | Supported | `src/ir/unmarshal.cpp`: `getAluOp` (`INST_ALU_OP_END`); `src/crab/ebpf_transformer.cpp`: `operator()(const Un&)` |
 | Jumps and conditional branches (`JMP`/`JMP32`) | Supported | `src/ir/unmarshal.cpp`: `makeJmp`; `src/ir/cfg_builder.cpp`: `instruction_seq_to_cfg` |
 | `JA32` immediate-offset form | Supported | `src/ir/unmarshal.cpp`: `makeJmp` (`INST_OP_JA32`) |
