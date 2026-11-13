@@ -352,8 +352,17 @@ void ProgramReader::apply_core_relocation(RawProgram& prog, const bpf_core_relo&
         inst.imm = gsl::narrow<int32_t>(64 - field_bit_width);
         break;
     }
+    // A type-id relocation asks for the id of the named type itself, modifiers included:
+    // libbpf writes relo->type_id unchanged for TYPE_ID_LOCAL (and the id of the matching
+    // target type for TYPE_ID_TARGET, which without target BTF is the local id as well).
+    // Stripping typedef/const/... here would make a typedef compare equal to its
+    // underlying type and decide branches differently from the loaded program.
     case BPF_CORE_TYPE_ID_LOCAL:
-    case BPF_CORE_TYPE_ID_TARGET: inst.imm = gsl::narrow<int32_t>(strip_type_modifiers(btf_data, relo.type_id)); break;
+    case BPF_CORE_TYPE_ID_TARGET:
+        // Reject ids that do not exist in the local BTF.
+        (void)btf_data.get_kind_index(relo.type_id);
+        inst.imm = gsl::narrow<int32_t>(relo.type_id);
+        break;
     // Prevail is a static verifier without target-kernel BTF, so existence/match predicates
     // are resolved against local BTF only and therefore fold to true.
     case BPF_CORE_TYPE_EXISTS:
@@ -394,6 +403,16 @@ void ProgramReader::apply_core_relocation(RawProgram& prog, const bpf_core_relo&
         break;
     }
     default: throw UnmarshalError("Unsupported CO-RE relocation kind: " + std::to_string(relo.kind));
+    }
+
+    // libbpf's bpf_core_patch_insn() writes the new value over the whole 64-bit immediate of
+    // an LDDW, so the continuation slot must not keep the hi32 bits the object shipped.
+    if (inst.opcode == INST_OP_LDDW_IMM) {
+        if (inst_idx + 1 >= prog.prog.size()) {
+            throw UnmarshalError("CO-RE relocation at offset " + std::to_string(relo.insn_off) +
+                                 " targets incomplete LDDW");
+        }
+        prog.prog[inst_idx + 1].imm = inst.imm < 0 ? -1 : 0;
     }
 }
 
