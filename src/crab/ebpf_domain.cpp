@@ -332,8 +332,12 @@ Interval EbpfDomain::get_map_max_entries(const Reg& map_fd_reg, const AnalysisCo
 
 ExtendedNumber EbpfDomain::get_loop_count_upper_bound(const std::span<const Variable> loop_counters) const {
     ExtendedNumber ub{0};
+    if (is_bottom()) {
+        return ub;
+    }
+    // Each loop head has its own counter, and a counter is never reset: the iterations add up.
     for (const Variable counter : loop_counters) {
-        ub = std::max(ub, state.values.eval_interval(counter).ub());
+        ub += state.values.eval_interval(counter).ub();
     }
     return ub;
 }
