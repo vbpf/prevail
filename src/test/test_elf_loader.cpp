@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 #include <algorithm>
+
+#include <array>
 #include <catch2/catch_all.hpp>
 #include <chrono>
 #include <concepts>
@@ -876,6 +878,137 @@ TEST_CASE("CO-RE access string offset out-of-bounds fails cleanly", "[elf][core]
 
     REQUIRE_THROWS_WITH((ElfObject{elf.path().string(), {}, &g_ebpf_platform_linux}.get_programs("fentry/tcp_close")),
                         Catch::Matchers::ContainsSubstring("Unsupported or invalid CO-RE/BTF relocation data"));
+}
+
+// Regression test: a bitfield is loaded through the aligned storage unit that covers all of its bits, so
+// FIELD_BYTE_OFFSET, FIELD_BYTE_SIZE and FIELD_LSHIFT_U64 must describe that unit rather than the byte holding the
+// first bit and the declared type. Expected values are those of libbpf's bpf_core_calc_field_relo().
+TEST_CASE("CO-RE bitfield relocations describe the aligned storage unit", "[elf][core]") {
+    auto append_u32 = [](std::string& data, const uint32_t value) {
+        for (int shift = 0; shift < 32; shift += 8) {
+            data.push_back(static_cast<char>((value >> shift) & 0xFF));
+        }
+    };
+    // FIELD_BYTE_OFFSET, FIELD_BYTE_SIZE, FIELD_LSHIFT_U64, FIELD_RSHIFT_U64.
+    constexpr std::array<uint32_t, 4> kinds = {0, 1, 4, 5};
+    constexpr uint8_t MOV64_IMM = 0xb7; // r0 = imm
+
+    // `struct s { <int of type_size bytes> f : bit_size; }` with `f` at bit_offset, and a program in section "xdp"
+    // with one `r0 = -1` per relocation kind, each relocated against `f`.
+    auto load = [&](const uint32_t type_size, const uint32_t bit_offset, const uint32_t bit_size) {
+        using namespace std::string_literals;
+        const std::string strings = "\0int\0s\0f\0xdp\0"
+                                    "0:0\0"s;
+        constexpr uint32_t int_name = 1, struct_name = 5, member_name = 7, section_name = 9, access_string = 13;
+
+        std::string types;
+        append_u32(types, int_name); // Type 1: BTF_KIND_INT.
+        append_u32(types, 1U << 24);
+        append_u32(types, type_size);
+        append_u32(types, type_size * 8);
+        append_u32(types, struct_name); // Type 2: BTF_KIND_STRUCT, kind_flag set, one member.
+        append_u32(types, (1U << 31) | (4U << 24) | 1U);
+        append_u32(types, 16);
+        append_u32(types, member_name);
+        append_u32(types, 1);
+        append_u32(types, (bit_size << 24) | bit_offset);
+
+        std::string btf;
+        append_u32(btf, 0x0001eb9f); // magic, version 1, no flags.
+        append_u32(btf, 24);         // hdr_len
+        append_u32(btf, 0);          // type_off
+        append_u32(btf, gsl::narrow<uint32_t>(types.size()));
+        append_u32(btf, gsl::narrow<uint32_t>(types.size())); // str_off
+        append_u32(btf, gsl::narrow<uint32_t>(strings.size()));
+        btf += types + strings;
+
+        std::string core_relos;
+        append_u32(core_relos, 16); // Record size.
+        append_u32(core_relos, section_name);
+        append_u32(core_relos, gsl::narrow<uint32_t>(kinds.size()));
+        std::string insts;
+        for (const uint32_t kind : kinds) {
+            append_u32(core_relos, gsl::narrow<uint32_t>(insts.size())); // insn_off
+            append_u32(core_relos, 2);                                   // type_id
+            append_u32(core_relos, access_string);
+            append_u32(core_relos, kind);
+            append_u32(insts, MOV64_IMM);
+            append_u32(insts, 0xffffffff);
+        }
+        append_u32(insts, INST_OP_EXIT);
+        append_u32(insts, 0);
+
+        std::string btf_ext;
+        append_u32(btf_ext, 0x0001eb9f); // magic, version 1, no flags.
+        append_u32(btf_ext, 32);         // hdr_len
+        append_u32(btf_ext, 0);          // func_info_off
+        append_u32(btf_ext, 0);          // func_info_len
+        append_u32(btf_ext, 0);          // line_info_off
+        append_u32(btf_ext, 0);          // line_info_len
+        append_u32(btf_ext, 0);          // core_relo_off
+        append_u32(btf_ext, gsl::narrow<uint32_t>(core_relos.size()));
+        btf_ext += core_relos;
+
+        ELFIO::elfio writer;
+        writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+        writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+        writer.set_type(ELFIO::ET_REL);
+        writer.set_machine(ELFIO::EM_BPF);
+
+        ELFIO::section* prog_sec = writer.sections.add("xdp");
+        prog_sec->set_type(ELFIO::SHT_PROGBITS);
+        prog_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+        prog_sec->set_addr_align(8);
+        prog_sec->set_data(insts);
+
+        ELFIO::section* btf_sec = writer.sections.add(".BTF");
+        btf_sec->set_type(ELFIO::SHT_PROGBITS);
+        btf_sec->set_addr_align(4);
+        btf_sec->set_data(btf);
+
+        ELFIO::section* btf_ext_sec = writer.sections.add(".BTF.ext");
+        btf_ext_sec->set_type(ELFIO::SHT_PROGBITS);
+        btf_ext_sec->set_addr_align(4);
+        btf_ext_sec->set_data(btf_ext);
+
+        ELFIO::section* str_sec = writer.sections.add(".strtab");
+        str_sec->set_type(ELFIO::SHT_STRTAB);
+        ELFIO::string_section_accessor str_writer(str_sec);
+
+        ELFIO::section* sym_sec = writer.sections.add(".symtab");
+        sym_sec->set_type(ELFIO::SHT_SYMTAB);
+        sym_sec->set_addr_align(8);
+        sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+        sym_sec->set_link(str_sec->get_index());
+        sym_sec->set_info(1);
+        ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+        sym_writer.add_symbol(str_writer, "prog", 0, insts.size(), ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0,
+                              prog_sec->get_index());
+
+        std::ostringstream out_stream;
+        writer.save(out_stream);
+        std::istringstream in_stream(out_stream.str());
+
+        const auto programs = read_elf(in_stream, "memory", "xdp", "", VerifierOptions{}, &g_ebpf_platform_linux);
+        REQUIRE(programs.size() == 1);
+        REQUIRE(programs[0].core_relocation_count == kinds.size());
+        std::array<int32_t, kinds.size()> values{};
+        for (size_t i = 0; i < kinds.size(); ++i) {
+            values[i] = programs[0].prog.at(i).imm;
+        }
+        return values;
+    };
+
+    // Within the first byte of the declared type's unit.
+    REQUIRE(load(1, 3, 4) == std::array{0, 1, 57, 60});
+    // Starts in a later byte of the unit: the offset is that of the unit.
+    REQUIRE(load(4, 16, 16) == std::array{0, 4, 32, 48});
+    REQUIRE(load(8, 104, 10) == std::array{8, 8, 14, 54});
+    // Straddles the declared type's unit: the unit is doubled until it covers the field.
+    REQUIRE(load(1, 117, 5) == std::array{14, 2, 54, 59});
+    REQUIRE(load(4, 28, 12) == std::array{0, 8, 24, 52});
+    // No aligned 64-bit unit covers the field.
+    REQUIRE_THROWS_WITH(load(4, 63, 2), Catch::Matchers::ContainsSubstring("cannot be read with a 64-bit load"));
 }
 
 TEST_CASE("ELF loader rejects relocation entries with invalid symbol index", "[elf][hardening]") {
