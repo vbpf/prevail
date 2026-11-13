@@ -116,7 +116,13 @@ struct Unmarshaller {
             case 0: return Bin::Op::MOV;
             case 8: return Bin::Op::MOVSX8;
             case 16: return Bin::Op::MOVSX16;
-            case 32: return Bin::Op::MOVSX32;
+            case 32:
+                // The 32-bit sign-extending move exists only in class ALU64 ({MOV, X, ALU} sign-extends
+                // 8-bit and 16-bit operands only), so offset 32 is not a valid encoding for opcode 0xbc.
+                if ((inst.opcode & INST_CLS_MASK) != INST_CLS_ALU64) {
+                    throw InvalidInstruction(pc, make_opcode_message("invalid offset for", inst.opcode));
+                }
+                return Bin::Op::MOVSX32;
             default: throw InvalidInstruction(pc, make_opcode_message("invalid offset for", inst.opcode));
             }
         default: break;
