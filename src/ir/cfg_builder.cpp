@@ -802,32 +802,29 @@ static void pass_compute_callback_metadata(CfgBuilder& builder) {
         md.target_labels.insert(label.from);
     }
 
-    const auto has_reachable_top_level_exit = [&](const Label& start) {
-        std::set<Label> seen;
-        std::vector<Label> worklist{start};
-        while (!worklist.empty()) {
-            Label label = worklist.back();
-            worklist.pop_back();
-            if (seen.contains(label)) {
-                continue;
-            }
-            seen.insert(label);
-            if (label == Label::exit) {
-                return true;
-            }
-            if (label != Label::entry && prog.cfg().contains(label) &&
-                std::holds_alternative<Exit>(prog.instruction_at(label)) && label.stack_frame_prefix.empty()) {
-                return true;
-            }
-            for (const Label& child : prog.cfg().children_of(label)) {
-                worklist.push_back(child);
-            }
+    // A label reaches a top-level Exit iff it is found by one backward traversal from Label::exit
+    // and every top-level Exit instruction. Computing this once for the whole CFG keeps the pass
+    // linear; a forward search per candidate label would be quadratic in program size.
+    std::set<Label> reaches_top_level_exit;
+    std::vector<Label> worklist{Label::exit};
+    for (const Label& label : prog.labels()) {
+        if (label != Label::entry && label != Label::exit && label.stack_frame_prefix.empty() &&
+            std::holds_alternative<Exit>(prog.instruction_at(label))) {
+            worklist.push_back(label);
         }
-        return false;
-    };
+    }
+    while (!worklist.empty()) {
+        const Label label = worklist.back();
+        worklist.pop_back();
+        if (!reaches_top_level_exit.insert(label).second) {
+            continue;
+        }
+        for (const Label& parent : prog.cfg().parents_of(label)) {
+            worklist.push_back(parent);
+        }
+    }
     for (const int32_t label_num : md.target_labels) {
-        const Label label{gsl::narrow<int>(label_num)};
-        if (has_reachable_top_level_exit(label)) {
+        if (reaches_top_level_exit.contains(Label{gsl::narrow<int>(label_num)})) {
             md.targets_with_exit.insert(label_num);
         }
     }
