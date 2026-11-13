@@ -33,8 +33,12 @@ std::optional<int64_t> EbpfDomain::get_stack_offset(const Reg& reg) const {
         return std::nullopt;
     }
     const auto offset = state.values.eval_interval(reg_pack(reg).stack_offset);
-    if (const auto singleton = offset.singleton()) {
-        return singleton->cast_to<int64_t>();
+    // Pointer arithmetic does not wrap stack_offset and deps are collected before the
+    // access is bounds-checked, so the singleton may exceed any machine integer. Any
+    // offset that can pass valid_access fits in 32 bits; report nothing otherwise so
+    // callers can rebase it with int64_t arithmetic.
+    if (const auto singleton = offset.singleton(); singleton && singleton->fits<int32_t>()) {
+        return singleton->narrow<int32_t>();
     }
     return std::nullopt;
 }
