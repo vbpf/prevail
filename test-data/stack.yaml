@@ -1170,3 +1170,73 @@ post:
   - s[504...511].type=number
   - s[504...511].svalue=r0.svalue
   - s[504...511].uvalue=r0.svalue
+---
+test-case: narrow read of a stack cell whose svalue is outside the 64-bit range
+
+pre: ["r6.type=number", "r7.type=number", "r8.type=number",
+      "r10.type=stack", "r10.stack_offset=4096"]
+
+code:
+  <start>: |
+    if r7 s< r6 goto <low>
+  <high>: |
+    goto <join>
+  <low>: |
+    r7 = -9223372036854775808 ll
+    r6 = 0
+  <join>: |
+    if r6 s< -1 goto <out>
+    r1 = -9223372036854775808 ll
+    if r8 s> r1 goto <out>
+    if r7 s>= r8 goto <out>
+    *(u64 *)(r10 - 8) = r7
+    r0 = *(u8 *)(r10 - 8)
+  <out>: |
+    r0 = 0
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0
+  - r6.type=number
+  - r6.svalue-r7.svalue<=9223372036854775808
+  - r7.type=number
+  - r8.type=number
+  - r10.type=stack
+  - r10.stack_offset=4096
+---
+test-case: partial overwrite of a stack cell whose svalue is outside the 64-bit range
+
+pre: ["r6.type=number", "r7.type=number", "r8.type=number",
+      "r10.type=stack", "r10.stack_offset=4096"]
+
+code:
+  <start>: |
+    if r7 s< r6 goto <low>
+  <high>: |
+    goto <join>
+  <low>: |
+    r7 = -9223372036854775808 ll
+    r6 = 0
+  <join>: |
+    if r6 s< -1 goto <out>
+    r1 = -9223372036854775808 ll
+    if r8 s> r1 goto <out>
+    if r7 s>= r8 goto <out>
+    *(u64 *)(r10 - 8) = r7
+    *(u32 *)(r10 - 4) = 256
+  <out>: |
+    r0 = 0
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0
+  - r6.type=number
+  - r6.svalue-r7.svalue<=9223372036854775808
+  - r7.type=number
+  - r8.type=number
+  - r10.type=stack
+  - r10.stack_offset=4096

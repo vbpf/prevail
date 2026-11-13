@@ -437,7 +437,9 @@ std::optional<uint8_t> get_value_byte(const NumAbsDomain& inv, const offset_t o,
                                       const bool big_endian) {
     const Variable v = variable_registry.cell_var(DataKind::svalues, (o / width) * width, width);
     const std::optional<Number> t = inv.eval_interval(v).singleton();
-    if (!t) {
+    // Zone closure can pin a cell's svalue to a number outside the 64-bit range. Such a number
+    // has no byte representation: treat the byte as unknown.
+    if (!t || !t->fits_cast_to<Index>()) {
         return {};
     }
     Index n = t->cast_to<Index>();

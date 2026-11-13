@@ -1458,6 +1458,36 @@ messages:
   - "7:8: Code becomes unreachable (assume r0 w< 0)"
 
 ---
+test-case: left shift when only one zone bound is finite and exceeds the 64-bit range
+
+# The join at <join> keeps only r0.uvalue - r1.uvalue <= 2^64 - 1, and closing it
+# against r1.uvalue <= 100 gives r0.uvalue = [-oo, 2^64 + 99]. An interval that is
+# unbounded on one side skips the clamp in shl(), and Interval::shl multiplied the
+# raw bound by 2^63, overflowing the checked 128-bit Number.
+pre: ["r0.type=number", "r1.type=number"]
+
+code:
+  <start>: |
+    if r0 > r1 goto <const>
+    goto <join>
+  <const>: |
+    r0 = -1
+    r1 = 0
+  <join>: |
+    if r1 > 100 goto <out>
+    r0 <<= 63
+  <out>: |
+    r0 = 0
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0
+  - r1.type=number
+  - r1.uvalue=[0, +oo]
+
+---
 test-case: unsigned right shift when a zone bound exceeds the 64-bit range
 
 pre: ["r1.type=ctx", "r1.ctx_offset=0", "r1.uvalue=[1, 2147418112]",
@@ -1484,3 +1514,65 @@ post:
 
 messages:
   - "7:8: Code becomes unreachable (assume r0 w< 0)"
+---
+test-case: left shift by a register whose zone bound exceeds the 64-bit range
+
+pre: ["r0.type=number", "r6.type=number", "r7.type=number", "r8.type=number"]
+
+code:
+  <start>: |
+    if r7 > r6 goto <big>
+  <small>: |
+    goto <join>
+  <big>: |
+    r7 = -1
+    r6 = 0
+  <join>: |
+    if r6 > 1 goto <out>
+    if r8 < -1 goto <out>
+    if r7 <= r8 goto <out>
+    r0 <<= r7
+  <out>: |
+    r0 = 0
+    exit
+
+post:
+  - r0.svalue=0
+  - r0.type=number
+  - r0.uvalue=0
+  - r6.type=number
+  - r6.uvalue=[0, +oo]
+  - r7.type=number
+  - r7.uvalue-r6.uvalue<=18446744073709551615
+  - r8.type=number
+---
+test-case: right shift by a register whose zone bound exceeds the 64-bit range
+
+pre: ["r0.type=number", "r6.type=number", "r7.type=number", "r8.type=number"]
+
+code:
+  <start>: |
+    if r7 > r6 goto <big>
+  <small>: |
+    goto <join>
+  <big>: |
+    r7 = -1
+    r6 = 0
+  <join>: |
+    if r6 > 1 goto <out>
+    if r8 < -1 goto <out>
+    if r7 <= r8 goto <out>
+    r0 >>= r7
+  <out>: |
+    r0 = 0
+    exit
+
+post:
+  - r0.svalue=0
+  - r0.type=number
+  - r0.uvalue=0
+  - r6.type=number
+  - r6.uvalue=[0, +oo]
+  - r7.type=number
+  - r7.uvalue-r6.uvalue<=18446744073709551615
+  - r8.type=number

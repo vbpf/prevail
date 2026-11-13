@@ -1602,7 +1602,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
             break;
         case Bin::Op::LSH:
             if (dom.state.is_in_group(src_reg, TS_NUM)) {
-                auto src_interval = dom.state.values.eval_interval(src.uvalue);
+                auto src_interval = dom.state.values.eval_interval(src.uvalue).truncate_to<uint64_t>();
                 if (std::optional<Number> sn = src_interval.singleton()) {
                     // truncate to uint64?
                     uint64_t imm = sn->cast_to<uint64_t>() & (bin.is64 ? 63 : 31);
@@ -1621,7 +1621,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
             break;
         case Bin::Op::RSH:
             if (dom.state.is_in_group(src_reg, TS_NUM)) {
-                auto src_interval = dom.state.values.eval_interval(src.uvalue);
+                auto src_interval = dom.state.values.eval_interval(src.uvalue).truncate_to<uint64_t>();
                 if (std::optional<Number> sn = src_interval.singleton()) {
                     uint64_t imm = sn->cast_to<uint64_t>() & (bin.is64 ? 63 : 31);
                     if (imm <= std::numeric_limits<int32_t>::max()) {
