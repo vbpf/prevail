@@ -1104,3 +1104,69 @@ post:
   - s[496...503].uvalue=r2.uvalue
   - s[504...507].type=number
   - s[508...511].type=r3.type
+---
+test-case: store through stack-or-shared pointer does not let indirect stack read pass ValidAccess
+
+pre: ["r4.type in {stack, shared}", "r4.stack_offset=504",
+      "r4.shared_offset=0", "r4.shared_region_size=8", "r4.uvalue=[1, 2147418112]",
+      "r8.type=stack", "r8.stack_offset=504",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    *(u64 *)(r4 + 0) = 0
+    r0 = *(u64 *)(r8 + 0)
+
+post:
+  - "_|_"
+
+messages:
+  - "1: Stack content is not numeric (valid_access(r8.offset, width=8) for read)"
+---
+test-case: store through stack-or-shared pointer does not retype spilled pointer
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r4.type in {stack, shared}", "r4.stack_offset=504",
+      "r4.shared_offset=0", "r4.shared_region_size=8", "r4.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    *(u64 *)(r10 - 8) = r1
+    *(u64 *)(r4 + 0) = 0
+    r0 = *(u64 *)(r10 - 8)
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "3: Invalid type (r0.type == number)"
+---
+test-case: store through stack-or-shared pointer over numeric stack joins values
+
+pre: ["r4.type in {stack, shared}", "r4.stack_offset=504",
+      "r4.shared_offset=0", "r4.shared_region_size=8", "r4.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    *(u64 *)(r10 - 8) = 42
+    *(u64 *)(r4 + 0) = 99
+    r0 = *(u64 *)(r10 - 8)
+
+post:
+  - r0.type=number
+  - r0.svalue=[42, 99]
+  - r0.uvalue=r0.svalue
+  - r4.type in {stack, shared}
+  - r4.stack_offset=504
+  - r4.stack_numeric_size=8
+  - r4.shared_offset=0
+  - r4.shared_region_size=8
+  - r4.uvalue=[1, 2147418112]
+  - r10.type=stack
+  - r10.stack_offset=512
+  - s[504...511].type=number
+  - s[504...511].svalue=r0.svalue
+  - s[504...511].uvalue=r0.svalue

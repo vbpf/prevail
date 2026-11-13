@@ -835,6 +835,19 @@ void EbpfTransformer::do_mem_store(const Mem& b, const LinearExpression& val_sva
             return;
         }
     }
+    if (!dom.state.may_have_type(b.access.basereg, T_STACK)) {
+        return;
+    }
+    // do_store_stack marks the written bytes numeric in the stack domain, which is shared by
+    // every type branch and not re-joined by join_over_types. When the base may also be a
+    // non-stack pointer, the stack is unchanged on that path, so join the pre-store stack back in.
+    std::optional<ArrayDomain> pre_stack;
+    for (const TypeEncoding type : dom.state.iterate_types(b.access.basereg)) {
+        if (type != T_STACK) {
+            pre_stack = stack;
+            break;
+        }
+    }
     dom.state = dom.state.join_over_types(b.access.basereg, [&](TypeToNumDomain& state, const TypeEncoding type) {
         if (type == T_STACK) {
             const auto base_addr = LinearExpression(reg_pack(b.access.basereg).stack_offset);
@@ -842,6 +855,9 @@ void EbpfTransformer::do_mem_store(const Mem& b, const LinearExpression& val_sva
         }
         // do nothing for any other type
     });
+    if (pre_stack) {
+        stack |= std::move(*pre_stack);
+    }
 }
 
 // Construct a Bin operation that does the main operation that a given Atomic operation does atomically.
@@ -965,25 +981,34 @@ void EbpfTransformer::operator()(const Call& call) {
             // Fixed-width writable pointer: the helper may store a number at the pointed-to location.
             const int width = param.kind == ArgSingle::Kind::PTR_TO_WRITABLE_LONG ? 8 : 4;
             Interval w{width};
+            bool only_stack = true;
+            std::optional<Interval> stack_addr;
             dom.state = dom.state.join_over_types(param.reg, [&](TypeToNumDomain& state, const TypeEncoding type) {
                 // Branch over possible pointer *types* for this register. This is separate from
                 // uncertainty over regions/offsets within one type (e.g., many shared regions).
                 if (type == T_STACK) {
                     const auto offset = primary_kind_variable_for_type(param.reg, type);
                     if (!offset.has_value()) {
+                        only_stack = false;
                         return;
                     }
                     const Interval addr = state.values.eval_interval(*offset);
+                    stack_addr = addr;
                     for (const DataKind kind : iterate_kinds()) {
                         stack.havoc(state.values, kind, addr, w, context.runtime().big_endian);
                     }
                     // iterate_kinds() covers the value kinds only; forget the type cells as well
                     // (see PTR_TO_WRITABLE_MEM below).
                     stack.havoc_type(state.types, addr, w);
-                    // Keep this scoped to stack-typed pointers only.
-                    stack.store_numbers(addr, w);
+                } else {
+                    only_stack = false;
                 }
             });
+            // As for PTR_TO_WRITABLE_MEM below: store_numbers mutates the shared stack domain,
+            // so it runs only when the pointer is definitely stack.
+            if (only_stack && stack_addr) {
+                stack.store_numbers(*stack_addr, w);
+            }
             break;
         }
         }

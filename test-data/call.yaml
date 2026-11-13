@@ -1330,3 +1330,50 @@ code:
 
 post:
   - r0.type=number
+---
+test-case: bpf_strtol with stack-or-shared result pointer does not mark stack numeric
+
+pre: ["r1.type=stack", "r1.stack_offset=488",
+      "r2.type=number", "r2.svalue=8", "r2.uvalue=8",
+      "r3.type=number", "r3.svalue=0", "r3.uvalue=0",
+      "r4.type in {stack, shared}", "r4.stack_offset=504",
+      "r4.shared_offset=0", "r4.shared_region_size=8", "r4.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=512",
+      "s[488...495].type=number"]
+
+code:
+  <start>: |
+    call 105; bpf_strtol
+    r0 = *(u64 *)(r10 - 8)
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "2: Invalid type (r0.type == number)"
+---
+test-case: bpf_strtol with stack-or-shared result pointer does not retype spilled pointer
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0",
+      "r4.type in {stack, shared}", "r4.stack_offset=504",
+      "r4.shared_offset=0", "r4.shared_region_size=8", "r4.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=512",
+      "s[488...495].type=number"]
+
+code:
+  <start>: |
+    *(u64 *)(r10 - 8) = r1
+    r1 = r10
+    r1 += -24
+    r2 = 8
+    r3 = 0
+    call 105; bpf_strtol
+    r0 = *(u64 *)(r10 - 8)
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "7: Invalid type (r0.type == number)"
