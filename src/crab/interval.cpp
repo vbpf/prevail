@@ -374,14 +374,14 @@ Interval Interval::shl(const Interval& x) const {
         if (k < 0) {
             return top();
         }
-        // Some crazy linux drivers generate shl instructions with huge shifts.
-        // We limit the number of times the loop is run to avoid wasting too much time on it.
-        if (k <= 128) {
-            Number factor = 1;
-            for (int i = 0; k > i; i++) {
-                factor *= 2;
-            }
-            return this->operator*(Interval{factor});
+        // Number is a checked 128-bit integer, so only form bound * 2^k when it is known to fit: a shift count
+        // below 64 and bounds that are 64-bit machine values. Callers mask the count, but a stored bound need not
+        // be representable: zone closure can derive a finite one outside [INT64_MIN, UINT64_MAX].
+        const auto is_machine_value = [](const Bound& bound) {
+            return bound.is_infinite() || bound.number()->fits_cast_to<int64_t>();
+        };
+        if (k < 64 && is_machine_value(_lb) && is_machine_value(_ub)) {
+            return this->operator*(Interval{Number{1} << k});
         }
     }
     return top();
@@ -397,8 +397,9 @@ Interval Interval::ashr(const Interval& x) const {
             return top();
         }
         // Some crazy linux drivers generate ashr instructions with huge shifts.
-        // We limit the number of times the loop is run to avoid wasting too much time on it.
-        if (k <= 128) {
+        // We limit the number of times the loop is run to avoid wasting too much time on it,
+        // and to keep the factor within the checked 128-bit Number.
+        if (k < 127) {
             Number factor = 1;
             for (int i = 0; k > i; i++) {
                 factor *= 2;

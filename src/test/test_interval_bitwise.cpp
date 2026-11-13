@@ -23,6 +23,28 @@ TEST_CASE("bitwise_and with non-singleton containing all-ones includes zero", "[
     REQUIRE(left.bitwise_and(anomalous_right) == Interval{0, 100});
 }
 
+TEST_CASE("shl gives up on operands whose product does not fit a Number", "[interval][bitwise]") {
+    const Number uint64_max{std::numeric_limits<uint64_t>::max()};
+    const Number int64_min{std::numeric_limits<int64_t>::min()};
+    const Number factor = Number{1} << 63;
+
+    // 64-bit machine values are shifted exactly, whatever the (masked) count.
+    REQUIRE(Interval{int64_min, uint64_max}.shl(Interval{63}) == Interval{int64_min * factor, uint64_max * factor});
+    REQUIRE(Interval{MINUS_INFINITY, uint64_max}.shl(Interval{63}) == Interval{MINUS_INFINITY, uint64_max * factor});
+
+    // Zone closure can derive a finite bound that is not a 64-bit machine value.
+    REQUIRE(Interval{MINUS_INFINITY, uint64_max + 100}.shl(Interval{63}) == Interval::top());
+    REQUIRE(Interval{int64_min - 1, PLUS_INFINITY}.shl(Interval{63}) == Interval::top());
+    REQUIRE(Interval{uint64_max + 1, uint64_max + 100}.shl(Interval{63}) == Interval::top());
+
+    // 2^k itself must fit as well.
+    REQUIRE(Interval{1}.shl(Interval{64}) == Interval::top());
+    REQUIRE(Interval{1}.shl(Interval{128}) == Interval::top());
+    REQUIRE(Interval{1}.ashr(Interval{126}) == Interval{0});
+    REQUIRE(Interval{1}.ashr(Interval{127}) == Interval::top());
+    REQUIRE(Interval{1}.ashr(Interval{128}) == Interval::top());
+}
+
 TEST_CASE("ExtendedNumber division flips an infinite bound for a negative divisor", "[extended_number][arithmetic]") {
     const auto pos_inf = ExtendedNumber::plus_infinity();
     const auto neg_inf = ExtendedNumber::minus_infinity();
