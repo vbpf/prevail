@@ -265,13 +265,13 @@ post:
   - r2.svalue=4294967295
   - r2.uvalue=4294967295
 ---
-test-case: movsx32 into the same register to 32 bits
+test-case: movsx16 into the same register to 32 bits
 
 pre: ["r2.svalue=-5", "r2.uvalue=18446744073709551611", "r2.type=number"]
 
 code:
   <start>: |
-    w2 s32= r2
+    w2 s16= r2
 
 post:
   - r2.type=number

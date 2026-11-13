@@ -370,7 +370,13 @@ TEST_CASE("disasm_marshal", "[disasm][marshal]") {
                         Bin::Op::SDIV, Bin::Op::SMOD, Bin::Op::MOVSX8, Bin::Op::MOVSX16, Bin::Op::MOVSX32};
             for (const auto op : ops) {
                 compare_marshal_unmarshal(Bin{.op = op, .dst = Reg{1}, .v = Reg{2}, .is64 = true});
-                compare_marshal_unmarshal(Bin{.op = op, .dst = Reg{1}, .v = Reg{2}, .is64 = false});
+                if (op == Bin::Op::MOVSX32) {
+                    // MOVSX32 is only defined for ALU64, not ALU (opcode 0xbc with offset 32 is not an instruction).
+                    check_marshal_unmarshal_fail(Bin{.op = op, .dst = Reg{1}, .v = Reg{2}, .is64 = false},
+                                                 "0: invalid offset for op 0xbc\n");
+                } else {
+                    compare_marshal_unmarshal(Bin{.op = op, .dst = Reg{1}, .v = Reg{2}, .is64 = false});
+                }
             }
         }
         SECTION("Imm src") {
@@ -825,6 +831,11 @@ TEST_CASE("fail unmarshal bad instructions", "[disasm][marshal]") {
 
     // Check any remaining variations after the last template.
     check_instruction_variations(instruction_template[template_count - 1], {});
+
+    // The offset variations above only probe the value after each template, so check explicitly that the
+    // ALU64-only MOVSX32 offset is rejected for the 32-bit register move (0xbc).
+    check_unmarshal_fail({.opcode = INST_CLS_ALU | INST_SRC_REG | INST_ALU_OP_MOV, .dst = 1, .src = 2, .offset = 32},
+                         "0: invalid offset for op 0xbc\n");
 }
 
 TEST_CASE("check unmarshal conformance groups", "[disasm][marshal]") {
