@@ -662,6 +662,11 @@ struct Unmarshaller {
                 if ((next.opcode & INST_CLS_MASK) != INST_CLS_ALU64) {
                     break;
                 }
+                // Both shifts are base64 instructions but the merged wX = rX is base32: without base64,
+                // keep the pair as is so that instruction-support validation still sees and rejects it.
+                if (info.platform && !info.platform->supports_group(bpf_conformance_groups_t::base64)) {
+                    break;
+                }
                 auto next_ins = makeAluOp(pc + 1, next);
                 if (next_ins == shift32(dst, Bin::Op::RSH)) {
                     new_ins = Bin{.op = Bin::Op::MOV, .dst = dst, .v = dst, .is64 = false};
