@@ -668,6 +668,19 @@ TEST_CASE("helper map-type restrictions cover every map the register may refer t
     REQUIRE_THAT(first_error(1, 40), ContainsSubstring("map type is not known for ringbuf_reserve"));
 }
 
+TEST_CASE("get_socket_cookie is unavailable where Linux binds the id to a struct sock variant", "[platform][tables]") {
+    // bpf_get_socket_ptr_cookie(sk)
+    for (const auto* section : {"sk_reuseport/x", "fentry/x", "fexit/x", "iter/x", "tp_btf/x", "lsm/x"}) {
+        CAPTURE(section);
+        REQUIRE_FALSE(g_ebpf_platform_linux.is_helper_usable(46, g_ebpf_platform_linux.get_program_type(section, "")));
+    }
+    // The ctx variant.
+    for (const auto* section : {"socket", "sockops", "cgroup/connect4", "cgroup/skb"}) {
+        CAPTURE(section);
+        REQUIRE(g_ebpf_platform_linux.is_helper_usable(46, g_ebpf_platform_linux.get_program_type(section, "")));
+    }
+}
+
 TEST_CASE("new Linux context descriptors keep expected layout constants", "[platform][tables]") {
     REQUIRE(g_sock_addr_descr.size == 72);
     REQUIRE(g_sock_addr_descr.data == -1);
