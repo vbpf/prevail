@@ -1737,6 +1737,25 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
     }
 }
 
+TEST_CASE("unmarshal line info that starts after the first instruction", "[unmarshal]") {
+    constexpr EbpfInst mov64_imm{.opcode = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM, .dst = 0, .imm = 0};
+    constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
+    ProgramInfo info{.platform = &g_ebpf_platform_linux,
+                     .type = g_ebpf_platform_linux.get_program_type("unspec", "unspec")};
+    // Only instruction 1 has a .BTF.ext record; the loader leaves instruction 0 without an entry.
+    info.line_info[1] = btf_line_info_t{"a.c", "return 0;", 7, 1};
+    VerifierOptions options{};
+    options.verbosity_opts.print_line_info = true;
+
+    const auto prog_or_error = unmarshal(RawProgram{"", "", 0, "", {mov64_imm, exit}, info}, options);
+    REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+    const auto& parsed = std::get<InstructionSeq>(prog_or_error);
+    REQUIRE(parsed.size() == 2);
+    REQUIRE_FALSE(std::get<2>(parsed[0]).has_value());
+    REQUIRE(std::get<2>(parsed[1]).has_value());
+    REQUIRE(std::get<2>(parsed[1])->line_number == 7);
+}
+
 #define TEST_LEGACY(dirname, filename, sectionname)                                                             \
     TEST_CASE("Unsupported instructions: " dirname "/" filename " " sectionname, "[unmarshal]") {               \
         ebpf_platform_t platform = g_ebpf_platform_linux;                                                       \

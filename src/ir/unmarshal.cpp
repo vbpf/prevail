@@ -696,8 +696,13 @@ struct Unmarshaller {
 
             std::optional<btf_line_info_t> current_line_info = {};
 
-            if (options.verbosity_opts.print_line_info && pc < info.line_info.size()) {
-                current_line_info = info.line_info.at(pc);
+            // line_info is keyed by instruction index and need not be dense: the loader only
+            // fills gaps after the first .BTF.ext record, so look the key up instead of
+            // comparing against the entry count.
+            if (options.verbosity_opts.print_line_info) {
+                if (const auto it = info.line_info.find(pc); it != info.line_info.end()) {
+                    current_line_info = it->second;
+                }
             }
 
             prog.emplace_back(Label(gsl::narrow<int>(pc)), new_ins, current_line_info);
