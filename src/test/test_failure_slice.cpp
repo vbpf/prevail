@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <sstream>
 
+#include "arith/dsl_syntax.hpp"
 #include "crab_utils/num_safety.hpp"
 #include "ebpf_verifier.hpp"
 
@@ -72,6 +73,25 @@ TEST_CASE("extract_instruction_deps for Mem load", "[failure_slice][deps]") {
     REQUIRE(deps.regs_written.contains(Reg{1}));
     REQUIRE(deps.regs_read.contains(Reg{10}));
     REQUIRE(deps.stack_read.contains(-8));
+}
+
+TEST_CASE("extract_instruction_deps for Mem load through a derived stack pointer", "[failure_slice][deps]") {
+    // r2 = *(r1 + 0), where r1 is a copy of r10 moved by pointer arithmetic
+    const Instruction ins = Mem{Deref{8, Reg{1}, 0}, Reg{2}, true};
+    const int total_stack_size = RuntimeConfig{}.total_stack_size();
+    const auto stack_read_at = [&](const Number& r10_delta) {
+        using namespace dsl_syntax;
+        const EbpfDomain dom = EbpfDomain::from_constraints({{reg_type(Reg{1}), TypeSet{T_STACK}}},
+                                                            {reg_pack(1).stack_offset == r10_delta + total_stack_size});
+        return extract_instruction_deps(ins, dom, total_stack_size).stack_read;
+    };
+
+    REQUIRE(stack_read_at(-16) == std::set<int64_t>{-16});
+    // Deps are collected before the access is checked, so the offset may be out of any machine integer's range.
+    constexpr Number int64_max{std::numeric_limits<int64_t>::max()};
+    REQUIRE(stack_read_at(int64_max).empty());
+    REQUIRE(stack_read_at(int64_max + int64_max).empty());
+    REQUIRE(stack_read_at(-int64_max - int64_max).empty());
 }
 
 TEST_CASE("extract_instruction_deps for Mem store", "[failure_slice][deps]") {
