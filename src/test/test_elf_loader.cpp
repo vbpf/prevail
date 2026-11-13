@@ -436,6 +436,81 @@ void patch_first_core_access_string_offset(const std::filesystem::path& path, co
     write_file_bytes(path, bytes);
 }
 
+// Rewrites, in place in the .BTF string table, the access string of the CO-RE relocation
+// record targeting instruction byte offset insn_off. The new string must not be longer than
+// the old one; the remainder of the old string is NUL-padded.
+void patch_core_access_string(const std::filesystem::path& path, const uint32_t insn_off,
+                              const std::string_view new_access_string) {
+    ELFIO::elfio reader;
+    if (!reader.load(path.string())) {
+        throw std::runtime_error("Failed to parse test ELF copy: " + path.string());
+    }
+    const auto* btf = reader.sections[".BTF"];
+    const auto* btf_ext = reader.sections[".BTF.ext"];
+    if (!btf || !btf_ext) {
+        throw std::runtime_error("Section .BTF or .BTF.ext not found in test ELF copy");
+    }
+
+    auto bytes = read_file_bytes(path);
+    const size_t btf_base = static_cast<size_t>(btf->get_offset());
+    const uint32_t btf_hdr_len = read_u32_le(bytes, btf_base + 4);
+    const uint32_t btf_str_off = read_u32_le(bytes, btf_base + 16);
+    const uint32_t btf_str_len = read_u32_le(bytes, btf_base + 20);
+    const size_t strings_start = btf_base + static_cast<size_t>(btf_hdr_len) + static_cast<size_t>(btf_str_off);
+    if (strings_start > bytes.size() || btf_str_len > bytes.size() - strings_start) {
+        throw std::runtime_error(".BTF string table out of file bounds in test ELF copy");
+    }
+
+    const size_t ext_base = static_cast<size_t>(btf_ext->get_offset());
+    const uint32_t hdr_len = read_u32_le(bytes, ext_base + 4);
+    const uint32_t core_relo_off = read_u32_le(bytes, ext_base + 24);
+    const uint32_t core_relo_len = read_u32_le(bytes, ext_base + 28);
+    const size_t core_start = ext_base + static_cast<size_t>(hdr_len) + static_cast<size_t>(core_relo_off);
+    const size_t core_end = core_start + static_cast<size_t>(core_relo_len);
+    if (core_end > bytes.size() || core_end < core_start || core_end - core_start < sizeof(uint32_t)) {
+        throw std::runtime_error("Invalid core_relo bounds in test ELF copy");
+    }
+
+    const uint32_t record_size = read_u32_le(bytes, core_start);
+    size_t cursor = core_start + sizeof(uint32_t);
+    while (cursor + 8 <= core_end) {
+        const uint32_t num_info = read_u32_le(bytes, cursor + 4);
+        cursor += 8;
+        const size_t records_size = static_cast<size_t>(num_info) * static_cast<size_t>(record_size);
+        if (records_size > core_end - cursor) {
+            throw std::runtime_error("Invalid CO-RE records bounds in test ELF copy");
+        }
+
+        for (uint32_t i = 0; i < num_info; ++i) {
+            const size_t record = cursor + static_cast<size_t>(i) * record_size;
+            if (read_u32_le(bytes, record) != insn_off) {
+                continue;
+            }
+            // bpf_core_relo.access_str_off is the third u32 field in a relocation record.
+            const uint32_t access_str_off = read_u32_le(bytes, record + 8);
+            if (access_str_off >= btf_str_len) {
+                throw std::runtime_error("CO-RE access string offset out of bounds in test ELF copy");
+            }
+            const size_t str_start = strings_start + access_str_off;
+            const auto str_begin = bytes.begin() + static_cast<std::ptrdiff_t>(str_start);
+            const auto strings_end = bytes.begin() + static_cast<std::ptrdiff_t>(strings_start + btf_str_len);
+            const auto str_end = std::find(str_begin, strings_end, uint8_t{0});
+            const size_t old_length = static_cast<size_t>(str_end - str_begin);
+            if (new_access_string.size() > old_length) {
+                throw std::runtime_error("Replacement CO-RE access string is longer than the original");
+            }
+            std::memset(bytes.data() + str_start, 0, old_length);
+            std::memcpy(bytes.data() + str_start, new_access_string.data(), new_access_string.size());
+            write_file_bytes(path, bytes);
+            return;
+        }
+
+        cursor += records_size;
+    }
+
+    throw std::runtime_error("No CO-RE relocation record for instruction offset " + std::to_string(insn_off));
+}
+
 void patch_first_relocation_symbol_index(const std::filesystem::path& path, const std::string& section_name,
                                          const uint32_t new_symbol_index) {
     const auto info = get_relocation_section_info(path, section_name);
@@ -876,6 +951,40 @@ TEST_CASE("CO-RE access string offset out-of-bounds fails cleanly", "[elf][core]
 
     REQUIRE_THROWS_WITH((ElfObject{elf.path().string(), {}, &g_ebpf_platform_linux}.get_programs("fentry/tcp_close")),
                         Catch::Matchers::ContainsSubstring("Unsupported or invalid CO-RE/BTF relocation data"));
+}
+
+// The first accessor of a CO-RE access string indexes the root type as an array (ptr[N]),
+// contributing N * sizeof(root) bytes; it is not a member index.
+TEST_CASE("CO-RE field relocation honors a non-zero root accessor", "[elf][core]") {
+
+    constexpr auto sample = "ebpf-samples/cilium-examples/tcprtt_bpf_bpfel.o";
+    constexpr auto section = "fentry/tcp_close";
+
+    // Instruction 1 loads via "0:0:2" on a 16-byte struct sock (member offset 12); instruction 22 loads via
+    // "0:0" on a 4-byte struct tcp_sock (member offset 0).
+    const auto original = ElfObject{sample, {}, &g_ebpf_platform_linux}.get_programs(section);
+    REQUIRE(original.size() == 1);
+    REQUIRE(original[0].prog.size() > 22);
+    REQUIRE(original[0].prog[1].offset == 12);
+    REQUIRE(original[0].prog[22].offset == 0);
+
+    SECTION("root index followed by member indices") {
+        TempElfFile elf{sample, "core-root-index-member"};
+        patch_core_access_string(elf.path(), 1 * sizeof(EbpfInst), "1:0:2");
+
+        const auto progs = ElfObject{elf.path().string(), {}, &g_ebpf_platform_linux}.get_programs(section);
+        REQUIRE(progs.size() == 1);
+        REQUIRE(progs[0].prog[1].offset == 16 + 12);
+    }
+
+    SECTION("root index alone") {
+        TempElfFile elf{sample, "core-root-index-only"};
+        patch_core_access_string(elf.path(), 22 * sizeof(EbpfInst), "3");
+
+        const auto progs = ElfObject{elf.path().string(), {}, &g_ebpf_platform_linux}.get_programs(section);
+        REQUIRE(progs.size() == 1);
+        REQUIRE(progs[0].prog[22].offset == 3 * 4);
+    }
 }
 
 TEST_CASE("ELF loader rejects relocation entries with invalid symbol index", "[elf][hardening]") {

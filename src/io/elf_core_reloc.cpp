@@ -167,11 +167,23 @@ std::vector<uint32_t> parse_core_access_string(const std::string_view s) {
 core_field_resolution_t resolve_core_field(const libbtf::btf_type_data& btf_data, const uint32_t type_id,
                                            const std::string_view access_string) {
     auto indices = parse_core_access_string(access_string);
-    // Clang/libbpf encode root type with a leading "0" accessor.
-    if (!indices.empty() && indices.front() == 0) {
+    core_field_resolution_t result{strip_type_modifiers(btf_data, type_id), 0, std::nullopt};
+
+    // The first accessor is not a member index: it indexes the root type as an array element
+    // (ptr[N], contributing N * sizeof(root) bytes), and Clang emits 0 unless the source
+    // indexes the pointer. Member and array indices start with the second accessor.
+    if (!indices.empty()) {
+        if (const uint32_t root_index = indices.front(); root_index != 0) {
+            const uint64_t root_size = btf_data.get_size(result.type_id);
+            const uint64_t root_offset_bytes = static_cast<uint64_t>(root_index) * root_size;
+            if (root_size == 0 || root_offset_bytes > std::numeric_limits<int32_t>::max()) {
+                throw UnmarshalError("CO-RE: root index " + std::to_string(root_index) +
+                                     " out of range for access path " + std::string(access_string));
+            }
+            result.offset_bits = root_offset_bytes * 8;
+        }
         indices.erase(indices.begin());
     }
-    core_field_resolution_t result{type_id, 0, std::nullopt};
     // Like libbpf's is_flex_arr, only a zero-length array reached through a
     // named final struct/union member is flexible. This is a property of this
     // access step, not of the array type: array elements must not inherit it.
