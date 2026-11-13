@@ -83,7 +83,7 @@ class EbpfDomain final {
     /// values. Inexpensive to compute (~100 constraints); not cached.
     static EbpfDomain calculate_constant_limits(const AnalysisContext& context,
                                                 std::span<const Variable> loop_counters);
-    /// Maximum upper bound across the given loop counter variables in this
+    /// Upper bound on the sum of the given loop counter variables in this
     /// domain. The caller supplies the counter set (per-program loop heads),
     /// not the registry — see calculate_constant_limits for the rationale.
     ExtendedNumber get_loop_count_upper_bound(std::span<const Variable> loop_counters) const;

@@ -143,6 +143,7 @@ struct FailureSlice {
 struct AnalysisResult {
     std::map<Label, InvariantMapPair> invariants;
     bool failed = false;
+    /// Upper bound on the loop iterations of a whole run, all loops taken together.
     int max_loop_count{};
     int max_call_depth{};
     Interval exit_value = Interval::top();

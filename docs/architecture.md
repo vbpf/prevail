@@ -60,7 +60,7 @@ The analysis produces:
 - **Invariants**: Pre/post states at each program point
 - **Errors**: List of safety violations
 - **Exit value**: Range of possible return values in R0
-- **Loop bounds**: Maximum observed loop iterations
+- **Loop bounds**: Upper bound on the loop iterations of a run, summed over all loops
 
 ## Component Details
 
