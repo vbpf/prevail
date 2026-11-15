@@ -123,29 +123,45 @@ static int create_map_linux(uint32_t map_type, uint32_t key_size, uint32_t value
 // the preprocessor treat a prefix list as one macro argument.
 #define COMMA ,
 
+// Allows LD_ABS/LD_IND, for a program type whose context is an sk_buff (may_access_skb() in
+// kernel/bpf/verifier.c).
+static EbpfProgramType with_legacy_packet_access(EbpfProgramType type) {
+    type.legacy_packet_access = true;
+    return type;
+}
+
+// Lets a program type read the packet but not write it (may_access_direct_pkt_data() in
+// kernel/bpf/verifier.c).
+static EbpfProgramType with_read_only_packet(EbpfProgramType type) {
+    type.packet_read_only = true;
+    return type;
+}
+
 const EbpfProgramType linux_socket_filter_program_type =
-    PTYPE("socket_filter", &g_socket_filter_descr, BPF_PROG_TYPE_SOCKET_FILTER, {"socket"});
+    with_legacy_packet_access(PTYPE("socket_filter", &g_socket_filter_descr, BPF_PROG_TYPE_SOCKET_FILTER, {"socket"}));
 
 const EbpfProgramType linux_xdp_program_type = PTYPE_READONLY_CTX("xdp", &g_xdp_descr, BPF_PROG_TYPE_XDP, {"xdp"});
 
-const EbpfProgramType cilium_lxc_program_type = PTYPE("lxc", &g_sched_descr, BPF_PROG_TYPE_SOCKET_FILTER, {});
+// cilium's name for a sched_cls program.
+const EbpfProgramType cilium_lxc_program_type =
+    with_legacy_packet_access(PTYPE("lxc", &g_sched_descr, BPF_PROG_TYPE_SOCKET_FILTER, {}));
 
 const std::vector<EbpfProgramType> linux_program_types = {
     PTYPE("unspec", &g_unspec_descr, BPF_PROG_TYPE_UNSPEC, {}),
     linux_socket_filter_program_type,
     linux_xdp_program_type,
     PTYPE_READONLY_CTX("cgroup_device", &g_cgroup_dev_descr, BPF_PROG_TYPE_CGROUP_DEVICE, {"cgroup/dev"}),
-    PTYPE("cgroup_skb", &g_socket_filter_descr, BPF_PROG_TYPE_CGROUP_SKB, {"cgroup/skb"}),
+    with_read_only_packet(PTYPE("cgroup_skb", &g_socket_filter_descr, BPF_PROG_TYPE_CGROUP_SKB, {"cgroup/skb"})),
     PTYPE("cgroup_sock", &g_cgroup_sock_descr, BPF_PROG_TYPE_CGROUP_SOCK, {"cgroup/sock"}),
     PTYPE_PRIVILEGED_READONLY_CTX("kprobe", &g_kprobe_descr, BPF_PROG_TYPE_KPROBE, {"kprobe/" COMMA "kretprobe/"}),
-    PTYPE("lwt_in", &g_lwt_inout_descr, BPF_PROG_TYPE_LWT_IN, {"lwt_in"}),
-    PTYPE("lwt_out", &g_lwt_inout_descr, BPF_PROG_TYPE_LWT_OUT, {"lwt_out"}),
+    with_read_only_packet(PTYPE("lwt_in", &g_lwt_inout_descr, BPF_PROG_TYPE_LWT_IN, {"lwt_in"})),
+    with_read_only_packet(PTYPE("lwt_out", &g_lwt_inout_descr, BPF_PROG_TYPE_LWT_OUT, {"lwt_out"})),
     PTYPE("lwt_xmit", &g_lwt_xmit_descr, BPF_PROG_TYPE_LWT_XMIT, {"lwt_xmit"}),
     PTYPE_READONLY_CTX("perf_event", &g_perf_event_descr, BPF_PROG_TYPE_PERF_EVENT,
                        {"perf_section" COMMA "perf_event"}),
-    PTYPE("sched_act", &g_sched_descr, BPF_PROG_TYPE_SCHED_ACT, {"action"}),
+    with_legacy_packet_access(PTYPE("sched_act", &g_sched_descr, BPF_PROG_TYPE_SCHED_ACT, {"action"})),
     // libbpf also names tc programs "tc", "tc/..." and "tcx/...".
-    PTYPE("sched_cls", &g_sched_descr, BPF_PROG_TYPE_SCHED_CLS, {"classifier" COMMA "tc"}),
+    with_legacy_packet_access(PTYPE("sched_cls", &g_sched_descr, BPF_PROG_TYPE_SCHED_CLS, {"classifier" COMMA "tc"})),
     PTYPE("sk_skb", &g_sk_skb_descr, BPF_PROG_TYPE_SK_SKB, {"sk_skb"}),
     PTYPE("sock_ops", &g_sock_ops_descr, BPF_PROG_TYPE_SOCK_OPS, {"sockops"}),
     PTYPE_READONLY_CTX("tracepoint", &g_tracepoint_descr, BPF_PROG_TYPE_TRACEPOINT, {"tracepoint/"}),
@@ -163,10 +179,12 @@ const std::vector<EbpfProgramType> linux_program_types = {
     PTYPE("cgroup_sock_addr", &g_sock_addr_descr, BPF_PROG_TYPE_CGROUP_SOCK_ADDR,
           {"cgroup/bind" COMMA "cgroup/post_bind" COMMA "cgroup/connect" COMMA "cgroup/sendmsg" COMMA
            "cgroup/recvmsg" COMMA "cgroup/getpeername" COMMA "cgroup/getsockname"}),
-    PTYPE("lwt_seg6local", &g_lwt_xmit_descr, BPF_PROG_TYPE_LWT_SEG6LOCAL, {"lwt_seg6local"}),
+    with_read_only_packet(PTYPE("lwt_seg6local", &g_lwt_xmit_descr, BPF_PROG_TYPE_LWT_SEG6LOCAL, {"lwt_seg6local"})),
     PTYPE_READONLY_CTX("lirc_mode2", &g_lirc_mode2_descr, BPF_PROG_TYPE_LIRC_MODE2, {"lirc_mode2"}),
-    PTYPE_READONLY_CTX("sk_reuseport", &g_sk_reuseport_descr, BPF_PROG_TYPE_SK_REUSEPORT, {"sk_reuseport/"}),
-    PTYPE_READONLY_CTX("flow_dissector", &g_flow_dissector_descr, BPF_PROG_TYPE_FLOW_DISSECTOR, {"flow_dissector"}),
+    with_read_only_packet(
+        PTYPE_READONLY_CTX("sk_reuseport", &g_sk_reuseport_descr, BPF_PROG_TYPE_SK_REUSEPORT, {"sk_reuseport/"})),
+    with_read_only_packet(PTYPE_READONLY_CTX("flow_dissector", &g_flow_dissector_descr, BPF_PROG_TYPE_FLOW_DISSECTOR,
+                                             {"flow_dissector"})),
     PTYPE("cgroup_sysctl", &g_cgroup_sysctl_descr, BPF_PROG_TYPE_CGROUP_SYSCTL, {"cgroup/sysctl"}),
     PTYPE("ext", &g_unspec_descr, BPF_PROG_TYPE_EXT, {"freplace/"}),
     // The argument array is where the trampoline saved the traced function's registers.

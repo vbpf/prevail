@@ -114,7 +114,9 @@ static EbpfProgramType make_program_type(const string& name, const ebpf_ctx_desc
                            .ctx_descriptor = ctx_descriptor,
                            .platform_specific_data = 0,
                            .section_prefixes = {},
-                           .is_privileged = false};
+                           .is_privileged = false,
+                           // The test declares the context, so the packet group alone decides LD_ABS/LD_IND.
+                           .legacy_packet_access = true};
 }
 
 // Parse a textual invariant and lift it to an EbpfDomain. The shared parsing core
