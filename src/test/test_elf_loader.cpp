@@ -2711,3 +2711,80 @@ TEST_CASE("CO-RE type id relocation keeps modifiers and patches both LDDW slots"
     CHECK(prog[2].imm == struct_id);
     CHECK(prog[3].imm == 0);
 }
+
+// A static map is referenced through the unnamed section symbol of its map section. The loader cannot resolve that to a
+// map, and must not leave the LDDW's placeholder immediate to be analyzed as a constant. The same object referencing
+// the map through its named symbol loads.
+TEST_CASE("ELF loader rejects a map reference through a section symbol", "[elf][hardening]") {
+    constexpr uint8_t MOV64_IMM = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
+    // One legacy map record: hash map, key_size 4, value_size 8, max_entries 16.
+    constexpr uint32_t map_record[5] = {1, 4, 8, 16, 0};
+
+    const auto build_object = [&](const bool reference_map_by_name) {
+        ELFIO::elfio writer;
+        writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+        writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+        writer.set_type(ELFIO::ET_REL);
+        writer.set_machine(ELFIO::EM_BPF);
+
+        const auto add_section = [&](const std::string& name, const ELFIO::Elf_Xword flags, const void* data,
+                                     const size_t size) {
+            ELFIO::section* sec = writer.sections.add(name);
+            sec->set_type(ELFIO::SHT_PROGBITS);
+            sec->set_flags(flags);
+            sec->set_addr_align(8);
+            sec->set_data(static_cast<const char*>(data), size);
+            return sec;
+        };
+        ELFIO::section* maps_sec =
+            add_section("maps", ELFIO::SHF_ALLOC | ELFIO::SHF_WRITE, map_record, sizeof(map_record));
+        // prog: r1 = <maps + 0> ll; r0 = 0; exit
+        const std::vector<EbpfInst> prog_insts{EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 1}, EbpfInst{},
+                                               EbpfInst{.opcode = MOV64_IMM}, EbpfInst{.opcode = INST_OP_EXIT}};
+        ELFIO::section* socket_sec = add_section("socket", ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR, prog_insts.data(),
+                                                 prog_insts.size() * sizeof(EbpfInst));
+
+        ELFIO::section* str_sec = writer.sections.add(".strtab");
+        str_sec->set_type(ELFIO::SHT_STRTAB);
+        ELFIO::string_section_accessor str_writer(str_sec);
+
+        ELFIO::section* sym_sec = writer.sections.add(".symtab");
+        sym_sec->set_type(ELFIO::SHT_SYMTAB);
+        sym_sec->set_addr_align(8);
+        sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+        sym_sec->set_link(str_sec->get_index());
+        sym_sec->set_info(2); // First global symbol.
+        ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+
+        const auto maps_section_sym =
+            sym_writer.add_symbol(str_writer, "", 0, 0, ELFIO::STB_LOCAL, ELFIO::STT_SECTION, 0, maps_sec->get_index());
+        const auto map_sym = sym_writer.add_symbol(str_writer, "m", 0, sizeof(map_record), ELFIO::STB_GLOBAL,
+                                                   ELFIO::STT_OBJECT, 0, maps_sec->get_index());
+        sym_writer.add_symbol(str_writer, "prog", 0, socket_sec->get_size(), ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0,
+                              socket_sec->get_index());
+
+        ELFIO::section* rel_sec = writer.sections.add(".relsocket");
+        rel_sec->set_type(ELFIO::SHT_REL);
+        rel_sec->set_addr_align(8);
+        rel_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_REL));
+        rel_sec->set_link(sym_sec->get_index());
+        rel_sec->set_info(socket_sec->get_index());
+        ELFIO::relocation_section_accessor(writer, rel_sec)
+            .add_entry(0, reference_map_by_name ? map_sym : maps_section_sym, R_BPF_64_64_TYPE);
+
+        std::ostringstream out_stream;
+        writer.save(out_stream);
+        return out_stream.str();
+    };
+
+    VerifierOptions options{};
+    {
+        std::istringstream in_stream(build_object(true));
+        const auto programs = read_elf(in_stream, "memory", "socket", "", options, &g_ebpf_platform_linux);
+        REQUIRE(programs.size() == 1);
+        REQUIRE(programs[0].prog[0].src == INST_LD_MODE_MAP_FD);
+    }
+    std::istringstream in_stream(build_object(false));
+    REQUIRE_THROWS_WITH(read_elf(in_stream, "memory", "socket", "", options, &g_ebpf_platform_linux),
+                        Catch::Matchers::ContainsSubstring("Unresolved symbols found"));
+}
