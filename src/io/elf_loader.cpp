@@ -1,5 +1,6 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
+#include <algorithm>
 #include <cerrno>
 #include <cstring>
 #include <fstream>
@@ -259,13 +260,26 @@ const std::vector<RawProgram>& ElfObject::get_programs(const std::string& desire
         return it->second;
     }
 
+    // A section that failed to load is never skipped silently: it fails a request for every program, and a request
+    // for a program it holds.
+    const auto section_holds = [&](const std::string& section_name) {
+        const auto indices = state_->section_program_indices.find(section_name);
+        return indices != state_->section_program_indices.end() &&
+               std::ranges::any_of(indices->second, [&](const size_t index) {
+                   return state_->programs[index].function_name == desired_program;
+               });
+    };
     std::vector<RawProgram> all_programs;
     for (const auto& section_name : state_->section_order) {
         state_->load_section(section_name);
         const auto& cache_entry = state_->section_cache.at(section_name);
-        if (cache_entry.valid) {
-            all_programs.insert(all_programs.end(), cache_entry.programs.begin(), cache_entry.programs.end());
+        if (!cache_entry.valid) {
+            if (desired_program.empty() || section_holds(section_name)) {
+                throw UnmarshalError("Section '" + section_name + "' failed to load: " + cache_entry.error);
+            }
+            continue;
         }
+        all_programs.insert(all_programs.end(), cache_entry.programs.begin(), cache_entry.programs.end());
     }
     if (all_programs.empty()) {
         throw UnmarshalError("No executable sections");

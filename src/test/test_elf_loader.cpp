@@ -1266,7 +1266,12 @@ TEST_CASE("ELF loader keeps load errors local to their section", "[elf]") {
     REQUIRE_THROWS_WITH(elf.get_programs("fentry/bpf_fentry_test2"),
                         Catch::Matchers::ContainsSubstring("Unresolved symbols found."));
     REQUIRE(elf.get_programs("tp_btf/task_newtask").size() == 2);
-    REQUIRE(elf.get_programs().size() == 2);
+    // Without a section, a program of a section that loaded can still be selected by name, but a section that failed
+    // is not skipped: it fails a request for all programs, and one for a program it holds.
+    REQUIRE(elf.get_programs("", "call_weak_kfunc").size() == 1);
+    REQUIRE_THROWS_WITH(elf.get_programs("", "call_kfunc"),
+                        Catch::Matchers::ContainsSubstring("Section 'tc' failed to load: Unresolved symbols found."));
+    REQUIRE_THROWS_WITH(elf.get_programs(), Catch::Matchers::ContainsSubstring("Section 'tc' failed to load"));
 }
 
 TEST_CASE("ELF loader gives BTF maps declared with the same type distinct fds", "[elf]") {
