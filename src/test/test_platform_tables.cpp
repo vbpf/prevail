@@ -202,10 +202,10 @@ TEST_CASE("stores through a read-only context are rejected", "[platform][tables]
 
 TEST_CASE("linux map-type table covers post-cpumap map ids", "[platform][tables]") {
     const std::array<MapTypeExpectation, 17> expectations{{
-        {17, "XSKMAP", false, EbpfMapValueType::ANY},
+        {17, "XSKMAP", true, EbpfMapValueType::ANY},
         {18, "SOCKHASH", false, EbpfMapValueType::ANY},
         {19, "CGROUP_STORAGE", false, EbpfMapValueType::ANY},
-        {20, "REUSEPORT_SOCKARRAY", false, EbpfMapValueType::ANY},
+        {20, "REUSEPORT_SOCKARRAY", true, EbpfMapValueType::ANY},
         {21, "PERCPU_CGROUP_STORAGE", false, EbpfMapValueType::ANY},
         {22, "QUEUE", false, EbpfMapValueType::ANY},
         {23, "STACK", false, EbpfMapValueType::ANY},
@@ -311,6 +311,52 @@ TEST_CASE("mock map fds are not shared between maps of different types", "[platf
     REQUIRE(descriptors.size() == 3);
     REQUIRE(descriptors[0].original_fd != descriptors[1].original_fd);
     REQUIRE(g_ebpf_platform_linux.get_map_descriptor(descriptors[1].original_fd, descriptors).type == 15);
+}
+
+TEST_CASE("strict mode bounds the index of every map indexed by a u32 below max_entries", "[platform][verify]") {
+    // r0 = map_lookup_elem(map, &key) with key = index, for a map of 4 entries.
+    const auto lookup = [](const uint32_t map_type, const uint64_t index, const bool strict) {
+        constexpr int fd = 1;
+        const EbpfMapDescriptor map{
+            .original_fd = fd, .type = map_type, .key_size = 4, .value_size = 4, .max_entries = 4};
+        const ProgramInfo info{.platform = &g_ebpf_platform_linux,
+                               .map_descriptors = Cow<std::vector<EbpfMapDescriptor>>::make(std::vector{map}),
+                               .type = g_ebpf_platform_linux.get_program_type("xdp", "")};
+        const auto at = [](const int label, Instruction ins) {
+            return LabeledInstruction{Label{label}, std::move(ins), std::nullopt};
+        };
+        const InstructionSeq seq{
+            at(0, Bin{Bin::Op::MOV, Reg{1}, Imm{index}, true, false}),
+            at(1, Mem{Deref{4, Reg{10}, -4}, Reg{1}, false, false}),
+            at(2, Bin{Bin::Op::MOV, Reg{2}, Reg{10}, true, false}),
+            at(3, Bin{Bin::Op::SUB, Reg{2}, Imm{4}, true, false}),
+            at(4, LoadMapFd{Reg{1}, fd}),
+            at(5, Call{.func = 1, .kind = CallKind::helper}),
+            at(6, Bin{Bin::Op::MOV, Reg{0}, Imm{0}, true, false}),
+            at(7, Exit{}),
+        };
+        VerifierOptions options{};
+        options.runtime.strict = strict;
+        const AnalysisResult result = analyze(Program::from_sequence(seq, info, options), options);
+        const auto error = result.find_first_error();
+        return error ? to_string(*error) : std::string{};
+    };
+    using Catch::Matchers::ContainsSubstring;
+
+    // ARRAY, DEVMAP, SOCKMAP, CPUMAP, XSKMAP, REUSEPORT_SOCKARRAY.
+    for (const uint32_t map_type : {2u, 14u, 15u, 16u, 17u, 20u}) {
+        CAPTURE(map_type);
+        REQUIRE(g_ebpf_platform_linux.get_map_type(map_type).is_array);
+        REQUIRE_THAT(lookup(map_type, 1000, true), ContainsSubstring("Array index overflow"));
+        REQUIRE_THAT(lookup(map_type, 3, true), !ContainsSubstring("Array index"));
+        REQUIRE_THAT(lookup(map_type, 1000, false), !ContainsSubstring("Array index"));
+    }
+    // SOCKHASH and DEVMAP_HASH take arbitrary keys.
+    for (const uint32_t map_type : {18u, 25u}) {
+        CAPTURE(map_type);
+        REQUIRE_FALSE(g_ebpf_platform_linux.get_map_type(map_type).is_array);
+        REQUIRE_THAT(lookup(map_type, 1000, true), !ContainsSubstring("Array index"));
+    }
 }
 
 TEST_CASE("map_lookup_elem result is only a writable map value for plain-value maps", "[platform][verify]") {
