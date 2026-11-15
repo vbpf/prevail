@@ -541,13 +541,15 @@ void ProgramReader::process_core_relocations(const libbtf::btf_type_data& btf_da
                 read_struct_at<bpf_core_relo>(btf_ext_data, btf_ext_size, record_offset, "CO-RE relocation");
             const auto access_string = btf_string_at(strings, reloc.access_str_off, "CO-RE access string");
 
+            // This runs before linking, when the programs of a section do not overlap; linking then copies the
+            // patched code into the callers. Every program that covers the instruction is patched nonetheless,
+            // so that no copy would keep its placeholder if they did.
             bool applied = false;
             for (RawProgram* prog : prog_it->second) {
                 const size_t prog_size = prog->prog.size() * sizeof(EbpfInst);
                 if (reloc.insn_off >= prog->insn_off && reloc.insn_off < prog->insn_off + prog_size) {
                     apply_core_relocation(*prog, reloc, access_string, btf_data);
                     applied = true;
-                    break;
                 }
             }
 

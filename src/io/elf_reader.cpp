@@ -1127,9 +1127,15 @@ void ProgramReader::read_programs(const bool all_sections) {
     build_ksym_function_resolution_cache();
     build_relocation_section_cache();
 
+    // .BTF.ext attributes CO-RE relocations and line info to a section by name alone, so two program sections sharing
+    // a name cannot be told apart there.
+    std::set<std::string> program_section_names;
     for (const auto& sec : reader.sections) {
         if (!(sec->get_flags() & ELFIO::SHF_EXECINSTR) || !sec->get_size() || !sec->get_data()) {
             continue;
+        }
+        if (!program_section_names.insert(sec->get_name()).second) {
+            throw UnmarshalError("Duplicate executable section name " + abbreviate_name(sec->get_name()));
         }
         const auto& sec_name = sec->get_name();
         const auto prog_type = parse_params.platform->get_program_type(sec_name, parse_params.path);
