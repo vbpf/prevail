@@ -1425,8 +1425,8 @@ TEST_CASE("read_elf succeeds with istream and non-file path", "[elf]") {
 }
 
 // Verify that the ELF loader rejects FUNC symbols at non-instruction-aligned offsets.
-// Such a symbol would cause compute_reachable_program_span to inflate the extracted byte
-// span via truncating integer division, leading to a read past the section data buffer.
+// Such a symbol would split the section at a byte offset that is not an instruction boundary,
+// so that the extracted byte span would run past the section data buffer.
 TEST_CASE("ELF loader rejects non-instruction-aligned FUNC symbol", "[elf][hardening]") {
 
     // Build a minimal ELF with an executable section and a FUNC symbol at an unaligned offset.
@@ -1439,8 +1439,8 @@ TEST_CASE("ELF loader rejects non-instruction-aligned FUNC symbol", "[elf][harde
     writer.set_machine(ELFIO::EM_BPF);
 
     // Create a .text section with 32 BPF "exit" instructions (256 bytes).
-    // This ensures the section is big enough that the second iteration's
-    // compute_reachable_program_span can return an aligned-but-overflowing span.
+    // This ensures the section is big enough that the second iteration starts
+    // at the unaligned boundary.
     ELFIO::section* text_sec = writer.sections.add(".text");
     text_sec->set_type(ELFIO::SHT_PROGBITS);
     text_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
@@ -1593,10 +1593,8 @@ TEST_CASE("ELF loader does not cross-apply relocations between same-named progra
     // is a local call to subprogram "sub", carrying a real .rel.text2 relocation with
     // source_offset 5. Under the bug this relocation matches section A's "shared" by
     // name and is applied at index 5 of A's 2-instruction vector (inserting "sub" and
-    // then writing past the end of the grown vector). A recorded relocation entry is
-    // required: the synthetic local-call path would not record source_offset 5 here,
-    // because compute_reachable_program_span already pulls "sub" into this program's
-    // span and enqueue_synthetic_local_calls skips targets inside the program.
+    // then writing past the end of the grown vector). The relocation entry is what
+    // carries the cross-applied source_offset 5.
     ELFIO::section* text_b = writer.sections.add(".text2");
     text_b->set_type(ELFIO::SHT_PROGBITS);
     text_b->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
@@ -3098,4 +3096,124 @@ TEST_CASE("ELF loader finds the symbol and relocation tables by their headers", 
     std::istringstream two_tables(TableLookupObject{.second_relocation_table = true}.build());
     REQUIRE_THROWS_WITH(read_elf(two_tables, "memory", "xdp", "", VerifierOptions{}, &g_ebpf_platform_linux),
                         Catch::Matchers::ContainsSubstring("Multiple relocation sections for section xdp"));
+}
+
+namespace {
+/// A local call without a relocation entry, to the instruction imm + 1 ahead of it in the section.
+constexpr EbpfInst test_call_local(const int32_t imm) {
+    return {.opcode = INST_OP_CALL, .src = INST_CALL_LOCAL, .imm = imm};
+}
+
+constexpr EbpfInst test_mov_r0(const int32_t imm) {
+    return {.opcode = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM, .imm = imm};
+}
+} // namespace
+
+// A program is the code from its FUNC symbol to the next one, whatever its control flow reaches. Extending it over
+// the code its calls and jumps reach stores N functions that each call (or run into) a later one as N overlapping
+// copies of the rest of the section, which is quadratic in the size of the object. A local call brings in its
+// callee alone, whether the callee lies ahead of the caller or behind it.
+TEST_CASE("ELF loader does not extend a program past the next FUNC symbol", "[elf][hardening]") {
+    const TestObjectBuilder builder{
+        .sections =
+            {
+                {.name = ".text",
+                 .insts = {test_call_local(4), test_exit,                   // f0 calls f2
+                           test_mov_r0_0, test_mov_r0_0, test_exit,         // f1
+                           test_mov_r0_0, test_exit,                        // f2
+                           test_mov_r0_0, test_call_local(-4), test_exit}}, // f3 calls f2
+            },
+        .symbols = {{.name = "f0", .section = 0, .value = 0},
+                    {.name = "f1", .section = 0, .value = 2 * sizeof(EbpfInst)},
+                    {.name = "f2", .section = 0, .value = 5 * sizeof(EbpfInst)},
+                    {.name = "f3", .section = 0, .value = 7 * sizeof(EbpfInst)}},
+    };
+    const auto programs = read_test_object(builder.build(), ".text");
+    REQUIRE(programs.size() == 4);
+    REQUIRE(programs[0].prog == std::vector{test_call_local(1), test_exit, test_mov_r0_0, test_exit});
+    REQUIRE(programs[1].prog == std::vector{test_mov_r0_0, test_mov_r0_0, test_exit});
+    REQUIRE(programs[2].prog == std::vector{test_mov_r0_0, test_exit});
+    REQUIRE(programs[3].prog == std::vector{test_mov_r0_0, test_call_local(1), test_exit, test_mov_r0_0, test_exit});
+}
+
+// Since a program ends at the next FUNC symbol, control may leave it only by exit or by a call, as Linux requires of
+// each subprogram. Otherwise it would run into whatever code linking places after it, which is a callee rather than
+// the code that follows in the section.
+TEST_CASE("ELF loader rejects control flow that runs out of a function", "[elf][hardening]") {
+    const EbpfInst call_sub{.opcode = INST_OP_CALL, .src = INST_CALL_LOCAL, .imm = -1};
+
+    SECTION("falling through into the next function") {
+        const TestObjectBuilder builder{
+            .sections = {{.name = ".text", .insts = {test_mov_r0_0, test_mov_r0_0, test_exit}}},
+            .symbols = {{.name = "f0", .section = 0, .value = 0},
+                        {.name = "f1", .section = 0, .value = sizeof(EbpfInst)}},
+        };
+        REQUIRE_THROWS_WITH(
+            read_test_object(builder.build(), ".text"),
+            Catch::Matchers::ContainsSubstring("Function f0 in section .text falls through into function f1"));
+    }
+
+    SECTION("jumping into the next function") {
+        const TestObjectBuilder builder{
+            .sections = {{.name = ".text",
+                          .insts = {EbpfInst{.opcode = INST_OP_JA16, .offset = 1}, test_exit, test_mov_r0_0,
+                                    test_exit}}},
+            .symbols = {{.name = "f0", .section = 0, .value = 0},
+                        {.name = "f1", .section = 0, .value = 2 * sizeof(EbpfInst)}},
+        };
+        REQUIRE_THROWS_WITH(read_test_object(builder.build(), ".text"),
+                            Catch::Matchers::ContainsSubstring("Function f0 in section .text jumps into function f1"));
+    }
+
+    SECTION("falling off the end of the section into a callee") {
+        const TestObjectBuilder builder{
+            .sections = {{.name = "socket", .insts = {call_sub, test_mov_r0_0}},
+                         {.name = ".text", .insts = {test_mov_r0_0, test_exit}}},
+            .symbols = {{.name = "entry", .section = 0}, {.name = "sub", .section = 1}},
+            .relocations = {{.section = 0, .instruction = 0, .symbol = 1, .type = R_BPF_64_32_TYPE}},
+        };
+        REQUIRE_THROWS_WITH(
+            read_test_object(builder.build(), "socket"),
+            Catch::Matchers::ContainsSubstring("Function entry in section socket falls through out of the section"));
+    }
+
+    SECTION("calling a function that runs out of its code") {
+        // sub falls through into last; entry calls sub, other calls last.
+        const TestObjectBuilder builder{
+            .sections = {{.name = "socket", .insts = {call_sub, test_exit}},
+                         {.name = "xdp", .insts = {call_sub, test_exit}},
+                         {.name = ".text", .insts = {test_mov_r0_0, test_mov_r0_0, test_exit}}},
+            .symbols = {{.name = "entry", .section = 0},
+                        {.name = "other", .section = 1},
+                        {.name = "sub", .section = 2, .value = 0},
+                        {.name = "last", .section = 2, .value = sizeof(EbpfInst)}},
+            .relocations = {{.section = 0, .instruction = 0, .symbol = 2, .type = R_BPF_64_32_TYPE},
+                            {.section = 1, .instruction = 0, .symbol = 3, .type = R_BPF_64_32_TYPE}},
+        };
+        const std::string object = builder.build();
+        REQUIRE_THROWS_WITH(read_test_object(object, "socket"),
+                            Catch::Matchers::ContainsSubstring("Function sub in section .text falls through"));
+        REQUIRE(read_test_object(object, "xdp").size() == 1);
+    }
+}
+
+// A local call without a relocation entry may land on code that no FUNC symbol starts. It then calls into the
+// function whose code holds its target, which linking appends to the caller.
+TEST_CASE("ELF loader links a local call into the middle of a function", "[elf]") {
+    const TestObjectBuilder builder{
+        .sections = {{.name = ".text",
+                      .insts =
+                          {
+                              test_call_local(3), test_exit,                       // f0 calls f1 + 2
+                              test_mov_r0(1), test_exit, test_mov_r0(2), test_exit // f1
+                          }}},
+        .symbols = {{.name = "f0", .section = 0, .value = 0},
+                    {.name = "f1", .section = 0, .value = 2 * sizeof(EbpfInst)}},
+    };
+    const auto programs = read_test_object(builder.build(), ".text");
+    REQUIRE(programs.size() == 2);
+    const std::vector<EbpfInst>& f0 = programs[0].prog;
+    REQUIRE(f0.size() == 6);
+    REQUIRE(f0[0].opcode == INST_OP_CALL);
+    REQUIRE(f0.at(1 + f0[0].imm) == test_mov_r0(2));
 }
