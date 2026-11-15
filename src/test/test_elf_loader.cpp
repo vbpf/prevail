@@ -2931,6 +2931,45 @@ TEST_CASE("ELF loader rejects a map reference through a section symbol", "[elf][
                         Catch::Matchers::ContainsSubstring("Unresolved symbols found"));
 }
 
+// The offset field of a btf_member packs a bitfield size into its top 8 bits only when the struct or union has
+// kind_flag set; otherwise all 32 bits are the member's bit offset, and a member 2 MiB or more into its aggregate
+// must not have its offset wrapped or be taken for a bitfield.
+TEST_CASE("CO-RE field relocations decode member offsets by the BTF kind_flag", "[elf][core]") {
+    constexpr uint32_t CORE_FIELD_BYTE_SIZE = 1;
+    constexpr uint32_t CORE_FIELD_LSHIFT_U64 = 4;
+    constexpr uint32_t CORE_FIELD_RSHIFT_U64 = 5;
+    const std::vector<EbpfInst> code(5, EbpfInst{.opcode = CORE_TEST_MOV64_IMM, .imm = -1});
+    CoreObject object{
+        .sections = {{"xdp", code, {{"prog", 0}}}},
+        .core_section = "xdp",
+        .relocations = {{0, CORE_FIELD_BYTE_OFFSET},
+                        {8, CORE_FIELD_BYTE_SIZE},
+                        {16, CORE_FIELD_LSHIFT_U64},
+                        {24, CORE_FIELD_RSHIFT_U64}},
+    };
+    object.sections[0].insts.back() = EbpfInst{.opcode = INST_OP_EXIT};
+    const auto relocated_values = [&] {
+        const auto programs = read_core_object(object, "xdp");
+        REQUIRE(programs.size() == 1);
+        REQUIRE(programs[0].core_relocation_count == object.relocations.size());
+        return std::array{programs[0].prog[0].imm, programs[0].prog[1].imm, programs[0].prog[2].imm,
+                          programs[0].prog[3].imm};
+    };
+
+    object.is_union = GENERATE(false, true);
+    object.aggregate_size = (1U << 21) + 16;
+
+    SECTION("kind_flag clear: the whole field is the bit offset") {
+        object.member_offset_field = (1U << 24) + 64; // Byte 2 MiB + 8, which has bits above the low 24 set.
+        REQUIRE(relocated_values() == std::array{(1 << 21) + 8, 4, 32, 32});
+    }
+    SECTION("kind_flag set: bitfield size and 24-bit bit offset") {
+        object.kind_flag = true;
+        object.member_offset_field = (12U << 24) | 68; // 12-bit bitfield at bit 68: in the int at byte 8.
+        REQUIRE(relocated_values() == std::array{8, 4, 48, 52});
+    }
+}
+
 namespace {
 /// Builds a relocatable BPF object from executable sections, FUNC or undefined symbols, and relocations.
 struct TestObjectBuilder {
