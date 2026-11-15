@@ -48,7 +48,7 @@ Capability and configuration checks are described in `Notes / Evidence`; they do
 | Feature | Status | Notes / Evidence |
 |---|---|---|
 | `LDX/ST/STX` memory width forms (B/H/W/DW) | Supported | `src/ir/unmarshal.cpp`: `makeMemOp`; `src/ir/syntax.hpp`: `Mem` |
-| Legacy packet access (`LD_ABS`/`LD_IND`) | Supported | `src/ir/unmarshal.cpp`; `src/ir/cfg_builder.cpp`: `check_instruction_feature_support` |
+| Legacy packet access (`LD_ABS`/`LD_IND`) | Supported | `src/ir/unmarshal.cpp`; `src/ir/cfg_builder.cpp`: `check_instruction_feature_support` (packet conformance group, and `EbpfProgramType::legacy_packet_access` for the program type) |
 | LDDW immediate (`src=0`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_IMM`) |
 | LDDW map FD pseudo (`src=1`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_MAP_FD`, `LoadMapFd`); `src/elf_loader.cpp`: `try_reloc` |
 | LDDW map value pseudo (`src=2`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_MAP_VALUE`, `LoadMapAddress`); `src/elf_loader.cpp`: `try_reloc` |

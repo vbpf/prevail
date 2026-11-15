@@ -264,8 +264,13 @@ static std::optional<RejectionReason> check_instruction_feature_support(const In
             return reject_capability("requires conformance group base64");
         }
     }
-    if (std::holds_alternative<Packet>(ins) && !supports(platform, bpf_conformance_groups_t::packet)) {
-        return reject_capability("requires conformance group packet");
+    if (std::holds_alternative<Packet>(ins)) {
+        if (!supports(platform, bpf_conformance_groups_t::packet)) {
+            return reject_capability("requires conformance group packet");
+        }
+        if (!info.type.legacy_packet_access) {
+            return reject_capability("legacy packet access is unavailable for this program type");
+        }
     }
     if (const auto p = std::get_if<Atomic>(&ins)) {
         const auto group =

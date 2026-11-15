@@ -128,7 +128,13 @@ class AssertExtractor {
                 // The output buffer is held to the input-value precondition (in bounds, numeric bytes):
                 // map_peek_elem reads it on bloom filters, and the transformer relies on it staying numeric.
                 res.emplace_back(TypeConstraint{arg.reg, mem});
-                res.emplace_back(ValidMapKeyValue{arg.reg, *map_fd_reg, arg.kind == ArgSingle::Kind::PTR_TO_MAP_KEY});
+                res.emplace_back(ValidMapKeyValue{
+                    .access_reg = arg.reg,
+                    .map_fd_reg = *map_fd_reg,
+                    .key = arg.kind == ArgSingle::Kind::PTR_TO_MAP_KEY,
+                    .access_type =
+                        arg.kind == ArgSingle::Kind::PTR_TO_WRITABLE_MAP_VALUE ? AccessType::write : AccessType::read,
+                });
                 break;
             case ArgSingle::Kind::PTR_TO_STACK:
                 res.emplace_back(TypeConstraint{arg.reg, arg.or_null ? TypeGroup::stack_or_num : TypeGroup::stack});

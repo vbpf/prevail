@@ -457,6 +457,7 @@ struct ValidMapKeyValue {
     Reg access_reg;
     Reg map_fd_reg;
     bool key{};
+    AccessType access_type{AccessType::read}; // write when the helper stores a map value there.
     constexpr bool operator==(const ValidMapKeyValue&) const = default;
 };
 

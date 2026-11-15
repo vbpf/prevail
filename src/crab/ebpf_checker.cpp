@@ -440,7 +440,9 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
             LinearExpression ub = LinearExpression{lb} + LinearExpression{width};
             require_lower_bound(lb, variable_registry.meta_offset(), "Lower bound must be at least meta_offset");
             require_upper_bound(ub, variable_registry.packet_size(), "Upper bound must be at most packet_size");
-            // Packet memory is both readable and writable.
+            if (s.access_type == AccessType::write && context.program_info().type.packet_read_only) {
+                throw_fail("Packet is read-only");
+            }
             if (array_max_entries.has_value() && s.key) {
                 // Packet contents are not tracked, so the index cannot be bounded.
                 throw_fail("Array index must be on the stack");
@@ -585,6 +587,9 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
                 require_upper_bound(ub, LinearExpression{max}, "Upper bound must be at most " + std::to_string(max));
             } else {
                 require_upper_bound(ub, variable_registry.packet_size(), "Upper bound must be at most packet_size");
+            }
+            if (s.access_type == AccessType::write && context.program_info().type.packet_read_only) {
+                throw_fail("Packet is read-only");
             }
             break;
         }

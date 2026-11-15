@@ -25,5 +25,7 @@ Program types that exist but have approximate or incorrect context modeling.
 - [ ] `socket_filter` still models `__sk_buff.data`/`data_end` as packet pointers although Linux rejects both fields for it — kept because unrecognized section names fall back to this type.
 - [ ] Context descriptor parity — field offsets and sizes match Linux 6.18 definitions for all registered program types.
 - [x] Read-only contexts — program types whose `is_valid_access()` rejects every `BPF_WRITE` (kprobe, tracepoint, perf_event, tracing, LSM, struct_ops, XDP, ...) reject stores through the context pointer.
+- [x] Read-only packets — `cgroup_skb`, `lwt_in`, `lwt_out`, `lwt_seg6local`, `sk_reuseport` and `flow_dissector` may read the packet but not write it (`may_access_direct_pkt_data()`): stores, atomics and helper output buffers into the packet are rejected (`EbpfProgramType::packet_read_only`).
+- [x] Legacy packet access — `LD_ABS`/`LD_IND` are accepted only for `socket_filter`, `sched_cls` and `sched_act` (`may_access_skb()`), whose context is an sk_buff (`EbpfProgramType::legacy_packet_access`).
 - [ ] Per-field context write permissions — for contexts with writable fields (`__sk_buff`, `bpf_sock_ops`, `bpf_sock_addr`, ...), stores are checked only against the data/data_end/data_meta slots, not against the per-program-type `BPF_WRITE` field set.
 - [ ] Model attach-type-dependent helper availability — Linux gates helper legality on (program type, attach type) pairs, not just program type alone.

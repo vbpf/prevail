@@ -63,6 +63,11 @@ struct EbpfProgramType {
     // No store through the context pointer is allowed: the context is live kernel
     // state (e.g. the pt_regs of a probed function) rather than a scratch structure.
     bool ctx_read_only{};
+    // LD_ABS/LD_IND may be used: they read through R6 as the platform's packet buffer object (an sk_buff on Linux),
+    // so the context must be one.
+    bool legacy_packet_access{};
+    // Direct packet access may read but not write the packet.
+    bool packet_read_only{};
 };
 
 enum class EbpfStructFieldPermission { read_only, read_write };

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include <algorithm>
 #include <array>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -198,6 +199,73 @@ TEST_CASE("stores through a read-only context are rejected", "[platform][tables]
             "1: Context is read-only (valid_access(r1.offset, width=8) for write)");
     // __sk_buff.mark, which a tc program may set.
     REQUIRE_FALSE(verify_lines("classifier", {"r2 = 1", "*(u32 *)(r1 + 8) = r2", "r0 = 0", "exit"}).has_value());
+}
+
+TEST_CASE("legacy packet access is limited to program types whose context is an sk_buff", "[platform][tables]") {
+    const std::vector<std::string> lines{"r6 = r1", "r0 = *(u32 *)skb[23]", "r0 = 0", "exit"};
+    for (const char* section : {"socket", "classifier", "action"}) {
+        CAPTURE(section);
+        REQUIRE(g_ebpf_platform_linux.get_program_type(section, "").legacy_packet_access);
+        REQUIRE_FALSE(verify_lines(section, lines).has_value());
+    }
+    for (const char* section : {"xdp", "cgroup/skb", "sk_skb", "lwt_in", "kprobe/f", "perf_event", "cgroup/sysctl"}) {
+        CAPTURE(section);
+        REQUIRE_FALSE(g_ebpf_platform_linux.get_program_type(section, "").legacy_packet_access);
+        REQUIRE_THROWS_WITH(verify_lines(section, lines),
+                            Catch::Matchers::ContainsSubstring("legacy packet access is unavailable"));
+    }
+}
+
+TEST_CASE("packet writes are rejected where the packet is read-only", "[platform][tables]") {
+    // Bounds-check 8 bytes of the packet, then write its first byte, either by a store or by
+    // bpf_map_pop_elem (helper 88) from a queue map with 1-byte values.
+    const auto write_packet = [](const std::string& section, const bool through_helper) {
+        const EbpfProgramType type = g_ebpf_platform_linux.get_program_type(section, "");
+        const std::string data = std::to_string(type.ctx_descriptor->data);
+        const std::string end = std::to_string(type.ctx_descriptor->end);
+        // sk_reuseport_md holds its packet pointers in 64-bit fields; the __sk_buff and xdp_md ones are 32-bit.
+        const std::string width = section.starts_with("sk_reuseport") ? "u64" : "u32";
+        std::vector<std::string> lines{"r2 = *(" + width + " *)(r1 + " + data + ")",
+                                       "r3 = *(" + width + " *)(r1 + " + end + ")", "r4 = r2", "r4 += 8",
+                                       "if r4 > r3 goto <8>"};
+        if (through_helper) {
+            lines.insert(lines.end(), {"r1 = map_fd 1", "call 88", "r0 = 0"});
+        } else {
+            lines.insert(lines.end(), {"r5 = 0", "*(u8 *)(r2 + 0) = r5", "r0 = 0"});
+        }
+        lines.insert(lines.end(), {"r0 = 0", "exit"});
+
+        constexpr uint32_t queue_map_type = 22;
+        const EbpfMapDescriptor queue{
+            .original_fd = 1, .type = queue_map_type, .key_size = 0, .value_size = 1, .max_entries = 4};
+        const ProgramInfo info{.platform = &g_ebpf_platform_linux,
+                               .map_descriptors = Cow<std::vector<EbpfMapDescriptor>>::make(std::vector{queue}),
+                               .type = type};
+        const std::map<std::string, Label> labels{{"<8>", Label{8}}};
+        InstructionSeq seq;
+        for (size_t i = 0; i < lines.size(); ++i) {
+            seq.emplace_back(Label{static_cast<int>(i)}, parse_instruction(lines[i], labels, type), std::nullopt);
+        }
+        const VerifierOptions options{};
+        const AnalysisContext context{Program::from_sequence(seq, info, options), options};
+        const auto error = analyze(context).find_first_error();
+        return error ? to_string(*error) : std::string{};
+    };
+    using Catch::Matchers::ContainsSubstring;
+
+    for (const char* section :
+         {"cgroup/skb", "lwt_in", "lwt_out", "lwt_seg6local", "sk_reuseport/r", "flow_dissector"}) {
+        CAPTURE(section);
+        REQUIRE(g_ebpf_platform_linux.get_program_type(section, "").packet_read_only);
+        REQUIRE_THAT(write_packet(section, false), ContainsSubstring("Packet is read-only"));
+        REQUIRE_THAT(write_packet(section, true), ContainsSubstring("Packet is read-only"));
+    }
+    for (const char* section : {"classifier", "action", "xdp", "lwt_xmit", "sk_skb"}) {
+        CAPTURE(section);
+        REQUIRE_FALSE(g_ebpf_platform_linux.get_program_type(section, "").packet_read_only);
+        REQUIRE(write_packet(section, false).empty());
+        REQUIRE(write_packet(section, true).empty());
+    }
 }
 
 TEST_CASE("linux map-type table covers post-cpumap map ids", "[platform][tables]") {
