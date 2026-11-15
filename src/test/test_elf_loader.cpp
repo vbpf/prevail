@@ -2987,3 +2987,115 @@ TEST_CASE("ELF loader bounds the report of unresolved symbols", "[elf][hardening
     REQUIRE_THAT(xdp_report, !Catch::Matchers::ContainsSubstring("more unresolved symbols"));
     REQUIRE(read_test_object(object, "tc").size() == 1);
 }
+
+namespace {
+struct TableLookupObject {
+    std::string relocation_name = ".relxdp";
+    std::string relocated_section = "xdp"; ///< The section the relocation table's sh_info names.
+    bool link_to_symbol_table = true;      ///< Whether the relocation table's sh_link names the symbol table.
+    bool second_relocation_table = false;  ///< Add another table for the same section.
+    bool decoy_symtab = false;             ///< Put a PROGBITS section named .symtab before the symbol table.
+
+    /// Two programs, in xdp and socket, each "r1 = m ll; r0 = 0; exit", with one relocation of the LDDW against the
+    /// legacy map m.
+    [[nodiscard]]
+    std::string build() const {
+        constexpr uint8_t MOV64_IMM = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
+        constexpr uint32_t map_record[5] = {1, 4, 8, 16, 0}; // hash map, key_size 4, value_size 8, max_entries 16.
+        const std::vector<EbpfInst> insts{EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 1}, EbpfInst{},
+                                          EbpfInst{.opcode = MOV64_IMM}, EbpfInst{.opcode = INST_OP_EXIT}};
+
+        ELFIO::elfio writer;
+        writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+        writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+        writer.set_type(ELFIO::ET_REL);
+        writer.set_machine(ELFIO::EM_BPF);
+        const auto add_section = [&](const std::string& name, const ELFIO::Elf_Xword flags, const void* data,
+                                     const size_t size) {
+            ELFIO::section* sec = writer.sections.add(name);
+            sec->set_type(ELFIO::SHT_PROGBITS);
+            sec->set_flags(flags);
+            sec->set_addr_align(8);
+            sec->set_data(static_cast<const char*>(data), size);
+            return sec;
+        };
+        ELFIO::section* maps_sec =
+            add_section("maps", ELFIO::SHF_ALLOC | ELFIO::SHF_WRITE, map_record, sizeof(map_record));
+        const size_t code_size = insts.size() * sizeof(EbpfInst);
+        ELFIO::section* xdp_sec = add_section("xdp", ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR, insts.data(), code_size);
+        ELFIO::section* socket_sec =
+            add_section("socket", ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR, insts.data(), code_size);
+        if (decoy_symtab) {
+            add_section(".symtab", 0, map_record, sizeof(map_record));
+        }
+
+        ELFIO::section* str_sec = writer.sections.add(".strtab");
+        str_sec->set_type(ELFIO::SHT_STRTAB);
+        ELFIO::string_section_accessor str_writer(str_sec);
+        ELFIO::section* sym_sec = writer.sections.add(".symtab");
+        sym_sec->set_type(ELFIO::SHT_SYMTAB);
+        sym_sec->set_addr_align(8);
+        sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+        sym_sec->set_link(str_sec->get_index());
+        sym_sec->set_info(1); // First global symbol.
+        ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+        const auto map_sym = sym_writer.add_symbol(str_writer, "m", 0, sizeof(map_record), ELFIO::STB_GLOBAL,
+                                                   ELFIO::STT_OBJECT, 0, maps_sec->get_index());
+        sym_writer.add_symbol(str_writer, "xdp_prog", 0, code_size, ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0,
+                              xdp_sec->get_index());
+        sym_writer.add_symbol(str_writer, "socket_prog", 0, code_size, ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0,
+                              socket_sec->get_index());
+
+        const auto add_relocation_table = [&](const std::string& name) {
+            ELFIO::section* rel_sec = writer.sections.add(name);
+            rel_sec->set_type(ELFIO::SHT_REL);
+            rel_sec->set_addr_align(8);
+            rel_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_REL));
+            rel_sec->set_link(link_to_symbol_table ? sym_sec->get_index() : str_sec->get_index());
+            rel_sec->set_info(relocated_section == "xdp" ? xdp_sec->get_index() : socket_sec->get_index());
+            ELFIO::relocation_section_accessor(writer, rel_sec).add_entry(0, map_sym, R_BPF_64_64_TYPE);
+        };
+        add_relocation_table(relocation_name);
+        if (second_relocation_table) {
+            add_relocation_table(relocation_name + ".copy");
+        }
+
+        std::ostringstream out_stream;
+        writer.save(out_stream);
+        return out_stream.str();
+    }
+};
+
+/// Whether the LDDW of the program in `section` was relocated to the map.
+bool loads_map(const std::string& object, const std::string& section) {
+    std::istringstream in_stream(object);
+    const auto programs = read_elf(in_stream, "memory", section, "", VerifierOptions{}, &g_ebpf_platform_linux);
+    REQUIRE(programs.size() == 1);
+    return programs[0].prog[0].src == INST_LD_MODE_MAP_FD;
+}
+} // namespace
+
+// The symbol table and each section's relocation table are the sections the ELF headers designate (sh_type, sh_info,
+// sh_link), whatever their names, so the program loaded is the one readelf and objdump show.
+TEST_CASE("ELF loader finds the symbol and relocation tables by their headers", "[elf][hardening]") {
+    REQUIRE(loads_map(TableLookupObject{}.build(), "xdp"));
+    REQUIRE_FALSE(loads_map(TableLookupObject{}.build(), "socket"));
+
+    // A table with a name that does not follow the .rel<section> convention still applies.
+    REQUIRE(loads_map(TableLookupObject{.relocation_name = ".rel.custom"}.build(), "xdp"));
+
+    // A table named after one section applies to the one its sh_info names.
+    const std::string misnamed = TableLookupObject{.relocated_section = "socket"}.build();
+    REQUIRE_FALSE(loads_map(misnamed, "xdp"));
+    REQUIRE(loads_map(misnamed, "socket"));
+
+    // A non-symbol-table section named .symtab is not the symbol table.
+    REQUIRE(loads_map(TableLookupObject{.decoy_symtab = true}.build(), "xdp"));
+
+    std::istringstream unlinked(TableLookupObject{.link_to_symbol_table = false}.build());
+    REQUIRE_THROWS_WITH(read_elf(unlinked, "memory", "xdp", "", VerifierOptions{}, &g_ebpf_platform_linux),
+                        Catch::Matchers::ContainsSubstring("is not linked to the symbol table"));
+    std::istringstream two_tables(TableLookupObject{.second_relocation_table = true}.build());
+    REQUIRE_THROWS_WITH(read_elf(two_tables, "memory", "xdp", "", VerifierOptions{}, &g_ebpf_platform_linux),
+                        Catch::Matchers::ContainsSubstring("Multiple relocation sections for section xdp"));
+}
