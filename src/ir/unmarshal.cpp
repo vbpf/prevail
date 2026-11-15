@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include <cassert>
 #include <iostream>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -78,6 +79,56 @@ static auto getMemWidth(const uint8_t opcode) -> int {
 
 static Instruction shift32(const Reg dst, const Bin::Op op) {
     return Bin{.op = op, .dst = dst, .v = Imm{32}, .is64 = true, .lddw = false};
+}
+
+/// The labels that control can reach other than by falling through: jump and local call targets, and the
+/// functions whose address is loaded by an lddw.
+static std::set<Label> branch_targets(const vector<LabeledInstruction>& prog) {
+    std::set<Label> targets;
+    for (const auto& [label, ins, line_info] : prog) {
+        if (const auto pjmp = std::get_if<Jmp>(&ins)) {
+            targets.insert(pjmp->target);
+        } else if (const auto pcall = std::get_if<CallLocal>(&ins)) {
+            targets.insert(pcall->target);
+        } else if (const auto ppseudo = std::get_if<LoadPseudo>(&ins);
+                   ppseudo && ppseudo->addr.kind == PseudoAddress::Kind::CODE_ADDR) {
+            targets.insert(Label{ppseudo->addr.imm});
+        }
+    }
+    return targets;
+}
+
+/// Merge (rX <<= 32; rX >>>= 32) into wX = rX
+///       (rX <<= 32; rX >>= 32)  into rX s32= rX
+/// The pair must lie in one basic block: a merge drops the label of the second shift, so it is done only when
+/// nothing branches there.
+static void merge_shift_pairs(vector<LabeledInstruction>& prog) {
+    const std::set<Label> targets = branch_targets(prog);
+    vector<LabeledInstruction> merged;
+    merged.reserve(prog.size());
+    for (size_t i = 0; i < prog.size(); i++) {
+        auto& [label, ins, line_info] = prog[i];
+        if (i + 1 < prog.size()) {
+            const auto& [next_label, next_ins, next_line_info] = prog[i + 1];
+            const auto pshl = std::get_if<Bin>(&ins);
+            if (pshl && ins == shift32(pshl->dst, Bin::Op::LSH) && !targets.contains(next_label)) {
+                const Reg dst = pshl->dst;
+                if (next_ins == shift32(dst, Bin::Op::RSH)) {
+                    merged.emplace_back(label, Bin{.op = Bin::Op::MOV, .dst = dst, .v = dst, .is64 = false}, line_info);
+                    i++;
+                    continue;
+                }
+                if (next_ins == shift32(dst, Bin::Op::ARSH)) {
+                    merged.emplace_back(label, Bin{.op = Bin::Op::MOVSX32, .dst = dst, .v = dst, .is64 = true},
+                                        line_info);
+                    i++;
+                    continue;
+                }
+            }
+        }
+        merged.push_back(std::move(prog[i]));
+    }
+    prog = std::move(merged);
 }
 
 struct Unmarshaller {
@@ -654,36 +705,6 @@ struct Unmarshaller {
             case INST_CLS_ALU:
             case INST_CLS_ALU64: {
                 new_ins = makeAluOp(pc, inst);
-
-                // Merge (rX <<= 32; rX >>>= 32) into wX = rX
-                //       (rX <<= 32; rX >>= 32)  into rX s32= rX
-                if (pc >= insts.size() - 1) {
-                    break;
-                }
-                const EbpfInst next = insts[pc + 1];
-                auto dst = Reg{inst.dst};
-
-                if (new_ins != shift32(dst, Bin::Op::LSH)) {
-                    break;
-                }
-
-                if ((next.opcode & INST_CLS_MASK) != INST_CLS_ALU64) {
-                    break;
-                }
-                // Both shifts are base64 instructions but the merged wX = rX is base32: without base64,
-                // keep the pair as is so that instruction-support validation still sees and rejects it.
-                if (info.platform && !info.platform->supports_group(bpf_conformance_groups_t::base64)) {
-                    break;
-                }
-                auto next_ins = makeAluOp(pc + 1, next);
-                if (next_ins == shift32(dst, Bin::Op::RSH)) {
-                    new_ins = Bin{.op = Bin::Op::MOV, .dst = dst, .v = dst, .is64 = false};
-                    skip_instruction = true;
-                } else if (next_ins == shift32(dst, Bin::Op::ARSH)) {
-                    new_ins = Bin{.op = Bin::Op::MOVSX32, .dst = dst, .v = dst, .is64 = true};
-                    skip_instruction = true;
-                }
-
                 break;
             }
 
@@ -729,6 +750,11 @@ struct Unmarshaller {
         }
         if (exit_count == 0) {
             note("no exit instruction");
+        }
+        // Both shifts are base64 instructions but the merged wX = rX is base32: without base64,
+        // keep the pairs as they are so that instruction-support validation still sees and rejects them.
+        if (!info.platform || info.platform->supports_group(bpf_conformance_groups_t::base64)) {
+            merge_shift_pairs(prog);
         }
         return prog;
     }
