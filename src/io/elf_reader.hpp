@@ -198,7 +198,8 @@ class ProgramReader {
     /// Maps the position where each program starts to its index in raw_programs.
     std::map<SectionOffset, size_t> raw_program_index_;
     std::map<std::string, std::optional<KsymBtfId>> ksym_function_resolution_cache;
-    std::map<std::string, const ELFIO::section*> relocation_section_cache;
+    /// The relocation table of each section, by the index of the section it applies to (its sh_info).
+    std::map<ELFIO::Elf_Word, const ELFIO::section*> relocation_section_cache;
     std::vector<UnresolvedRelocation> unresolved_relocations;
     /// Indices in raw_programs of the programs holding an entry of unresolved_relocations.
     std::set<size_t> programs_with_unresolved_relocations;
@@ -255,7 +256,7 @@ class ProgramReader {
     void process_relocations(std::vector<EbpfInst>& instructions, const ELFIO::section& reloc,
                              const std::string& section_name, ELFIO::Elf_Xword program_offset, size_t program_size);
     [[nodiscard]]
-    const ELFIO::section* get_relocation_section(const std::string& name) const;
+    const ELFIO::section* get_relocation_section(const ELFIO::section& target) const;
     /// Reads every executable section and keeps the programs of parse_params.desired_section
     /// (all of them when it is empty); errors that would fail the load of that section are thrown.
     void read_programs();

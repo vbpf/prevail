@@ -161,6 +161,11 @@ RelocationSectionLayout relocation_section_layout(const ELFIO::elfio& reader, co
     if (entry_size != expected_entry_size || section.get_data() == nullptr || section.get_size() % entry_size != 0) {
         throw UnmarshalError("Malformed relocation section " + section_name);
     }
+    // Symbol indices in the table refer to the section sh_link names, which must be the symbol table.
+    const ELFIO::section* linked_symbols = reader.sections[section.get_link()];
+    if (linked_symbols == nullptr || linked_symbols->get_type() != ELFIO::SHT_SYMTAB) {
+        throw UnmarshalError("Relocation section " + section_name + " is not linked to the symbol table");
+    }
     return {
         .elf_class = elf_class,
         .section_type = section_type,
@@ -588,7 +593,17 @@ ELFIO::elfio load_elf(std::istream& input_stream, const std::string& path) {
 
 ELFIO::const_symbol_section_accessor read_and_validate_symbol_section(const ELFIO::elfio& reader,
                                                                       const std::string& path) {
-    const ELFIO::section* symbol_section = reader.sections[".symtab"];
+    // The symbol table is the section of type SHT_SYMTAB, whatever its name; a relocatable object has one.
+    const ELFIO::section* symbol_section = nullptr;
+    for (const auto& section : reader.sections) {
+        if (section->get_type() != ELFIO::SHT_SYMTAB) {
+            continue;
+        }
+        if (symbol_section) {
+            throw UnmarshalError("Multiple symbol sections found in ELF file " + path);
+        }
+        symbol_section = section.get();
+    }
     if (!symbol_section) {
         throw UnmarshalError("No symbol section found in ELF file " + path);
     }
@@ -1049,23 +1064,20 @@ void ProgramReader::process_relocations(std::vector<EbpfInst>& instructions, con
 void ProgramReader::build_relocation_section_cache() {
     relocation_section_cache.clear();
     for (const auto& sec : reader.sections) {
-        // Keep the first section of each name, as a lookup by name in reader.sections does.
-        if (const std::string name = sec->get_name(); name.starts_with(".rel")) {
-            relocation_section_cache.try_emplace(name, sec.get());
+        // A relocation table applies to the section its sh_info names, whatever either is called.
+        if (sec->get_type() != ELFIO::SHT_REL && sec->get_type() != ELFIO::SHT_RELA) {
+            continue;
+        }
+        if (!relocation_section_cache.try_emplace(sec->get_info(), sec.get()).second) {
+            const ELFIO::section* target = reader.sections[sec->get_info()];
+            throw UnmarshalError("Multiple relocation sections for section " +
+                                 (target ? target->get_name() : std::to_string(sec->get_info())));
         }
     }
 }
 
-const ELFIO::section* ProgramReader::get_relocation_section(const std::string& name) const {
-    if (name == ".BTF") {
-        return nullptr;
-    }
-    // reader.sections[name] is a linear scan over every section; with one lookup per program
-    // that made reading an object quadratic in its section count.
-    auto it = relocation_section_cache.find(".rel" + name);
-    if (it == relocation_section_cache.end()) {
-        it = relocation_section_cache.find(".rela" + name);
-    }
+const ELFIO::section* ProgramReader::get_relocation_section(const ELFIO::section& target) const {
+    const auto it = relocation_section_cache.find(target.get_index());
     if (it == relocation_section_cache.end() || !it->second->get_data()) {
         return nullptr;
     }
@@ -1106,7 +1118,7 @@ void ProgramReader::read_programs(const bool all_sections) {
             }
             auto instructions = vector_of<EbpfInst>(sec->get_data() + offset, extracted_size);
             jump_targets_for_current_program = collect_jump_targets(instructions);
-            if (const auto reloc_sec = get_relocation_section(sec_name)) {
+            if (const auto reloc_sec = get_relocation_section(*sec)) {
                 process_relocations(instructions, *reloc_sec, sec_name, offset, extracted_size);
             }
             enqueue_synthetic_local_calls(instructions, sec->get_index(), offset);
