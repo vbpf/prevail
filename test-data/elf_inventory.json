@@ -3681,7 +3681,9 @@
           "sections": {}
         },
         "invalid_map_static-el.elf": {
-          "diagnostics": [],
+          "diagnostics": [
+            "Unresolved external symbol <anonymous> in section xdp at location 4"
+          ],
           "exit_code": 0,
           "program_count": 1,
           "section_count": 1,
@@ -3689,16 +3691,15 @@
             "xdp": [
               {
                 "function": "xdp_prog",
-                "reject_load": false
+                "reject_load": true,
+                "reject_load_reason": "Unresolved symbols found."
               }
             ]
           },
           "test_overrides": {
             "sections": {
               "xdp": {
-                "kind": "VerifierTypeTracking",
-                "reason": "register type refinement is too imprecise in this control-flow pattern",
-                "status": "expected_failure"
+                "status": "reject_load"
               }
             }
           }

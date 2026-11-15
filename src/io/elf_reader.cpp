@@ -943,7 +943,11 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
             lo_inst.get().imm = relocate_global_variable(symbol_section_index);
             return true;
         }
-        return true;
+        // A code address (e.g., a callback in .text) is kept as the file encodes it. Any other section symbol,
+        // such as a static map referenced through its map section, names data this loader cannot resolve, and
+        // leaving the placeholder in place would analyze it as a constant.
+        const ELFIO::section* target_section = reader.sections[symbol_section_index];
+        return target_section != nullptr && (target_section->get_flags() & ELFIO::SHF_EXECINSTR) != 0;
     }
 
     if ((instruction_to_relocate.opcode & INST_CLS_MASK) != INST_CLS_LD) {
