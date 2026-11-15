@@ -2718,6 +2718,140 @@ TEST_CASE("CO-RE type id relocation keeps modifiers and patches both LDDW slots"
     CHECK(prog[3].imm == 0);
 }
 
+namespace {
+/// An object of executable sections, each with its FUNC symbols, and a .BTF and .BTF.ext with CO-RE relocations.
+/// The .BTF holds `int` (type 1) and `struct s` (type 2) or `union s`, with one int member `f`.
+struct CoreObject {
+    struct Function {
+        std::string name;
+        size_t start; ///< Index of the function's first instruction in its section.
+    };
+    struct Section {
+        std::string name;
+        std::vector<EbpfInst> insts;
+        std::vector<Function> functions;
+    };
+    struct Relocation {
+        uint32_t insn_off; ///< Byte offset of the relocated instruction in the section.
+        uint32_t kind;     ///< A bpf_core_relo_kind.
+    };
+
+    std::vector<Section> sections;
+    std::string core_section; ///< The section the CO-RE relocations name.
+    std::vector<Relocation> relocations;
+    bool is_union = false;
+    bool kind_flag = false;
+    uint32_t member_offset_field = 32; ///< The btf_member offset field of `f`.
+    uint32_t aggregate_size = 8;
+
+    [[nodiscard]]
+    std::string build() const {
+        const auto append_u32 = [](std::string& data, const uint32_t value) {
+            const uint32_t le = boost::endian::native_to_little(value);
+            data.append(reinterpret_cast<const char*>(&le), sizeof(le));
+        };
+
+        const std::string strings = std::string{"\0int\0s\0f\0", 9} + core_section + '\0' + "0:0" + '\0';
+        constexpr uint32_t int_name = 1, aggregate_name = 5, member_name = 7, section_name = 9;
+        const auto access_string = gsl::narrow<uint32_t>(section_name + core_section.size() + 1);
+        std::string types;
+        append_u32(types, int_name); // Type 1: 32-bit int.
+        append_u32(types, 1U << 24);
+        append_u32(types, 4);
+        append_u32(types, 32);
+        append_u32(types, aggregate_name); // Type 2: struct or union with one member.
+        append_u32(types, (kind_flag ? 1U << 31 : 0U) | ((is_union ? 5U : 4U) << 24) | 1U);
+        append_u32(types, aggregate_size);
+        append_u32(types, member_name);
+        append_u32(types, 1);
+        append_u32(types, member_offset_field);
+
+        std::string btf;
+        append_u32(btf, 0x0001eb9f); // magic, version 1, no flags.
+        append_u32(btf, 24);         // hdr_len
+        append_u32(btf, 0);          // type_off
+        append_u32(btf, gsl::narrow<uint32_t>(types.size()));
+        append_u32(btf, gsl::narrow<uint32_t>(types.size())); // str_off
+        append_u32(btf, gsl::narrow<uint32_t>(strings.size()));
+        btf += types + strings;
+
+        std::string core_relos;
+        append_u32(core_relos, 16); // Record size.
+        append_u32(core_relos, section_name);
+        append_u32(core_relos, gsl::narrow<uint32_t>(relocations.size()));
+        for (const auto& [insn_off, kind] : relocations) {
+            append_u32(core_relos, insn_off);
+            append_u32(core_relos, 2); // type_id
+            append_u32(core_relos, access_string);
+            append_u32(core_relos, kind);
+        }
+        std::string btf_ext;
+        append_u32(btf_ext, 0x0001eb9f); // magic, version 1, no flags.
+        append_u32(btf_ext, 32);         // hdr_len
+        for (int i = 0; i < 4; ++i) {
+            append_u32(btf_ext, 0); // func_info and line_info offset and length.
+        }
+        append_u32(btf_ext, 0); // core_relo_off
+        append_u32(btf_ext, gsl::narrow<uint32_t>(core_relos.size()));
+        btf_ext += core_relos;
+
+        ELFIO::elfio writer;
+        writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+        writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+        writer.set_type(ELFIO::ET_REL);
+        writer.set_machine(ELFIO::EM_BPF);
+        std::vector<ELFIO::section*> code_sections;
+        for (const auto& section : sections) {
+            ELFIO::section* sec = writer.sections.add(section.name);
+            sec->set_type(ELFIO::SHT_PROGBITS);
+            sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+            sec->set_addr_align(8);
+            sec->set_data(reinterpret_cast<const char*>(section.insts.data()), section.insts.size() * sizeof(EbpfInst));
+            code_sections.push_back(sec);
+        }
+        for (const auto& [name, data] : {std::pair{".BTF", &btf}, std::pair{".BTF.ext", &btf_ext}}) {
+            ELFIO::section* sec = writer.sections.add(name);
+            sec->set_type(ELFIO::SHT_PROGBITS);
+            sec->set_addr_align(4);
+            sec->set_data(*data);
+        }
+
+        ELFIO::section* str_sec = writer.sections.add(".strtab");
+        str_sec->set_type(ELFIO::SHT_STRTAB);
+        ELFIO::string_section_accessor str_writer(str_sec);
+        ELFIO::section* sym_sec = writer.sections.add(".symtab");
+        sym_sec->set_type(ELFIO::SHT_SYMTAB);
+        sym_sec->set_addr_align(8);
+        sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+        sym_sec->set_link(str_sec->get_index());
+        sym_sec->set_info(1); // First global symbol.
+        ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+        for (size_t i = 0; i < sections.size(); ++i) {
+            const auto& functions = sections[i].functions;
+            for (size_t f = 0; f < functions.size(); ++f) {
+                const size_t end = f + 1 < functions.size() ? functions[f + 1].start : sections[i].insts.size();
+                sym_writer.add_symbol(str_writer, functions[f].name.c_str(), functions[f].start * sizeof(EbpfInst),
+                                      (end - functions[f].start) * sizeof(EbpfInst), ELFIO::STB_GLOBAL, ELFIO::STT_FUNC,
+                                      0, code_sections[i]->get_index());
+            }
+        }
+
+        std::ostringstream out_stream;
+        writer.save(out_stream);
+        return out_stream.str();
+    }
+};
+
+constexpr uint32_t CORE_FIELD_BYTE_OFFSET = 0;
+constexpr uint8_t CORE_TEST_MOV64_IMM = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
+
+std::vector<RawProgram> read_core_object(const CoreObject& object, const std::string& section,
+                                         const std::string& function = "") {
+    std::istringstream in_stream(object.build());
+    return read_elf(in_stream, "memory", section, function, VerifierOptions{}, &g_ebpf_platform_linux);
+}
+} // namespace
+
 // A static map is referenced through the unnamed section symbol of its map section. The loader cannot resolve that to a
 // map, and must not leave the LDDW's placeholder immediate to be analyzed as a constant. The same object referencing
 // the map through its named symbol loads.
@@ -2793,6 +2927,45 @@ TEST_CASE("ELF loader rejects a map reference through a section symbol", "[elf][
     std::istringstream in_stream(build_object(false));
     REQUIRE_THROWS_WITH(read_elf(in_stream, "memory", "socket", "", options, &g_ebpf_platform_linux),
                         Catch::Matchers::ContainsSubstring("Unresolved symbols found"));
+}
+
+// The offset field of a btf_member packs a bitfield size into its top 8 bits only when the struct or union has
+// kind_flag set; otherwise all 32 bits are the member's bit offset, and a member 2 MiB or more into its aggregate
+// must not have its offset wrapped or be taken for a bitfield.
+TEST_CASE("CO-RE field relocations decode member offsets by the BTF kind_flag", "[elf][core]") {
+    constexpr uint32_t CORE_FIELD_BYTE_SIZE = 1;
+    constexpr uint32_t CORE_FIELD_LSHIFT_U64 = 4;
+    constexpr uint32_t CORE_FIELD_RSHIFT_U64 = 5;
+    const std::vector<EbpfInst> code(5, EbpfInst{.opcode = CORE_TEST_MOV64_IMM, .imm = -1});
+    CoreObject object{
+        .sections = {{"xdp", code, {{"prog", 0}}}},
+        .core_section = "xdp",
+        .relocations = {{0, CORE_FIELD_BYTE_OFFSET},
+                        {8, CORE_FIELD_BYTE_SIZE},
+                        {16, CORE_FIELD_LSHIFT_U64},
+                        {24, CORE_FIELD_RSHIFT_U64}},
+    };
+    object.sections[0].insts.back() = EbpfInst{.opcode = INST_OP_EXIT};
+    const auto relocated_values = [&] {
+        const auto programs = read_core_object(object, "xdp");
+        REQUIRE(programs.size() == 1);
+        REQUIRE(programs[0].core_relocation_count == object.relocations.size());
+        return std::array{programs[0].prog[0].imm, programs[0].prog[1].imm, programs[0].prog[2].imm,
+                          programs[0].prog[3].imm};
+    };
+
+    object.is_union = GENERATE(false, true);
+    object.aggregate_size = (1U << 21) + 16;
+
+    SECTION("kind_flag clear: the whole field is the bit offset") {
+        object.member_offset_field = (1U << 24) + 64; // Byte 2 MiB + 8, which has bits above the low 24 set.
+        REQUIRE(relocated_values() == std::array{(1 << 21) + 8, 4, 32, 32});
+    }
+    SECTION("kind_flag set: bitfield size and 24-bit bit offset") {
+        object.kind_flag = true;
+        object.member_offset_field = (12U << 24) | 68; // 12-bit bitfield at bit 68: in the int at byte 8.
+        REQUIRE(relocated_values() == std::array{8, 4, 48, 52});
+    }
 }
 
 namespace {
