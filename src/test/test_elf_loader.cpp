@@ -3099,3 +3099,85 @@ TEST_CASE("ELF loader finds the symbol and relocation tables by their headers", 
     REQUIRE_THROWS_WITH(read_elf(two_tables, "memory", "xdp", "", VerifierOptions{}, &g_ebpf_platform_linux),
                         Catch::Matchers::ContainsSubstring("Multiple relocation sections for section xdp"));
 }
+
+// Every legacy map symbol has the size of its record, and the records of a section all have one size, which is also
+// the stride between them. Symbols that disagree on it leave the record size undetermined: taking the smallest
+// would shorten every record of the section and silently drop the fields past it, such as inner_map_idx.
+TEST_CASE("ELF loader rejects a legacy maps section whose symbols disagree on the record size", "[elf][hardening]") {
+    // Four 32-byte bpf_map_def records: two ARRAYs with 4096- and 8-byte values, an ARRAY_OF_MAPS whose
+    // inner_map_idx (offset 20) names the second one, and a HASH.
+    constexpr uint32_t record_size = 32;
+    const std::vector<uint32_t> records = {
+        2,  4, 4096, 1, 0, 0, 0, 0, // inner_big
+        2,  4, 8,    1, 0, 0, 0, 0, // inner_small
+        12, 4, 4,    1, 0, 1, 0, 0, // outer
+        1,  4, 4,    1, 0, 0, 0, 0, // unrelated
+    };
+    const std::vector<std::string> map_names = {"inner_big", "inner_small", "outer", "unrelated"};
+
+    auto build_object = [&](const ELFIO::Elf_Xword unrelated_symbol_size) {
+        ELFIO::elfio writer;
+        writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+        writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+        writer.set_type(ELFIO::ET_REL);
+        writer.set_machine(ELFIO::EM_BPF);
+
+        ELFIO::section* text_sec = writer.sections.add("xdp");
+        text_sec->set_type(ELFIO::SHT_PROGBITS);
+        text_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+        text_sec->set_addr_align(8);
+        const std::vector insts = {EbpfInst{.opcode = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM},
+                                   EbpfInst{.opcode = INST_OP_EXIT}};
+        text_sec->set_data(reinterpret_cast<const char*>(insts.data()), insts.size() * sizeof(EbpfInst));
+
+        ELFIO::section* maps_sec = writer.sections.add("maps");
+        maps_sec->set_type(ELFIO::SHT_PROGBITS);
+        maps_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_WRITE);
+        maps_sec->set_addr_align(4);
+        maps_sec->set_data(reinterpret_cast<const char*>(records.data()), records.size() * sizeof(uint32_t));
+
+        ELFIO::section* str_sec = writer.sections.add(".strtab");
+        str_sec->set_type(ELFIO::SHT_STRTAB);
+        ELFIO::string_section_accessor str_writer(str_sec);
+        ELFIO::section* sym_sec = writer.sections.add(".symtab");
+        sym_sec->set_type(ELFIO::SHT_SYMTAB);
+        sym_sec->set_addr_align(8);
+        sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+        sym_sec->set_link(str_sec->get_index());
+        sym_sec->set_info(1);
+        ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+        sym_writer.add_symbol(str_writer, "prog", 0, insts.size() * sizeof(EbpfInst), ELFIO::STB_GLOBAL,
+                              ELFIO::STT_FUNC, 0, text_sec->get_index());
+        for (size_t i = 0; i < map_names.size(); ++i) {
+            const ELFIO::Elf_Xword size = map_names[i] == "unrelated" ? unrelated_symbol_size : record_size;
+            sym_writer.add_symbol(str_writer, map_names[i].c_str(), i * record_size, size, ELFIO::STB_GLOBAL,
+                                  ELFIO::STT_OBJECT, 0, maps_sec->get_index());
+        }
+
+        std::ostringstream out_stream;
+        writer.save(out_stream);
+        return out_stream.str();
+    };
+
+    SECTION("all symbols have the record size") {
+        std::istringstream in_stream(build_object(record_size));
+        const auto programs = read_elf(in_stream, "memory", "xdp", "", VerifierOptions{}, &g_ebpf_platform_linux);
+        REQUIRE(programs.size() == 1);
+        const auto& descriptors = *programs[0].info.map_descriptors;
+        REQUIRE(descriptors.size() == map_names.size());
+        // outer's inner map is inner_small, as its record says.
+        REQUIRE(descriptors[2].inner_map_fd == descriptors[1].original_fd);
+    }
+
+    SECTION("one symbol is smaller than its record") {
+        std::istringstream in_stream(build_object(16));
+        REQUIRE_THROWS_WITH(read_elf(in_stream, "memory", "xdp", "", VerifierOptions{}, &g_ebpf_platform_linux),
+                            Catch::Matchers::ContainsSubstring("map symbols disagree on the record size"));
+    }
+
+    SECTION("one symbol is larger than its record") {
+        std::istringstream in_stream(build_object(64));
+        REQUIRE_THROWS_WITH(read_elf(in_stream, "memory", "xdp", "", VerifierOptions{}, &g_ebpf_platform_linux),
+                            Catch::Matchers::ContainsSubstring("map symbols disagree on the record size"));
+    }
+}
