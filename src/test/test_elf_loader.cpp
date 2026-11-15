@@ -13,8 +13,11 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <iterator>
 #include <limits>
+#include <map>
+#include <optional>
 #include <random>
 #include <sstream>
 #include <stdexcept>
@@ -2787,4 +2790,195 @@ TEST_CASE("ELF loader rejects a map reference through a section symbol", "[elf][
     std::istringstream in_stream(build_object(false));
     REQUIRE_THROWS_WITH(read_elf(in_stream, "memory", "socket", "", options, &g_ebpf_platform_linux),
                         Catch::Matchers::ContainsSubstring("Unresolved symbols found"));
+}
+
+namespace {
+/// Builds a relocatable BPF object from executable sections, FUNC or undefined symbols, and relocations.
+struct TestObjectBuilder {
+    struct Section {
+        std::string name;
+        std::vector<EbpfInst> insts;
+    };
+    struct Symbol {
+        std::string name;
+        std::optional<size_t> section; ///< Index into sections; undefined when empty.
+        ELFIO::Elf64_Addr value{};
+    };
+    struct Relocation {
+        size_t section;     ///< Index into sections of the relocated section.
+        size_t instruction; ///< Instruction index within that section.
+        size_t symbol;      ///< Index into symbols.
+        unsigned type;
+    };
+
+    std::vector<Section> sections;
+    std::vector<Symbol> symbols;
+    std::vector<Relocation> relocations;
+
+    [[nodiscard]]
+    std::string build() const {
+        ELFIO::elfio writer;
+        writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+        writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+        writer.set_type(ELFIO::ET_REL);
+        writer.set_machine(ELFIO::EM_BPF);
+
+        std::vector<ELFIO::section*> elf_sections;
+        for (const Section& section : sections) {
+            ELFIO::section* sec = writer.sections.add(section.name);
+            sec->set_type(ELFIO::SHT_PROGBITS);
+            sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+            sec->set_addr_align(8);
+            sec->set_data(reinterpret_cast<const char*>(section.insts.data()), section.insts.size() * sizeof(EbpfInst));
+            elf_sections.push_back(sec);
+        }
+
+        ELFIO::section* str_sec = writer.sections.add(".strtab");
+        str_sec->set_type(ELFIO::SHT_STRTAB);
+        ELFIO::string_section_accessor str_writer(str_sec);
+        ELFIO::section* sym_sec = writer.sections.add(".symtab");
+        sym_sec->set_type(ELFIO::SHT_SYMTAB);
+        sym_sec->set_addr_align(8);
+        sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+        sym_sec->set_link(str_sec->get_index());
+        sym_sec->set_info(1); // First global symbol.
+        ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+        std::vector<ELFIO::Elf_Word> symbol_indices;
+        for (const Symbol& symbol : symbols) {
+            if (symbol.section) {
+                const ELFIO::section* sec = elf_sections.at(*symbol.section);
+                symbol_indices.push_back(sym_writer.add_symbol(str_writer, symbol.name.c_str(), symbol.value,
+                                                               sec->get_size() - symbol.value, ELFIO::STB_GLOBAL,
+                                                               ELFIO::STT_FUNC, 0, sec->get_index()));
+            } else {
+                symbol_indices.push_back(sym_writer.add_symbol(str_writer, symbol.name.c_str(), 0, 0, ELFIO::STB_GLOBAL,
+                                                               ELFIO::STT_NOTYPE, 0, ELFIO::SHN_UNDEF));
+            }
+        }
+
+        std::map<size_t, ELFIO::section*> rel_sections;
+        for (const Relocation& relocation : relocations) {
+            ELFIO::section*& rel_sec = rel_sections[relocation.section];
+            if (!rel_sec) {
+                const ELFIO::section* target = elf_sections.at(relocation.section);
+                rel_sec = writer.sections.add(".rel" + target->get_name());
+                rel_sec->set_type(ELFIO::SHT_REL);
+                rel_sec->set_addr_align(8);
+                rel_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_REL));
+                rel_sec->set_link(sym_sec->get_index());
+                rel_sec->set_info(target->get_index());
+            }
+            ELFIO::relocation_section_accessor(writer, rel_sec)
+                .add_entry(relocation.instruction * sizeof(EbpfInst), symbol_indices.at(relocation.symbol),
+                           relocation.type);
+        }
+
+        std::ostringstream out_stream;
+        writer.save(out_stream);
+        return out_stream.str();
+    }
+};
+
+constexpr EbpfInst test_mov_r0_0{.opcode = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM};
+constexpr EbpfInst test_exit{.opcode = INST_OP_EXIT};
+
+std::vector<RawProgram> read_test_object(const std::string& object, const std::string& section) {
+    std::istringstream in_stream(object);
+    return read_elf(in_stream, "memory", section, "", VerifierOptions{}, &g_ebpf_platform_linux);
+}
+} // namespace
+
+// A subprogram is linked into its callers from any section, so an unresolved relocation in it must fail the load of
+// every caller, not only of its own section; otherwise the caller is verified with the code as the file encodes it.
+// A relocation on an instruction that is neither a call nor a load is never applied.
+TEST_CASE("ELF loader rejects a caller of a subprogram with unresolved symbols", "[elf][hardening]") {
+    const TestObjectBuilder builder{
+        .sections =
+            {
+                {.name = "socket",
+                 .insts = {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_LOCAL, .imm = -1}, test_mov_r0_0,
+                           test_exit}},
+                {.name = ".text", .insts = {test_mov_r0_0, test_exit}},
+            },
+        .symbols = {{.name = "entry", .section = 0}, {.name = "sub", .section = 1}, {.name = "unknown"}},
+        .relocations =
+            {
+                {.section = 0, .instruction = 0, .symbol = 1, .type = R_BPF_64_32_TYPE},
+                {.section = 1, .instruction = 0, .symbol = 2, .type = R_BPF_64_32_TYPE},
+            },
+    };
+    const std::string object = builder.build();
+    REQUIRE_THROWS_WITH(read_test_object(object, ".text"), Catch::Matchers::ContainsSubstring("Unresolved symbols"));
+    REQUIRE_THROWS_WITH(read_test_object(object, "socket"),
+                        Catch::Matchers::ContainsSubstring("Unresolved symbols found in subprogram sub"));
+}
+
+// With no section filter every program is returned, so a link error in any of them must fail the load.
+TEST_CASE("ELF loader rejects a link error without a section filter", "[elf][hardening]") {
+    // The call designates .text + 8 (a REL entry carries the addend in imm, as (imm + 1) * 8 bytes), where no
+    // function starts.
+    const TestObjectBuilder builder{
+        .sections =
+            {
+                {.name = "socket",
+                 .insts = {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_LOCAL, .imm = 0}, test_mov_r0_0,
+                           test_exit}},
+                {.name = ".text", .insts = {test_mov_r0_0, test_mov_r0_0, test_exit}},
+            },
+        .symbols = {{.name = "entry", .section = 0}, {.name = "sub", .section = 1}},
+        .relocations = {{.section = 0, .instruction = 0, .symbol = 1, .type = R_BPF_64_32_TYPE}},
+    };
+    const std::string object = builder.build();
+    REQUIRE_THROWS_WITH(read_test_object(object, "socket"), Catch::Matchers::ContainsSubstring("Subprogram not found"));
+    REQUIRE_THROWS_WITH(read_test_object(object, ""), Catch::Matchers::ContainsSubstring("Subprogram not found"));
+    REQUIRE(read_test_object(object, ".text").size() == 1);
+}
+
+// Unresolved relocations are stored without their names and only the first few are reported, so a file with many
+// entries against a long name costs memory and output linear in its size. Every entry still fails the load.
+TEST_CASE("ELF loader bounds the report of unresolved symbols", "[elf][hardening]") {
+    const std::string long_name(10'000, 'x');
+    TestObjectBuilder builder{
+        .sections =
+            {
+                {.name = "socket", .insts = {test_mov_r0_0, test_exit}},
+                {.name = "xdp", .insts = {test_mov_r0_0, test_exit}},
+                {.name = "tc", .insts = {test_mov_r0_0, test_exit}},
+            },
+        .symbols = {{.name = "entry", .section = 0},
+                    {.name = "other", .section = 1},
+                    {.name = "clean", .section = 2},
+                    {.name = long_name}},
+    };
+    for (size_t i = 0; i < 1000; i++) {
+        builder.relocations.push_back({.section = 0, .instruction = 0, .symbol = 3, .type = R_BPF_64_32_TYPE});
+    }
+    builder.relocations.push_back({.section = 1, .instruction = 0, .symbol = 3, .type = R_BPF_64_32_TYPE});
+    const std::string object = builder.build();
+
+    std::ostringstream captured;
+    std::streambuf* const original = std::cerr.rdbuf(captured.rdbuf());
+    std::string socket_error;
+    try {
+        read_test_object(object, "socket");
+    } catch (const std::exception& e) {
+        socket_error = e.what();
+    }
+    const std::string socket_report = captured.str();
+    captured.str("");
+    std::string xdp_error;
+    try {
+        read_test_object(object, "xdp");
+    } catch (const std::exception& e) {
+        xdp_error = e.what();
+    }
+    const std::string xdp_report = captured.str();
+    std::cerr.rdbuf(original);
+
+    REQUIRE_THAT(socket_error, Catch::Matchers::ContainsSubstring("Unresolved symbols found."));
+    REQUIRE(socket_report.size() < long_name.size());
+    REQUIRE_THAT(socket_report, Catch::Matchers::ContainsSubstring("... and 984 more unresolved symbols"));
+    REQUIRE_THAT(xdp_error, Catch::Matchers::ContainsSubstring("Unresolved symbols found."));
+    REQUIRE_THAT(xdp_report, !Catch::Matchers::ContainsSubstring("more unresolved symbols"));
+    REQUIRE(read_test_object(object, "tc").size() == 1);
 }

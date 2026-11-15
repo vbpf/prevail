@@ -180,9 +180,12 @@ void update_line_info(std::vector<RawProgram>& raw_programs, const ELFIO::sectio
 // ---------------------------------------------------------------------------
 
 class ProgramReader {
-    struct unresolved_symbol_error_t {
-        std::string section;
-        std::string message;
+    /// A relocation entry that try_reloc could not apply. It holds indices rather than text, so that its size does not
+    /// depend on the length of the names the file supplies; the message is built only to report it.
+    struct UnresolvedRelocation {
+        size_t prog_index{}; ///< Index in raw_programs of the program holding the relocated instruction.
+        size_t location{};   ///< Instruction index within that program.
+        ELFIO::Elf_Word symbol_index{};
     };
 
     const parse_params_t& parse_params;
@@ -196,7 +199,9 @@ class ProgramReader {
     std::map<SectionOffset, size_t> raw_program_index_;
     std::map<std::string, std::optional<KsymBtfId>> ksym_function_resolution_cache;
     std::map<std::string, const ELFIO::section*> relocation_section_cache;
-    std::vector<unresolved_symbol_error_t> unresolved_symbol_errors;
+    std::vector<UnresolvedRelocation> unresolved_relocations;
+    /// Indices in raw_programs of the programs holding an entry of unresolved_relocations.
+    std::set<size_t> programs_with_unresolved_relocations;
     /// Only negative IDs are platform-internal builtins needing the gate;
     /// positive IDs are standard BPF helpers handled via normal prototype lookup.
     std::set<size_t> builtin_offsets_for_current_program;
@@ -220,6 +225,8 @@ class ProgramReader {
                                        ELFIO::Elf_Xword program_offset);
 
     void record_function_relocation(FunctionRelocation reloc);
+    [[nodiscard]]
+    std::string unresolved_relocation_message(const UnresolvedRelocation& unresolved) const;
     void read_programs(bool all_sections);
 
   public:

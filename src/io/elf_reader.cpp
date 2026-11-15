@@ -692,6 +692,16 @@ void ProgramReader::resolve_function_relocation_targets() {
     }
 }
 
+/// Names longer than this are abbreviated in diagnostics.
+constexpr size_t max_reported_name_length = 128;
+
+static std::string abbreviate_name(const std::string& name) {
+    if (name.size() <= max_reported_name_length) {
+        return name;
+    }
+    return name.substr(0, max_reported_name_length) + "...";
+}
+
 /// Link `prog`, a copy of raw_programs[prog_index], against raw_programs, which stay unlinked:
 /// every function in the transitive call graph of `prog` is appended exactly once, however many
 /// callers share it, so the linked program is never larger than all programs together.
@@ -728,6 +738,10 @@ std::string ProgramReader::append_subprograms(RawProgram& prog, const size_t pro
             throw UnmarshalError("Mutual recursion in subprogram calls");
         }
         if (visit[callee] == Visit::unvisited) {
+            // Its own section reports the relocations themselves; a caller must not take in its unrelocated code.
+            if (programs_with_unresolved_relocations.contains(callee)) {
+                return "Unresolved symbols found in subprogram " + abbreviate_name(raw_programs[callee].function_name);
+            }
             visit[callee] = Visit::in_progress;
             path.emplace_back(callee, function_relocations_of(callee));
         }
@@ -1024,11 +1038,10 @@ void ProgramReader::process_relocations(std::vector<EbpfInst>& instructions, con
 
         if (!try_reloc(sym.name, sym.section_index, sym.type, sym.bind, instructions, loc, idx,
                        entry.explicit_addend)) {
-            unresolved_symbol_errors.push_back(unresolved_symbol_error_t{
-                .section = section_name,
-                .message = "Unresolved external symbol " + (sym.name.empty() ? "<anonymous>" : sym.name) +
-                           " in section " + section_name + " at location " + std::to_string(loc),
-            });
+            // raw_programs.size() is the index the program gets when read_programs appends it.
+            unresolved_relocations.push_back(
+                UnresolvedRelocation{.prog_index = raw_programs.size(), .location = loc, .symbol_index = idx});
+            programs_with_unresolved_relocations.insert(raw_programs.size());
         }
     }
 }
@@ -1058,6 +1071,16 @@ const ELFIO::section* ProgramReader::get_relocation_section(const std::string& n
     }
     return it->second;
 }
+
+std::string ProgramReader::unresolved_relocation_message(const UnresolvedRelocation& unresolved) const {
+    const std::string symbol_name = get_symbol_details(symbols, unresolved.symbol_index).name;
+    return "Unresolved external symbol " + (symbol_name.empty() ? "<anonymous>" : abbreviate_name(symbol_name)) +
+           " in section " + abbreviate_name(raw_programs.at(unresolved.prog_index).section_name) + " at location " +
+           std::to_string(unresolved.location);
+}
+
+/// At most this many unresolved relocations are reported for one section; the rest are only counted.
+constexpr size_t max_reported_unresolved_relocations = 16;
 
 void ProgramReader::read_programs() { read_programs(false); }
 
@@ -1115,21 +1138,40 @@ void ProgramReader::read_programs(const bool all_sections) {
         }
     }
 
-    bool has_relevant_unresolved_symbols = false;
-    for (const auto& err : unresolved_symbol_errors) {
+    // Every unresolved relocation fails the load of its section, however many there are; only the first few of each
+    // section are reported.
+    std::map<std::string, size_t> unresolved_count_by_section;
+    for (const UnresolvedRelocation& unresolved : unresolved_relocations) {
+        const std::string& section = raw_programs.at(unresolved.prog_index).section_name;
+        if (!all_sections && !parse_params.desired_section.empty() && section != parse_params.desired_section) {
+            continue;
+        }
+        if (++unresolved_count_by_section[section] > max_reported_unresolved_relocations) {
+            continue;
+        }
         if (all_sections) {
-            section_error_t& section_error = section_errors[err.section];
-            section_error.reason = "Unresolved symbols found.";
-            section_error.diagnostics.push_back(err.message);
-            continue;
+            section_errors[section].diagnostics.push_back(unresolved_relocation_message(unresolved));
+        } else {
+            std::cerr << unresolved_relocation_message(unresolved) << std::endl;
         }
-        if (!parse_params.desired_section.empty() && err.section != parse_params.desired_section) {
-            continue;
-        }
-        has_relevant_unresolved_symbols = true;
-        std::cerr << err.message << std::endl;
     }
-    if (has_relevant_unresolved_symbols) {
+    for (const auto& [section, count] : unresolved_count_by_section) {
+        std::optional<std::string> more;
+        if (count > max_reported_unresolved_relocations) {
+            more =
+                "... and " + std::to_string(count - max_reported_unresolved_relocations) + " more unresolved symbols";
+        }
+        if (all_sections) {
+            section_error_t& section_error = section_errors[section];
+            section_error.reason = "Unresolved symbols found.";
+            if (more) {
+                section_error.diagnostics.push_back(*more);
+            }
+        } else if (more) {
+            std::cerr << *more << std::endl;
+        }
+    }
+    if (!all_sections && !unresolved_count_by_section.empty()) {
         throw UnmarshalError("Unresolved symbols found.");
     }
 
@@ -1155,7 +1197,8 @@ void ProgramReader::read_programs(const bool all_sections) {
         }
         if (all_sections) {
             section_errors.try_emplace(prog.section_name, section_error_t{.reason = err});
-        } else if (prog.section_name == parse_params.desired_section) {
+        } else if (parse_params.desired_section.empty() || prog.section_name == parse_params.desired_section) {
+            // The program is returned below, so it must be fully linked.
             throw UnmarshalError(err);
         }
     }
