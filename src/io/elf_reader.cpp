@@ -8,7 +8,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -278,81 +277,36 @@ std::optional<std::string> find_function_symbol_at_offset(const ELFIO::const_sym
     return get_symbol_details(symbols, it->second.first).name;
 }
 
-ELFIO::Elf_Xword compute_reachable_program_span(const std::vector<EbpfInst>& section_instructions,
-                                                const ELFIO::Elf_Xword program_offset,
-                                                const ELFIO::Elf_Xword initial_size) {
-    if (section_instructions.empty()) {
-        return initial_size;
-    }
-
-    const size_t total = section_instructions.size();
-    const size_t start = program_offset / sizeof(EbpfInst);
-    size_t initial_end = (program_offset + initial_size) / sizeof(EbpfInst);
-    if (start >= total || initial_end <= start) {
-        return initial_size;
-    }
-    initial_end = std::min(initial_end, total);
-
-    auto mark = [&](const int64_t index, std::vector<bool>& seen, std::deque<size_t>& work) {
-        if (index < 0 || index >= gsl::narrow<int64_t>(total)) {
-            return;
+std::optional<ControlFlowEscape> find_control_flow_escape(const std::vector<EbpfInst>& instructions) {
+    const auto size = gsl::narrow<int64_t>(instructions.size());
+    for (int64_t pc = 0; pc < size;) {
+        const EbpfInst& inst = instructions[gsl::narrow<size_t>(pc)];
+        const int64_t next = pc + (inst.opcode == INST_OP_LDDW_IMM ? 2 : 1);
+        if (next > size) {
+            // An lddw without its second slot is not a control-flow question; unmarshal rejects it.
+            break;
         }
-        const size_t idx = gsl::narrow<size_t>(index);
-        if (seen[idx]) {
-            return;
-        }
-        seen[idx] = true;
-        work.push_back(idx);
-    };
-
-    std::vector<bool> seen(total, false);
-    std::deque<size_t> work;
-    mark(gsl::narrow<int64_t>(start), seen, work);
-
-    size_t max_reachable = initial_end - 1;
-    while (!work.empty()) {
-        const size_t pc = work.front();
-        work.pop_front();
-        max_reachable = std::max(max_reachable, pc);
-
-        const EbpfInst& inst = section_instructions[pc];
-        const bool is_lddw = inst.opcode == INST_OP_LDDW_IMM;
-        const size_t fallthrough = pc + (is_lddw ? 2 : 1);
-
-        // LDDW is a two-slot instruction, so keep the high slot in range.
-        if (is_lddw && pc + 1 < total) {
-            mark(gsl::narrow<int64_t>(pc + 1), seen, work);
-            max_reachable = std::max(max_reachable, pc + 1);
-        }
-
+        bool falls_through = true;
         const uint8_t cls = inst.opcode & INST_CLS_MASK;
         if (cls == INST_CLS_JMP || cls == INST_CLS_JMP32) {
             const uint8_t op = (inst.opcode >> 4) & 0xF;
             if (op == INST_EXIT) {
-                continue;
-            }
-            if (op == INST_CALL) {
-                if (inst.opcode == INST_OP_CALL && inst.src == INST_CALL_LOCAL) {
-                    const int64_t target = gsl::narrow<int64_t>(pc) + 1 + inst.imm;
-                    mark(target, seen, work);
+                falls_through = false;
+            } else if (op != INST_CALL) {
+                const int32_t offset = inst.opcode == INST_OP_JA32 ? inst.imm : inst.offset;
+                const int64_t target = pc + 1 + offset;
+                if (target < 0 || target >= size) {
+                    return ControlFlowEscape{.pc = gsl::narrow<size_t>(pc), .target = target, .is_jump = true};
                 }
-                mark(gsl::narrow<int64_t>(fallthrough), seen, work);
-                continue;
+                falls_through = op != INST_JA;
             }
-
-            const int64_t target = gsl::narrow<int64_t>(pc) + 1 + inst.offset;
-            mark(target, seen, work);
-            if (op != INST_JA) {
-                mark(gsl::narrow<int64_t>(fallthrough), seen, work);
-            }
-            continue;
         }
-
-        mark(gsl::narrow<int64_t>(fallthrough), seen, work);
+        if (falls_through && next >= size) {
+            return ControlFlowEscape{.pc = gsl::narrow<size_t>(pc), .target = next, .is_jump = false};
+        }
+        pc = next;
     }
-
-    const size_t span_end = std::max(initial_end, max_reachable + 1);
-    return gsl::narrow<ELFIO::Elf_Xword>((span_end - start) * sizeof(EbpfInst));
+    return std::nullopt;
 }
 
 std::vector<ELFIO::section*> global_sections(const ELFIO::elfio& reader) {
@@ -631,6 +585,50 @@ void ProgramReader::record_function_relocation(FunctionRelocation reloc) {
     function_relocations.push_back(std::move(reloc));
 }
 
+/// Names longer than this are abbreviated in diagnostics.
+constexpr size_t max_reported_name_length = 128;
+
+static std::string abbreviate_name(const std::string& name) {
+    if (name.size() <= max_reported_name_length) {
+        return name;
+    }
+    return name.substr(0, max_reported_name_length) + "...";
+}
+
+std::string ProgramReader::name_of_function_containing(const ELFIO::section& section,
+                                                       const ELFIO::Elf_Xword offset) const {
+    const auto section_symbols = function_symbols.find(section.get_index());
+    if (section_symbols == function_symbols.end()) {
+        return section.get_name();
+    }
+    const auto& by_offset = section_symbols->second.by_offset;
+    auto it = by_offset.upper_bound(offset);
+    if (it == by_offset.begin()) {
+        return section.get_name();
+    }
+    --it;
+    // The last symbol at an offset names the program there, as in get_program_name_and_size.
+    return get_symbol_details(symbols, it->second.second).name;
+}
+
+std::string ProgramReader::describe_control_flow_escape(const ELFIO::section& section,
+                                                        const ELFIO::Elf_Xword program_offset,
+                                                        const std::string& program_name,
+                                                        const ControlFlowEscape& escape) const {
+    const int64_t section_target = gsl::narrow<int64_t>(program_offset / sizeof(EbpfInst)) + escape.target;
+    const bool in_section =
+        section_target >= 0 && section_target < gsl::narrow<int64_t>(section.get_size() / sizeof(EbpfInst));
+    std::string destination = "out of the section";
+    if (in_section) {
+        destination =
+            "into function " + abbreviate_name(name_of_function_containing(
+                                   section, gsl::narrow<ELFIO::Elf_Xword>(section_target) * sizeof(EbpfInst)));
+    }
+    return "Function " + abbreviate_name(program_name) + " in section " + abbreviate_name(section.get_name()) +
+           (escape.is_jump ? " jumps " : " falls through ") + destination + " at instruction " +
+           std::to_string(escape.pc);
+}
+
 bool ProgramReader::has_function_relocation(const size_t prog_index, const size_t source_offset) const {
     return function_relocation_index_.contains({prog_index, source_offset});
 }
@@ -667,19 +665,15 @@ void ProgramReader::enqueue_synthetic_local_calls(const std::vector<EbpfInst>& i
             throw UnmarshalError("Local call target out of section bounds");
         }
 
+        // The target need not start a FUNC symbol: a call into the code of a function lands in
+        // that function, which resolve_function_relocation_targets finds by position.
         const auto target_offset = gsl::narrow<ELFIO::Elf_Xword>(target * sizeof(EbpfInst));
-        const auto target_name =
-            find_function_symbol_at_offset(symbols, function_symbols, section_index, target_offset);
-        if (!target_name) {
-            throw UnmarshalError("Subprogram not found at section offset " + std::to_string(target_offset));
-        }
-
         record_function_relocation(FunctionRelocation{
             .prog_index = raw_programs.size(),
             .source_offset = loc,
             .relocation_entry_index = std::nullopt,
             .target = {.section_index = section_index, .offset = target_offset},
-            .target_function_name = *target_name,
+            .target_function_name = name_of_function_containing(*section, target_offset),
         });
     }
 }
@@ -699,22 +693,25 @@ void ProgramReader::resolve_function_relocation_targets() {
         if (reloc.target.section_index >= reader.sections.size()) {
             throw UnmarshalError("Invalid section index");
         }
-        // The callee is the program at the position the relocation designates, not the first
-        // program that happens to share its section name and function name.
-        if (const auto it = raw_program_index_.find(reloc.target); it != raw_program_index_.end()) {
-            reloc.target_prog_index = it->second;
+        // The callee is the program whose code holds the position the relocation designates, not
+        // the first program that happens to share its section name and function name. A relocation
+        // entry names its callee by a symbol, so it must designate where a program starts; only a
+        // call without one (enqueue_synthetic_local_calls) may land on code no FUNC symbol starts.
+        auto it = raw_program_index_.upper_bound(reloc.target);
+        if (it == raw_program_index_.begin()) {
+            continue;
+        }
+        --it;
+        const auto& [start, prog_index] = *it;
+        if (start.section_index != reloc.target.section_index) {
+            continue;
+        }
+        const size_t entry = (reloc.target.offset - start.offset) / sizeof(EbpfInst);
+        if (entry < raw_programs[prog_index].prog.size() && (entry == 0 || !reloc.relocation_entry_index)) {
+            reloc.target_prog_index = prog_index;
+            reloc.target_entry = entry;
         }
     }
-}
-
-/// Names longer than this are abbreviated in diagnostics.
-constexpr size_t max_reported_name_length = 128;
-
-static std::string abbreviate_name(const std::string& name) {
-    if (name.size() <= max_reported_name_length) {
-        return name;
-    }
-    return name.substr(0, max_reported_name_length) + "...";
 }
 
 /// Link `prog`, a copy of raw_programs[prog_index], against raw_programs, which stay unlinked:
@@ -757,6 +754,10 @@ std::string ProgramReader::append_subprograms(RawProgram& prog, const size_t pro
             if (programs_with_unresolved_relocations.contains(callee)) {
                 return "Unresolved symbols found in subprogram " + abbreviate_name(raw_programs[callee].function_name);
             }
+            if (const auto escape = programs_with_escaping_control_flow.find(callee);
+                escape != programs_with_escaping_control_flow.end()) {
+                return escape->second;
+            }
             visit[callee] = Visit::in_progress;
             path.emplace_back(callee, function_relocations_of(callee));
         }
@@ -786,7 +787,8 @@ std::string ProgramReader::append_subprograms(RawProgram& prog, const size_t pro
     for (const size_t caller : postorder) {
         const auto base = gsl::narrow<int64_t>(subprogram_offsets[caller]);
         for (const auto& reloc : function_relocations_of(caller)) {
-            const auto target_offset = gsl::narrow<int64_t>(subprogram_offsets[*reloc.target_prog_index]);
+            const auto target_offset =
+                gsl::narrow<int64_t>(subprogram_offsets[*reloc.target_prog_index] + reloc.target_entry);
             const auto source_offset = base + gsl::narrow<int64_t>(reloc.source_offset);
             prog.prog[source_offset].imm = gsl::narrow<int32_t>(target_offset - source_offset - 1);
         }
@@ -1106,20 +1108,24 @@ void ProgramReader::read_programs(const bool all_sections) {
         if (!(sec->get_flags() & ELFIO::SHF_EXECINSTR) || !sec->get_size() || !sec->get_data()) {
             continue;
         }
-        auto section_instructions = vector_of<EbpfInst>(*sec);
         const auto& sec_name = sec->get_name();
         const auto prog_type = parse_params.platform->get_program_type(sec_name, parse_params.path);
         for (ELFIO::Elf_Xword offset = 0; offset < sec->get_size();) {
             builtin_offsets_for_current_program.clear();
-            auto [name, symbol_size] = get_program_name_and_size(*sec, offset, symbols, function_symbols);
-            const auto extracted_size = compute_reachable_program_span(section_instructions, offset, symbol_size);
-            if (offset + extracted_size > sec->get_size()) {
-                throw UnmarshalError("Program span exceeds section bounds in section " + sec->get_name());
+            // A program is the code from its FUNC symbol to the next one, so that the programs of a
+            // section do not overlap. Control may leave it only by exit or by a call: a callee is
+            // appended to the program on linking, and other code it would run into is not.
+            auto [name, size] = get_program_name_and_size(*sec, offset, symbols, function_symbols);
+            auto instructions = vector_of<EbpfInst>(sec->get_data() + offset, size);
+            if (const auto escape = find_control_flow_escape(instructions)) {
+                programs_with_escaping_control_flow.emplace(raw_programs.size(),
+                                                            describe_control_flow_escape(*sec, offset, name, *escape));
+                jump_targets_for_current_program.clear();
+            } else {
+                jump_targets_for_current_program = collect_jump_targets(instructions);
             }
-            auto instructions = vector_of<EbpfInst>(sec->get_data() + offset, extracted_size);
-            jump_targets_for_current_program = collect_jump_targets(instructions);
             if (const auto reloc_sec = get_relocation_section(*sec)) {
-                process_relocations(instructions, *reloc_sec, sec_name, offset, extracted_size);
+                process_relocations(instructions, *reloc_sec, sec_name, offset, size);
             }
             enqueue_synthetic_local_calls(instructions, sec->get_index(), offset);
             ProgramInfo program_info{
@@ -1138,7 +1144,7 @@ void ProgramReader::read_programs(const bool all_sections) {
                 std::move(instructions),
                 std::move(program_info),
             });
-            offset += symbol_size;
+            offset += size;
         }
     }
 
@@ -1200,25 +1206,33 @@ void ProgramReader::read_programs(const bool all_sections) {
     }
 
     resolve_function_relocation_targets();
-    std::vector<RawProgram> linked_programs = raw_programs;
-    for (size_t i = 0; i < linked_programs.size(); ++i) {
-        RawProgram& prog = linked_programs[i];
-        const auto err = append_subprograms(prog, i);
+    // Only the programs returned below are linked: linking copies every callee into each of its
+    // callers, so it costs more than all the unlinked programs together.
+    const bool keeps_one_section = !all_sections && !parse_params.desired_section.empty();
+    std::vector<RawProgram> linked_programs;
+    for (size_t i = 0; i < raw_programs.size(); ++i) {
+        if (keeps_one_section && raw_programs[i].section_name != parse_params.desired_section) {
+            continue;
+        }
+        RawProgram& prog = linked_programs.emplace_back(raw_programs[i]);
+        std::string err;
+        if (const auto escape = programs_with_escaping_control_flow.find(i);
+            escape != programs_with_escaping_control_flow.end()) {
+            err = escape->second;
+        } else {
+            err = append_subprograms(prog, i);
+        }
         if (err.empty()) {
             continue;
         }
         if (all_sections) {
             section_errors.try_emplace(prog.section_name, section_error_t{.reason = err});
-        } else if (parse_params.desired_section.empty() || prog.section_name == parse_params.desired_section) {
+        } else {
             // The program is returned below, so it must be fully linked.
             throw UnmarshalError(err);
         }
     }
     raw_programs = std::move(linked_programs);
-
-    if (!all_sections && !parse_params.desired_section.empty()) {
-        std::erase_if(raw_programs, [&](const auto& p) { return p.section_name != parse_params.desired_section; });
-    }
 
     if (raw_programs.empty()) {
         throw UnmarshalError(parse_params.desired_section.empty() ? "No executable sections" : "Section not found");
