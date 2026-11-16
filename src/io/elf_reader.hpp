@@ -156,7 +156,6 @@ ELFIO::const_symbol_section_accessor read_and_validate_symbol_section(const ELFI
 // ---------------------------------------------------------------------------
 
 std::optional<uint64_t> resolve_known_linux_extern_symbol(std::string_view symbol_name);
-EbpfInst make_mov_reg_nop(uint8_t reg);
 /// Indices of the instructions that some jump or local call in the program lands on.
 /// Throws UnmarshalError if a jump leaves the program.
 std::set<size_t> collect_jump_targets(const std::vector<EbpfInst>& instructions);
@@ -206,6 +205,8 @@ class ProgramReader {
     /// Only negative IDs are platform-internal builtins needing the gate;
     /// positive IDs are standard BPF helpers handled via normal prototype lookup.
     std::set<size_t> builtin_offsets_for_current_program;
+    /// The lddw instructions of the current program that load the address of an extern the loader cannot resolve.
+    std::set<size_t> extern_address_offsets_for_current_program;
     std::set<size_t> jump_targets_for_current_program;
 
     // CO-RE relocation (elf_core_reloc.cpp)
@@ -221,6 +222,9 @@ class ProgramReader {
     std::span<const FunctionRelocation> function_relocations_of(size_t prog_index) const;
     void resolve_function_relocation_targets();
     void build_ksym_function_resolution_cache();
+    /// Whether `symbol_name` is a weak kernel function that the platform reports absent, whose address is then 0.
+    [[nodiscard]]
+    bool is_absent_weak_kfunc(const std::string& symbol_name, unsigned char symbol_bind) const;
     void build_relocation_section_cache();
     void enqueue_synthetic_local_calls(const std::vector<EbpfInst>& instructions, ELFIO::Elf_Half section_index,
                                        ELFIO::Elf_Xword program_offset);

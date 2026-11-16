@@ -111,6 +111,10 @@ struct ProgramInfo {
     std::map<size_t, btf_line_info_t> line_info{};
     // Instruction indices rewritten from builtin-call relocations.
     std::set<size_t> builtin_call_offsets{};
+    // Instruction indices of the lddw instructions that load the address of an extern symbol the loader cannot
+    // resolve: whatever immediate they hold, the loader that resolves the symbol writes its address there, so
+    // their destination holds an unknown number.
+    std::set<size_t> extern_address_offsets{};
 };
 
 struct RawProgram {

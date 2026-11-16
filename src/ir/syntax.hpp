@@ -108,6 +108,7 @@ struct PseudoAddress {
         CODE_ADDR,        // src=4; imm holds the label of the target, not the encoded relative offset
         MAP_BY_IDX,       // src=5
         MAP_VALUE_BY_IDX, // src=6
+        EXTERN_ADDR,      // src=0 at an index in ProgramInfo::extern_address_offsets: an unknown number
     } kind{};
     int32_t imm{};
     int32_t next_imm{};

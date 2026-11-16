@@ -68,6 +68,7 @@ namespace prevail {
 
 #define RE_VARIABLE_ADDR R"_(\s*variable_addr\(([-+]?(?:0x)?[0-9a-f]+)\)\s*)_"
 #define RE_CODE_ADDR R"_(\s*code_addr\(([-+]?(?:0x)?[0-9a-f]+)\)\s*)_"
+#define RE_EXTERN_ADDR R"_(\s*extern_addr\s*)_"
 #define RE_MAP_BY_IDX R"_(\s*map_by_idx\(([-+]?(?:0x)?[0-9a-f]+)\)\s*)_"
 #define RE_MAP_VALUE_BY_IDX R"_(\s*mva\(map_by_idx\(([-+]?(?:0x)?[0-9a-f]+)\)\)\s*\+\s*([-+]?(?:0x)?[0-9a-f]+)\s*)_"
 
@@ -252,6 +253,9 @@ static Instruction parse_instruction_inner(const std::string& line,
     }
     if (regex_match(text, m, regex(WREG ASSIGN RE_CODE_ADDR))) {
         return LoadPseudo{reg(m[1]), PseudoAddress{PseudoAddress::Kind::CODE_ADDR, to_int(m[2]), 0}};
+    }
+    if (regex_match(text, m, regex(WREG ASSIGN RE_EXTERN_ADDR))) {
+        return LoadPseudo{reg(m[1]), PseudoAddress{PseudoAddress::Kind::EXTERN_ADDR, 0, 0}};
     }
     if (regex_match(text, m, regex(WREG ASSIGN RE_MAP_BY_IDX))) {
         return LoadPseudo{reg(m[1]), PseudoAddress{PseudoAddress::Kind::MAP_BY_IDX, to_int(m[2]), 0}};
