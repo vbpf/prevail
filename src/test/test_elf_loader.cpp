@@ -19,10 +19,12 @@
 #include <map>
 #include <optional>
 #include <random>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 #include <boost/endian/conversion.hpp>
@@ -32,6 +34,7 @@
 #include <libbtf/btf_type_data.h>
 
 #include "config.hpp"
+#include "ebpf_verifier.hpp"
 #include "io/elf_loader.hpp"
 #include "io/elf_reader.hpp"
 #include "platform.hpp"
@@ -1362,14 +1365,13 @@ TEST_CASE("rewrite_extern_constant_load bails out on values exceeding int32 rang
 TEST_CASE("rewrite_extern_constant_load keeps the LDDW write to the address register", "[elf][hardening]") {
     constexpr EbpfInst lddw_lo{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = 0, .offset = 0, .imm = 0};
     constexpr EbpfInst ldx_w{.opcode = INST_CLS_LDX | INST_MODE_MEM | INST_SIZE_W, .dst = 3, .src = 2};
-    constexpr EbpfInst mov_zero{.opcode = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM, .dst = 2, .imm = 0};
     constexpr EbpfInst mov32_imm{.opcode = INST_CLS_ALU | INST_ALU_OP_MOV | INST_SRC_IMM, .dst = 3, .imm = 42};
     constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
 
-    SECTION("the address register is set to zero like any other extern address") {
+    SECTION("the LDDW stays, as the load of the extern's address") {
         std::vector<EbpfInst> insts{lddw_lo, {}, ldx_w, exit};
         REQUIRE(rewrite_extern_constant_load(insts, 0, 42, {}));
-        CHECK(insts == std::vector<EbpfInst>{mov_zero, make_mov_reg_nop(2), mov32_imm, exit});
+        CHECK(insts == std::vector<EbpfInst>{lddw_lo, {}, mov32_imm, exit});
     }
 
     // A path that jumps past the first slot of the LDDW does not read the extern.
@@ -3096,6 +3098,82 @@ TEST_CASE("ELF loader finds the symbol and relocation tables by their headers", 
     std::istringstream two_tables(TableLookupObject{.second_relocation_table = true}.build());
     REQUIRE_THROWS_WITH(read_elf(two_tables, "memory", "xdp", "", VerifierOptions{}, &g_ebpf_platform_linux),
                         Catch::Matchers::ContainsSubstring("Multiple relocation sections for section xdp"));
+}
+
+// The loader that resolves an extern symbol writes its address into the lddw that loads it, so the analysis may not
+// take the placeholder the ELF loader writes there as its value; otherwise a test of the address prunes the code it
+// guards, which is then never verified. Only a weak kernel function that the platform reports absent has the address
+// 0, as libbpf gives it.
+TEST_CASE("ELF loader treats the address of an unresolved extern as an unknown number", "[elf][hardening]") {
+    SECTION("code guarded by a test of the address is verified") {
+        // r6 = r1; r1 = &ksym_var ll; if r1 == 0 goto +3; r0 = *(u64 *)(r6 + 4096); *(u64 *)(r10 + 8) = r0; exit;
+        // r0 = 0; exit. The guarded block reads past the context and writes above the stack frame.
+        const TestObjectBuilder builder{
+            .sections =
+                {{.name = "xdp",
+                  .insts =
+                      {
+                          EbpfInst{.opcode = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_REG, .dst = 6, .src = 1},
+                          EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 1},
+                          EbpfInst{},
+                          EbpfInst{.opcode = INST_CLS_JMP | (0x1 << 4), .dst = 1, .offset = 3}, // if r1 == 0
+                          EbpfInst{.opcode = INST_CLS_LDX | INST_MODE_MEM | INST_SIZE_DW,
+                                   .dst = 0,
+                                   .src = 6,
+                                   .offset = 4096},
+                          EbpfInst{
+                              .opcode = INST_CLS_STX | INST_MODE_MEM | INST_SIZE_DW, .dst = 10, .src = 0, .offset = 8},
+                          test_exit,
+                          test_mov_r0_0,
+                          test_exit,
+                      }}},
+            .symbols = {{.name = "prog", .section = 0}, {.name = "ksym_var"}},
+            .relocations = {{.section = 0, .instruction = 1, .symbol = 1, .type = R_BPF_64_64_TYPE}},
+        };
+        const auto programs = read_test_object(builder.build(), "xdp");
+        REQUIRE(programs.size() == 1);
+        REQUIRE(programs[0].info.extern_address_offsets == std::set<size_t>{1});
+
+        const VerifierOptions options{};
+        const auto sequence = unmarshal(programs[0], options);
+        REQUIRE(std::holds_alternative<InstructionSeq>(sequence));
+        const auto& [label, load, _] = std::get<InstructionSeq>(sequence).at(1);
+        REQUIRE(load == Instruction{LoadPseudo{.dst = Reg{1}, .addr = {.kind = PseudoAddress::Kind::EXTERN_ADDR}}});
+        const ThreadLocalGuard guard;
+        REQUIRE_FALSE(
+            verify(Program::from_sequence(std::get<InstructionSeq>(sequence), programs[0].info, options), options));
+    }
+
+    SECTION("strong and weak data symbols") {
+        ElfObject elf{"ebpf-samples/cilium-ebpf/ksym-el.elf", {}, &g_ebpf_platform_linux};
+        // lddw r1, bpf_init (GLOBAL) at 0; lddw r1, bpf_trace_run1 (WEAK) at 17.
+        const auto& ksym_test = elf.get_programs("socket", "ksym_test");
+        REQUIRE(ksym_test.size() == 1);
+        REQUIRE(ksym_test[0].info.extern_address_offsets == std::set<size_t>{0, 17});
+        const auto& ksym_missing_test = elf.get_programs("socket", "ksym_missing_test");
+        REQUIRE(ksym_missing_test.size() == 1);
+        REQUIRE_FALSE(ksym_missing_test[0].info.extern_address_offsets.empty());
+    }
+
+    SECTION("a weak kernel function that the platform reports absent has the address 0") {
+        ElfObject elf{"ebpf-samples/cilium-ebpf/kfunc-el.elf", {}, &g_ebpf_platform_linux};
+        const auto& programs = elf.get_programs("tp_btf/task_newtask", "weak_kfunc_missing");
+        REQUIRE(programs.size() == 1);
+        REQUIRE(programs[0].prog.at(1).opcode == INST_OP_LDDW_IMM);
+        REQUIRE(programs[0].prog.at(1).imm == 0);
+        REQUIRE(programs[0].info.extern_address_offsets.empty());
+    }
+
+    SECTION("the load of a folded configuration constant still loads the extern's address") {
+        ElfObject elf{"ebpf-samples/cilium-ebpf/kconfig-el.elf", {}, &g_ebpf_platform_linux};
+        const auto& programs = elf.get_programs("socket", "kconfig");
+        REQUIRE(programs.size() == 1);
+        // lddw r1, LINUX_KERNEL_VERSION at 1, followed by the folded constant.
+        REQUIRE(programs[0].prog.at(1).opcode == INST_OP_LDDW_IMM);
+        REQUIRE(programs[0].info.extern_address_offsets.contains(1));
+        REQUIRE(programs[0].prog.at(3) ==
+                EbpfInst{.opcode = INST_CLS_ALU | INST_ALU_OP_MOV | INST_SRC_IMM, .dst = 1, .imm = 394752});
+    }
 }
 
 namespace {

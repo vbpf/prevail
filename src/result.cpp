@@ -213,7 +213,8 @@ InstructionDeps extract_instruction_deps(const Instruction& ins, const EbpfDomai
                 // dst = op(dst)
                 deps.regs_read.insert(v.dst);
                 deps.regs_written.insert(v.dst);
-            } else if constexpr (std::is_same_v<T, LoadMapFd> || std::is_same_v<T, LoadMapAddress>) {
+            } else if constexpr (std::is_same_v<T, LoadMapFd> || std::is_same_v<T, LoadMapAddress> ||
+                                 std::is_same_v<T, LoadPseudo>) {
                 deps.regs_written.insert(v.dst);
             } else if constexpr (std::is_same_v<T, Mem>) {
                 deps.regs_read.insert(v.access.basereg);
