@@ -241,13 +241,24 @@ ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO
             throw UnmarshalError("Malformed legacy maps section: " + s->get_name());
         }
 
+        // Each map symbol has the size of its record (compilers give every legacy map symbol that size), and the
+        // records of a section share one size, which is also the stride between them. Symbols that disagree on
+        // it leave the layout of the section undetermined. Symbols of size 0 do not say.
         size_t map_record_size = 0;
+        const symbol_details_t* record_size_symbol = nullptr;
         for (const auto& symbol : map_symbols) {
             if (symbol.size == 0) {
                 continue;
             }
             const auto symbol_size = gsl::narrow<size_t>(symbol.size);
-            map_record_size = map_record_size == 0 ? symbol_size : std::min(map_record_size, symbol_size);
+            if (record_size_symbol && symbol_size != map_record_size) {
+                throw UnmarshalError("Malformed legacy maps section " + s->get_name() +
+                                     ": map symbols disagree on the record size (" + record_size_symbol->name +
+                                     " has " + std::to_string(map_record_size) + " bytes, " + symbol.name + " has " +
+                                     std::to_string(symbol_size) + ")");
+            }
+            map_record_size = symbol_size;
+            record_size_symbol = &symbol;
         }
         if (map_record_size == 0) {
             map_record_size = parse_params.platform->map_record_size;
