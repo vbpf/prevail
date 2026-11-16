@@ -560,3 +560,97 @@ TEST_CASE("the number of vertices is limited by a hard check and costs linear sc
     REQUIRE_THROWS_AS(dbm.new_vertex(), RuntimeInputError);
     CHECK(dbm.graph().size() == std::numeric_limits<VertId>::max());
 }
+
+// 26) Closure and join add weights up, and a program can feed each sum into the next one
+TEST_CASE("closure keeps derived weights within the range of 64-bit differences", "[closure][splitdbm]") {
+    using namespace splitdbm;
+    const Weight step = Weight{1} << 64;
+
+    for (const bool negative : {false, true}) {
+        CAPTURE(negative);
+        SplitDBM dbm;
+        std::vector<VertId> chain;
+        for (int i = 0; i < 4; i++) {
+            chain.push_back(dbm.new_vertex());
+        }
+        for (int i = 0; i + 1 < 4; i++) {
+            REQUIRE(dbm.add_difference_constraint(chain[i], chain[i + 1], negative ? -step : step));
+        }
+        for (int s = 0; s < 4; s++) {
+            for (int d = s + 2; d < 4; d++) {
+                CAPTURE(s, d);
+                // A sum of 2^65 or more is not stored, and a sum below -2^65 is stored as -2^65.
+                REQUIRE(dbm.graph().elem(chain[s], chain[d]) == negative);
+                if (negative) {
+                    CHECK(dbm.graph().edge_val(chain[s], chain[d]) == -derived_weight_limit);
+                }
+            }
+        }
+    }
+}
+
+// 27) Each round below stands for a few instructions of a loop-free program
+TEST_CASE("derived weights do not double round after round", "[join][closure]") {
+    using namespace dsl_syntax;
+    // Enough rounds to overflow 128 bits by doubling, from 2^64 or from -1.
+    constexpr int rounds = 140;
+    const auto var = [](const int i) { return variable_registry.cell_var(DataKind::uvalues, 8 * i, 8); };
+    ZoneDomain dom;
+
+    // high and low become copies of a pair of variables, or else are only known to be ordered.
+    const auto ordered_or_copy_of = [&](const Variable high, const Variable low, const LinearExpression& high_value,
+                                        const LinearExpression& low_value) {
+        dom.havoc(high);
+        dom.havoc(low);
+        ZoneDomain ordered = dom;
+        REQUIRE(ordered.add_constraint(high - low <= 0));
+        dom.assign(high, high_value);
+        dom.assign(low, low_value);
+        dom = dom | ordered;
+    };
+
+    SECTION("a bound and the relation that join derives from it") {
+        REQUIRE(dom.add_constraint(var(0) <= std::numeric_limits<uint64_t>::max()));
+        for (int round = 0; round < rounds; round++) {
+            ordered_or_copy_of(var(1), var(2), var(0), 0);     // var(1) - var(2) <= bound of var(0)
+            REQUIRE(dom.add_constraint(var(2) - var(0) <= 0)); // var(2) <= bound, so var(1) <= 2 * bound
+            dom.assign(var(0), var(1));
+        }
+    }
+
+    SECTION("two copies of a relation") {
+        REQUIRE(dom.add_constraint(var(0) - var(1) <= std::numeric_limits<uint64_t>::max()));
+        for (int round = 0; round < rounds; round++) {
+            ordered_or_copy_of(var(2), var(3), var(0), var(1)); // var(2) - var(3) <= w
+            ordered_or_copy_of(var(4), var(5), var(0), var(1)); // var(4) - var(5) <= w
+            REQUIRE(dom.add_constraint(eq(var(3), var(4))));    // var(2) - var(5) <= 2 * w
+            dom.assign(var(0), var(2));
+            dom.assign(var(1), var(5));
+        }
+    }
+
+    SECTION("negative relations") {
+        // Two pairs (low, high) without bounds: (0, 1) and (2, 3).
+        REQUIRE(dom.add_constraint(var(0) - var(1) < 0));
+        REQUIRE(dom.add_constraint(var(2) - var(3) < 0));
+        for (int round = 0; round < rounds; round++) {
+            // Four pairs, each a copy of either old pair: the join keeps low - high <= -w and nothing else.
+            for (int low = 4; low < 12; low += 2) {
+                ZoneDomain other = dom;
+                dom.assign(var(low), var(0));
+                dom.assign(var(low + 1), var(1));
+                other.assign(var(low), var(2));
+                other.assign(var(low + 1), var(3));
+                dom = dom | other;
+            }
+            REQUIRE(dom.add_constraint(eq(var(5), var(6))));  // var(4) - var(7) <= -2 * w
+            REQUIRE(dom.add_constraint(eq(var(9), var(10)))); // var(8) - var(11) <= -2 * w
+            dom.assign(var(0), var(4));
+            dom.assign(var(1), var(7));
+            dom.assign(var(2), var(8));
+            dom.assign(var(3), var(11));
+        }
+        CHECK(dom.entail(var(0) - var(1) < 0));
+        CHECK(dom.entail(var(2) - var(3) < 0));
+    }
+}

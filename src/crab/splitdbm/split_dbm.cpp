@@ -16,7 +16,9 @@ Graph compute_deferred(const ReadableGraph auto& bound_source, ReadableGraph aut
         for (VertId d : rel_excl.succs(s)) {
             if (auto ws = bound_source.lookup(s, 0)) {
                 if (auto wd = bound_source.lookup(0, d)) {
-                    deferred.add_edge(s, *ws + *wd, d);
+                    if (const auto w = derived_weight(*ws + *wd)) {
+                        deferred.add_edge(s, *w, d);
+                    }
                 }
             }
         }
@@ -189,7 +191,11 @@ bool SplitDBM::strengthen_bound(const VertId v, const Side side, const Weight& b
             if (e.vert == 0) {
                 continue;
             }
-            g_.update_edge(e.vert, e.val + edge_weight, 0);
+            const auto derived = derived_weight(e.val + edge_weight);
+            if (!derived) {
+                continue;
+            }
+            g_.update_edge(e.vert, *derived, 0);
             if (!repair_potential(e.vert, 0)) {
                 return false;
             }
@@ -207,7 +213,11 @@ bool SplitDBM::strengthen_bound(const VertId v, const Side side, const Weight& b
             if (e.vert == 0) {
                 continue;
             }
-            g_.update_edge(0, e.val + bound_value, e.vert);
+            const auto derived = derived_weight(e.val + bound_value);
+            if (!derived) {
+                continue;
+            }
+            g_.update_edge(0, *derived, e.vert);
             if (!repair_potential(0, e.vert)) {
                 return false;
             }
@@ -334,7 +344,10 @@ SplitDBM SplitDBM::join(const AlignedPair& aligned) {
         Weight right_lb = gy.edge_val(s, 0);
         for (VertId d : ub_up) {
             if (s != d) {
-                result_g.update_edge(s, std::max(left_lb + gx.edge_val(0, d), right_lb + gy.edge_val(0, d)), d);
+                const Weight sum = std::max(left_lb + gx.edge_val(0, d), right_lb + gy.edge_val(0, d));
+                if (const auto w = derived_weight(sum)) {
+                    result_g.update_edge(s, *w, d);
+                }
             }
         }
     }
@@ -344,7 +357,10 @@ SplitDBM SplitDBM::join(const AlignedPair& aligned) {
         Weight right_lb = gy.edge_val(s, 0);
         for (VertId d : ub_down) {
             if (s != d) {
-                result_g.update_edge(s, std::max(left_lb + gx.edge_val(0, d), right_lb + gy.edge_val(0, d)), d);
+                const Weight sum = std::max(left_lb + gx.edge_val(0, d), right_lb + gy.edge_val(0, d));
+                if (const auto w = derived_weight(sum)) {
+                    result_g.update_edge(s, *w, d);
+                }
             }
         }
     }
