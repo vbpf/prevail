@@ -441,6 +441,121 @@ TEST_CASE("xdp_md.data_meta is not assumed to precede data", "[verify][ctx]") {
     }
 }
 
+TEST_CASE("the access that a map grants to the program is enforced", "[verify][map]") {
+    using Access = EbpfMapAccess;
+    constexpr Reg r0{0}, r1{1}, r2{2}, r3{3}, r4{4}, r10{R10_STACK_POINTER};
+    const Label done{1000};
+    const auto mov = [](const Reg dst, const Value v) {
+        return Bin{.op = Bin::Op::MOV, .dst = dst, .v = v, .is64 = true};
+    };
+    const auto add = [](const Reg dst, const Value v) {
+        return Bin{.op = Bin::Op::ADD, .dst = dst, .v = v, .is64 = true};
+    };
+    const auto mem = [](const Reg base, const Value v, const bool is_load) {
+        return Mem{.access = {.width = 8, .basereg = base, .offset = 0}, .value = v, .is_load = is_load};
+    };
+    const Call lookup{.func = 1}; // map_lookup_elem
+    const Call update{.func = 2}; // map_update_elem
+    const Call erase{.func = 3};  // map_delete_elem
+    const Jmp if_null_done{.cond = eq0_zero_is64(), .target = done};
+
+    // Hash maps with fds 1 and 2, 4-byte keys and 8-byte values. The program stores a zero key and value at r10 - 8,
+    // points r2 and r3 to it, sets r4 = 0 and r1 = map 1, then runs `body` and returns 0.
+    const auto accepts = [&](const Access map1, const Access map2, const std::vector<Instruction>& body) {
+        ProgramInfo info = default_info();
+        for (const auto& [fd, access] : {std::pair{1, map1}, std::pair{2, map2}}) {
+            info.map_descriptors.get_mutable().push_back(EbpfMapDescriptor{.original_fd = fd,
+                                                                           .type = 1,
+                                                                           .key_size = 4,
+                                                                           .value_size = 8,
+                                                                           .max_entries = 1,
+                                                                           .inner_map_fd = -1,
+                                                                           .program_access = access});
+        }
+        std::vector<Instruction> code{
+            Mem{.access = {.width = 8, .basereg = r10, .offset = -8}, .value = Imm{0}, .is_load = false},
+            mov(r2, r10),
+            add(r2, Imm{static_cast<uint64_t>(-8)}),
+            mov(r3, r2),
+            mov(r4, Imm{0}),
+            LoadMapFd{.dst = r1, .mapfd = 1},
+        };
+        code.insert(code.end(), body.begin(), body.end());
+        InstructionSeq seq;
+        for (Instruction& ins : code) {
+            seq.push_back(at(static_cast<int>(seq.size()), std::move(ins)));
+        }
+        seq.push_back({done, mov(r0, Imm{0}), std::nullopt});
+        seq.push_back({Label{1001}, Exit{}, std::nullopt});
+        return !analyze(Program::from_sequence(seq, info, {}), {}).failed;
+    };
+
+    const std::vector<Instruction> load{lookup, if_null_done, mem(r0, r1, true)};
+    const std::vector<Instruction> store{lookup, if_null_done, mem(r0, Imm{0}, false)};
+    const std::vector<Instruction> atomic_add{
+        lookup, if_null_done, mov(r4, Imm{0}),
+        Atomic{
+            .op = Atomic::Op::ADD, .fetch = false, .access = {.width = 8, .basereg = r0, .offset = 0}, .valreg = r4}};
+    const std::vector<Instruction> update_elem{update};
+    const std::vector<Instruction> delete_elem{erase};
+    // map_update_elem on map 2 with a value that map_update_elem reads from a value of map 1.
+    const std::vector<Instruction> update_from_value{lookup,          if_null_done,
+                                                     mov(r3, r0),     LoadMapFd{.dst = r1, .mapfd = 2},
+                                                     mov(r2, r10),    add(r2, Imm{static_cast<uint64_t>(-8)}),
+                                                     mov(r4, Imm{0}), update};
+    // map_lookup_elem on map 1 or map 2. The body starts at label 6.
+    const auto on_either_map = [&](const Instruction& access) {
+        return std::vector<Instruction>{Call{.func = 5}, // ktime_get_ns
+                                        mov(r2, r10),
+                                        add(r2, Imm{static_cast<uint64_t>(-8)}),
+                                        LoadMapFd{.dst = r1, .mapfd = 1},
+                                        Jmp{.cond = eq0_zero_is64(), .target = Label{12}},
+                                        LoadMapFd{.dst = r1, .mapfd = 2},
+                                        lookup,
+                                        if_null_done,
+                                        access};
+    };
+    // The address of the value of map 1, as for a global variable.
+    const auto direct = [&](const bool is_load) {
+        return std::vector<Instruction>{LoadMapAddress{.dst = r0, .mapfd = 1, .offset = 0},
+                                        mem(r0, is_load ? Value{r1} : Value{Imm{0}}, is_load)};
+    };
+
+    for (const auto& body :
+         {load, store, atomic_add, update_elem, delete_elem, update_from_value, direct(true), direct(false)}) {
+        REQUIRE(accepts(Access::read_write, Access::read_write, body));
+    }
+
+    REQUIRE(accepts(Access::read_only, Access::read_write, load));
+    REQUIRE(accepts(Access::read_only, Access::read_write, update_from_value));
+    REQUIRE(accepts(Access::read_only, Access::read_write, direct(true)));
+    REQUIRE_FALSE(accepts(Access::read_only, Access::read_write, store));
+    REQUIRE_FALSE(accepts(Access::read_only, Access::read_write, atomic_add));
+    REQUIRE_FALSE(accepts(Access::read_only, Access::read_write, update_elem));
+    REQUIRE_FALSE(accepts(Access::read_only, Access::read_write, delete_elem));
+    REQUIRE_FALSE(accepts(Access::read_only, Access::read_write, direct(false)));
+    REQUIRE_FALSE(accepts(Access::read_write, Access::read_only, update_from_value)); // Updates map 2.
+
+    REQUIRE(accepts(Access::write_only, Access::read_write, store));
+    REQUIRE(accepts(Access::write_only, Access::read_write, update_elem));
+    REQUIRE(accepts(Access::write_only, Access::read_write, delete_elem));
+    REQUIRE(accepts(Access::write_only, Access::read_write, direct(false)));
+    REQUIRE_FALSE(accepts(Access::write_only, Access::read_write, load));
+    REQUIRE_FALSE(accepts(Access::write_only, Access::read_write, atomic_add));
+    REQUIRE_FALSE(accepts(Access::write_only, Access::read_write, update_from_value));
+    REQUIRE_FALSE(accepts(Access::write_only, Access::read_write, direct(true)));
+
+    // A value of either map may be accessed only as both maps allow.
+    const Instruction load_value = mem(r0, r1, true);
+    const Instruction store_value = mem(r0, Imm{0}, false);
+    REQUIRE(accepts(Access::read_only, Access::read_write, on_either_map(load_value)));
+    REQUIRE_FALSE(accepts(Access::read_only, Access::read_write, on_either_map(store_value)));
+    REQUIRE(accepts(Access::write_only, Access::read_write, on_either_map(store_value)));
+    REQUIRE_FALSE(accepts(Access::write_only, Access::read_write, on_either_map(load_value)));
+    REQUIRE_FALSE(accepts(Access::read_only, Access::write_only, on_either_map(load_value)));
+    REQUIRE_FALSE(accepts(Access::read_only, Access::write_only, on_either_map(store_value)));
+}
+
 TEST_CASE("AnalysisResult reports the loop iterations of all loops together", "[passes][stats]") {
     const ProgramInfo info = default_info();
     VerifierOptions options;

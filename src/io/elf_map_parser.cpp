@@ -50,6 +50,25 @@ std::map<int, int> map_typeid_to_fd(const std::vector<EbpfMapDescriptor>& map_de
     return type_id_to_fd_map;
 }
 
+/// Loaders create the map behind .rodata and .rodata.* read-only for the program (BPF_F_RDONLY_PROG).
+EbpfMapAccess global_section_access(const ELFIO::section& section) {
+    const std::string name = section.get_name();
+    const bool read_only = name == ".rodata" || name.starts_with(".rodata.");
+    return read_only ? EbpfMapAccess::read_only : EbpfMapAccess::read_write;
+}
+
+/// The value of the map_flags member of a BTF-defined map, which libbtf does not report. `__uint(map_flags, v)`
+/// declares it as `int (*map_flags)[v]`.
+uint32_t btf_map_flags(const libbtf::btf_type_data& btf_data, const libbtf::btf_type_id map_struct_id) {
+    for (const auto& member : btf_data.get_kind_type<libbtf::btf_kind_struct>(map_struct_id).members) {
+        if (member.name == "map_flags") {
+            const auto array_id = btf_data.dereference_pointer(member.type);
+            return btf_data.get_kind_type<libbtf::btf_kind_array>(array_id).count_of_elements;
+        }
+    }
+    return 0;
+}
+
 /// @brief Add implicit map descriptors for global variable sections.
 void add_global_variable_maps(const ELFIO::elfio& reader, ElfGlobalData& global) {
     auto& map_descriptors = global.map_descriptors.get_mutable();
@@ -64,6 +83,7 @@ void add_global_variable_maps(const ELFIO::elfio& reader, ElfGlobalData& global)
             .max_entries = 1,
             .inner_map_fd = DEFAULT_MAP_FD,
             .name = section->get_name(),
+            .program_access = global_section_access(*section),
         });
     }
 }
@@ -149,6 +169,7 @@ ElfGlobalData parse_btf_section(const parse_params_t& parse_params, const ELFIO:
                 .max_entries = map.max_entries,
                 .inner_map_fd = map.inner_map_type_id == 0 ? DEFAULT_MAP_FD : gsl::narrow<int>(map.inner_map_type_id),
                 .name = map.name,
+                .program_access = map_flags_to_program_access(btf_map_flags(*btf_data, map.type_id)),
             });
         }
     } catch (const std::exception& e) {
@@ -201,6 +222,7 @@ ElfGlobalData create_global_variable_maps(const ELFIO::elfio& reader) {
             .max_entries = 1,
             .inner_map_fd = DEFAULT_MAP_FD,
             .name = section->get_name(),
+            .program_access = global_section_access(*section),
         });
     }
 
@@ -352,6 +374,7 @@ ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO
             .max_entries = 1,
             .inner_map_fd = DEFAULT_MAP_FD,
             .name = section->get_name(),
+            .program_access = global_section_access(*section),
         });
     }
 
@@ -360,6 +383,17 @@ ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO
 }
 
 } // namespace
+
+EbpfMapAccess map_flags_to_program_access(const uint32_t map_flags) {
+    constexpr uint32_t rdonly_prog = 1U << 7; // BPF_F_RDONLY_PROG
+    constexpr uint32_t wronly_prog = 1U << 8; // BPF_F_WRONLY_PROG
+    switch (map_flags & (rdonly_prog | wronly_prog)) {
+    case 0: return EbpfMapAccess::read_write;
+    case rdonly_prog: return EbpfMapAccess::read_only;
+    case wronly_prog: return EbpfMapAccess::write_only;
+    default: throw UnmarshalError("map is both read-only and write-only for the program");
+    }
+}
 
 ElfGlobalData extract_global_data(const parse_params_t& params, const ELFIO::elfio& reader,
                                   const ELFIO::const_symbol_section_accessor& symbols) {

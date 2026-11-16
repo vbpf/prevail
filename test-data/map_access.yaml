@@ -1,0 +1,140 @@
+# Copyright (c) Prevail Verifier contributors.
+# SPDX-License-Identifier: MIT
+#
+# shared_access says what the program may do with the memory a shared pointer points to:
+# -1 read-only, 0 read-write (also what a pre-state that does not mention it means), 1 write-only.
+---
+test-case: load from read-only shared memory
+
+pre: ["r1.type=shared", "r1.shared_offset=0", "r1.shared_region_size=8", "r1.shared_access=-1", "r1.uvalue=[1, 2147418112]"]
+
+code:
+  <start>: |
+    r2 = *(u64 *)(r1 + 0)
+
+post: ["r1.type=shared", "r1.shared_offset=0", "r1.shared_region_size=8", "r1.shared_access=-1", "r1.uvalue=[1, 2147418112]",
+       "r2.type=number"]
+---
+test-case: store to read-only shared memory
+
+pre: ["r1.type=shared", "r1.shared_offset=0", "r1.shared_region_size=8", "r1.shared_access=-1", "r1.uvalue=[1, 2147418112]"]
+
+code:
+  <start>: |
+    *(u64 *)(r1 + 0) = 0
+
+post: ["_|_"]
+
+messages:
+  - "0: Shared memory is read-only (valid_access(r1.offset, width=8) for write)"
+---
+test-case: store to write-only shared memory
+
+pre: ["r1.type=shared", "r1.shared_offset=0", "r1.shared_region_size=8", "r1.shared_access=1", "r1.uvalue=[1, 2147418112]"]
+
+code:
+  <start>: |
+    *(u64 *)(r1 + 0) = 0
+
+post: ["r1.type=shared", "r1.shared_offset=0", "r1.shared_region_size=8", "r1.shared_access=1", "r1.uvalue=[1, 2147418112]"]
+---
+test-case: load from write-only shared memory
+
+pre: ["r1.type=shared", "r1.shared_offset=0", "r1.shared_region_size=8", "r1.shared_access=1", "r1.uvalue=[1, 2147418112]"]
+
+code:
+  <start>: |
+    r2 = *(u64 *)(r1 + 0)
+
+post: ["_|_"]
+
+messages:
+  - "0: Shared memory is write-only (valid_access(r1.offset, width=8) for read)"
+---
+test-case: atomic add to read-only shared memory
+
+pre: ["r1.type=shared", "r1.shared_offset=0", "r1.shared_region_size=8", "r1.shared_access=-1", "r1.uvalue=[1, 2147418112]",
+      "r2.type=number"]
+
+code:
+  <start>: |
+    lock *(u64 *)(r1 + 0) += r2
+
+post: ["_|_"]
+
+messages:
+  - "0: Shared memory is read-only (valid_access(r1.offset, width=8) for write)"
+---
+test-case: atomic add to write-only shared memory
+
+# The kernel checks every atomic as a read too, also one that does not fetch.
+pre: ["r1.type=shared", "r1.shared_offset=0", "r1.shared_region_size=8", "r1.shared_access=1", "r1.uvalue=[1, 2147418112]",
+      "r2.type=number"]
+
+code:
+  <start>: |
+    lock *(u64 *)(r1 + 0) += r2
+
+post: ["_|_"]
+
+messages:
+  - "0: Shared memory is write-only (valid_access(r1.offset, width=8) for read)"
+---
+test-case: atomic fetch-or on write-only shared memory
+
+pre: ["r1.type=shared", "r1.shared_offset=0", "r1.shared_region_size=8", "r1.shared_access=1", "r1.uvalue=[1, 2147418112]",
+      "r2.type=number"]
+
+code:
+  <start>: |
+    lock *(u64 *)(r1 + 0) |= r2 fetch
+
+post: ["_|_"]
+
+messages:
+  - "0: Shared memory is write-only (valid_access(r1.offset, width=8) for read)"
+---
+test-case: store to shared memory that may be read-only
+
+pre: ["r1.type=shared", "r1.shared_offset=0", "r1.shared_region_size=8", "r1.shared_access=[-1, 0]", "r1.uvalue=[1, 2147418112]"]
+
+code:
+  <start>: |
+    r2 = *(u64 *)(r1 + 0)
+    *(u64 *)(r1 + 0) = 0
+
+post: ["_|_"]
+
+messages:
+  - "1: Shared memory is read-only (valid_access(r1.offset, width=8) for write)"
+---
+test-case: a copy of a read-only pointer and a pointer derived from it are read-only
+
+pre: ["r1.type=shared", "r1.shared_offset=0", "r1.shared_region_size=8", "r1.shared_access=-1", "r1.uvalue=[1, 2147418112]"]
+
+code:
+  <start>: |
+    r2 = r1
+    r2 += 4
+    *(u32 *)(r2 + 0) = 0
+
+post: ["_|_"]
+
+messages:
+  - "2: Shared memory is read-only (valid_access(r2.offset, width=4) for write)"
+---
+test-case: a read-only pointer spilled to the stack and reloaded is read-only
+
+pre: ["r1.type=shared", "r1.shared_offset=0", "r1.shared_region_size=8", "r1.shared_access=-1", "r1.uvalue=[1, 2147418112]",
+      "r10.type=stack", "r10.stack_offset=512"]
+
+code:
+  <start>: |
+    *(u64 *)(r10 - 8) = r1
+    r2 = *(u64 *)(r10 - 8)
+    *(u64 *)(r2 + 0) = 0
+
+post: ["_|_"]
+
+messages:
+  - "2: Shared memory is read-only (valid_access(r2.offset, width=8) for write)"

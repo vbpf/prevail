@@ -119,13 +119,29 @@ static EbpfProgramType make_program_type(const string& name, const ebpf_ctx_desc
                            .legacy_packet_access = true};
 }
 
+// An invariant that does not state a register's shared_access lets the program read and write the shared memory
+// the register may point to, as a map without access flags does.
+static StringInvariant with_default_shared_access(const StringInvariant& inv) {
+    if (inv.is_bottom()) {
+        return inv;
+    }
+    std::set<string> constraints = inv.value();
+    for (int i = 0; i <= R10_STACK_POINTER; i++) {
+        const string access = "r" + std::to_string(i) + ".shared_access";
+        if (std::ranges::none_of(constraints, [&](const string& c) { return c.find(access) != string::npos; })) {
+            constraints.insert(access + "=" + std::to_string(static_cast<int>(EbpfMapAccess::read_write)));
+        }
+    }
+    return StringInvariant{std::move(constraints)};
+}
+
 // Parse a textual invariant and lift it to an EbpfDomain. The shared parsing core
 // used by both the entry-domain and observation-domain bridges below.
 static EbpfDomain parse_string_invariant_to_domain(const StringInvariant& inv, const AnalysisContext& context) {
     if (inv.is_bottom()) {
         return EbpfDomain::bottom();
     }
-    return EbpfDomain::from_constraints(parse_linear_constraints(inv.value()), context);
+    return EbpfDomain::from_constraints(parse_linear_constraints(with_default_shared_access(inv).value()), context);
 }
 
 // Test-only bridge for entry-domain construction. Resets the SplitDBM

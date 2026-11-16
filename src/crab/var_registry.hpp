@@ -23,6 +23,7 @@ struct RegPack {
     Variable shared_offset;
     Variable stack_offset;
     Variable shared_region_size;
+    Variable shared_access; // What the program may do with the region, as an EbpfMapAccess value.
     Variable stack_numeric_size;
     Variable socket_offset;
     Variable btf_id_offset;
@@ -81,6 +82,10 @@ class VariableRegistry final {
     /// EXPERIMENTAL: Variables where only the lower bound is semantically meaningful.
     [[nodiscard]]
     bool is_min_only(const Variable& v) const;
+
+    /// Whether `v` is a register's shared_access, which invariants show only where it is not read-write.
+    [[nodiscard]]
+    bool is_shared_access(const Variable& v) const;
 
     std::vector<Variable> get_loop_counters() const;
     Variable loop_counter(const std::string& label) const;

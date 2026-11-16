@@ -2480,6 +2480,110 @@ TEST_CASE("ELF loader resolves unambiguous BTF map symbols", "[elf][hardening]")
     REQUIRE(relocated_value_size(program, 1, INST_LD_MODE_MAP_FD) == 4096);
 }
 
+TEST_CASE("ELF loader records what the program may do with each map", "[elf][map]") {
+    constexpr uint32_t rdonly_prog = 1U << 7; // BPF_F_RDONLY_PROG
+    constexpr uint32_t wronly_prog = 1U << 8; // BPF_F_WRONLY_PROG
+    LddwRelocationElf elf;
+    // The access of the map that the n-th lddw of the program was relocated to.
+    const auto relocated_access = [](const RawProgram& program, const size_t n) {
+        const EbpfInst& inst = program.prog.at(2 * n);
+        for (const auto& descriptor : *program.info.map_descriptors) {
+            if (descriptor.original_fd == inst.imm) {
+                return descriptor.program_access;
+            }
+        }
+        FAIL("lddw does not refer to a map descriptor");
+        return EbpfMapAccess::read_write;
+    };
+
+    SECTION("map_flags of legacy map records") {
+        // {type, key_size, value_size, max_entries, map_flags, inner_map_idx, numa_node}
+        constexpr uint32_t records[3][7] = {{2, 4, 8, 1, 0}, {2, 4, 8, 1, rdonly_prog}, {2, 4, 8, 1, wronly_prog}};
+        const auto* maps_sec =
+            elf.add_data_section("maps", std::string(reinterpret_cast<const char*>(records), sizeof(records)));
+        const auto plain = elf.add_object("plain", 0, 28, maps_sec);
+        const auto read_only = elf.add_object("read_only", 28, 28, maps_sec);
+        const auto write_only = elf.add_object("write_only", 56, 28, maps_sec);
+
+        const auto program = elf.load({plain, read_only, write_only});
+        REQUIRE(relocated_access(program, 0) == EbpfMapAccess::read_write);
+        REQUIRE(relocated_access(program, 1) == EbpfMapAccess::read_only);
+        REQUIRE(relocated_access(program, 2) == EbpfMapAccess::write_only);
+    }
+    SECTION("a legacy map record that is both read-only and write-only") {
+        constexpr uint32_t record[7] = {2, 4, 8, 1, rdonly_prog | wronly_prog};
+        const auto* maps_sec =
+            elf.add_data_section("maps", std::string(reinterpret_cast<const char*>(record), sizeof(record)));
+        const auto map = elf.add_object("map", 0, 28, maps_sec);
+        REQUIRE_THROWS_WITH(elf.load({map}), Catch::Matchers::ContainsSubstring("both read-only and write-only"));
+    }
+    SECTION("map_flags of BTF-defined maps") {
+        // `struct { __uint(type, BPF_MAP_TYPE_ARRAY); __uint(max_entries, 1); int *key; int *value;
+        //           __uint(map_flags, flags); }` for each of the maps below, where __uint(name, val) is
+        // `int (*name)[val]`.
+        const std::vector<std::pair<std::string, uint32_t>> maps{
+            {"plain", 0}, {"read_only", rdonly_prog}, {"write_only", wronly_prog}};
+        constexpr uint32_t map_record_size = 40;
+        libbtf::btf_type_data btf;
+        const auto int_id = btf.append(libbtf::btf_kind_int{.name = "int",
+                                                            .size_in_bytes = 4,
+                                                            .offset_from_start_in_bits = 0,
+                                                            .field_width_in_bits = 32,
+                                                            .is_signed = true});
+        const auto int_ptr_id = btf.append(libbtf::btf_kind_ptr{.type = int_id});
+        const auto uint_member = [&](const uint32_t value) {
+            const auto array_id = btf.append(
+                libbtf::btf_kind_array{.element_type = int_id, .index_type = int_id, .count_of_elements = value});
+            return btf.append(libbtf::btf_kind_ptr{.type = array_id});
+        };
+        libbtf::btf_kind_data_section datasec{.name = ".maps", .members = {}, .size = 0};
+        for (const auto& [name, flags] : maps) {
+            const std::vector<libbtf::btf_kind_struct_member> members{
+                {.name = "type", .type = uint_member(2), .offset_from_start_in_bits = 0},
+                {.name = "max_entries", .type = uint_member(1), .offset_from_start_in_bits = 64},
+                {.name = "key", .type = int_ptr_id, .offset_from_start_in_bits = 128},
+                {.name = "value", .type = int_ptr_id, .offset_from_start_in_bits = 192},
+                {.name = "map_flags", .type = uint_member(flags), .offset_from_start_in_bits = 256},
+            };
+            const auto struct_id = btf.append(
+                libbtf::btf_kind_struct{.name = std::nullopt, .members = members, .size_in_bytes = map_record_size});
+            const auto var_id = btf.append(
+                libbtf::btf_kind_var{.name = name, .type = struct_id, .linkage = libbtf::BTF_LINKAGE_GLOBAL});
+            datasec.members.push_back({.type = var_id, .offset = datasec.size, .size = map_record_size});
+            datasec.size += map_record_size;
+        }
+        btf.append(datasec);
+        const auto btf_bytes = btf.to_bytes();
+        elf.add_data_section(".BTF", std::string(reinterpret_cast<const char*>(btf_bytes.data()), btf_bytes.size()));
+        const auto* maps_sec = elf.add_data_section(".maps", std::string(maps.size() * map_record_size, '\0'));
+        std::vector<ELFIO::Elf_Word> symbols;
+        for (size_t i = 0; i < maps.size(); i++) {
+            symbols.push_back(
+                elf.add_object(maps[i].first, i * map_record_size, map_record_size, maps_sec, ELFIO::STB_GLOBAL));
+        }
+
+        const auto program = elf.load(symbols);
+        REQUIRE(relocated_access(program, 0) == EbpfMapAccess::read_write);
+        REQUIRE(relocated_access(program, 1) == EbpfMapAccess::read_only);
+        REQUIRE(relocated_access(program, 2) == EbpfMapAccess::write_only);
+    }
+    SECTION("global variable sections") {
+        // Loaders create the maps behind .rodata and .rodata.* read-only for the program.
+        const auto* data_sec = elf.add_data_section(".data", std::string(8, '\0'));
+        const auto* bss_sec = elf.add_data_section(".bss", std::string(8, '\0'));
+        const auto* rodata_sec = elf.add_data_section(".rodata", std::string(8, '\0'));
+        const auto* rodata_str_sec = elf.add_data_section(".rodata.str1.1", std::string(8, '\0'));
+
+        const auto program =
+            elf.load({elf.add_object("d", 0, 8, data_sec), elf.add_object("b", 0, 8, bss_sec),
+                      elf.add_object("r", 0, 8, rodata_sec), elf.add_object("s", 0, 8, rodata_str_sec)});
+        REQUIRE(relocated_access(program, 0) == EbpfMapAccess::read_write);
+        REQUIRE(relocated_access(program, 1) == EbpfMapAccess::read_write);
+        REQUIRE(relocated_access(program, 2) == EbpfMapAccess::read_only);
+        REQUIRE(relocated_access(program, 3) == EbpfMapAccess::read_only);
+    }
+}
+
 TEST_CASE("ELF loader rejects relocations against ambiguous BTF map symbols", "[elf][hardening]") {
     LddwRelocationElf elf;
     ELFIO::Elf_Word relocation_symbol{};

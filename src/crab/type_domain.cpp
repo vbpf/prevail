@@ -80,6 +80,7 @@ std::string name_of(const DataKind kind) {
     case DataKind::packet_offsets: return "packet_offset";
     case DataKind::shared_offsets: return "shared_offset";
     case DataKind::shared_region_sizes: return "shared_region_size";
+    case DataKind::shared_accesses: return "shared_access";
     case DataKind::stack_numeric_sizes: return "stack_numeric_size";
     case DataKind::stack_offsets: return "stack_offset";
     case DataKind::socket_offsets: return "socket_offset";
@@ -103,6 +104,7 @@ DataKind regkind(const std::string& s) {
         {"shared_offset", DataKind::shared_offsets},
         {"stack_offset", DataKind::stack_offsets},
         {"shared_region_size", DataKind::shared_region_sizes},
+        {"shared_access", DataKind::shared_accesses},
         {"stack_numeric_size", DataKind::stack_numeric_sizes},
         {"socket_offset", DataKind::socket_offsets},
         {"btf_id_offset", DataKind::btf_id_offsets},

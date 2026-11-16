@@ -135,6 +135,16 @@ class EbpfChecker final {
         require_value(dom.state, access_ub <= ceiling, msg);
     }
 
+    // Map memory may be read or written only as the map lets the program (see EbpfMapAccess).
+    void require_shared_access(const RegPack& reg, const AccessType access_type) const {
+        using namespace dsl_syntax;
+        switch (access_type) {
+        case AccessType::compare: break;
+        case AccessType::read: require_value(dom.state, reg.shared_access <= 0, "Shared memory is write-only"); break;
+        case AccessType::write: require_value(dom.state, reg.shared_access >= 0, "Shared memory is read-only"); break;
+        }
+    }
+
     // A null pointer access is only valid with zero width.
     void require_zero_width(const Value& width) const {
         using namespace dsl_syntax;
@@ -456,7 +466,8 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
             require_upper_bound(ub, access_reg.shared_region_size,
                                 "Upper bound must be at most " + variable_registry.name(access_reg.shared_region_size));
             require_value(dom.state, access_reg.uvalue > 0, "Possible null access");
-            // Shared memory is zero-initialized when created so is safe to read and write.
+            // Shared memory is zero-initialized when created, so it may be read and written as the map allows.
+            require_shared_access(access_reg, s.access_type);
             if (array_max_entries.has_value() && s.key) {
                 // Shared memory contents are not tracked, so the index cannot be bounded.
                 throw_fail("Array index must be on the stack");
@@ -479,7 +490,14 @@ void EbpfChecker::operator()(const ValidMapType& s) const {
         throw_fail("map type is not known for " + s.helper_name);
     }
     for (int32_t map_fd = start_fd; map_fd <= end_fd; map_fd++) {
-        const uint32_t map_type = context.map_descriptor(map_fd).type;
+        const EbpfMapDescriptor& map = context.map_descriptor(map_fd);
+        if (s.modifies_map && map.program_access == EbpfMapAccess::read_only) {
+            throw_fail("Map is read-only for " + s.helper_name);
+        }
+        if (s.allowed_map_types == 0) {
+            continue;
+        }
+        const uint32_t map_type = map.type;
         // UNSPEC (0) means the ELF metadata did not say; allow it rather than reject every such program.
         if (map_type == 0) {
             continue;
@@ -598,6 +616,7 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             require_lower_bound(lb, LinearExpression{0}, "Lower bound must be at least 0");
             require_upper_bound(ub, reg.shared_region_size,
                                 "Upper bound must be at most " + variable_registry.name(reg.shared_region_size));
+            require_shared_access(reg, s.access_type);
             if (!is_comparison_check) {
                 require_non_null_or_zero_width(s);
             }

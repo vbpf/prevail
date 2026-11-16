@@ -275,6 +275,7 @@ void TypeToNumDomain::havoc_offsets(const Reg& reg) {
     values.havoc(r.packet_offset);
     values.havoc(r.shared_offset);
     values.havoc(r.shared_region_size);
+    values.havoc(r.shared_access);
     values.havoc(r.stack_offset);
     values.havoc(r.stack_numeric_size);
     values.havoc(r.socket_offset);

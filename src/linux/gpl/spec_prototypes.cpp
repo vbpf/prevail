@@ -251,6 +251,7 @@ static constexpr EbpfHelperPrototype bpf_map_update_elem_proto = {
         },
     // The kernel also allows SOCKMAP and SOCKHASH, where the value argument must be a socket.
     .allowed_map_types = MT_GENERIC,
+    .modifies_map = true,
 };
 
 static constexpr EbpfHelperPrototype bpf_map_delete_elem_proto = {
@@ -266,6 +267,7 @@ static constexpr EbpfHelperPrototype bpf_map_delete_elem_proto = {
         },
     // The kernel also allows SOCKMAP and SOCKHASH for some program types.
     .allowed_map_types = MT_GENERIC,
+    .modifies_map = true,
 };
 
 static constexpr EbpfHelperPrototype bpf_get_prandom_u32_proto = {
@@ -1105,6 +1107,7 @@ static constexpr EbpfHelperPrototype bpf_map_push_elem_proto = {
         EBPF_ARGUMENT_TYPE_ANYTHING,
     },
     .allowed_map_types = MT_QUEUE | MT_STACK | MT_BLOOM_FILTER,
+    .modifies_map = true,
 };
 
 static constexpr EbpfHelperPrototype bpf_map_pop_elem_proto = {
@@ -1115,6 +1118,7 @@ static constexpr EbpfHelperPrototype bpf_map_pop_elem_proto = {
         EBPF_ARGUMENT_TYPE_PTR_TO_UNINIT_MAP_VALUE,
     },
     .allowed_map_types = MT_QUEUE | MT_STACK,
+    .modifies_map = true,
 };
 
 static constexpr EbpfHelperPrototype bpf_map_peek_elem_proto = {

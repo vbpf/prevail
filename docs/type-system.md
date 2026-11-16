@@ -110,7 +110,7 @@ Each pointer type has associated numeric variables:
 | T_CTX | ctx_offset |
 | T_STACK | stack_offset, stack_numeric_size |
 | T_PACKET | packet_offset |
-| T_SHARED | shared_offset, shared_region_size |
+| T_SHARED | shared_offset, shared_region_size, shared_access |
 | T_MAP | map_value_size |
 | T_MAP_FD | map_fd |
 | T_SOCKET | socket_offset |
@@ -139,6 +139,7 @@ struct RegPack {
     
     // Size tracking
     Var shared_region_size;  // For T_SHARED
+    Var shared_access;       // For T_SHARED
     Var stack_numeric_size;  // For T_STACK spills
     Var alloc_mem_size;      // For T_ALLOC_MEM
     

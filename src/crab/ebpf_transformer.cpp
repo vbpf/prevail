@@ -1074,27 +1074,33 @@ void EbpfTransformer::operator()(const Call& call) {
     const auto r0_pack = reg_pack(r0_reg);
     dom.state.values.havoc(r0_pack.stack_numeric_size);
     // Set r0 as a nullable T_SHARED pointer at offset 0.
-    // If region_size is known, constrain it; otherwise havoc to prevent stale values.
-    auto assign_shared_map_value = [&](const std::optional<Interval>& region_size) {
+    auto assign_nullable_shared_pointer = [&] {
         dom.state.forget_type_dependent_values(r0_reg);
         dom.state.assign_type(r0_reg, T_SHARED);
         assign_valid_ptr(r0_reg, true);
         dom.state.values.assign(r0_pack.shared_offset, 0);
-        if (region_size) {
-            dom.state.values.set(r0_pack.shared_region_size, *region_size);
-        } else {
-            dom.state.values.havoc(r0_pack.shared_region_size);
-        }
+    };
+    // r0 points into a region of unknown size and access; havoc both to prevent stale values.
+    auto assign_unknown_shared_value = [&] {
+        assign_nullable_shared_pointer();
+        dom.state.values.havoc(r0_pack.shared_region_size);
+        dom.state.values.havoc(r0_pack.shared_access);
+    };
+    // r0 points into a value of one of the maps that fd_reg may refer to.
+    auto assign_map_value = [&](const Reg& fd_reg) {
+        assign_nullable_shared_pointer();
+        dom.state.values.set(r0_pack.shared_region_size, dom.get_map_value_size(fd_reg, context));
+        dom.state.values.set(r0_pack.shared_access, dom.get_map_program_access(fd_reg, context));
     };
     auto resolve_map_lookup = [&] {
         // Map lookup is the only way to get a null pointer.
         if (!maybe_fd_reg) {
-            assign_shared_map_value(std::nullopt);
+            assign_unknown_shared_value();
             return;
         }
         const auto map_type = dom.get_map_type(*maybe_fd_reg, context);
         if (!map_type) {
-            assign_shared_map_value(std::nullopt);
+            assign_unknown_shared_value();
             return;
         }
         if (context.platform().get_map_type(*map_type).value_type == EbpfMapValueType::MAP) {
@@ -1102,12 +1108,12 @@ void EbpfTransformer::operator()(const Call& call) {
             if (const auto inner_map_fd = dom.get_map_inner_map_fd(*maybe_fd_reg, context)) {
                 do_load_mapfd(r0_reg, *inner_map_fd, true);
             } else {
-                assign_shared_map_value(std::nullopt);
+                assign_unknown_shared_value();
             }
             return;
         }
         // Regular map: r0 is a shared pointer with known value size.
-        assign_shared_map_value(dom.get_map_value_size(*maybe_fd_reg, context));
+        assign_map_value(*maybe_fd_reg);
     };
     if (resolved.contract.is_map_lookup) {
         resolve_map_lookup();
@@ -1217,6 +1223,7 @@ void EbpfTransformer::do_load_map_address(const Reg& dst_reg, const int mapfd, c
     const RegPack& dst = reg_pack(dst_reg);
     dom.state.values.assign(dst.shared_offset, offset);
     dom.state.values.assign(dst.shared_region_size, desc.value_size);
+    dom.state.values.assign(dst.shared_access, static_cast<int>(desc.program_access));
     assign_valid_ptr(dst_reg, false);
 }
 
@@ -1476,6 +1483,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
                                                                  src.uvalue, finite_width);
                                     if (src_type == T_SHARED) {
                                         state.values.assign(dst.shared_region_size, src.shared_region_size);
+                                        state.values.assign(dst.shared_access, src.shared_access);
                                     }
                                 } else if (dst_type != T_NUM && src_type == T_NUM) {
                                     // ptr += num
