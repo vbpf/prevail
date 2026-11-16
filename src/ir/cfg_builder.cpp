@@ -181,6 +181,26 @@ static std::optional<ResolvedCall> resolve_kfunc_call(const CallBtf& call_btf, c
 // kind=kfunc}; the ResolvedCall is reproduced on demand via resolve(call, info).
 using ResolvedKfuncCalls = std::map<Label, Call>;
 
+/// The descriptor of the map whose fd or value address the instruction loads, or null if it loads none.
+/// A map index out of range also gives null; pass_lower_pseudo_loads rejects it.
+static const EbpfMapDescriptor* loaded_map(const Instruction& ins, const ProgramInfo& info) {
+    const auto& descriptors = *info.map_descriptors;
+    if (const auto p = std::get_if<LoadMapFd>(&ins)) {
+        return &info.platform->get_map_descriptor(p->mapfd, descriptors);
+    }
+    if (const auto p = std::get_if<LoadMapAddress>(&ins)) {
+        return &info.platform->get_map_descriptor(p->mapfd, descriptors);
+    }
+    if (const auto p = std::get_if<LoadPseudo>(&ins)) {
+        if ((p->addr.kind == PseudoAddress::Kind::MAP_BY_IDX ||
+             p->addr.kind == PseudoAddress::Kind::MAP_VALUE_BY_IDX) &&
+            p->addr.imm >= 0 && static_cast<size_t>(p->addr.imm) < descriptors.size()) {
+            return &descriptors.at(static_cast<size_t>(p->addr.imm));
+        }
+    }
+    return nullptr;
+}
+
 [[nodiscard]]
 static std::optional<RejectionReason> check_instruction_feature_support(const Instruction& ins,
                                                                         const ProgramInfo& info) {
@@ -254,6 +274,15 @@ static std::optional<RejectionReason> check_instruction_feature_support(const In
     if ((std::holds_alternative<LoadMapFd>(ins) || std::holds_alternative<LoadMapAddress>(ins)) &&
         !supports(platform, bpf_conformance_groups_t::base64)) {
         return reject_capability("requires conformance group base64");
+    }
+    // A sleepable program can hold a map value across a sleep, so it may only use maps whose elements outlive it.
+    // Type 0 says nothing about the map, and is not restricted.
+    if (info.type.is_sleepable) {
+        if (const EbpfMapDescriptor* map = loaded_map(ins, info);
+            map && map->type != 0 && !platform.get_map_type(map->type).usable_in_sleepable) {
+            return reject_capability("map type " + std::to_string(map->type) +
+                                     " is not allowed in a sleepable program");
+        }
     }
     if (const auto p = std::get_if<Mem>(&ins)) {
         if (!supports(platform,

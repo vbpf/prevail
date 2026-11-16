@@ -4,6 +4,7 @@
 #include <array>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -296,6 +297,16 @@ TEST_CASE("linux map-type table covers post-cpumap map ids", "[platform][tables]
         REQUIRE(type.name == expected_name);
         REQUIRE(type.is_array == expected_is_array);
         REQUIRE(type.value_type == expected_value_type);
+    }
+}
+
+TEST_CASE("linux map types usable in sleepable programs follow check_map_prog_compatibility", "[platform][tables]") {
+    // HASH, ARRAY, PERCPU_HASH, PERCPU_ARRAY, LRU_HASH, LRU_PERCPU_HASH, ARRAY_OF_MAPS, HASH_OF_MAPS, QUEUE, STACK,
+    // SK_STORAGE, RINGBUF, INODE_STORAGE, TASK_STORAGE, USER_RINGBUF, CGRP_STORAGE, ARENA.
+    const std::set<uint32_t> usable{1, 2, 5, 6, 9, 10, 12, 13, 22, 23, 24, 27, 28, 29, 31, 32, 33};
+    for (uint32_t id = 0; id <= 40; id++) {
+        CAPTURE(id);
+        REQUIRE(g_ebpf_platform_linux.get_map_type(id).usable_in_sleepable == usable.contains(id));
     }
 }
 
