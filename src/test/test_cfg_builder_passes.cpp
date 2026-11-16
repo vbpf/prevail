@@ -135,6 +135,52 @@ TEST_CASE("pass_lower_pseudo_loads rejects an out-of-range map index", "[passes]
                         Catch::Matchers::ContainsSubstring("invalid map index 5"));
 }
 
+TEST_CASE("pass_validate_instruction_support restricts the map types of a sleepable program", "[passes][map]") {
+    constexpr uint32_t hash = 1;
+    constexpr uint32_t lpm_trie = 11;
+    constexpr uint32_t devmap = 14;
+    const auto info_for = [](const std::string& section, const uint32_t map_type) {
+        ProgramInfo info{
+            .platform = &g_ebpf_platform_linux,
+            .type = g_ebpf_platform_linux.get_program_type(section, ""),
+        };
+        info.map_descriptors.get_mutable().push_back(EbpfMapDescriptor{
+            .original_fd = 1, .type = map_type, .key_size = 8, .value_size = 8, .max_entries = 16, .inner_map_fd = -1});
+        return info;
+    };
+    // Each way of referring to the map: by fd, by the address of its value, and by index before lowering.
+    const std::vector<Instruction> loads{
+        LoadMapFd{.dst = Reg{1}, .mapfd = 1},
+        LoadMapAddress{.dst = Reg{1}, .mapfd = 1, .offset = 0},
+        LoadPseudo{.dst = Reg{1}, .addr = {.kind = PseudoAddress::Kind::MAP_BY_IDX, .imm = 0, .next_imm = 0}},
+        LoadPseudo{.dst = Reg{1}, .addr = {.kind = PseudoAddress::Kind::MAP_VALUE_BY_IDX, .imm = 0, .next_imm = 0}},
+    };
+    const auto program = [](const Instruction& load) {
+        InstructionSeq seq;
+        seq.push_back(at(0, load));
+        seq.push_back(at(1, Bin{.op = Bin::Op::MOV, .dst = Reg{0}, .v = Imm{0}, .is64 = true}));
+        seq.push_back(at(2, Exit{}));
+        return seq;
+    };
+    for (const Instruction& load : loads) {
+        CAPTURE(load);
+        for (const std::string section : {"lsm.s/file_open", "fentry.s/f", "syscall/f"}) {
+            CAPTURE(section);
+            REQUIRE_THROWS_WITH(Program::from_sequence(program(load), info_for(section, lpm_trie), {}),
+                                Catch::Matchers::ContainsSubstring(
+                                    "rejected: map type 11 is not allowed in a sleepable program (at 0)"));
+            REQUIRE_THROWS_WITH(
+                Program::from_sequence(program(load), info_for(section, devmap), {}),
+                Catch::Matchers::ContainsSubstring("map type 14 is not allowed in a sleepable program"));
+            REQUIRE_NOTHROW(Program::from_sequence(program(load), info_for(section, hash), {}));
+            // Type 0 says nothing about the map.
+            REQUIRE_NOTHROW(Program::from_sequence(program(load), info_for(section, 0), {}));
+        }
+        // A program that cannot sleep may use any map type.
+        REQUIRE_NOTHROW(Program::from_sequence(program(load), info_for("lsm/file_open", lpm_trie), {}));
+    }
+}
+
 TEST_CASE("pass_inline_local_calls returns a successful tail call to the caller of the subprogram", "[passes]") {
     const ProgramInfo info = default_info();
     InstructionSeq seq;
