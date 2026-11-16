@@ -316,6 +316,7 @@ void parse_maps_section_linux(std::vector<EbpfMapDescriptor>& map_descriptors, c
             .value_size = s.value_size,
             .max_entries = s.max_entries,
             .inner_map_fd = gsl::narrow<int32_t>(s.inner_map_idx),
+            .program_access = map_flags_to_program_access(s.map_flags),
         });
     }
 }

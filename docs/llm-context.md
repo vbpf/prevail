@@ -72,6 +72,7 @@ Each register has multiple abstract properties:
 | `r<N>.packet_offset` | Offset within packet (if type=packet) |
 | `r<N>.shared_offset` | Offset within shared memory (if type=shared) |
 | `r<N>.shared_region_size` | Size of the shared region (for bounds checking) |
+| `r<N>.shared_access` | What the program may do with the shared region: -1 read-only, 0 read-write (not shown), 1 write-only |
 | `r<N>.stack_numeric_size` | Number of contiguous numeric bytes at stack location |
 | `r<N>.map_fd` | Map file descriptor value (if type=map_fd) |
 

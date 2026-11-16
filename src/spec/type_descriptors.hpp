@@ -18,6 +18,12 @@
 namespace prevail {
 enum class EbpfMapValueType { ANY, MAP, PROGRAM };
 
+/// What a program, as opposed to user space, may do with the memory of a map's values. The values are those of the
+/// shared_access variable of a register that points into such memory: reading needs shared_access <= 0 and writing
+/// needs shared_access >= 0, so a register that may point into maps of different access may do only what all of
+/// them allow.
+enum class EbpfMapAccess : int { read_only = -1, read_write = 0, write_only = 1 };
+
 struct EbpfMapType {
     uint32_t platform_specific_type; // EbpfMapDescriptor.type value.
     std::string name;                // For ease of display, not used by the verifier.
@@ -34,6 +40,7 @@ struct EbpfMapDescriptor {
     int inner_map_fd;
     std::string name;                  // Map name from ELF (empty if not available).
     bool is_inner_map_template{false}; // True if this descriptor is referenced as an inner map template.
+    EbpfMapAccess program_access{EbpfMapAccess::read_write}; // E.g., BPF_F_RDONLY_PROG, or the map behind .rodata.
 };
 
 /// @brief Distinct mock fds for maps of the given platform-specific types, starting at @p first_fd.

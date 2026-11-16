@@ -125,6 +125,9 @@ class EbpfDomain final {
     Interval get_map_value_size(const Reg& map_fd_reg, const AnalysisContext& context) const;
     [[nodiscard]]
     Interval get_map_max_entries(const Reg& map_fd_reg, const AnalysisContext& context) const;
+    /// The hull of the EbpfMapAccess values of the maps the register may refer to.
+    [[nodiscard]]
+    Interval get_map_program_access(const Reg& map_fd_reg, const AnalysisContext& context) const;
 
     bool get_map_fd_range(const Reg& map_fd_reg, int32_t* start_fd, int32_t* end_fd) const;
 

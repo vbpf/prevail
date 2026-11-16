@@ -334,6 +334,20 @@ Interval EbpfDomain::get_map_max_entries(const Reg& map_fd_reg, const AnalysisCo
     return result;
 }
 
+Interval EbpfDomain::get_map_program_access(const Reg& map_fd_reg, const AnalysisContext& context) const {
+    int start_fd, end_fd;
+    if (!get_map_fd_range(map_fd_reg, &start_fd, &end_fd)) {
+        return Interval::top();
+    }
+
+    Interval result = Interval::bottom();
+    for (int map_fd = start_fd; map_fd <= end_fd; map_fd++) {
+        const auto& map = context.map_descriptor(map_fd);
+        result = result | Interval(static_cast<int>(map.program_access));
+    }
+    return result;
+}
+
 ExtendedNumber EbpfDomain::get_loop_count_upper_bound(const std::span<const Variable> loop_counters) const {
     ExtendedNumber ub{0};
     if (is_bottom()) {
