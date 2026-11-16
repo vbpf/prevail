@@ -35,6 +35,10 @@ struct EbpfHelperPrototype {
     // Zero means any map type is accepted; bit N set means map type N is allowed.
     uint64_t allowed_map_types{};
 
+    // Whether this helper adds, replaces or removes elements of the map passed to it, which a map that is read-only
+    // for the program forbids.
+    bool modifies_map{};
+
     bool unsupported = false;
 };
 } // namespace prevail

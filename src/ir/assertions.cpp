@@ -188,8 +188,11 @@ class AssertExtractor {
                 break;
             }
         }
-        if (map_fd_reg && resolved.contract.allowed_map_types != 0) {
-            res.emplace_back(ValidMapType{*map_fd_reg, resolved.contract.allowed_map_types, resolved.name});
+        if (map_fd_reg && (resolved.contract.allowed_map_types != 0 || resolved.contract.modifies_map)) {
+            res.emplace_back(ValidMapType{.map_fd_reg = *map_fd_reg,
+                                          .allowed_map_types = resolved.contract.allowed_map_types,
+                                          .helper_name = resolved.name,
+                                          .modifies_map = resolved.contract.modifies_map});
         }
         for (ArgPair arg : resolved.contract.pairs) {
             const auto group = arg.or_null ? mem_or_num : mem;

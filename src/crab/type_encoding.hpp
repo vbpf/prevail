@@ -23,6 +23,7 @@ enum class DataKind {
     shared_offsets,
     stack_offsets,
     shared_region_sizes,
+    shared_accesses,
     stack_numeric_sizes,
     socket_offsets,
     btf_id_offsets,

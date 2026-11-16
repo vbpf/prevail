@@ -50,7 +50,7 @@ namespace prevail {
 
 #define SPECIAL_VAR R"_(\s*(packet_size|meta_offset)\s*)_"
 #define KIND \
-    R"_(\s*(svalue|uvalue|ctx_offset|map_fd|map_fd_programs|packet_offset|shared_offset|stack_offset|shared_region_size|stack_numeric_size)\s*)_"
+    R"_(\s*(svalue|uvalue|ctx_offset|map_fd|map_fd_programs|packet_offset|shared_offset|stack_offset|shared_region_size|shared_access|stack_numeric_size)\s*)_"
 #define INTERVAL R"_(\s*\[([-+]?\d+),\s*([-+]?\d+)\]?\s*)_"
 #define ARRAY_RANGE R"_(\s*\[([-+]?\d+)\.\.\.\s*([-+]?\d+)\]?\s*)_"
 
