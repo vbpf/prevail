@@ -3099,3 +3099,183 @@ TEST_CASE("ELF loader finds the symbol and relocation tables by their headers", 
     REQUIRE_THROWS_WITH(read_elf(two_tables, "memory", "xdp", "", VerifierOptions{}, &g_ebpf_platform_linux),
                         Catch::Matchers::ContainsSubstring("Multiple relocation sections for section xdp"));
 }
+
+namespace {
+/// An object of executable sections, each with its FUNC symbols, and a .BTF and .BTF.ext with CO-RE relocations.
+/// The .BTF holds `int` (type 1) and `struct s` (type 2) or `union s`, with one int member `f`.
+struct CoreObject {
+    struct Function {
+        std::string name;
+        size_t start; ///< Index of the function's first instruction in its section.
+    };
+    struct Section {
+        std::string name;
+        std::vector<EbpfInst> insts;
+        std::vector<Function> functions;
+    };
+    struct Relocation {
+        uint32_t insn_off; ///< Byte offset of the relocated instruction in the section.
+        uint32_t kind;     ///< A bpf_core_relo_kind.
+    };
+
+    std::vector<Section> sections;
+    std::string core_section; ///< The section the CO-RE relocations name.
+    std::vector<Relocation> relocations;
+    bool is_union = false;
+    bool kind_flag = false;
+    uint32_t member_offset_field = 32; ///< The btf_member offset field of `f`.
+    uint32_t aggregate_size = 8;
+
+    [[nodiscard]]
+    std::string build() const {
+        const auto append_u32 = [](std::string& data, const uint32_t value) {
+            const uint32_t le = boost::endian::native_to_little(value);
+            data.append(reinterpret_cast<const char*>(&le), sizeof(le));
+        };
+
+        const std::string strings = std::string{"\0int\0s\0f\0", 9} + core_section + '\0' + "0:0" + '\0';
+        constexpr uint32_t int_name = 1, aggregate_name = 5, member_name = 7, section_name = 9;
+        const auto access_string = gsl::narrow<uint32_t>(section_name + core_section.size() + 1);
+        std::string types;
+        append_u32(types, int_name); // Type 1: 32-bit int.
+        append_u32(types, 1U << 24);
+        append_u32(types, 4);
+        append_u32(types, 32);
+        append_u32(types, aggregate_name); // Type 2: struct or union with one member.
+        append_u32(types, (kind_flag ? 1U << 31 : 0U) | ((is_union ? 5U : 4U) << 24) | 1U);
+        append_u32(types, aggregate_size);
+        append_u32(types, member_name);
+        append_u32(types, 1);
+        append_u32(types, member_offset_field);
+
+        std::string btf;
+        append_u32(btf, 0x0001eb9f); // magic, version 1, no flags.
+        append_u32(btf, 24);         // hdr_len
+        append_u32(btf, 0);          // type_off
+        append_u32(btf, gsl::narrow<uint32_t>(types.size()));
+        append_u32(btf, gsl::narrow<uint32_t>(types.size())); // str_off
+        append_u32(btf, gsl::narrow<uint32_t>(strings.size()));
+        btf += types + strings;
+
+        std::string core_relos;
+        append_u32(core_relos, 16); // Record size.
+        append_u32(core_relos, section_name);
+        append_u32(core_relos, gsl::narrow<uint32_t>(relocations.size()));
+        for (const auto& [insn_off, kind] : relocations) {
+            append_u32(core_relos, insn_off);
+            append_u32(core_relos, 2); // type_id
+            append_u32(core_relos, access_string);
+            append_u32(core_relos, kind);
+        }
+        std::string btf_ext;
+        append_u32(btf_ext, 0x0001eb9f); // magic, version 1, no flags.
+        append_u32(btf_ext, 32);         // hdr_len
+        for (int i = 0; i < 4; ++i) {
+            append_u32(btf_ext, 0); // func_info and line_info offset and length.
+        }
+        append_u32(btf_ext, 0); // core_relo_off
+        append_u32(btf_ext, gsl::narrow<uint32_t>(core_relos.size()));
+        btf_ext += core_relos;
+
+        ELFIO::elfio writer;
+        writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+        writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+        writer.set_type(ELFIO::ET_REL);
+        writer.set_machine(ELFIO::EM_BPF);
+        std::vector<ELFIO::section*> code_sections;
+        for (const auto& section : sections) {
+            ELFIO::section* sec = writer.sections.add(section.name);
+            sec->set_type(ELFIO::SHT_PROGBITS);
+            sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+            sec->set_addr_align(8);
+            sec->set_data(reinterpret_cast<const char*>(section.insts.data()), section.insts.size() * sizeof(EbpfInst));
+            code_sections.push_back(sec);
+        }
+        for (const auto& [name, data] : {std::pair{".BTF", &btf}, std::pair{".BTF.ext", &btf_ext}}) {
+            ELFIO::section* sec = writer.sections.add(name);
+            sec->set_type(ELFIO::SHT_PROGBITS);
+            sec->set_addr_align(4);
+            sec->set_data(*data);
+        }
+
+        ELFIO::section* str_sec = writer.sections.add(".strtab");
+        str_sec->set_type(ELFIO::SHT_STRTAB);
+        ELFIO::string_section_accessor str_writer(str_sec);
+        ELFIO::section* sym_sec = writer.sections.add(".symtab");
+        sym_sec->set_type(ELFIO::SHT_SYMTAB);
+        sym_sec->set_addr_align(8);
+        sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+        sym_sec->set_link(str_sec->get_index());
+        sym_sec->set_info(1); // First global symbol.
+        ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+        for (size_t i = 0; i < sections.size(); ++i) {
+            const auto& functions = sections[i].functions;
+            for (size_t f = 0; f < functions.size(); ++f) {
+                const size_t end = f + 1 < functions.size() ? functions[f + 1].start : sections[i].insts.size();
+                sym_writer.add_symbol(str_writer, functions[f].name.c_str(), functions[f].start * sizeof(EbpfInst),
+                                      (end - functions[f].start) * sizeof(EbpfInst), ELFIO::STB_GLOBAL, ELFIO::STT_FUNC,
+                                      0, code_sections[i]->get_index());
+            }
+        }
+
+        std::ostringstream out_stream;
+        writer.save(out_stream);
+        return out_stream.str();
+    }
+};
+
+constexpr uint32_t CORE_FIELD_BYTE_OFFSET = 0;
+constexpr uint8_t CORE_TEST_MOV64_IMM = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
+
+std::vector<RawProgram> read_core_object(const CoreObject& object, const std::string& section,
+                                         const std::string& function = "") {
+    std::istringstream in_stream(object.build());
+    return read_elf(in_stream, "memory", section, function, VerifierOptions{}, &g_ebpf_platform_linux);
+}
+} // namespace
+
+// .BTF.ext names the section of each CO-RE relocation and line info record, and nothing else, so the records of two
+// executable sections with the same name cannot be told apart. Such an object is rejected rather than having the
+// records of one section patched into the other, or dropped.
+TEST_CASE("ELF loader rejects executable sections that share a name", "[elf][core][hardening]") {
+    const std::vector<EbpfInst> code{EbpfInst{.opcode = CORE_TEST_MOV64_IMM, .imm = -1},
+                                     EbpfInst{.opcode = INST_OP_EXIT}};
+    CoreObject object{
+        .sections = {{"xdp", code, {{"first", 0}}}, {"xdp", code, {{"second", 0}}}},
+        .core_section = "xdp",
+        .relocations = {{0, CORE_FIELD_BYTE_OFFSET}},
+    };
+    REQUIRE_THROWS_WITH(read_core_object(object, "xdp"),
+                        Catch::Matchers::ContainsSubstring("Duplicate executable section name xdp"));
+    REQUIRE_THROWS_WITH(read_core_object(object, ""),
+                        Catch::Matchers::ContainsSubstring("Duplicate executable section name xdp"));
+
+    // Distinct names load.
+    object.sections[1].name = "socket";
+    REQUIRE(read_core_object(object, "xdp").size() == 1);
+}
+
+// A program's code extends past its own symbol to every function it calls, so a function called from another one in
+// the same section is held by both programs. A CO-RE relocation of its code must patch both copies.
+TEST_CASE("CO-RE relocation patches every program holding the instruction", "[elf][core]") {
+    // main: call sub; exit. sub: r0 = -1; exit.
+    const CoreObject object{
+        .sections = {{"xdp",
+                      {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_LOCAL, .imm = 1},
+                       EbpfInst{.opcode = INST_OP_EXIT}, EbpfInst{.opcode = CORE_TEST_MOV64_IMM, .imm = -1},
+                       EbpfInst{.opcode = INST_OP_EXIT}},
+                      {{"main", 0}, {"sub", 2}}}},
+        .core_section = "xdp",
+        .relocations = {{2 * sizeof(EbpfInst), CORE_FIELD_BYTE_OFFSET}},
+    };
+
+    const auto main_programs = read_core_object(object, "xdp", "main");
+    REQUIRE(main_programs.size() == 1);
+    REQUIRE(main_programs[0].prog.size() == 4);
+    CHECK(main_programs[0].prog[2].imm == 4);
+
+    const auto sub_programs = read_core_object(object, "xdp", "sub");
+    REQUIRE(sub_programs.size() == 1);
+    REQUIRE(sub_programs[0].prog.size() == 2);
+    CHECK(sub_programs[0].prog[0].imm == 4);
+}
