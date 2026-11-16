@@ -339,6 +339,11 @@ void EbpfTransformer::operator()(const LoadPseudo& pseudo) {
         dom.state.havoc_offsets(pseudo.dst);
         return;
     }
+    case PseudoAddress::Kind::EXTERN_ADDR:
+        // The address of an extern symbol that the loader resolves: any number.
+        dom.state.havoc_register(pseudo.dst);
+        dom.state.assign_type(pseudo.dst, T_NUM);
+        return;
     case PseudoAddress::Kind::VARIABLE_ADDR:
     case PseudoAddress::Kind::MAP_BY_IDX:
     case PseudoAddress::Kind::MAP_VALUE_BY_IDX:

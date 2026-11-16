@@ -780,6 +780,9 @@ std::string ProgramReader::append_subprograms(RawProgram& prog, const size_t pro
         for (const size_t builtin_offset : sub.info.builtin_call_offsets) {
             prog.info.builtin_call_offsets.insert(base + builtin_offset);
         }
+        for (const size_t extern_address_offset : sub.info.extern_address_offsets) {
+            prog.info.extern_address_offsets.insert(base + extern_address_offset);
+        }
     }
 
     // Patch every relocated call, in `prog` itself and in each placed callee.
@@ -889,19 +892,39 @@ void ProgramReader::build_ksym_function_resolution_cache() {
     }
 }
 
+bool ProgramReader::is_absent_weak_kfunc(const std::string& symbol_name, const unsigned char symbol_bind) const {
+    if (symbol_bind != ELFIO::STB_WEAK) {
+        return false;
+    }
+    const auto it = ksym_function_resolution_cache.find(symbol_name);
+    return it != ksym_function_resolution_cache.end() && !it->second.has_value();
+}
+
 bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_Half symbol_section_index,
                               const unsigned char symbol_type, const unsigned char symbol_bind,
                               std::vector<EbpfInst>& instructions, const size_t location, const ELFIO::Elf_Word index,
                               const std::optional<ELFIO::Elf_Sxword> explicit_addend) {
     EbpfInst& instruction_to_relocate = instructions[location];
 
+    if (extern_address_offsets_for_current_program.contains(location)) {
+        // Another entry would retarget the load whose value has been folded into the access after it.
+        throw UnmarshalError("Multiple relocations of the extern address load at instruction " +
+                             std::to_string(location));
+    }
     if (symbol_section_index == ELFIO::SHN_UNDEF) {
+        // The loader that resolves the extern writes its address into the lddw, so the zero written
+        // here is a placeholder, and the lddw is marked as loading an unknown number. Only a weak
+        // kernel function that the platform reports absent has the address 0, as libbpf gives it.
         if (const auto value = resolve_known_linux_extern_symbol(symbol_name)) {
             if (rewrite_extern_constant_load(instructions, location, *value, jump_targets_for_current_program)) {
+                extern_address_offsets_for_current_program.insert(location);
                 return true;
             }
         }
         if (rewrite_extern_address_load_to_zero(instructions, location)) {
+            if (!is_absent_weak_kfunc(symbol_name, symbol_bind)) {
+                extern_address_offsets_for_current_program.insert(location);
+            }
             return true;
         }
     }
@@ -1111,6 +1134,7 @@ void ProgramReader::read_programs(const bool all_sections) {
         const auto prog_type = parse_params.platform->get_program_type(sec_name, parse_params.path);
         for (ELFIO::Elf_Xword offset = 0; offset < sec->get_size();) {
             builtin_offsets_for_current_program.clear();
+            extern_address_offsets_for_current_program.clear();
             auto [name, symbol_size] = get_program_name_and_size(*sec, offset, symbols, function_symbols);
             const auto extracted_size = compute_reachable_program_span(section_instructions, offset, symbol_size);
             if (offset + extracted_size > sec->get_size()) {
@@ -1127,6 +1151,7 @@ void ProgramReader::read_programs(const bool all_sections) {
                 .map_descriptors = global.map_descriptors,
                 .type = prog_type,
                 .builtin_call_offsets = std::move(builtin_offsets_for_current_program),
+                .extern_address_offsets = std::move(extern_address_offsets_for_current_program),
             };
             raw_program_index_.emplace(SectionOffset{.section_index = sec->get_index(), .offset = offset},
                                        raw_programs.size());

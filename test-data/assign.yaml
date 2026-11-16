@@ -397,3 +397,14 @@ post:
 
 messages:
   - "0: Invalid type (r1.type == number)"
+---
+test-case: load of an extern address
+
+pre: ["r1.type=number", "r1.svalue=7", "r1.uvalue=7"]
+
+code:
+  <start>: |
+    r1 = extern_addr
+
+post:
+  - r1.type=number
