@@ -23,6 +23,7 @@ struct EbpfMapType {
     std::string name;                // For ease of display, not used by the verifier.
     bool is_array;                   // True if key is integer in range [0,max_entries-1].
     EbpfMapValueType value_type;     // The type of items stored in the map.
+    bool usable_in_sleepable{};      // True if a sleepable program may use maps of this type.
 };
 
 struct EbpfMapDescriptor {
