@@ -69,7 +69,7 @@ bool EbpfDomain::is_bottom() const { return state.is_bottom(); }
 
 bool EbpfDomain::is_top() const { return stack && state.is_top() && stack->is_top(); }
 
-bool EbpfDomain::operator<=(const EbpfDomain& other) const {
+std::optional<bool> EbpfDomain::inclusion_prelude(const EbpfDomain& other) const {
     // Bottom is below everything. Short-circuit so we don't dereference a nullopt stack.
     if (is_bottom()) {
         return true;
@@ -80,31 +80,26 @@ bool EbpfDomain::operator<=(const EbpfDomain& other) const {
     if (!(*stack <= *other.stack)) {
         return false;
     }
+    return std::nullopt;
+}
+
+bool EbpfDomain::operator<=(const EbpfDomain& other) const {
+    if (const auto decided = inclusion_prelude(other)) {
+        return *decided;
+    }
     return state <= other.state;
 }
 
 bool EbpfDomain::is_included_in_raw_basis(const EbpfDomain& basis) const {
-    if (is_bottom()) {
-        return true;
-    }
-    if (basis.is_bottom()) {
-        return false;
-    }
-    if (!(*stack <= *basis.stack)) {
-        return false;
+    if (const auto decided = inclusion_prelude(basis)) {
+        return *decided;
     }
     return state.is_included_in_raw_basis(basis.state);
 }
 
 bool EbpfDomain::operator<=(EbpfDomain&& other) const {
-    if (is_bottom()) {
-        return true;
-    }
-    if (other.is_bottom()) {
-        return false;
-    }
-    if (!(*stack <= *other.stack)) {
-        return false;
+    if (const auto decided = inclusion_prelude(other)) {
+        return *decided;
     }
     return state <= std::move(other.state);
 }
@@ -202,43 +197,80 @@ std::vector<LinearConstraint> EbpfDomain::calculate_widening_thresholds(const An
     return thresholds;
 }
 
+// Whether the intervals alone show that `cst` holds in `dom`. For a
+// single-variable constraint on a closed state this is exact.
+static bool holds_by_intervals(const NumAbsDomain& dom, const LinearConstraint& cst) {
+    if (cst.is_tautology()) {
+        return true;
+    }
+    if (cst.is_contradiction()) {
+        return false;
+    }
+    const Interval interval = dom.eval_interval(cst.expression());
+    switch (cst.kind()) {
+    case ConstraintKind::EQUALS_ZERO: return interval.singleton() == std::optional(Number(0));
+    case ConstraintKind::LESS_THAN_OR_EQUALS_ZERO: return interval.ub() <= Number(0);
+    case ConstraintKind::LESS_THAN_ZERO: return interval.ub() < Number(0);
+    case ConstraintKind::NOT_ZERO: return interval.ub() < Number(0) || interval.lb() > Number(0);
+    }
+    return false;
+}
+
 void EbpfDomain::add_widening_thresholds(const EbpfDomain& before, const std::vector<LinearConstraint>& thresholds,
                                          const std::span<const Variable> loop_counters) {
     using namespace dsl_syntax;
     const auto& b = before.state.values;
+    // `before` is a join of normalized states, so its intervals are exact for
+    // single-variable thresholds; only relational ones need a full entailment
+    // query. A single-variable threshold the widened state already satisfies
+    // by its bounds is skipped: it would add nothing. A relational one is
+    // always added, even when the current bounds imply it: the explicit edge
+    // survives later widens that drop those bounds. The selected thresholds
+    // are applied together, with one closure.
+    NumAbsDomain selected = NumAbsDomain::top();
+    bool any = false;
     for (const LinearConstraint& cst : thresholds) {
-        if (b.entail(cst)) {
-            add_value_constraint(cst);
+        const bool unary = cst.expression().variable_terms().size() == 1;
+        if (unary ? holds_by_intervals(b, cst) && !holds_by_intervals(state.values, cst) : b.entail(cst)) {
+            selected.add_constraint(cst);
+            any = true;
         }
     }
     // `counter <= rN.svalue` is a useful threshold when the state relates the
     // counter to a bound register (e.g. `for (i = 0; i < n; i++)`). It is not
     // one when it only holds because the counter has not yet reached an
     // unrelated register's range: imposing it would cut off later states.
+    // (A bound register whose range starts above the counter is skipped too;
+    // the bound is not lost, because the guard relates the loop variable to
+    // that register and the counter stays related to the loop variable.)
     for (const int i : {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}) {
         const auto r = variable_registry.reg_pack(i);
         const Interval rv = b.eval_interval(r.svalue);
         for (const Variable counter : loop_counters) {
-            const LinearConstraint link = counter <= r.svalue;
-            if (!b.entail(link)) {
-                continue;
-            }
             if (b.eval_interval(counter).ub() <= rv.lb()) {
                 continue; // implied by the intervals alone: not a loop relation
             }
-            add_value_constraint(link);
+            const LinearConstraint link = counter <= r.svalue;
+            if (b.entail(link)) {
+                selected.add_constraint(link);
+                any = true;
+            }
         }
     }
+    if (!any) {
+        return;
+    }
+    // Normalize first: the meet below starts a fresh closure and does not
+    // carry the raw state's deferred recovery.
+    state.normalize_closure();
+    state.values = state.values & selected;
+    normalize_after_state_mutation();
 }
 
 EbpfDomain EbpfDomain::widen(const EbpfDomain& other) const {
-    if (is_bottom()) {
-        return other;
-    }
-    if (other.is_bottom()) {
-        return *this;
-    }
-    return EbpfDomain{this->state.widen(other.state), stack->widen(*other.stack)};
+    EbpfDomain res = widen_raw(other);
+    res.normalize_closure();
+    return res;
 }
 
 EbpfDomain EbpfDomain::widen_raw(const EbpfDomain& other) const {

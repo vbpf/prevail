@@ -121,6 +121,10 @@ class ZoneDomain final {
     Bound get_lb(Variable x) const;
     Bound get_ub(Variable x) const;
 
+    // widen_raw after any projection of dropped vertices.
+    [[nodiscard]]
+    ZoneDomain widen_raw_aligned(const ZoneDomain& o) const;
+
     // Private constructor for internal use (join, meet, widen, etc.)
     ZoneDomain(VertMap&& vert_map, RevMap&& rev_map, std::unique_ptr<splitdbm::SplitDBM> core);
 

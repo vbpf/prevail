@@ -84,6 +84,13 @@ class SplitDBM {
     VertId new_vertex();
     void forget(VertId v);
 
+    /// Make every relation implied through one of `vs` explicit among the
+    /// remaining vertices (Fourier-Motzkin elimination for difference
+    /// constraints: p -> v -> s yields p -> s). Implied edges keep the
+    /// potential valid. Used before an alignment drops `vs` from an
+    /// unnormalized graph, where such relations may exist only as paths.
+    void project_out(const std::vector<VertId>& vs);
+
     // ==========================================================================
     // Graph access for SplitDBM's read-only operations (e.g. to_set)
     // ==========================================================================

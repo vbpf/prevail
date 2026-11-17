@@ -80,6 +80,34 @@ VertId SplitDBM::new_vertex() {
 
 void SplitDBM::forget(const VertId v) { g_.forget(v); }
 
+void SplitDBM::project_out(const std::vector<VertId>& vs) {
+    for (const VertId v : vs) {
+        std::vector<std::pair<VertId, Weight>> preds;
+        for (const auto& e : g_.e_preds(v)) {
+            preds.emplace_back(e.vert, e.val);
+        }
+        std::vector<std::pair<VertId, Weight>> succs;
+        for (const auto& e : g_.e_succs(v)) {
+            succs.emplace_back(e.vert, e.val);
+        }
+        for (const auto& [p, wp] : preds) {
+            for (const auto& [s, ws] : succs) {
+                if (p == s) {
+                    continue; // a cycle through v, not a constraint
+                }
+                const Weight w = wp + ws;
+                if (Weight* pw = g_.lookup(p, s)) {
+                    if (w < *pw) {
+                        *pw = w;
+                    }
+                } else {
+                    g_.add_edge(p, w, s);
+                }
+            }
+        }
+    }
+}
+
 const Graph& SplitDBM::graph() const { return g_; }
 
 bool SplitDBM::repair_potential(const VertId src, const VertId dest) {

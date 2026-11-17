@@ -31,13 +31,20 @@ EbpfDomain Extrapolator::compute_fixpoint(EbpfDomain invariant, const Step& step
         }
         ++iteration;
         if (iteration < widening_delay_) {
+            // A join is already normalized: basis and invariant coincide.
             basis = basis | new_pre;
-        } else if (iteration == widening_delay_) {
+            invariant = basis;
+            continue;
+        }
+        if (iteration == widening_delay_) {
             // First widen: widening with thresholds. Only thresholds the state
             // being widened already satisfies are kept, so the result is still
-            // an upper bound of every state seen so far. (Adding them goes
-            // through the ordinary constraint operations, which normalize;
-            // that happens once.)
+            // an upper bound of every state seen so far.
+            //
+            // Convergence relies on the thresholds being applied at exactly
+            // one widen: they normalize the basis when at least one is
+            // selected, and a basis normalized at every widen need not
+            // stabilize (see above). Do not move them into every widen.
             const EbpfDomain before = basis | new_pre;
             basis = basis.widen_raw(new_pre);
             basis.add_widening_thresholds(before, widening_thresholds_, loop_counters_);

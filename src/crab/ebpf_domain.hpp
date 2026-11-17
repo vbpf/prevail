@@ -104,7 +104,9 @@ class EbpfDomain final {
                                  std::span<const Variable> loop_counters);
     /// Upper bound on the sum of the given loop counter variables in this
     /// domain. The caller supplies the counter set (per-program loop heads),
-    /// not the registry.
+    /// not the registry: the registry is global and accumulates the counters
+    /// of earlier analyses, which are absent from this domain and would
+    /// evaluate to top.
     ExtendedNumber get_loop_count_upper_bound(std::span<const Variable> loop_counters) const;
     Interval get_r0() const;
 
@@ -160,6 +162,11 @@ class EbpfDomain final {
     // Restore the bottom invariant after a `state` mutation that may have
     // driven it to bottom.
     void normalize_after_state_mutation();
+
+    // Bottom and stack checks shared by the inclusion tests: the answer if
+    // they decide it, otherwise nullopt (compare the states).
+    [[nodiscard]]
+    std::optional<bool> inclusion_prelude(const EbpfDomain& other) const;
 
     /// Type + numeric tracking
     TypeToNumDomain state;

@@ -75,15 +75,8 @@ class FiniteDomain {
     }
 
     [[nodiscard]]
-    FiniteDomain widen(FiniteDomain&& o) const {
-        return FiniteDomain{dom.widen(std::move(o.dom))};
-    }
-
-    [[nodiscard]]
     FiniteDomain widen_raw(const FiniteDomain& o) const {
-        FiniteDomain res;
-        res.dom = dom.widen_raw(o.dom);
-        return res;
+        return FiniteDomain{dom.widen_raw(o.dom)};
     }
 
     void normalize_closure() { dom.normalize_closure(); }

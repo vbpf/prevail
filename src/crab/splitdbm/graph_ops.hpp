@@ -214,8 +214,12 @@ inline void close_over_edge(Graph& g, const VertId ii, const VertId jj) {
                 // se -> ii -> jj -> se is a cycle, not a difference constraint.
                 // Storing it would leave a self-loop `x - x <= k` that closure
                 // later tightens to 0, so the state is never syntactically
-                // included in its own closure. A negative cycle here would mean
-                // the caller's potential repair missed an infeasible constraint.
+                // included in its own closure. The cycle contains the edge
+                // ii -> jj just added. The only caller,
+                // SplitDBM::add_difference_constraint, repairs the potential
+                // after adding that edge and reports infeasibility if the
+                // repair fails; a valid potential rules out a negative cycle,
+                // so the weight cannot be negative here.
                 assert(wt_sijd >= 0);
                 continue;
             }
