@@ -9,6 +9,7 @@
 #include <span>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "analysis_context.hpp"
 #include "arith/variable.hpp"
@@ -76,16 +77,36 @@ class EbpfDomain final {
     EbpfDomain operator|(const EbpfDomain& other) &&;
     EbpfDomain operator&(const EbpfDomain& other) const;
     EbpfDomain widen(const EbpfDomain& other) const;
+    /// `widen` without the zone's post-widen closure recovery: the left
+    /// operand for the next widen of an ascending sequence. Same
+    /// concretization as `widen`; call `normalize_closure()` on a copy before
+    /// using it for transfers or checks.
+    EbpfDomain widen_raw(const EbpfDomain& other) const;
+    void normalize_closure() { state.normalize_closure(); }
+    /// Inclusion in a raw widening basis; see
+    /// `TypeToNumDomain::is_included_in_raw_basis`.
+    [[nodiscard]]
+    bool is_included_in_raw_basis(const EbpfDomain& basis) const;
     EbpfDomain narrow(const EbpfDomain& other) const;
 
-    /// Per-register clamping domain: bounds signed/unsigned values to int32
-    /// range, stack offsets to total_stack_size, and loop counters to register
-    /// values. Inexpensive to compute (~100 constraints); not cached.
-    static EbpfDomain calculate_constant_limits(const AnalysisContext& context,
-                                                std::span<const Variable> loop_counters);
+    /// Candidate widening thresholds: per-register bounds on signed/unsigned
+    /// values (int32/uint32 range), stack/shared/packet offsets, and loop
+    /// counters in [0, int32 max]. Inexpensive (~100 constraints); not cached.
+    static std::vector<LinearConstraint> calculate_widening_thresholds(const AnalysisContext& context,
+                                                                       std::span<const Variable> loop_counters);
+    /// Widening with thresholds: add each of `thresholds` that `before` (the
+    /// state being widened, i.e. old | new) entails, plus `counter <= rN.svalue`
+    /// for each loop counter and register where `before` entails it
+    /// relationally (not merely because the two intervals are ordered).
+    /// Every added constraint holds in `before`, so the result still contains
+    /// every state observed so far.
+    void add_widening_thresholds(const EbpfDomain& before, const std::vector<LinearConstraint>& thresholds,
+                                 std::span<const Variable> loop_counters);
     /// Upper bound on the sum of the given loop counter variables in this
     /// domain. The caller supplies the counter set (per-program loop heads),
-    /// not the registry — see calculate_constant_limits for the rationale.
+    /// not the registry: the registry is global and accumulates the counters
+    /// of earlier analyses, which are absent from this domain and would
+    /// evaluate to top.
     ExtendedNumber get_loop_count_upper_bound(std::span<const Variable> loop_counters) const;
     Interval get_r0() const;
 
@@ -141,6 +162,11 @@ class EbpfDomain final {
     // Restore the bottom invariant after a `state` mutation that may have
     // driven it to bottom.
     void normalize_after_state_mutation();
+
+    // Bottom and stack checks shared by the inclusion tests: the answer if
+    // they decide it, otherwise nullopt (compare the states).
+    [[nodiscard]]
+    std::optional<bool> inclusion_prelude(const EbpfDomain& other) const;
 
     /// Type + numeric tracking
     TypeToNumDomain state;

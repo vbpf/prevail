@@ -228,3 +228,77 @@ TEST_CASE("TypeToNumDomain join_over_types forgets kind values of all registers 
     REQUIRE(res.values.eval_interval(pack.ctx_offset) == Interval{0});
     REQUIRE(res.values.eval_interval(pack.svalue).is_top());
 }
+
+// A raw widening basis can imply `y - x <= 0` only through a path via a kind
+// variable of an absent type (r0.packet_offset while r0 is a number). The
+// type-aware operator<= forgets that variable before closing the path, so the
+// fixpoint's basis inclusion must not use it.
+TEST_CASE("raw-basis inclusion keeps relations through inactive kind variables", "[type_to_num]") {
+    using namespace dsl_syntax;
+    const Variable x = reg_pack(Reg{1}).svalue;
+    const Variable y = reg_pack(Reg{2}).svalue;
+    const Variable v = reg_pack(Reg{0}).packet_offset;
+    auto numbers = [] {
+        TypeToNumDomain d;
+        for (uint8_t r = 0; r < 3; r++) {
+            d.assign_type(Reg{r}, T_NUM);
+        }
+        return d;
+    };
+
+    TypeToNumDomain left = numbers();
+    left.values.add_constraint(v - x <= 0);
+    left.values.add_constraint(y - v <= 0);
+    left.values.add_constraint(y - x <= -5);
+    TypeToNumDomain right = numbers();
+    right.values.add_constraint(v - x <= 0);
+    right.values.add_constraint(y - v <= 0);
+    right.values.add_constraint(y - x <= 0);
+
+    // Drops the direct y - x edge; the path through v still implies y - x <= 0.
+    const TypeToNumDomain basis = left.widen_raw(right);
+    TypeToNumDomain normalized = basis;
+    normalized.normalize_closure();
+
+    TypeToNumDomain pre = numbers();
+    pre.values.add_constraint(y - x <= 3);
+
+    CHECK_FALSE(pre <= normalized);
+    CHECK_FALSE(pre.is_included_in_raw_basis(basis));
+    CHECK(right.is_included_in_raw_basis(basis));
+}
+
+// When the next alignment drops a variable of an unnormalized basis, the
+// relations implied only through it must be kept (here y - x <= 0 via
+// r0.packet_offset), not lost with the vertex.
+TEST_CASE("raw widen keeps relations through a variable the alignment drops", "[type_to_num]") {
+    using namespace dsl_syntax;
+    const Variable x = reg_pack(Reg{1}).svalue;
+    const Variable y = reg_pack(Reg{2}).svalue;
+    const Variable v = reg_pack(Reg{0}).packet_offset;
+    auto numbers = [] {
+        TypeToNumDomain d;
+        for (uint8_t r = 0; r < 3; r++) {
+            d.assign_type(Reg{r}, T_NUM);
+        }
+        return d;
+    };
+
+    TypeToNumDomain left = numbers();
+    left.values.add_constraint(v - x <= 0);
+    left.values.add_constraint(y - v <= 0);
+    left.values.add_constraint(y - x <= -5);
+    TypeToNumDomain right = numbers();
+    right.values.add_constraint(v - x <= 0);
+    right.values.add_constraint(y - v <= 0);
+    right.values.add_constraint(y - x <= 0);
+    // Unnormalized: y - x <= 0 holds only through the path via v.
+    const TypeToNumDomain basis = left.widen_raw(right);
+
+    // The next state no longer tracks v, but still has y - x <= 0.
+    TypeToNumDomain next = numbers();
+    next.values.add_constraint(y - x <= 0);
+    TypeToNumDomain widened = basis.widen_raw(next);
+    widened.normalize_closure();
+    CHECK(widened.values.entail(y - x <= 0));
+}

@@ -41,6 +41,16 @@ bool TypeToNumDomain::operator<=(const TypeToNumDomain& other) const {
     return values <= tmp.values;
 }
 
+bool TypeToNumDomain::is_included_in_raw_basis(const TypeToNumDomain& basis) const {
+    if (is_bottom()) {
+        return true;
+    }
+    if (basis.is_bottom() || !(types <= basis.types)) {
+        return false;
+    }
+    return values <= basis.values;
+}
+
 void TypeToNumDomain::join_selective(const TypeToNumDomain& right) {
     if (is_bottom()) {
         *this = right;
@@ -297,7 +307,9 @@ void TypeToNumDomain::havoc_register(const Reg& reg) {
 TypeToNumDomain TypeToNumDomain::widen(const TypeToNumDomain& other) const {
     // Unlike join, widen must NOT re-add type-dependent constraints:
     // narrowing the widened result can defeat termination (see #960).
-    return TypeToNumDomain{types.widen(other.types), values.widen(other.values)};
+    TypeToNumDomain res = widen_raw(other);
+    res.normalize_closure();
+    return res;
 }
 
 TypeToNumDomain TypeToNumDomain::narrow(const TypeToNumDomain& other) const {

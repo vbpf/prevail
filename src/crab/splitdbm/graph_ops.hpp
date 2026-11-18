@@ -210,6 +210,19 @@ inline void close_over_edge(Graph& g, const VertId ii, const VertId jj) {
         Weight wt_sij = c + p1;
         for (const auto& [de, p2] : dest_dec) {
             Weight wt_sijd = wt_sij + p2;
+            if (se == de) {
+                // se -> ii -> jj -> se is a cycle, not a difference constraint.
+                // Storing it would leave a self-loop `x - x <= k` that closure
+                // later tightens to 0, so the state is never syntactically
+                // included in its own closure. The cycle contains the edge
+                // ii -> jj just added. The only caller,
+                // SplitDBM::add_difference_constraint, repairs the potential
+                // after adding that edge and reports infeasibility if the
+                // repair fails; a valid potential rules out a negative cycle,
+                // so the weight cannot be negative here.
+                assert(wt_sijd >= 0);
+                continue;
+            }
             if (Weight* pw = g.lookup(se, de)) {
                 if (*pw <= wt_sijd) {
                     continue;
