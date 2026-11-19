@@ -218,8 +218,10 @@ void EbpfChecker::operator()(const Addable& s) const {
 
 void EbpfChecker::operator()(const NonNull& s) const {
     using namespace dsl_syntax;
-    // Numbers and pointers to the singleton regions are never null. Any other pointer is
-    // null unless uvalue > 0 has been established, the same fact a dereference requires.
+    // Numbers and pointers to the singleton regions need no null check. Stack and packet
+    // pointers are never null; the context pointer may be null at entry, but it is never
+    // dereferenced then (see the T_CTX case of ValidAccess). Any other pointer is null unless
+    // uvalue > 0 has been established, the same fact a dereference requires.
     if (dom.state.is_in_group(s.reg, TS_NUM | TS_SINGLETON_PTR)) {
         return;
     }
@@ -572,7 +574,11 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             if (s.access_type == AccessType::write && context.program_info().type.ctx_read_only) {
                 throw_fail("Context is read-only");
             }
-            // T_CTX: non-null when in bounds.
+            // T_CTX: no null test. The entry state admits a null context (see
+            // EbpfDomain::setup_entry), but the access is still sound under the runtime
+            // contract: a program is started without a context only if it accesses none of it
+            // (Linux refuses the run unless ctx_size_in >= max_ctx_offset), so an access here
+            // never executes with a null base.
             break;
         }
         case T_PACKET: {
