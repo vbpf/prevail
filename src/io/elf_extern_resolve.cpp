@@ -65,7 +65,7 @@ std::set<size_t> collect_jump_targets(const std::vector<EbpfInst>& instructions)
         if (op == INST_EXIT || (op == INST_CALL && inst.src != INST_CALL_LOCAL)) {
             continue;
         }
-        const int32_t offset = (op == INST_CALL || inst.opcode == INST_OP_JA32) ? inst.imm : inst.offset;
+        const int32_t offset = op == INST_CALL ? inst.imm : jump_displacement(inst);
         const int64_t target = gsl::narrow<int64_t>(pc) + 1 + offset;
         if (target >= 0 && target < gsl::narrow<int64_t>(instructions.size())) {
             targets.insert(gsl::narrow<size_t>(target));

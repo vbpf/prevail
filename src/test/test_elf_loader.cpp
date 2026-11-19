@@ -2038,6 +2038,69 @@ TEST_CASE("ELF loader accepts instruction-aligned FUNC symbols", "[elf][hardenin
     REQUIRE_FALSE(programs.empty());
 }
 
+// A program owns every instruction of its section that its control flow reaches, also past the next FUNC
+// symbol. gotol (JA in the JMP32 class) keeps its displacement in imm, not in offset, and must extend the
+// program exactly as the equivalent goto does. Otherwise the code reached only through it is cut off, and
+// append_subprograms() can place a callee where that code should be, so the verified program is not the one
+// the object contains.
+TEST_CASE("ELF loader follows gotol like goto when sizing a program", "[elf][hardening]") {
+    constexpr EbpfInst r0_is_0{.opcode = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM, .dst = 0, .imm = 0};
+    constexpr EbpfInst r0_is_2{.opcode = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM, .dst = 0, .imm = 2};
+    constexpr EbpfInst exit_inst{.opcode = INST_OP_EXIT};
+
+    // main: 0: jump to 4; 1: r0 = 0; 2: exit; 3: exit; 4: r0 = 0
+    // inner: 5: r0 = 2; 6: exit
+    // The FUNC symbol "inner" cuts "main" after instruction 4, which falls through into "inner".
+    const auto load_main = [&](const EbpfInst& jump) {
+        const std::vector<EbpfInst> code{jump, r0_is_0, exit_inst, exit_inst, r0_is_0, r0_is_2, exit_inst};
+
+        ELFIO::elfio writer;
+        writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+        writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+        writer.set_type(ELFIO::ET_REL);
+        writer.set_machine(ELFIO::EM_BPF);
+
+        ELFIO::section* text_sec = writer.sections.add("xdp");
+        text_sec->set_type(ELFIO::SHT_PROGBITS);
+        text_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+        text_sec->set_addr_align(8);
+        text_sec->set_data(reinterpret_cast<const char*>(code.data()),
+                           gsl::narrow<ELFIO::Elf_Word>(code.size() * sizeof(EbpfInst)));
+
+        ELFIO::section* str_sec = writer.sections.add(".strtab");
+        str_sec->set_type(ELFIO::SHT_STRTAB);
+        ELFIO::string_section_accessor str_writer(str_sec);
+
+        ELFIO::section* sym_sec = writer.sections.add(".symtab");
+        sym_sec->set_type(ELFIO::SHT_SYMTAB);
+        sym_sec->set_addr_align(8);
+        sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+        sym_sec->set_link(str_sec->get_index());
+        sym_sec->set_info(1);
+        ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+        sym_writer.add_symbol(str_writer, "main", 0, 7 * sizeof(EbpfInst), ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0,
+                              text_sec->get_index());
+        sym_writer.add_symbol(str_writer, "inner", 5 * sizeof(EbpfInst), 2 * sizeof(EbpfInst), ELFIO::STB_GLOBAL,
+                              ELFIO::STT_FUNC, 0, text_sec->get_index());
+
+        std::ostringstream out_stream;
+        writer.save(out_stream);
+        std::istringstream in_stream(out_stream.str());
+        VerifierOptions options{};
+        const auto programs = read_elf(in_stream, "memory", "xdp", "main", options, &g_ebpf_platform_linux);
+        REQUIRE(programs.size() == 1);
+        return programs.front().prog;
+    };
+
+    const auto with_goto = load_main({.opcode = INST_OP_JA16, .offset = 3});
+    const auto with_gotol = load_main({.opcode = INST_OP_JA32, .imm = 3});
+    CHECK(with_goto.size() == 7);
+    CHECK(with_gotol.size() == 7);
+    // Apart from the jump encoding, both programs are the same instructions.
+    REQUIRE(with_goto.size() == with_gotol.size());
+    CHECK(std::equal(with_goto.begin() + 1, with_goto.end(), with_gotol.begin() + 1));
+}
+
 TEST_CASE("CO-RE array indexing recognizes only flexible trailing members", "[elf][core]") {
     libbtf::btf_type_data types;
     const auto u64 = types.append(libbtf::btf_kind_int{.name = "u64",
