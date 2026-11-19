@@ -340,7 +340,7 @@ ELFIO::Elf_Xword compute_reachable_program_span(const std::vector<EbpfInst>& sec
                 continue;
             }
 
-            const int64_t target = gsl::narrow<int64_t>(pc) + 1 + inst.offset;
+            const int64_t target = gsl::narrow<int64_t>(pc) + 1 + jump_displacement(inst);
             mark(target, seen, work);
             if (op != INST_JA) {
                 mark(gsl::narrow<int64_t>(fallthrough), seen, work);

@@ -652,8 +652,7 @@ struct Unmarshaller {
                 throw InvalidInstruction(pc, make_opcode_message("nonzero imm for", inst.opcode));
             }
 
-            const int32_t offset = (inst.opcode == INST_OP_JA32) ? inst.imm : inst.offset;
-            const Label target = getJumpTarget(offset, insts, pc);
+            const Label target = getJumpTarget(jump_displacement(inst), insts, pc);
             if (inst.opcode != INST_OP_JA16 && inst.opcode != INST_OP_JA32) {
                 if (inst.dst > R10_STACK_POINTER) {
                     throw InvalidInstruction(pc, "bad register");

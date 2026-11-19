@@ -114,6 +114,14 @@ enum {
     R11_ATOMIC_SCRATCH = 11, // Pseudo-register used internally for atomic instructions.
 };
 
+/// The displacement of a jump instruction (JA or a conditional jump, not a call or exit), counted in
+/// instructions from the one after it. Every jump keeps it in `offset`, except gotol (JA in the JMP32 class),
+/// whose displacement does not fit 16 bits and is in `imm`. Every place that follows a jump in raw
+/// instructions must use this, so that a goto and the equivalent gotol always reach the same code.
+constexpr int32_t jump_displacement(const EbpfInst& inst) {
+    return inst.opcode == INST_OP_JA32 ? inst.imm : inst.offset;
+}
+
 int opcode_to_width(uint8_t opcode);
 uint8_t width_to_opcode(int width);
 
