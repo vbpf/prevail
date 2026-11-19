@@ -31,7 +31,7 @@ Return types that are classified and propagated into register state:
 
 - [x] `PTR_TO_MAP_VALUE` / `PTR_TO_MAP_VALUE_OR_NULL` — map value pointers with offset/size tracking
 - [x] `PTR_TO_UNINIT_MAP_VALUE` — used by `map_pop_elem`, `map_peek_elem`; checked like `PTR_TO_MAP_VALUE` (the buffer must already be numeric), and the covered `value_size` stack bytes are havoced after the call
-- [x] `PTR_TO_CTX` — program context pointer
+- [x] `PTR_TO_CTX` — program context pointer. As in Linux, it may be null at entry (`BPF_PROG_RUN` starts syscall and raw tracepoint programs without a context), so code behind a null test of `r1` is verified. Context accesses are not null-checked: like Linux, PREVAIL relies on the runtime not starting a program that accesses its context without one (`ctx_size_in >= max_ctx_offset`)
 - [x] `PTR_TO_STACK` / `PTR_TO_STACK_OR_NULL` — stack pointers with bounds checking
 - [x] `PTR_TO_FUNC` — callback function pointer; validated as singleton code address targeting a label with reachable exit
 - [x] `PTR_TO_ALLOC_MEM` — used by `ringbuf_submit`, `ringbuf_discard`; enforces `T_ALLOC_MEM` type
