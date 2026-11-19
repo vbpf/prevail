@@ -142,7 +142,7 @@ Features:
           --max-inlined-calls INT:INT in [1 - 1048576]
                               Maximum number of inlined local call instances (default: 256)
           --max-packet-size INT:INT in [1 - 1073741824]
-                              Maximum packet size in bytes (default: 65535)
+                              Maximum packet offset in a pointer comparison (default: 65535)
           --include_groups GROUPS:{atomic32,atomic64,base32,base64,callx,divmul32,divmul64,packet}
                               Include conformance groups
           --exclude_groups GROUPS:{atomic32,atomic64,base32,base64,callx,divmul32,divmul64,packet}

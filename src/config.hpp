@@ -68,7 +68,10 @@ struct RuntimeConfig {
     // breadth that max_call_stack_frames leaves unconstrained.
     int max_inlined_calls = 256;
 
-    // Maximum packet size in bytes (upper bound on packet_size).
+    // The largest offset from the packet's start at which a packet pointer that is not
+    // known to lie inside the packet may be compared or subtracted, so that its address
+    // cannot wrap around (Linux's MAX_PACKET_OFF). It is not assumed to bound the packet
+    // itself: helpers that reallocate the packet, and ordinary traffic, can make it longer.
     int max_packet_size = 0xffff;
 
     static constexpr int MAX_SUBPROGRAM_STACK_SIZE = 1024 * 1024;
