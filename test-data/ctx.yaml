@@ -336,6 +336,140 @@ messages:
   - "4: Upper bound must be at most packet_size (valid_access(r2.offset, width=1) for read)"
 
 ---
+# max_packet_size bounds comparison operands, not the packet: helpers that
+# reallocate it (bpf_msg_pull_data, bpf_msg_push_data, bpf_skb_pull_data) set
+# its length from their arguments, and XDP and tc see 65549-byte frames. The
+# data_end load must not assume a longer packet away, or the code behind the
+# length test below is never verified.
+test-case: code guarded by data_end - data above max_packet_size is verified
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "meta_offset=0", "packet_size=[0, 2147483647]"]
+
+code:
+  <start>: |
+    r2 = *(u32 *)(r1 + 0)
+    r3 = *(u32 *)(r1 + 4)
+    r3 -= r2
+    if r3 <= 65535 goto <out>
+    r5 = 0x41414141
+    *(u64 *)(r5 + 0) = r5
+  <out>: |
+    r0 = 0
+    exit
+
+post:
+  - meta_offset=0
+  - packet_size=0
+  - r0.svalue=0
+  - r0.type=number
+  - r0.uvalue=0
+  - r1.ctx_offset=0
+  - r1.type=ctx
+  - r2.packet_offset=0
+  - r2.type=packet
+  - r2.uvalue=[0, 2147418112]
+  - r3.svalue=packet_size
+  - r3.type=number
+  - r3.uvalue=packet_size
+
+messages:
+  - "5: Invalid type (r5.type in {ctx, stack, packet, shared, socket, alloc_mem})"
+
+---
+# The same guard as a pointer comparison at the ceiling: the fall-through edge
+# is a packet longer than max_packet_size.
+test-case: code guarded by data + max_packet_size below data_end is verified
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "meta_offset=0", "packet_size=[0, 2147483647]"]
+
+code:
+  <start>: |
+    r2 = *(u32 *)(r1 + 0)
+    r3 = *(u32 *)(r1 + 4)
+    r2 += 65535
+    if r2 >= r3 goto <out>
+    r5 = 0x41414141
+    *(u64 *)(r5 + 0) = r5
+  <out>: |
+    r0 = 0
+    exit
+
+post:
+  - meta_offset=0
+  - packet_size=0
+  - r0.svalue=0
+  - r0.type=number
+  - r0.uvalue=0
+  - r1.ctx_offset=0
+  - r1.type=ctx
+  - r2.packet_offset=packet_size
+  - r2.svalue=[65535, 2147483647]
+  - r2.type=packet
+  - r2.uvalue=r2.svalue
+  - r3.packet_offset=packet_size
+  - r3.type=packet
+  - r3.uvalue=[0, 2147418112]
+
+messages:
+  - "5: Invalid type (r5.type in {ctx, stack, packet, shared, socket, alloc_mem})"
+
+---
+# A length taken as data_end - data, with no constant bound on the packet, is
+# still a number that bounds packet accesses, also through its 32-bit view.
+test-case: data_end - data guards a packet access
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "meta_offset=0", "packet_size=[0, 2147483647]"]
+
+code:
+  <start>: |
+    r2 = *(u32 *)(r1 + 0)
+    r3 = *(u32 *)(r1 + 4)
+    r3 -= r2
+    if w3 < 8 goto <out>
+    r0 = *(u64 *)(r2 + 0)
+  <out>: |
+    r0 = 0
+    exit
+
+post:
+  - meta_offset=0
+  - packet_size=0
+  - r0.svalue=0
+  - r0.type=number
+  - r0.uvalue=0
+  - r1.ctx_offset=0
+  - r1.type=ctx
+  - r2.packet_offset=0
+  - r2.type=packet
+  - r2.uvalue=[0, 2147418112]
+  - r3.svalue=packet_size
+  - r3.type=number
+  - r3.uvalue=packet_size
+
+---
+# A comparison operand that may lie past data_end is still held to
+# max_packet_size, so that its address cannot wrap around.
+test-case: pointer past data_end is not comparable above max_packet_size
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "meta_offset=0", "packet_size=[0, 2147483647]"]
+
+code:
+  <start>: |
+    r2 = *(u32 *)(r1 + 0)
+    r3 = *(u32 *)(r1 + 4)
+    r3 += 1
+    if r2 > r3 goto <out>
+  <out>: |
+    r0 = 0
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "3: Upper bound must be at most 65535 (valid_access(r3.offset) for comparison/subtraction)"
+
+---
 # A packet pointer loaded from the context is not known to be non-null: Linux
 # hands sk_msg programs data == data_end == NULL when the payload is shared with
 # user space. The fall-through edge of a null test must therefore stay live and
