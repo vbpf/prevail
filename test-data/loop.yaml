@@ -818,3 +818,61 @@ post: ["_|_"]
 messages:
   - "6:13: Code becomes unreachable (assume r4 > 100)"
   - "18: Invalid type (r3.type in {ctx, stack, packet, shared, socket, alloc_mem})"
+---
+test-case: subsumption compares the svalue of a pointer that a null check reads
+
+# r7 enters the loop as a non-null pointer whose uvalue wrapped (r7 += r9; r7 += -8) but whose svalue,
+# which pointer arithmetic writes, is still bounded away from 0. The null check reads that svalue, so the
+# first pass treats r6 = 1 as dead. The back edge brings r7 = r8, which may be null; the loop head must not
+# be accepted as stable by a comparison that ignores the svalue bound, or <unchecked> is never checked.
+# At run time: pass 1 skips r6 = 1, pass 2 sees r7 = NULL and sets r6 = 1, pass 3 reaches <unchecked>.
+
+pre: ["r7.type=shared", "r7.shared_offset=0", "r7.shared_region_size=8", "r7.uvalue=[1, 2147418112]",
+      "r8.type=shared", "r8.shared_offset=0", "r8.shared_region_size=8", "r8.uvalue=[0, 2147418112]",
+      "r4.type=number", "r9.type=number", "r9.svalue=[0, 8]", "r9.uvalue=[0, 8]"]
+
+code:
+  <start>: |
+    r6 = 0
+    r7 += r9
+    r7 += -8
+    if r9 < 8 goto <out>
+  <head>: |
+    if r6 != 0 goto <unchecked>
+    if r7 != 0 goto <skip>
+    r6 = 1
+  <skip>: |
+    r7 = r8
+    if r4 != 0 goto <head>
+  <out>: |
+    r0 = 0
+    exit
+  <unchecked>: |
+    r3 = 1
+    r0 = *(u64 *)(r3 + 0)
+    exit
+
+post:
+  - r0.svalue=0
+  - r0.type=number
+  - r0.uvalue=0
+  - r4.type=number
+  - r6.svalue-r7.shared_offset<=8
+  - r6.svalue=[0, 1]
+  - r6.type=number
+  - r6.uvalue=r6.svalue
+  - r7.shared_offset=[-8, 0]
+  - r7.shared_region_size=8
+  - r7.type=shared
+  - r8.shared_offset-r7.shared_region_size<=-8
+  - r8.shared_offset-r8.shared_region_size<=-8
+  - r8.shared_offset=0
+  - r8.shared_region_size=8
+  - r8.type=shared
+  - r8.uvalue=[0, 2147418112]
+  - r9.svalue=r6.svalue
+  - r9.type=number
+  - r9.uvalue=r6.svalue
+
+messages:
+  - "12: Invalid type (r3.type in {ctx, stack, packet, shared, socket, alloc_mem})"

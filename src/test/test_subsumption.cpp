@@ -94,6 +94,21 @@ TEST_CASE("Subsumption with absent type-specific variables", "[subsumption][latt
                          {r0.stack_offset == 128, r0.stack_numeric_size == 8}, {{r0_type, TypeSet{T_NUM}}}, {});
 }
 
+TEST_CASE("Subsumption compares kind variables of a type absent on both sides", "[subsumption][lattice]") {
+    using namespace dsl_syntax;
+    // A constraint is excused only when the right-hand side admits the type and the left-hand side does not.
+    // The svalue of a pointer is outside T_NUM on both sides, yet pointer arithmetic writes it and the pointer
+    // null check reads it, so a constraint on it must be compared (ANT-2026-0VVUN9A5).
+    require_not_subsumes({{r0_type, TypeSet{T_SHARED}}}, {}, {{r0_type, TypeSet{T_SHARED}}}, {r0.svalue >= 1});
+    require_subsumes({{r0_type, TypeSet{T_SHARED}}}, {r0.svalue == 5}, {{r0_type, TypeSet{T_SHARED}}},
+                     {r0.svalue >= 1});
+    // A relation to such a variable is compared too.
+    require_not_subsumes({{r0_type, TypeSet{T_SHARED}}, {r1_type, TypeSet{T_NUM}}}, {},
+                         {{r0_type, TypeSet{T_SHARED}}, {r1_type, TypeSet{T_NUM}}}, {r1.uvalue - r0.svalue <= 254});
+    // When the right-hand side admits T_NUM and the left-hand side does not, the constraint holds vacuously.
+    require_subsumes({{r0_type, TypeSet{T_SHARED}}}, {}, {{r0_type, TypeSet{T_SHARED, T_NUM}}}, {r0.svalue >= 1});
+}
+
 TEST_CASE("Subsumption with present type-specific variables", "[subsumption][lattice]") {
     using namespace dsl_syntax;
     // Standard subsumption check when the relevant type-specific variables are active in both domains.
