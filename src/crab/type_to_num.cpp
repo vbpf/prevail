@@ -34,9 +34,25 @@ bool TypeToNumDomain::operator<=(const TypeToNumDomain& other) const {
         return false;
     }
     // Then, check the numeric domain with consideration of type-specific variables.
+    // A constraint of `other` on a kind variable holds vacuously in `this` when `other` admits the variable's
+    // type and `this` does not: every state of `this` lies in another alternative of `other`, one that leaves
+    // the variable free. Forget exactly those constraints.
+    // The kind variables of a type that neither side admits are compared like any other variable. They are
+    // meaningless by the domain's rule, but the transformers do not all honor it: pointer arithmetic writes
+    // the svalue of a pointer, and the pointer null check reads it. Ignoring a constraint that
+    // some transfer function reads would accept a loop invariant that the loop body does not preserve, and
+    // code behind a branch decided by that constraint would never be checked. Comparing these variables can
+    // only make the answer false more often, and widening still drops whatever does not stabilize.
     TypeToNumDomain tmp{other.types, other.values};
-    for (const Variable& v : this->get_nonexistent_kind_variables()) {
-        tmp.values.havoc(v);
+    for (const Variable type_var : types.variables()) {
+        for (const auto& [type, kinds] : type_to_kinds) {
+            if (types.may_have_type(type_var, type) || !other.types.may_have_type(type_var, type)) {
+                continue;
+            }
+            for (const DataKind kind : kinds) {
+                tmp.values.havoc(variable_registry.kind_var(kind, type_var));
+            }
+        }
     }
     return values <= tmp.values;
 }

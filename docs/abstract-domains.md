@@ -90,7 +90,7 @@ Each register has multiple associated variables:
 
 This affects the main domain operations:
 
-* **Subsumption (A ⊆ B)** is type-aware: kind variables that are inactive in A are treated as "don't care" during numeric comparison, so states like `{r is NUM}` can be subsumed by `{r is NUM or PACKET, r.packet_offset = 5}` without failing on `packet_offset`.
+* **Subsumption (A ⊆ B)** is type-aware: kind variables that are inactive in A but active in B are treated as "don't care" during numeric comparison, so states like `{r is NUM}` can be subsumed by `{r is NUM or PACKET, r.packet_offset = 5}` without failing on `packet_offset`. Kind variables that are inactive on both sides are compared like any other variable: not every transfer function ignores them (pointer arithmetic writes the `svalue` of a pointer, and the null check reads it), so ignoring them would let a loop head stabilize on an invariant that its body does not preserve.
 
 * **Join** is type-aware: constraints on kind variables that exist only on the branch where the guarding type is possible are preserved instead of being dropped by a naive numeric join.
 

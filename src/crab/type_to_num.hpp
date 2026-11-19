@@ -41,8 +41,9 @@ inline const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
  *   whichever side has a type the other doesn't, preventing the zone join from losing them.
  *   This is what an RCP join does: each "slot" (type) has its own numeric sub-state, and
  *   constraints from a slot that exists on only one side are carried across unchanged.
- * - At subsumption time, type-irrelevant kind variables are havocked to top in the wider domain
- *   so that the numeric check correctly treats "absent type = bottom" on the narrower side.
+ * - At subsumption time, the kind variables of types that only the wider domain admits are havocked
+ *   to top in the wider domain, so that the numeric check treats "absent type = bottom" on the
+ *   narrower side. Kind variables of a type that neither side admits are compared as they are.
  * - At meet time, kind variables of types absent from the resulting TypeSet are havocked in both
  *   operands first, so that a value held for a ruled-out alternative cannot refute the remaining ones.
  *   Kind variables of a type that remains one of several alternatives keep only the intersection of
@@ -106,10 +107,16 @@ struct TypeToNumDomain {
      * "kind" variables (e.g., `packet_offset`). A standard numerical comparison is
      * insufficient due to the special role these variables play: a kind variable associated
      * with a type that is not active in `this` domain is conceptually Bottom.
-     * To ensure a correct comparison, this function first identifies these "Bottom" variables.
-     * It then `havoc`s them in a temporary copy of the `other` domain, which sets them to
-     * Top. The final numerical check `values <= tmp.values` is then sound, as it
-     * evaluates `x <= Top` for all irrelevant variables on the left-hand side.
+     * To ensure a correct comparison, this function first identifies the "Bottom" variables
+     * whose type is active in `other`. It then `havoc`s them in a temporary copy of the
+     * `other` domain, which sets them to Top. The final numerical check `values <= tmp.values`
+     * is then sound, as it evaluates `x <= Top` for these variables on the left-hand side.
+     *
+     * The kind variables of a type that is active in neither domain are compared as they are.
+     * Not every transfer function treats them as meaningless (pointer arithmetic writes the
+     * `svalue` of a pointer, and the pointer null check reads it), so a constraint on
+     * one may decide a branch. Ignoring it here would let a loop head stabilize on an invariant
+     * that the loop body does not preserve.
      */
     bool operator<=(const TypeToNumDomain& other) const;
 
@@ -129,7 +136,7 @@ struct TypeToNumDomain {
     /**
      * @brief Identifies type-specific ("kind") variables that are meaningless for the given domain.
      *
-     * @details This function is a helper for the type-aware subsumption check (`operator<=`).
+     * @details This function is a helper for the type-aware meet and narrowing (`operator&`, `narrow`).
      * The Core Principle: In EbpfDomain, a "kind" variable (e.g., `r1.packet_offset`) is
      * only meaningful if the register might have the corresponding type (`T_PACKET`). If the
      * type is absent, the kind variable is conceptually Bottom.
@@ -140,8 +147,8 @@ struct TypeToNumDomain {
      * Effectively meaning:
      *      `{r1.type=T_NUM, r1.packet_offset=BOT} <= {r1.type in {T_PACKET,T_NUM}, r1.packet_offset=5}`
      * Which is obviously true, since Bottom <= 5.
-     * This function finds these variables so the `operator<=` can handle them correctly,
-     * ensuring the subsumption check is sound.
+     * `operator<=` forgets, on its right-hand side, those of these variables whose type the
+     * right-hand side admits. Meet and narrowing forget all of them in their result.
      *
      * @return A vector of all kind variables that are meaningless (effectively Bottom) in `dom`.
      */
