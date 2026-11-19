@@ -603,12 +603,20 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             const auto [lb, ub] = lb_ub_access_pair(s, reg.packet_offset);
             require_lower_bound(lb, variable_registry.meta_offset(), "Lower bound must be at least meta_offset");
             // Pointer-comparison checks (width == 0) may legitimately reach
-            // past the runtime packet_size, so they use the looser
-            // max_packet_size ceiling. Real dereferences must be bounded by
-            // the runtime packet_size variable.
+            // past the runtime packet_size, as `data + 14 > data_end` does.
+            // Such an operand must stay within max_packet_size of data so
+            // that its address cannot wrap around. An operand provably
+            // inside the packet (data_end itself, or a pointer already
+            // checked against it) is a real address in the packet buffer
+            // and cannot wrap, whatever the packet's length, which
+            // max_packet_size does not bound (see do_load_ctx).
+            // Real dereferences must be bounded by the runtime packet_size.
             if (is_comparison_check) {
-                const auto max = context.runtime().max_packet_size;
-                require_upper_bound(ub, LinearExpression{max}, "Upper bound must be at most " + std::to_string(max));
+                if (!dom.state.values.entail(ub <= variable_registry.packet_size())) {
+                    const auto max = context.runtime().max_packet_size;
+                    require_upper_bound(ub, LinearExpression{max},
+                                        "Upper bound must be at most " + std::to_string(max));
+                }
             } else {
                 require_upper_bound(ub, variable_registry.packet_size(), "Upper bound must be at most packet_size");
             }

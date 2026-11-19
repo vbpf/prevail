@@ -617,10 +617,18 @@ static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, 
     } else if (addr == desc->end) {
         if (width == offset_width) {
             state.values.assign(target.packet_offset, variable_registry.packet_size());
-            // EXPERIMENTAL: Explicit upper bound since packet_size is min_only.
-            // This preserves the relational constraint (packet_offset <= packet_size)
-            // while ensuring comparison checks have a concrete upper bound.
-            state.values.add_constraint(target.packet_offset <= context.runtime().max_packet_size);
+            // The packet is not bounded by max_packet_size. Helpers that reallocate it set its length
+            // from their arguments (bpf_msg_pull_data, bpf_msg_push_data, bpf_skb_pull_data), and XDP
+            // and tc see 65549-byte frames from ordinary loopback traffic. Bounding packet_offset by
+            // max_packet_size here would make the code behind `data_end - data > max_packet_size`
+            // unreachable, and so never checked. max_packet_size only limits comparison operands that
+            // are not known to lie inside the packet (see EbpfChecker's ValidAccess).
+            //
+            // The one bound kept is the 32-bit cap the model puts on every pointer (see ptr_max): the
+            // linear part of a packet is one kernel allocation, and the largest one Linux can make
+            // (KMALLOC_MAX_SIZE: 4 MiB with 4 KiB pages) is far below 2 GiB. It keeps
+            // `data_end - data` a number that fits a signed 32-bit register, so `(u32)len` is exact.
+            state.values.add_constraint(target.packet_offset <= std::numeric_limits<int32_t>::max());
         }
     } else if (addr == desc->meta) {
         if (width == offset_width) {
