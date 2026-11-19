@@ -93,6 +93,8 @@ class EbpfTransformer final {
 
     void recompute_stack_numeric_size(TypeToNumDomain& state, Variable type_variable);
 
+    void advance_stack_numeric_size(TypeToNumDomain& state, const Reg& reg, const LinearExpression& advance);
+
     void do_load_stack(TypeToNumDomain& state, const Reg& target_reg, const LinearExpression& addr, int width,
                        const Reg& src_reg, int offset);
 
@@ -1269,6 +1271,33 @@ void EbpfTransformer::recompute_stack_numeric_size(TypeToNumDomain& state, const
     recompute_stack_numeric_size(state, reg_type(reg));
 }
 
+// Move a stack pointer's stack_numeric_size along with the pointer, which has advanced by `advance` bytes.
+// Precondition: `advance` >= 0 in every state of `state`; the callers havoc the size when the pointer may move down.
+//
+// Invariant: every constraint on a register's (or a spilled cell's) stack_numeric_size held by the numeric domain is
+// true of N, the length of the run of numeric bytes that starts at its stack_offset. The domain keeps no constant upper
+// bound on these variables (VariableRegistry::is_min_only), since a constant is only ever proved as a lower bound on N,
+// but it does keep relations between them, such as the equality a register copy creates. Join, meet and widening are
+// sound for such true facts, so the transfer functions must not record a relation that can be false.
+//
+// Let N be the run at the old offset and N' the run at the new one. If the `advance` skipped bytes are all numeric
+// (advance <= N), then N' = N - advance exactly, and recording that equality is sound. Otherwise N' is unrelated to N:
+// a skipped byte may be a pointer and any number of numeric bytes may follow. Recording N' = N - advance then would
+// bound N from below by N' + advance, so a later proof of numeric bytes at the new pointer (in a meet) would raise the
+// size of the old one, e.g., of a copy that still points at a spilled pointer (ANT-2026-5BZGMKXJ). In that case forget
+// the size and recompute what the stack contents prove.
+void EbpfTransformer::advance_stack_numeric_size(TypeToNumDomain& state, const Reg& reg,
+                                                 const LinearExpression& advance) {
+    using namespace dsl_syntax;
+    const Variable size = reg_pack(reg).stack_numeric_size;
+    if (state.values.entail(advance <= size)) {
+        state.values.assign(size, size - advance);
+    } else {
+        state.values.havoc(size);
+        recompute_stack_numeric_size(state, reg);
+    }
+}
+
 void EbpfTransformer::add(const Reg& dst_reg, const int64_t imm, const int finite_width) {
     const auto dst = reg_pack(dst_reg);
     if (dom.state.is_in_group(dst_reg, TS_NUM)) {
@@ -1298,7 +1327,7 @@ void EbpfTransformer::add(const Reg& dst_reg, const int64_t imm, const int finit
     }
     if (dom.state.may_have_type(dst_reg, T_STACK)) {
         if (imm > 0) {
-            dom.state.values->sub(dst.stack_numeric_size, imm);
+            advance_stack_numeric_size(dom.state, dst_reg, LinearExpression{imm});
         } else if (imm < 0) {
             dom.state.values.havoc(dst.stack_numeric_size);
         }
@@ -1504,9 +1533,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
                                                 state.values.havoc(dst.stack_numeric_size);
                                                 recompute_stack_numeric_size(state, bin.dst);
                                             } else {
-                                                state.values->apply_signed(ArithBinOp::SUB, dst.stack_numeric_size,
-                                                                           dst.stack_numeric_size,
-                                                                           dst.stack_numeric_size, src.svalue, 0);
+                                                advance_stack_numeric_size(state, bin.dst, src.svalue);
                                             }
                                         }
                                     }
@@ -1583,8 +1610,8 @@ void EbpfTransformer::operator()(const Bin& bin) {
                             dom.state.values.havoc(dst.stack_numeric_size);
                             recompute_stack_numeric_size(dom.state, bin.dst);
                         } else {
-                            dom.state.values->apply(ArithBinOp::ADD, dst.stack_numeric_size, dst.stack_numeric_size,
-                                                    src.svalue);
+                            using namespace dsl_syntax;
+                            advance_stack_numeric_size(dom.state, bin.dst, -LinearExpression{src.svalue});
                         }
                     }
                 } else {

@@ -80,6 +80,9 @@ class VariableRegistry final {
     Variable packet_size() const;
 
     /// EXPERIMENTAL: Variables where only the lower bound is semantically meaningful.
+    /// The numeric domain drops constant upper bounds on them. Relations between them are kept, so the transfer
+    /// functions must record only relations that are true of the quantity itself; for stack_numeric_size see
+    /// EbpfTransformer::advance_stack_numeric_size.
     [[nodiscard]]
     bool is_min_only(const Variable& v) const;
 
