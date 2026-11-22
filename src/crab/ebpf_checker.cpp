@@ -34,10 +34,21 @@ bool is_power_of_two(const int size) { return size > 0 && (size & (size - 1)) ==
 
 bool field_is_present(const EbpfStructFieldDescriptor& field) { return field.offset >= 0 && field.span > 0; }
 
-bool field_allows_access(const EbpfStructFieldDescriptor& field, const int offset, const int size,
+/// One past the last byte of a field, over all of its elements.
+int field_end(const EbpfStructFieldDescriptor& field) { return field.offset + field.span * field.count; }
+
+bool field_allows_access(EbpfStructFieldDescriptor field, const int offset, const int size,
                          const AccessType access_type) {
     if (!field_is_present(field)) {
         return false;
+    }
+    if (field.count != 1) {
+        // An array: the access is judged against the element that holds its first byte.
+        if (field.count < 1 || offset < field.offset || offset >= field_end(field)) {
+            return false;
+        }
+        field.offset += (offset - field.offset) / field.span * field.span;
+        field.count = 1;
     }
     if (access_type == AccessType::write && field.permission == EbpfStructFieldPermission::read_only) {
         return false;
@@ -77,7 +88,7 @@ bool write_may_touch_readonly_field(const NumAbsDomain& values, const LinearExpr
             continue;
         }
         if (values.intersect(ub > LinearExpression{field.offset}) &&
-            values.intersect(lb < LinearExpression{field.offset + field.span})) {
+            values.intersect(lb < LinearExpression{field_end(field)})) {
             return true;
         }
     }
@@ -591,6 +602,23 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             // state (the pt_regs of a probed function, the saved arguments of a traced one).
             if (s.access_type == AccessType::write && context.program_info().type.ctx_read_only) {
                 throw_fail("Context is read-only");
+            }
+            // Where the runtime rewrites a context access by the field it names, being in bounds is not
+            // enough: what executes is an access to whatever backs that field, of the width the runtime
+            // chooses. So the access must be one that a field of the layout admits, which takes a known
+            // offset and width.
+            if (const auto* layout = context.program_info().type.ctx_layout; layout && !is_comparison_check) {
+                if (!std::holds_alternative<Imm>(s.width)) {
+                    throw_fail("Context access size must be constant");
+                }
+                const auto exact_offset = dom.state.values.eval_interval(lb).singleton();
+                if (!exact_offset || !exact_offset->fits_cast_to<int32_t>()) {
+                    throw_fail("Context access offset must be precise");
+                }
+                const auto width = static_cast<int>(std::get<Imm>(s.width).v);
+                if (!is_valid_struct_access(*layout, exact_offset->cast_to<int32_t>(), width, s.access_type)) {
+                    throw_fail("Invalid context access");
+                }
             }
             // T_CTX: no null test. The entry state admits a null context (see
             // EbpfDomain::setup_entry), but the access is still sound under the runtime

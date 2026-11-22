@@ -109,6 +109,21 @@ inline constexpr std::array bpf_sock_common_fields{
 inline constexpr EbpfStructDescriptor bpf_sock_common_layout{
     .size = cgroup_sock_regions, .fields = bpf_sock_common_fields.data(), .field_count = bpf_sock_common_fields.size()};
 
+// Context layouts: the accesses that each program type's is_valid_access() admits in Linux, which rewrites a
+// context access into an access to the kernel object behind the field at its offset.
+
+// bpf_perf_event_data (pe_prog_is_valid_access, pe_prog_convert_ctx_access): every load outside sample_period
+// and addr runs as a load of a whole word of the interrupted pt_regs, so only those are admitted; the two
+// u64 fields are loaded whole and then narrowed, so they admit narrow loads.
+inline constexpr std::array bpf_perf_event_data_fields{
+    array_of(exact_field(0, 8), ptregs_size / 8),
+    narrow_field(ptregs_size, 8),     // sample_period
+    narrow_field(ptregs_size + 8, 8), // addr
+};
+inline constexpr EbpfStructDescriptor bpf_perf_event_data_layout{.size = perf_event_regions,
+                                                                 .fields = bpf_perf_event_data_fields.data(),
+                                                                 .field_count = bpf_perf_event_data_fields.size()};
+
 constexpr ebpf_ctx_descriptor_t sk_buff = {sk_skb_regions, 76, 80, 140}; // data/data_end/data_meta
 // __sk_buff outside tc: Linux rejects data_meta for these program types, and the
 // cgroup_skb, sk_skb and socket_filter entry points never compute the pointer
