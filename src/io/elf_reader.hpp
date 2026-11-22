@@ -229,8 +229,10 @@ class ProgramReader {
     std::set<size_t> jump_targets_for_current_program;
 
     // CO-RE relocation (elf_core_reloc.cpp)
+    /// `section_code` is the code of the program's section as the file holds it, before any relocation.
     static void apply_core_relocation(RawProgram& prog, const struct bpf_core_relo& relo,
-                                      std::string_view access_string, const struct CoreBtf& btf);
+                                      std::string_view access_string, const struct CoreBtf& btf,
+                                      std::span<const EbpfInst> section_code);
     void process_core_relocations(const libbtf::btf_type_data& btf_data);
 
     int32_t compute_lddw_reloc_offset_imm(std::optional<ELFIO::Elf_Sxword> explicit_addend, ELFIO::Elf_Word index,

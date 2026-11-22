@@ -397,7 +397,8 @@ bool core_field_offset_uses_offset_field(const EbpfInst& inst) {
 // ---------------------------------------------------------------------------
 
 void ProgramReader::apply_core_relocation(RawProgram& prog, const bpf_core_relo& relo,
-                                          const std::string_view access_string, const CoreBtf& btf) {
+                                          const std::string_view access_string, const CoreBtf& btf,
+                                          const std::span<const EbpfInst> section_code) {
     const libbtf::btf_type_data& btf_data = btf.types;
     if (relo.insn_off < prog.insn_off) {
         throw UnmarshalError("CO-RE relocation offset before program start");
@@ -421,6 +422,54 @@ void ProgramReader::apply_core_relocation(RawProgram& prog, const bpf_core_relo&
         throw UnmarshalError("CO-RE relocation at offset " + std::to_string(relo.insn_off) +
                              " targets LDDW continuation slot");
     }
+    const auto reject = [&](const std::string& why) {
+        throw UnmarshalError("CO-RE relocation at offset " + std::to_string(relo.insn_off) + " targets " + why);
+    };
+
+    // The loader's own rewrites are done by now, and their soundness was argued for the code they left: a known
+    // extern's load is folded into a constant, and jump targets were collected to decide that. A CO-RE relocation
+    // applied on top of a rewritten instruction would patch something other than what the file relocates.
+    const bool is_lddw = inst.opcode == INST_OP_LDDW_IMM;
+    const size_t section_idx = relo.insn_off / sizeof(EbpfInst);
+    if (is_lddw && inst_idx + 1 >= prog.prog.size()) {
+        reject("incomplete LDDW");
+    }
+    if (section_idx + (is_lddw ? 1 : 0) >= section_code.size() || inst != section_code[section_idx] ||
+        (is_lddw && prog.prog[inst_idx + 1] != section_code[section_idx + 1])) {
+        reject("an instruction that another relocation rewrote");
+    }
+
+    // Only the instructions that libbpf's bpf_core_patch_insn() patches are patched here; it fails the load for
+    // any other. In particular no jump or call is patched: their targets decide which code is checked at all.
+    switch (inst.opcode & INST_CLS_MASK) {
+    case INST_CLS_ALU:
+    case INST_CLS_ALU64:
+        if ((inst.opcode & INST_SRC_REG) != 0) {
+            reject("an ALU instruction without an immediate operand");
+        }
+        break;
+    case INST_CLS_LDX:
+    case INST_CLS_ST:
+    case INST_CLS_STX:
+        // libbpf patches the offset field of these, whatever the relocation kind. Only a field's byte offset
+        // belongs there, so any other kind is rejected instead of being written to imm.
+        if (relo.kind != BPF_CORE_FIELD_BYTE_OFFSET || !core_field_offset_uses_offset_field(inst)) {
+            reject("a load or store with a relocation other than a field byte offset");
+        }
+        break;
+    case INST_CLS_LD: {
+        if (!is_lddw || inst.src != 0 || inst.offset != 0) {
+            reject("a load that is not a plain LDDW");
+        }
+        const EbpfInst& next = prog.prog[inst_idx + 1];
+        if (next.opcode != 0 || next.dst != 0 || next.src != 0 || next.offset != 0) {
+            reject("a load that is not a plain LDDW");
+        }
+        break;
+    }
+    default: reject("an instruction that cannot be relocated");
+    }
+
     std::optional<core_field_resolution_t> resolved_field;
     const auto get_field = [&]() -> const core_field_resolution_t& {
         if (!resolved_field) {
@@ -621,6 +670,15 @@ void ProgramReader::process_core_relocations(const libbtf::btf_type_data& btf_da
             continue;
         }
 
+        // Executable sections have distinct names (read_programs), so this is the code the records refer to.
+        std::vector<EbpfInst> section_code;
+        for (const auto& sec : reader.sections) {
+            if ((sec->get_flags() & ELFIO::SHF_EXECINSTR) && sec->get_data() && sec->get_name() == section_name) {
+                section_code = vector_of<EbpfInst>(*sec);
+                break;
+            }
+        }
+
         for (size_t i = 0; i < section.num_info; ++i) {
             const size_t record_offset = offset + i * core_relo_rec_size;
             const auto reloc =
@@ -634,7 +692,7 @@ void ProgramReader::process_core_relocations(const libbtf::btf_type_data& btf_da
             for (RawProgram* prog : prog_it->second) {
                 const size_t prog_size = prog->prog.size() * sizeof(EbpfInst);
                 if (reloc.insn_off >= prog->insn_off && reloc.insn_off < prog->insn_off + prog_size) {
-                    apply_core_relocation(*prog, reloc, access_string, btf);
+                    apply_core_relocation(*prog, reloc, access_string, btf, section_code);
                     applied = true;
                 }
             }

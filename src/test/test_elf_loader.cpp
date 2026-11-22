@@ -2845,6 +2845,8 @@ struct CoreObject {
     std::vector<Section> sections;
     std::string core_section; ///< The section the CO-RE relocations name.
     std::vector<Relocation> relocations;
+    /// Indices of the instructions of the first section with an entry against the undefined LINUX_KERNEL_VERSION.
+    std::vector<size_t> extern_relocations;
     bool is_union = false;
     bool kind_flag = false;
     uint32_t member_offset_field = 32; ///< The btf_member offset field of `f`.
@@ -2939,6 +2941,20 @@ struct CoreObject {
                 sym_writer.add_symbol(str_writer, functions[f].name.c_str(), functions[f].start * sizeof(EbpfInst),
                                       (end - functions[f].start) * sizeof(EbpfInst), ELFIO::STB_GLOBAL, ELFIO::STT_FUNC,
                                       0, code_sections[i]->get_index());
+            }
+        }
+        if (!extern_relocations.empty()) {
+            const ELFIO::Elf_Word extern_symbol = sym_writer.add_symbol(
+                str_writer, "LINUX_KERNEL_VERSION", 0, 0, ELFIO::STB_GLOBAL, ELFIO::STT_NOTYPE, 0, ELFIO::SHN_UNDEF);
+            ELFIO::section* rel_sec = writer.sections.add(".rel" + sections.at(0).name);
+            rel_sec->set_type(ELFIO::SHT_REL);
+            rel_sec->set_addr_align(8);
+            rel_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_REL));
+            rel_sec->set_link(sym_sec->get_index());
+            rel_sec->set_info(code_sections.at(0)->get_index());
+            ELFIO::relocation_section_accessor rel_writer(writer, rel_sec);
+            for (const size_t instruction : extern_relocations) {
+                rel_writer.add_entry(instruction * sizeof(EbpfInst), extern_symbol, R_BPF_64_64_TYPE);
             }
         }
 
@@ -3235,6 +3251,73 @@ TEST_CASE("ELF loader rejects executable sections that share a name", "[elf][cor
     // Distinct names load.
     object.sections[1].name = "socket";
     REQUIRE(read_core_object(object, "xdp").size() == 1);
+}
+
+// A CO-RE relocation patches only what libbpf's bpf_core_patch_insn() patches: the immediate of an ALU instruction or
+// of a plain lddw, and the offset of a load or store. Anything else fails the load there, and patching it here would
+// analyze a program that is never loaded. A patched jump could, for one, land on code whose checks relied on the
+// jump targets collected before.
+TEST_CASE("CO-RE relocation is rejected on an instruction libbpf does not patch", "[elf][core][hardening]") {
+    constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
+    constexpr EbpfInst mov{.opcode = CORE_TEST_MOV64_IMM, .imm = -1};
+    constexpr EbpfInst load{.opcode = INST_CLS_LDX | INST_MODE_MEM | INST_SIZE_W, .dst = 0, .src = 1};
+    constexpr uint32_t CORE_FIELD_BYTE_SIZE = 1;
+    const auto object = [&](const EbpfInst relocated, const uint32_t kind = CORE_FIELD_BYTE_OFFSET) {
+        return CoreObject{
+            .sections = {{"xdp", {relocated, mov, mov, mov, mov, exit}, {{"prog", 0}}}},
+            .core_section = "xdp",
+            .relocations = {{0, kind}},
+        };
+    };
+    const auto rejects = [&](const CoreObject& o, const std::string& why) {
+        REQUIRE_THROWS_WITH(read_core_object(o, "xdp"), Catch::Matchers::ContainsSubstring(why));
+    };
+
+    SECTION("patched forms") {
+        CHECK(read_core_object(object(mov), "xdp")[0].prog[0].imm == 4);
+        CHECK(read_core_object(object(load), "xdp")[0].prog[0].offset == 4);
+    }
+    SECTION("jumps and calls") {
+        rejects(object({.opcode = INST_OP_JA32}), "cannot be relocated");
+        rejects(object({.opcode = INST_OP_JA16}), "cannot be relocated");
+        rejects(object({.opcode = INST_CLS_JMP | (0x1 << 4), .dst = 1}), "cannot be relocated"); // JEQ imm
+        rejects(object({.opcode = INST_OP_CALL, .imm = 1}), "cannot be relocated");
+        rejects(object(exit), "cannot be relocated");
+    }
+    SECTION("an ALU instruction with a register operand") {
+        rejects(object({.opcode = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_REG, .dst = 0, .src = 1}),
+                "without an immediate operand");
+    }
+    SECTION("a load with a relocation that is not a byte offset") {
+        rejects(object(load, CORE_FIELD_BYTE_SIZE), "other than a field byte offset");
+    }
+    SECTION("an lddw with a pseudo source") {
+        CoreObject o = object({.opcode = INST_OP_LDDW_IMM, .dst = 1, .src = INST_LD_MODE_MAP_FD});
+        o.sections[0].insts[1] = {};
+        rejects(o, "not a plain LDDW");
+    }
+}
+
+// The loader folds the load of a known extern into a constant before CO-RE relocations are applied. A relocation
+// of that load would then overwrite the constant, whereas libbpf patches the offset of the load.
+TEST_CASE("CO-RE relocation is rejected on an instruction another relocation rewrote", "[elf][core][hardening]") {
+    constexpr EbpfInst lddw{.opcode = INST_OP_LDDW_IMM, .dst = 2};
+    constexpr EbpfInst load{.opcode = INST_CLS_LDX | INST_MODE_MEM | INST_SIZE_W, .dst = 0, .src = 2};
+    CoreObject object{
+        .sections = {{"xdp", {lddw, {}, load, EbpfInst{.opcode = INST_OP_EXIT}}, {{"prog", 0}}}},
+        .core_section = "xdp",
+        .relocations = {{2 * sizeof(EbpfInst), CORE_FIELD_BYTE_OFFSET}},
+        .extern_relocations = {0},
+    };
+    REQUIRE_THROWS_WITH(read_core_object(object, "xdp"),
+                        Catch::Matchers::ContainsSubstring("an instruction that another relocation rewrote"));
+
+    // Without the CO-RE relocation the load is folded, and without the extern it is relocated.
+    object.relocations.clear();
+    CHECK(read_core_object(object, "xdp")[0].prog[2] != load);
+    object.relocations = {{2 * sizeof(EbpfInst), CORE_FIELD_BYTE_OFFSET}};
+    object.extern_relocations.clear();
+    CHECK(read_core_object(object, "xdp")[0].prog[2].offset == 4);
 }
 
 // Linking appends a copy of each callee to its caller, so a function called from another one in the same section is
