@@ -908,11 +908,6 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
                               const std::optional<ELFIO::Elf_Sxword> explicit_addend) {
     EbpfInst& instruction_to_relocate = instructions[location];
 
-    if (extern_address_offsets_for_current_program.contains(location)) {
-        // Another entry would retarget the load whose value has been folded into the access after it.
-        throw UnmarshalError("Multiple relocations of the extern address load at instruction " +
-                             std::to_string(location));
-    }
     if (symbol_section_index == ELFIO::SHN_UNDEF) {
         // The loader that resolves the extern writes its address into the lddw, so the zero written
         // here is a placeholder, and the lddw is marked as loading an unknown number. Only a weak
@@ -1047,6 +1042,7 @@ void ProgramReader::process_relocations(std::vector<EbpfInst>& instructions, con
                                         const std::string& section_name, const ELFIO::Elf_Xword program_offset,
                                         const size_t program_size) {
     const auto layout = relocation_section_layout(reader, reloc, section_name);
+    std::set<size_t> relocated_slots;
     for (ELFIO::Elf_Xword i = 0; i < layout.entries_num; i++) {
         const auto entry = read_relocation_entry(reloc, i, layout);
         ELFIO::Elf64_Addr o = entry.offset;
@@ -1073,6 +1069,18 @@ void ProgramReader::process_relocations(std::vector<EbpfInst>& instructions, con
         const auto loc = o / sizeof(EbpfInst);
         if (loc >= instructions.size()) {
             throw UnmarshalError("Invalid relocation");
+        }
+        // An entry is resolved against the instruction as the file stores it: a SHT_REL entry keeps its
+        // addend in the immediate, which applying a relocation overwrites (in an lddw, with a map fd).
+        // So each instruction is relocated at most once: a second entry would take what the first one
+        // stored as its addend, one for the second slot of a relocated lddw would replace the offset
+        // computed for it, and one for an extern's lddw would retarget a load whose value is already folded.
+        const size_t slots = instructions[loc].opcode == INST_OP_LDDW_IMM ? 2 : 1;
+        for (size_t slot = loc; slot < loc + slots; ++slot) {
+            if (!relocated_slots.insert(slot).second) {
+                throw UnmarshalError("Multiple relocations in section " + section_name + " at location " +
+                                     std::to_string(slot));
+            }
         }
         auto sym = get_symbol_details(symbols, idx);
 

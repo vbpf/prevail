@@ -1837,6 +1837,105 @@ TEST_CASE("ELF loader applies the in-instruction addend of an lddw relocation ag
     REQUIRE(prog[1].imm == 12);
 }
 
+// Regression test: applying a relocation overwrites the immediate in which a SHT_REL entry keeps
+// its addend, so an lddw must not be relocated twice. A second entry for it used to take the map fd
+// stored by the first one as its addend, and an entry for its second slot used to replace the offset:
+// either way the verified offset into the global data was not the one the object designates.
+TEST_CASE("ELF loader rejects a second relocation of an lddw", "[elf][hardening]") {
+    struct Relocation {
+        size_t slot;
+        bool against_arr;
+    };
+    const auto load = [](const std::vector<Relocation>& relocations) {
+        auto append_inst = [](std::string& data, const uint8_t opcode, const uint8_t dst, const int32_t imm) {
+            const EbpfInst inst{.opcode = opcode, .dst = dst, .src = 0, .offset = 0, .imm = imm};
+            data.append(reinterpret_cast<const char*>(&inst), sizeof(inst));
+        };
+        constexpr uint8_t MOV64_IMM = 0xb7;
+
+        ELFIO::elfio writer;
+        writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+        writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+        writer.set_type(ELFIO::ET_REL);
+        writer.set_machine(ELFIO::EM_BPF);
+
+        // xdp: r1 = arr+8 ll; r0 = 0; exit
+        ELFIO::section* prog_sec = writer.sections.add("xdp");
+        prog_sec->set_type(ELFIO::SHT_PROGBITS);
+        prog_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+        prog_sec->set_addr_align(8);
+        std::string prog_data;
+        append_inst(prog_data, INST_OP_LDDW_IMM, 1, 8);
+        append_inst(prog_data, 0, 0, 0);
+        append_inst(prog_data, MOV64_IMM, 0, 0);
+        append_inst(prog_data, INST_OP_EXIT, 0, 0);
+        prog_sec->set_data(prog_data);
+
+        ELFIO::section* data_sec = writer.sections.add(".data");
+        data_sec->set_type(ELFIO::SHT_PROGBITS);
+        data_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_WRITE);
+        data_sec->set_addr_align(4);
+        data_sec->set_data(std::string(16, '\0'));
+
+        ELFIO::section* str_sec = writer.sections.add(".strtab");
+        str_sec->set_type(ELFIO::SHT_STRTAB);
+        ELFIO::string_section_accessor str_writer(str_sec);
+
+        ELFIO::section* sym_sec = writer.sections.add(".symtab");
+        sym_sec->set_type(ELFIO::SHT_SYMTAB);
+        sym_sec->set_addr_align(8);
+        sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+        sym_sec->set_link(str_sec->get_index());
+        sym_sec->set_info(1);
+        ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+
+        sym_writer.add_symbol(str_writer, "prog", 0, 32, ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0, prog_sec->get_index());
+        const auto arr_sym = sym_writer.add_symbol(str_writer, "arr", 4, 12, ELFIO::STB_GLOBAL, ELFIO::STT_OBJECT, 0,
+                                                   data_sec->get_index());
+        const auto config_sym = sym_writer.add_symbol(str_writer, "__config_x", 0, 0, ELFIO::STB_GLOBAL,
+                                                      ELFIO::STT_NOTYPE, 0, ELFIO::SHN_UNDEF);
+
+        ELFIO::section* rel_sec = writer.sections.add(".relxdp");
+        rel_sec->set_type(ELFIO::SHT_REL);
+        rel_sec->set_addr_align(8);
+        rel_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_REL));
+        rel_sec->set_link(sym_sec->get_index());
+        rel_sec->set_info(prog_sec->get_index());
+        ELFIO::relocation_section_accessor rel_writer(writer, rel_sec);
+        for (const auto& [slot, against_arr] : relocations) {
+            rel_writer.add_entry(slot * sizeof(EbpfInst), against_arr ? arr_sym : config_sym, R_BPF_64_64_TYPE);
+        }
+
+        std::ostringstream out_stream;
+        writer.save(out_stream);
+        std::istringstream in_stream(out_stream.str());
+
+        VerifierOptions options{};
+        return read_elf(in_stream, "memory", "xdp", "", options, &g_ebpf_platform_linux);
+    };
+    const auto multiple_relocations = Catch::Matchers::ContainsSubstring("Multiple relocations in section xdp");
+
+    SECTION("one entry per instruction") {
+        const auto programs = load({{.slot = 0, .against_arr = true}});
+        REQUIRE(programs.size() == 1);
+        // arr is at .data+4, so arr+8 is offset 12 into the .data map value.
+        REQUIRE(programs[0].prog.at(0).src == INST_LD_MODE_MAP_VALUE);
+        REQUIRE(programs[0].prog.at(1).imm == 12);
+    }
+
+    SECTION("two entries for the lddw") {
+        REQUIRE_THROWS_WITH(load({{.slot = 0, .against_arr = true}, {.slot = 0, .against_arr = true}}),
+                            multiple_relocations);
+    }
+
+    SECTION("an entry for the second slot of the lddw") {
+        REQUIRE_THROWS_WITH(load({{.slot = 0, .against_arr = true}, {.slot = 1, .against_arr = false}}),
+                            multiple_relocations);
+        REQUIRE_THROWS_WITH(load({{.slot = 1, .against_arr = false}, {.slot = 0, .against_arr = true}}),
+                            multiple_relocations);
+    }
+}
+
 // Regression test: the callee of a local call is the function at the section offset
 // the relocation designates (S + A), not the first function in that section with the
 // same name. ELF symbol names need not be unique, so a decoy with the callee's name
@@ -3349,10 +3448,13 @@ TEST_CASE("CO-RE relocation patches every program holding the instruction", "[el
 // entries against a long name costs memory and output linear in its size. Every entry still fails the load.
 TEST_CASE("ELF loader bounds the report of unresolved symbols", "[elf][hardening]") {
     const std::string long_name(10'000, 'x');
+    // One unresolved entry per instruction: an instruction may be relocated only once.
+    std::vector<EbpfInst> socket_insts(1000, test_mov_r0_0);
+    socket_insts.push_back(test_exit);
     TestObjectBuilder builder{
         .sections =
             {
-                {.name = "socket", .insts = {test_mov_r0_0, test_exit}},
+                {.name = "socket", .insts = socket_insts},
                 {.name = "xdp", .insts = {test_mov_r0_0, test_exit}},
                 {.name = "tc", .insts = {test_mov_r0_0, test_exit}},
             },
@@ -3362,7 +3464,7 @@ TEST_CASE("ELF loader bounds the report of unresolved symbols", "[elf][hardening
                     {.name = long_name}},
     };
     for (size_t i = 0; i < 1000; i++) {
-        builder.relocations.push_back({.section = 0, .instruction = 0, .symbol = 3, .type = R_BPF_64_32_TYPE});
+        builder.relocations.push_back({.section = 0, .instruction = i, .symbol = 3, .type = R_BPF_64_32_TYPE});
     }
     builder.relocations.push_back({.section = 1, .instruction = 0, .symbol = 3, .type = R_BPF_64_32_TYPE});
     const std::string object = builder.build();
