@@ -632,7 +632,7 @@ test-case: JEQ with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -647,7 +647,7 @@ post:
   - r0.type=number
   - r0.uvalue=1
   - r1.ctx_offset=0
-  - r1.svalue=[1, 2147418112]
+  - r1.uvalue=[1, 2147418112]
   - r1.type=ctx
 
 messages:
@@ -657,7 +657,7 @@ test-case: JNE with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -679,7 +679,7 @@ test-case: JSET with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -700,7 +700,7 @@ test-case: JNSET with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -721,7 +721,7 @@ test-case: JLT with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -736,9 +736,8 @@ post:
   - r0.type=number
   - r0.uvalue=1
   - r1.ctx_offset=0
-  - r1.svalue=[1, 2147418112]
+  - r1.uvalue=[1, 2147418112]
   - r1.type=ctx
-  - r1.uvalue=[0, +oo]
 
 messages:
   - "0:2: Code becomes unreachable (assume r1 < 0)"
@@ -748,7 +747,7 @@ test-case: JLE with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -763,9 +762,8 @@ post:
   - r0.type=number
   - r0.uvalue=1
   - r1.ctx_offset=0
-  - r1.svalue=[1, 2147418112]
+  - r1.uvalue=[1, 2147418112]
   - r1.type=ctx
-  - r1.uvalue=[1, +oo]
 
 messages:
   - "0:2: Code becomes unreachable (assume r1 <= 0)"
@@ -775,7 +773,7 @@ test-case: JGT with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -797,7 +795,7 @@ test-case: JGE with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -819,7 +817,7 @@ test-case: JSLT with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -840,7 +838,7 @@ test-case: JSLE with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -861,7 +859,7 @@ test-case: JSGT with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -882,7 +880,7 @@ test-case: JSGE with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -903,7 +901,7 @@ test-case: JEQ32 with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -924,7 +922,7 @@ test-case: JNE32 with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -945,7 +943,7 @@ test-case: JSET32 with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -966,7 +964,7 @@ test-case: JNSET32 with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -987,7 +985,7 @@ test-case: JLT32 with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -1008,7 +1006,7 @@ test-case: JLE32 with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -1029,7 +1027,7 @@ test-case: JGT32 with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -1050,7 +1048,7 @@ test-case: JGE32 with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -1071,7 +1069,7 @@ test-case: JSLT32 with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -1092,7 +1090,7 @@ test-case: JSLE32 with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -1113,7 +1111,7 @@ test-case: JSGT32 with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -1134,7 +1132,7 @@ test-case: JSGE32 with imm 0 and pointer
 options: []
 pre:
   - "r1.type=ctx"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r1.ctx_offset=0"
 
 code:
@@ -1201,7 +1199,7 @@ test-case: reject ordered comparison between context pointer and nonzero scalar
 pre:
   - "r1.type=ctx"
   - "r1.ctx_offset=0"
-  - "r1.svalue=[1, 2147418112]"
+  - "r1.uvalue=[1, 2147418112]"
   - "r2.type=number"
   - "r2.svalue=4027836164"
   - "r2.uvalue=4027836164"

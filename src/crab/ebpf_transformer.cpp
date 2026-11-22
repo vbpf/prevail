@@ -256,8 +256,12 @@ static bool offsets_decide_pointer_comparison(const TypeEncoding type, const Con
 }
 
 /// Narrow a pointer compared with zero: the comparison tests whether it is null.
+/// Nullness is decided by uvalue alone. svalue is a kind variable of T_NUM (type_to_kinds): for a pointer it is
+/// meaningless, and join, meet and subsumption treat it so. Whatever it still holds, from when the register was
+/// a number or from a stack slot, is forgotten first, so that it cannot decide the branch.
 static void assume_pointer_null_check(TypeToNumDomain& state, const Condition& cond, const RegPack& dst) {
     if (admits_pointer_operands(cond)) {
+        state.values.havoc(dst.svalue);
         for (const LinearConstraint& cst :
              state.values->assume_cst_imm(cond.op, cond.is64, dst.svalue, dst.uvalue, 0)) {
             state.values.add_constraint(cst);
@@ -1290,6 +1294,7 @@ void EbpfTransformer::add(const Reg& dst_reg, const int64_t imm, const int finit
             }
         }
         dom.state.values->apply_unsigned(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.uvalue, imm, finite_width);
+        dom.state.values.havoc(dst.svalue); // A pointer has no svalue.
     }
     if (dom.state.may_have_type(dst_reg, T_STACK)) {
         if (imm > 0) {
@@ -1481,6 +1486,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
                                     }
                                     state.values->apply_unsigned(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.uvalue,
                                                                  src.uvalue, finite_width);
+                                    state.values.havoc(dst.svalue); // A pointer has no svalue.
                                     if (src_type == T_SHARED) {
                                         state.values.assign(dst.shared_region_size, src.shared_region_size);
                                         state.values.assign(dst.shared_access, src.shared_access);
@@ -1506,6 +1512,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
                                     }
                                     state.values->apply_unsigned(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.uvalue,
                                                                  src.uvalue, finite_width);
+                                    state.values.havoc(dst.svalue); // A pointer has no svalue.
                                 } else if (dst_type == T_NUM && src_type == T_NUM) {
                                     state.values->apply_signed(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.svalue,
                                                                src.svalue, finite_width);
@@ -1568,6 +1575,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
                         }
                         dom.state.values->apply_unsigned(ArithBinOp::SUB, dst.svalue, dst.uvalue, dst.uvalue,
                                                          src.uvalue, finite_width);
+                        dom.state.values.havoc(dst.svalue); // A pointer has no svalue.
                     }
                     if (dom.state.may_have_type(bin.dst, T_STACK)) {
                         using namespace dsl_syntax;
