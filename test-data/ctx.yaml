@@ -403,9 +403,8 @@ post:
   - r1.ctx_offset=0
   - r1.type=ctx
   - r2.packet_offset=packet_size
-  - r2.svalue=[65535, 2147483647]
   - r2.type=packet
-  - r2.uvalue=r2.svalue
+  - r2.uvalue=[65535, 2147483647]
   - r3.packet_offset=packet_size
   - r3.type=packet
   - r3.uvalue=[0, 2147418112]
