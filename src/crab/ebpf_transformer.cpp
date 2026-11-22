@@ -1711,7 +1711,11 @@ void EbpfTransformer::operator()(const Bin& bin) {
             // Only when the result is 64 bits wide: a 32-bit MOVSX must still zero-extend its
             // 32-bit result into the upper half, and returning here would skip the truncation
             // applied at the end of this function.
-            if (bin.is64 && dst.svalue == src.svalue &&
+            // Only for a proven number: svalue is the kind variable of T_NUM, so for a register
+            // that may also be a pointer it bounds the numeric alternative alone and says nothing
+            // about the pointer, which sign extension does not preserve. The MOVSX that models a
+            // sign-extending load (see Mem) arrives here with no number TypeConstraint on it.
+            if (bin.is64 && dst.svalue == src.svalue && dom.state.is_in_group(src_reg, TS_NUM) &&
                 dom.state.values.eval_interval(dst.svalue) <= Interval::signed_int(source_width)) {
                 return;
             }
