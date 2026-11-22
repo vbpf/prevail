@@ -78,6 +78,21 @@ std::set<size_t> collect_jump_targets(const std::vector<EbpfInst>& instructions)
     return targets;
 }
 
+std::set<size_t> collect_local_call_targets(const std::vector<EbpfInst>& section_instructions) {
+    const auto size = gsl::narrow<int64_t>(section_instructions.size());
+    std::set<size_t> targets;
+    for (int64_t pc = 0; pc < size; ++pc) {
+        const EbpfInst& inst = section_instructions[gsl::narrow<size_t>(pc)];
+        if (inst.opcode != INST_OP_CALL || inst.src != INST_CALL_LOCAL) {
+            continue;
+        }
+        if (const int64_t target = pc + 1 + inst.imm; target >= 0 && target < size) {
+            targets.insert(gsl::narrow<size_t>(target));
+        }
+    }
+    return targets;
+}
+
 bool rewrite_extern_constant_load(std::vector<EbpfInst>& instructions, const size_t location, const uint64_t value,
                                   const std::set<size_t>& jump_targets) {
     if (instructions.size() <= location + 2) {

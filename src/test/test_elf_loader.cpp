@@ -3136,6 +3136,40 @@ TEST_CASE("ELF loader does not extend a program past the next FUNC symbol", "[el
     REQUIRE(programs[3].prog == std::vector{test_mov_r0_0, test_call_local(1), test_exit, test_mov_r0_0, test_exit});
 }
 
+// A known extern's load is folded into a constant only if every path reaches it through the lddw of the extern's
+// address. A local call from another function can enter at the load, with any value in the address register.
+TEST_CASE("ELF loader keeps an extern load that another function calls into", "[elf][hardening]") {
+    constexpr EbpfInst lddw{.opcode = INST_OP_LDDW_IMM, .dst = 2};
+    constexpr EbpfInst load{.opcode = INST_CLS_LDX | INST_MODE_MEM | INST_SIZE_W, .dst = 0, .src = 2};
+    const bool caller_first = GENERATE(true, false);
+    const size_t entry = GENERATE(0, 1, 2); // The lddw, its second slot, or the load.
+    CAPTURE(caller_first, entry);
+
+    const size_t caller = caller_first ? 0 : 4;
+    const size_t callee = caller_first ? 2 : 0;
+    std::vector<EbpfInst> insts(6, test_exit);
+    insts[caller] = test_call_local(static_cast<int32_t>(callee + entry) - static_cast<int32_t>(caller) - 1);
+    insts[callee] = lddw;
+    insts[callee + 1] = {};
+    insts[callee + 2] = load;
+    const TestObjectBuilder builder{
+        .sections = {{.name = ".text", .insts = insts}},
+        .symbols = {{.name = "caller", .section = 0, .value = caller * sizeof(EbpfInst)},
+                    {.name = "callee", .section = 0, .value = callee * sizeof(EbpfInst)},
+                    {.name = "LINUX_KERNEL_VERSION"}},
+        .relocations = {{.section = 0, .instruction = callee, .symbol = 2, .type = R_BPF_64_64_TYPE}},
+    };
+    const auto programs = read_test_object(builder.build(), ".text");
+    REQUIRE(programs.size() == 2);
+    const bool load_is_folded = entry == 0;
+    for (const RawProgram& program : programs) {
+        CAPTURE(program.function_name);
+        // Linking puts the callee after the caller's two instructions.
+        const size_t callee_start = program.function_name == "caller" ? 2 : 0;
+        CHECK((program.prog.at(callee_start + 2) != load) == load_is_folded);
+    }
+}
+
 // Since a program ends at the next FUNC symbol, control may leave it only by exit or by a call, as Linux requires of
 // each subprogram. Otherwise it would run into whatever code linking places after it, which is a callee rather than
 // the code that follows in the section.

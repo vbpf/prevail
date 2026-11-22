@@ -172,6 +172,10 @@ EbpfInst make_mov_reg_nop(uint8_t reg);
 /// Indices of the instructions that some jump or local call in the program lands on.
 /// Throws UnmarshalError if a jump leaves the program.
 std::set<size_t> collect_jump_targets(const std::vector<EbpfInst>& instructions);
+/// Indices in the section of the instructions that the imm of some local call in it designates. Only a call without a
+/// relocation entry can land inside another function, and it lands on this index. Calls with an entry are included
+/// all the same: an index too many only prevents a fold, whereas one too few makes the fold unsound.
+std::set<size_t> collect_local_call_targets(const std::vector<EbpfInst>& section_instructions);
 bool rewrite_extern_constant_load(std::vector<EbpfInst>& instructions, size_t location, uint64_t value,
                                   const std::set<size_t>& jump_targets);
 bool rewrite_extern_address_load_to_zero(std::vector<EbpfInst>& instructions, size_t location);

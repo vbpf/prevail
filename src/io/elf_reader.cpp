@@ -1110,6 +1110,8 @@ void ProgramReader::read_programs(const bool all_sections) {
         }
         const auto& sec_name = sec->get_name();
         const auto prog_type = parse_params.platform->get_program_type(sec_name, parse_params.path);
+        // Collected over the whole section before any program is rewritten, as the caller may follow its callee.
+        const std::set<size_t> local_call_targets = collect_local_call_targets(vector_of<EbpfInst>(*sec));
         for (ELFIO::Elf_Xword offset = 0; offset < sec->get_size();) {
             builtin_offsets_for_current_program.clear();
             // A program is the code from its FUNC symbol to the next one, so that the programs of a
@@ -1123,6 +1125,13 @@ void ProgramReader::read_programs(const bool all_sections) {
                 jump_targets_for_current_program.clear();
             } else {
                 jump_targets_for_current_program = collect_jump_targets(instructions);
+                // A local call from another function may enter this one anywhere (FunctionRelocation::target_entry),
+                // so what it lands on is as much a jump target as the target of a jump in this program.
+                const size_t start = offset / sizeof(EbpfInst);
+                for (auto it = local_call_targets.lower_bound(start);
+                     it != local_call_targets.end() && *it < start + instructions.size(); ++it) {
+                    jump_targets_for_current_program.insert(*it - start);
+                }
             }
             if (const auto reloc_sec = get_relocation_section(*sec)) {
                 process_relocations(instructions, *reloc_sec, sec_name, offset, size);
