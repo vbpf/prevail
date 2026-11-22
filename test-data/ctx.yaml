@@ -245,6 +245,47 @@ post:
   - r2.svalue=[-2147483648, 2147483647]
 
 ---
+# A sign-extending load of a pointer slot yields the sign-extended low half of the address, not
+# the pointer, so the result must carry no type.
+test-case: load s32 of a ctx pointer slot is not a packet pointer
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0"]
+
+code:
+  <start>: |
+    r2 = *(s32 *)(r1 + 0)
+
+post:
+  - r1.ctx_offset=0
+  - r1.type=ctx
+
+---
+# The same load through a pointer that is either stack or ctx joins a number (the stack bytes)
+# with the slot's packet pointer. The number's svalue describes the numeric alternative only: it
+# must not make the sign extension a no-op for the pointer as well, or the result stays a packet
+# pointer at offset 0 that compares equal to ctx->data while the runtime value differs.
+test-case: load s32 of a ctx pointer slot through a stack-or-ctx pointer is not a packet pointer
+
+pre: ["r10.type=stack", "r10.stack_offset=4096",
+      "r9.type in {ctx, stack}", "r9.ctx_offset=0", "r9.stack_offset=4088", "r9.stack_numeric_size=8",
+      "s[4088...4095].type=number", "s[4088...4095].svalue=0", "s[4088...4095].uvalue=0"]
+
+code:
+  <start>: |
+    r3 = *(s32 *)(r9 + 0)
+
+post:
+  - r10.type=stack
+  - r10.stack_offset=4096
+  - r9.type in {ctx, stack}
+  - r9.ctx_offset=0
+  - r9.stack_offset=4088
+  - r9.stack_numeric_size=8
+  - s[4088...4095].type=number
+  - s[4088...4095].svalue=0
+  - s[4088...4095].uvalue=0
+
+---
 # A load straddling a pointer slot reads real pointer bytes. Typing the result as
 # a number would let the program store those bytes into a map shared with
 # userspace -- a pointer/KASLR leak (#1204). The result must carry no type, so the
