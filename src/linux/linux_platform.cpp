@@ -137,6 +137,12 @@ static EbpfProgramType with_read_only_packet(EbpfProgramType type) {
     return type;
 }
 
+// Gives a program type the layout of its context: the fields it has and the accesses each admits.
+static EbpfProgramType with_ctx_layout(EbpfProgramType type, const EbpfStructDescriptor& layout) {
+    type.ctx_layout = &layout;
+    return type;
+}
+
 const EbpfProgramType linux_socket_filter_program_type =
     with_legacy_packet_access(PTYPE("socket_filter", &g_socket_filter_descr, BPF_PROG_TYPE_SOCKET_FILTER, {"socket"}));
 
@@ -157,8 +163,9 @@ const std::vector<EbpfProgramType> linux_program_types = {
     with_read_only_packet(PTYPE("lwt_in", &g_lwt_inout_descr, BPF_PROG_TYPE_LWT_IN, {"lwt_in"})),
     with_read_only_packet(PTYPE("lwt_out", &g_lwt_inout_descr, BPF_PROG_TYPE_LWT_OUT, {"lwt_out"})),
     PTYPE("lwt_xmit", &g_lwt_xmit_descr, BPF_PROG_TYPE_LWT_XMIT, {"lwt_xmit"}),
-    PTYPE_READONLY_CTX("perf_event", &g_perf_event_descr, BPF_PROG_TYPE_PERF_EVENT,
-                       {"perf_section" COMMA "perf_event"}),
+    with_ctx_layout(PTYPE_READONLY_CTX("perf_event", &g_perf_event_descr, BPF_PROG_TYPE_PERF_EVENT,
+                                       {"perf_section" COMMA "perf_event"}),
+                    bpf_perf_event_data_layout),
     with_legacy_packet_access(PTYPE("sched_act", &g_sched_descr, BPF_PROG_TYPE_SCHED_ACT, {"action"})),
     // libbpf also names tc programs "tc", "tc/..." and "tcx/...".
     with_legacy_packet_access(PTYPE("sched_cls", &g_sched_descr, BPF_PROG_TYPE_SCHED_CLS, {"classifier" COMMA "tc"})),

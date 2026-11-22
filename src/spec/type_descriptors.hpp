@@ -61,6 +61,8 @@ inline std::vector<int> mock_map_fds_by_type(const std::vector<uint32_t>& types,
     return fds;
 }
 
+struct EbpfStructDescriptor;
+
 struct EbpfProgramType {
     std::string name{}; // For ease of display, not used by the verifier.
     const ebpf_ctx_descriptor_t* ctx_descriptor{};
@@ -76,10 +78,19 @@ struct EbpfProgramType {
     bool legacy_packet_access{};
     // Direct packet access may read but not write the packet.
     bool packet_read_only{};
+    // The fields of the context and the accesses each one admits, for a runtime that does not run a context
+    // access as written but rewrites it by the field it names (see context_access_requires_zero_offset in
+    // ebpf_platform_t). A load or store through the context must then be an access that one field admits.
+    // Null when the context is plain memory: any access within ctx_descriptor->size is allowed.
+    const EbpfStructDescriptor* ctx_layout{};
 };
 
 enum class EbpfStructFieldPermission { read_only, read_write };
 
+/// A field of a structure that the runtime exposes field by field, and the accesses it admits.
+/// With allow_narrow_access, any access of a power-of-two width up to max_access_width that lies within the
+/// field. Without it, only an access of exactly max_access_width at the start of the field.
+/// Every access must also be aligned to its own width (is_valid_struct_access).
 struct EbpfStructFieldDescriptor {
     int offset{};
     int span{};
@@ -90,7 +101,34 @@ struct EbpfStructFieldDescriptor {
     bool allow_narrow_access{};
     // Additional exact-width read allowed only at the field start.
     int extra_read_width_at_start{};
+    // The field is an array of this many elements, `span` bytes each, of which `offset` is the first.
+    // Each element admits the accesses described above.
+    int count{1};
 };
+
+/// A field that admits only an access of its whole width.
+constexpr EbpfStructFieldDescriptor
+exact_field(const int offset, const int width,
+            const EbpfStructFieldPermission permission = EbpfStructFieldPermission::read_only) {
+    return {.offset = offset, .span = width, .permission = permission, .max_access_width = width};
+}
+
+/// A field that admits any aligned access of a power-of-two width within it.
+constexpr EbpfStructFieldDescriptor
+narrow_field(const int offset, const int width,
+             const EbpfStructFieldPermission permission = EbpfStructFieldPermission::read_only) {
+    return {.offset = offset,
+            .span = width,
+            .permission = permission,
+            .max_access_width = width,
+            .allow_narrow_access = true};
+}
+
+/// `count` consecutive copies of `element`, which describes the first.
+constexpr EbpfStructFieldDescriptor array_of(EbpfStructFieldDescriptor element, const int count) {
+    element.count = count;
+    return element;
+}
 
 struct EbpfStructDescriptor {
     int size{};
