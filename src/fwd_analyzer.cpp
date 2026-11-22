@@ -1,6 +1,8 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: Apache-2.0
 #include <cassert>
+#include <map>
+#include <optional>
 #include <ranges>
 #include <set>
 #include <utility>
@@ -132,6 +134,50 @@ class InterleavedFwdFixpointIterator final {
         }
     }
 
+    /// The base register of an instruction that accesses memory through one, if it is such an instruction.
+    [[nodiscard]]
+    static std::optional<Reg> memory_base(const Instruction& ins) {
+        if (const auto* mem = std::get_if<Mem>(&ins)) {
+            return mem->access.basereg;
+        }
+        if (const auto* atomic = std::get_if<Atomic>(&ins)) {
+            return atomic->access.basereg;
+        }
+        return {};
+    }
+
+    // A runtime that lowers context and socket fields per instruction lowers each load or store once:
+    // for every path that reaches it and for every call site its subprogram is inlined at. A base that
+    // is such a structure in one reachable state must therefore be the same kind of pointer in all of
+    // them. The assertions at a label see one state of one inlined copy, and ValidAccess accepts each
+    // possible type on its own, so this is checked here, over all copies of the instruction.
+    void find_mixed_lowered_bases(const Program& prog) {
+        const TypeSet lowered{T_CTX, T_SOCKET};
+        std::map<int, TypeSet> base_types_by_instruction;
+        for (const auto& [label, inv_pair] : result.invariants) {
+            const auto base = memory_base(prog.instruction_at(label));
+            if (!base || inv_pair.pre.is_bottom()) {
+                continue;
+            }
+            TypeSet& base_types = base_types_by_instruction[label.from];
+            for (const TypeEncoding type : inv_pair.pre.enumerate_types(*base)) {
+                base_types |= TypeSet{type};
+            }
+        }
+        for (const auto& [label, inv_pair] : result.invariants) {
+            if (!memory_base(prog.instruction_at(label)) || inv_pair.pre.is_bottom()) {
+                continue;
+            }
+            const TypeSet base_types = base_types_by_instruction.at(label.from);
+            if (!(base_types & lowered).is_empty() && !base_types.is_singleton()) {
+                VerificationError error{"Same instruction cannot be used with base pointers of types " +
+                                        base_types.to_string()};
+                error.where = label;
+                set_error(label, std::move(error));
+            }
+        }
+    }
+
     int max_loop_count() const {
         ExtendedNumber loop_count{0};
         for (const auto& inv_pair : std::views::values(result.invariants)) {
@@ -255,6 +301,10 @@ AnalysisResult InterleavedFwdFixpointIterator::run(const AnalysisContext& contex
     analyzer.set_pre(prog.cfg().entry_label(), std::move(entry_inv));
     for (const auto& component : analyzer._wto) {
         std::visit(analyzer, component);
+    }
+    if (const auto* platform = context.program_info().platform;
+        !result.failed && platform && platform->context_access_requires_zero_offset) {
+        analyzer.find_mixed_lowered_bases(prog);
     }
     if (!result.failed && context.runtime().check_for_termination) {
         analyzer.find_termination_errors(prog);

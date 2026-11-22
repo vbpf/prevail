@@ -651,7 +651,8 @@ std::vector<FailureSlice> AnalysisResult::compute_failure_slices(const SlicePara
                 break;
             }
         }
-        // Fallback: if no failing assertion was identified (shouldn't happen),
+        // Fallback: if no failing assertion was identified (the error relates several
+        // states, e.g. the base types of all copies of one memory instruction),
         // aggregate all assertions. When the failing assertion was found but has
         // no register deps, leave the seed empty so compute_slice_from_label
         // enters conservative mode.

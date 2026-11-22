@@ -14,12 +14,25 @@ using namespace prevail;
 namespace {
 
 AnalysisContext context_program(const ebpf_platform_t& platform, const std::vector<std::string>& lines,
-                                const std::string& section = "xdp", const std::map<std::string, Label>& labels = {}) {
+                                const std::string& section = "xdp",
+                                const std::map<std::string, Label>& extra_labels = {}) {
     const ProgramInfo info{.platform = &platform, .type = platform.get_program_type(section, "")};
+    // A line ending in ':' names the instruction that follows it.
+    std::map<std::string, Label> labels = extra_labels;
+    int index = 0;
+    for (const std::string& line : lines) {
+        if (line.ends_with(":")) {
+            labels.emplace(line.substr(0, line.size() - 1), Label{index});
+        } else {
+            index++;
+        }
+    }
     InstructionSeq instructions;
-    for (size_t i = 0; i < lines.size(); ++i) {
-        instructions.emplace_back(Label{static_cast<int>(i)}, parse_instruction(lines[i], labels, info.type),
-                                  std::nullopt);
+    index = 0;
+    for (const std::string& line : lines) {
+        if (!line.ends_with(":")) {
+            instructions.emplace_back(Label{index++}, parse_instruction(line, labels, info.type), std::nullopt);
+        }
     }
     return {Program::from_sequence(instructions, info, {}), {}};
 }
@@ -32,6 +45,77 @@ bool accepts_context_program(const ebpf_platform_t& platform, std::vector<std::s
     lines.emplace_back("r0 = 0");
     lines.emplace_back("exit");
     return !analyze(context_program(platform, lines, section)).failed;
+}
+
+// `access` through r2, which is the context or a copy of `other`, depending on a context field.
+// r5 points to 16 zeroed stack bytes and r3 is 1, for the accesses that use them.
+std::vector<std::string> through_ctx_or(const std::string& other, const std::string& access) {
+    return {
+        "*(u64 *)(r10 - 8) = 0",
+        "*(u64 *)(r10 - 16) = 0",
+        "r5 = r10",
+        "r5 += -16",
+        "r3 = 1",
+        "r4 = *(u32 *)(r1 + 16)",
+        "r2 = " + other,
+        "if r4 == 0 goto <access>",
+        "r2 = r1",
+        "<access>:",
+        access,
+        "r0 = 0",
+        "exit",
+    };
+}
+
+// A load through r6, which is the socket that bpf_sk_lookup_tcp found or, without one, a pointer to 16 zeroed
+// stack bytes.
+std::vector<std::string> load_through_socket_or_stack() {
+    return {
+        "*(u64 *)(r10 - 8) = 0",
+        "*(u64 *)(r10 - 16) = 0",
+        "r6 = r10",
+        "r6 += -16",
+        "r2 = r6",
+        "r3 = 12",
+        "r4 = 0",
+        "r5 = 0",
+        "call 84",
+        "if r0 == 0 goto <access>",
+        "r6 = r0",
+        "<access>:",
+        "r3 = *(u32 *)(r6 + 4)",
+        "r0 = 0",
+        "exit",
+    };
+}
+
+// A subprogram that loads through r1, called with the context or a pointer to 16 zeroed stack bytes in r1.
+std::vector<std::string> load_in_subprogram(const bool first_is_ctx, const bool second_is_ctx) {
+    std::vector<std::string> lines{"r6 = r1", "*(u64 *)(r10 - 8) = 0", "*(u64 *)(r10 - 16) = 0"};
+    for (const bool is_ctx : {first_is_ctx, second_is_ctx}) {
+        if (is_ctx) {
+            lines.emplace_back("r1 = r6");
+        } else {
+            lines.emplace_back("r1 = r10");
+            lines.emplace_back("r1 += -16");
+        }
+        lines.emplace_back("call <read_field>");
+    }
+    for (const char* line : {"r0 = 0", "exit", "<read_field>:", "r0 = *(u32 *)(r1 + 12)", "exit"}) {
+        lines.emplace_back(line);
+    }
+    return lines;
+}
+
+bool accepts_program(const ebpf_platform_t& platform, const std::vector<std::string>& lines,
+                     const std::string& section = "xdp") {
+    return !analyze(context_program(platform, lines, section)).failed;
+}
+
+bool rejects_mixed_bases(const ebpf_platform_t& platform, const std::vector<std::string>& lines,
+                         const std::string& section = "xdp") {
+    const auto error = analyze(context_program(platform, lines, section)).find_first_error();
+    return error && error->message.find("Same instruction cannot be used with base pointers") != std::string::npos;
 }
 
 } // namespace
@@ -67,6 +151,32 @@ TEST_CASE("Linux context accesses require an unshifted base", "[context][platfor
     }
     SECTION("restored base") {
         CHECK(accepts_context_program(platform, {"r1 += 8", "r1 -= 8", "r3 = *(u32 *)(r1 + 8)"}));
+    }
+}
+
+TEST_CASE("Linux context accesses require a context base in every state", "[context][platform]") {
+    const auto& platform = g_ebpf_platform_linux;
+    SECTION("load through context or stack") {
+        CHECK(rejects_mixed_bases(platform, through_ctx_or("r5", "r3 = *(u32 *)(r2 + 12)")));
+    }
+    SECTION("store through context or stack") {
+        CHECK(rejects_mixed_bases(platform, through_ctx_or("r5", "*(u32 *)(r2 + 8) = 0"), writable_ctx_section));
+    }
+    SECTION("atomic through context or stack") {
+        CHECK(rejects_mixed_bases(platform, through_ctx_or("r5", "lock *(u32 *)(r2 + 8) += r3"), writable_ctx_section));
+    }
+    SECTION("load through socket or stack") { CHECK(rejects_mixed_bases(platform, load_through_socket_or_stack())); }
+    SECTION("one load in a subprogram called with context and with stack") {
+        // Each inlined copy of the load has a single base type; the instruction has two.
+        CHECK(rejects_mixed_bases(platform, load_in_subprogram(false, true)));
+        CHECK(rejects_mixed_bases(platform, load_in_subprogram(true, false)));
+    }
+    SECTION("one load in a subprogram called with the same kind of base") {
+        CHECK(accepts_program(platform, load_in_subprogram(true, true)));
+        CHECK(accepts_program(platform, load_in_subprogram(false, false)));
+    }
+    SECTION("context on every path") {
+        CHECK(accepts_program(platform, through_ctx_or("r1", "r3 = *(u32 *)(r2 + 12)")));
     }
 }
 
@@ -142,4 +252,13 @@ TEST_CASE("Context accesses behind a null test rely on the runtime contract", "[
         CAPTURE(section);
         CHECK(accepts_behind_null_context(section, {"if r1 != 0 goto <out>"}, "r3 = *(u64 *)(r1 + 0)"));
     }
+}
+
+TEST_CASE("Flat context platforms retain accesses through a context or other base", "[context][platform]") {
+    auto flat = g_ebpf_platform_linux;
+    flat.context_access_requires_zero_offset = false;
+    CHECK(accepts_program(flat, through_ctx_or("r5", "r3 = *(u32 *)(r2 + 12)")));
+    CHECK(accepts_program(flat, through_ctx_or("r5", "*(u32 *)(r2 + 8) = 0"), writable_ctx_section));
+    CHECK(accepts_program(flat, load_through_socket_or_stack()));
+    CHECK(accepts_program(flat, load_in_subprogram(false, true)));
 }
