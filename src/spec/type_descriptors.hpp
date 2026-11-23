@@ -35,6 +35,9 @@ struct EbpfMapType {
     bool one_per_program{};
 };
 
+/// EbpfMapDescriptor::inner_map_fd of a map whose definition names no inner map.
+constexpr int NO_INNER_MAP_FD = -1;
+
 struct EbpfMapDescriptor {
     int original_fd;
     uint32_t type; // Platform-specific type value in ELF file.

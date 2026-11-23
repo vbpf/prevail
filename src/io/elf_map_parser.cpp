@@ -24,8 +24,6 @@ namespace prevail {
 
 namespace {
 
-constexpr int DEFAULT_MAP_FD = -1;
-
 /// Map type recorded for the implicit single-entry map that backs a global variable section
 /// (.data/.rodata/.bss). Loaders create these as array maps (BPF_MAP_TYPE_ARRAY), and the descriptor must say so:
 /// type 0 means "unknown", which exempts the map from the helpers' map-type restrictions.
@@ -81,7 +79,7 @@ void add_global_variable_maps(const ELFIO::elfio& reader, ElfGlobalData& global)
             .key_size = sizeof(uint32_t),
             .value_size = gsl::narrow<uint32_t>(section->get_size()),
             .max_entries = 1,
-            .inner_map_fd = DEFAULT_MAP_FD,
+            .inner_map_fd = NO_INNER_MAP_FD,
             .name = section->get_name(),
             .program_access = global_section_access(*section),
         });
@@ -167,7 +165,7 @@ ElfGlobalData parse_btf_section(const parse_params_t& parse_params, const ELFIO:
                 .key_size = map.key_size,
                 .value_size = map.value_size,
                 .max_entries = map.max_entries,
-                .inner_map_fd = map.inner_map_type_id == 0 ? DEFAULT_MAP_FD : gsl::narrow<int>(map.inner_map_type_id),
+                .inner_map_fd = map.inner_map_type_id == 0 ? NO_INNER_MAP_FD : gsl::narrow<int>(map.inner_map_type_id),
                 .name = map.name,
                 .program_access = map_flags_to_program_access(btf_map_flags(*btf_data, map.type_id)),
             });
@@ -187,7 +185,7 @@ ElfGlobalData parse_btf_section(const parse_params_t& parse_params, const ELFIO:
         auto& desc = map_descriptors[i];
         desc.original_fd = pseudo_fds[i];
 
-        if (desc.inner_map_fd != DEFAULT_MAP_FD) {
+        if (desc.inner_map_fd != NO_INNER_MAP_FD) {
             auto inner_it = type_id_to_fd_map.find(desc.inner_map_fd);
             if (inner_it == type_id_to_fd_map.end()) {
                 throw UnmarshalError("Unknown inner map type ID in BTF: " + std::to_string(desc.inner_map_fd));
@@ -220,7 +218,7 @@ ElfGlobalData create_global_variable_maps(const ELFIO::elfio& reader) {
             .key_size = sizeof(uint32_t),
             .value_size = gsl::narrow<uint32_t>(section->get_size()),
             .max_entries = 1,
-            .inner_map_fd = DEFAULT_MAP_FD,
+            .inner_map_fd = NO_INNER_MAP_FD,
             .name = section->get_name(),
             .program_access = global_section_access(*section),
         });
@@ -372,7 +370,7 @@ ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO
             .key_size = sizeof(uint32_t),
             .value_size = gsl::narrow<uint32_t>(section->get_size()),
             .max_entries = 1,
-            .inner_map_fd = DEFAULT_MAP_FD,
+            .inner_map_fd = NO_INNER_MAP_FD,
             .name = section->get_name(),
             .program_access = global_section_access(*section),
         });
@@ -421,7 +419,7 @@ ElfGlobalData extract_global_data(const parse_params_t& params, const ELFIO::elf
     auto& map_descriptors = global.map_descriptors.get_mutable();
     std::set<int> inner_map_fds;
     for (const auto& desc : map_descriptors) {
-        if (desc.inner_map_fd != DEFAULT_MAP_FD) {
+        if (desc.inner_map_fd != NO_INNER_MAP_FD) {
             inner_map_fds.insert(desc.inner_map_fd);
         }
     }

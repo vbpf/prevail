@@ -344,6 +344,150 @@ TEST_CASE("linux legacy map definitions of the same shape get distinct mock fds"
     }
     REQUIRE(descriptors[0].inner_map_fd == descriptors[2].original_fd);
     REQUIRE(descriptors[1].inner_map_fd == descriptors[3].original_fd);
+    // Only a map of maps names an inner map: the 0 in the other records is not a reference to defs[0].
+    REQUIRE(descriptors[2].inner_map_fd == NO_INNER_MAP_FD);
+
+    // A word that is no position in the table is an error in a map of maps, and nothing in another map.
+    auto bad_index = defs;
+    bad_index[6][5] = 0xFFFFFFFF;
+    std::vector<EbpfMapDescriptor> ignored;
+    g_ebpf_platform_linux.parse_maps_section(ignored, reinterpret_cast<const char*>(bad_index.data()),
+                                             sizeof(bad_index[0]), static_cast<int>(bad_index.size()),
+                                             &g_ebpf_platform_linux, VerifierOptions{});
+    REQUIRE_NOTHROW(g_ebpf_platform_linux.resolve_inner_map_references(ignored));
+    for (const uint32_t index : {7U, 0xFFFFFFFFU}) {
+        bad_index[0][5] = index;
+        std::vector<EbpfMapDescriptor> rejected;
+        REQUIRE_THROWS_WITH((g_ebpf_platform_linux.parse_maps_section(
+                                 rejected, reinterpret_cast<const char*>(bad_index.data()), sizeof(bad_index[0]),
+                                 static_cast<int>(bad_index.size()), &g_ebpf_platform_linux, VerifierOptions{}),
+                             g_ebpf_platform_linux.resolve_inner_map_references(rejected)),
+                            Catch::Matchers::ContainsSubstring("bad inner map index"));
+    }
+}
+
+namespace {
+
+// Parse one legacy maps section given as an array of 32-bit words per record.
+template <size_t Words, size_t Count>
+std::vector<EbpfMapDescriptor> legacy_maps(const std::array<std::array<uint32_t, Words>, Count>& defs) {
+    std::vector<EbpfMapDescriptor> descriptors;
+    g_ebpf_platform_linux.parse_maps_section(descriptors, reinterpret_cast<const char*>(defs.data()), sizeof(defs[0]),
+                                             static_cast<int>(defs.size()), &g_ebpf_platform_linux, VerifierOptions{});
+    g_ebpf_platform_linux.resolve_inner_map_references(descriptors);
+    return descriptors;
+}
+
+// The first error of an XDP program that looks key 0 up in the map of maps `outer`, looks key 0 up in the map
+// it got, and stores 8 bytes at `offset` of the value it got.
+std::optional<VerificationError> store_through_map_of_maps(const std::vector<EbpfMapDescriptor>& descriptors,
+                                                           const EbpfMapDescriptor& outer, const int offset) {
+    const std::map<std::string, Label> labels{{"<out>", Label{14}}};
+    const std::vector<std::string> lines{
+        "r1 = 0",
+        "*(u32 *)(r10 - 4) = r1",
+        "r2 = r10",
+        "r2 += -4",
+        "r1 = map_fd " + std::to_string(outer.original_fd),
+        "call 1",
+        "if r0 == 0 goto <out>",
+        "r1 = r0",
+        "r2 = r10",
+        "r2 += -4",
+        "call 1",
+        "if r0 == 0 goto <out>",
+        "r1 = 1",
+        "*(u64 *)(r0 + " + std::to_string(offset) + ") = r1",
+        "r0 = 2",
+        "exit",
+    };
+    InstructionSeq seq;
+    int index = 0;
+    for (const std::string& line : lines) {
+        seq.emplace_back(Label{index++}, parse_instruction(line, labels, {}), std::nullopt);
+    }
+    const ProgramInfo info{
+        .platform = &g_ebpf_platform_linux,
+        .map_descriptors = Cow<std::vector<EbpfMapDescriptor>>::make(descriptors),
+        .type = g_ebpf_platform_linux.get_program_type("xdp", ""),
+    };
+    const VerifierOptions options{};
+    const Program prog = Program::from_sequence(seq, info, options);
+    const ThreadLocalGuard guard;
+    return analyze(prog, options).find_first_error();
+}
+
+} // namespace
+
+TEST_CASE("linux iproute2 map definitions name their inner map by id", "[platform][tables]") {
+    // struct bpf_elf_map: {type, size_key, size_value, max_elem, flags, id, pinning, inner_id, inner_idx}
+    using Defs = std::array<std::array<uint32_t, 9>, 5>;
+    constexpr Defs defs{{
+        {2, 4, 4096, 1, 0, 0, 0, 0, 0}, // ARRAY
+        {12, 4, 4, 1, 0, 0, 0, 7, 0},   // ARRAY_OF_MAPS of the map with id 7. Its own id, 0, is not a position.
+        {2, 4, 8, 1, 0, 7, 0, 0, 0},    // ARRAY with id 7
+        {2, 4, 16, 1, 0, 7, 0, 0, 1},   // ARRAY with id 7 again: iproute2 takes the first
+        {2, 4, 8, 1, 0, 99, 0, 99, 0},  // ARRAY: not a map of maps, so its id and inner_id name nothing
+    }};
+
+    const std::vector<EbpfMapDescriptor> descriptors = legacy_maps(defs);
+    REQUIRE(descriptors.size() == defs.size());
+    REQUIRE(descriptors[1].inner_map_fd == descriptors[2].original_fd);
+    for (const size_t i : {0, 2, 3, 4}) {
+        CAPTURE(i);
+        REQUIRE(descriptors[i].inner_map_fd == NO_INNER_MAP_FD);
+    }
+
+    // The value a lookup through the map of maps yields has the 8 bytes of defs[2], not the 4096 of defs[0].
+    REQUIRE_FALSE(store_through_map_of_maps(descriptors, descriptors[1], 0).has_value());
+    REQUIRE(store_through_map_of_maps(descriptors, descriptors[1], 4000).has_value());
+
+    // Ids bind within a section, wherever its maps land in the table.
+    std::vector<EbpfMapDescriptor> two_sections;
+    for (int section = 0; section < 2; section++) {
+        g_ebpf_platform_linux.parse_maps_section(two_sections, reinterpret_cast<const char*>(defs.data()),
+                                                 sizeof(defs[0]), static_cast<int>(defs.size()), &g_ebpf_platform_linux,
+                                                 VerifierOptions{});
+    }
+    g_ebpf_platform_linux.resolve_inner_map_references(two_sections);
+    REQUIRE(two_sections[1].inner_map_fd == two_sections[2].original_fd);
+    REQUIRE(two_sections[6].inner_map_fd == two_sections[7].original_fd);
+
+    // iproute2 refuses to load a map of maps whose inner_id is the id of no map.
+    Defs unknown_inner_id = defs;
+    unknown_inner_id[1][7] = 9;
+    REQUIRE_THROWS_WITH(legacy_maps(unknown_inner_id), Catch::Matchers::ContainsSubstring("unknown inner map id 9"));
+}
+
+TEST_CASE("linux iproute2 map definitions without inner_idx name their inner map by id", "[platform][tables]") {
+    // iproute2 reads a record shorter than struct bpf_elf_map as one padded with zeros, so a record that ends
+    // with inner_id means what a full one does: {type, size_key, size_value, max_elem, flags, id, pinning, inner_id}
+    constexpr std::array<std::array<uint32_t, 8>, 3> defs{{
+        {2, 4, 4096, 1, 0, 0, 0, 0}, // ARRAY
+        {2, 4, 8, 1, 0, 7, 0, 0},    // ARRAY with id 7
+        {12, 4, 4, 1, 0, 0, 0, 7},   // ARRAY_OF_MAPS of the map with id 7
+    }};
+
+    const std::vector<EbpfMapDescriptor> descriptors = legacy_maps(defs);
+    REQUIRE(descriptors[2].inner_map_fd == descriptors[1].original_fd);
+    REQUIRE(store_through_map_of_maps(descriptors, descriptors[2], 4000).has_value());
+}
+
+TEST_CASE("a legacy map definition with no field for an inner map names none", "[platform][tables]") {
+    // An ARRAY and an ARRAY_OF_MAPS, in records of 16 and 20 bytes (libbpf's struct bpf_map_def, which ends with
+    // map_flags), of 36 bytes with inner_id 0, and of 40 bytes, which is no known layout. None says which map
+    // the ARRAY_OF_MAPS holds, so it is not defs[0].
+    const auto check = [](const auto& defs) {
+        CAPTURE(sizeof(defs[0]));
+        const std::vector<EbpfMapDescriptor> descriptors = legacy_maps(defs);
+        REQUIRE(descriptors[1].inner_map_fd == NO_INNER_MAP_FD);
+        // Nothing is known about the map a lookup yields, so it cannot be used as a map.
+        REQUIRE(store_through_map_of_maps(descriptors, descriptors[1], 0).has_value());
+    };
+    check(std::array<std::array<uint32_t, 4>, 2>{{{2, 4, 4096, 1}, {12, 4, 4, 1}}});
+    check(std::array<std::array<uint32_t, 5>, 2>{{{2, 4, 4096, 1, 0}, {12, 4, 4, 1, 0}}});
+    check(std::array<std::array<uint32_t, 9>, 2>{{{2, 4, 4096, 1, 0, 0, 0, 0, 0}, {12, 4, 4, 1, 0, 0, 0, 0, 0}}});
+    check(std::array<std::array<uint32_t, 10>, 2>{{{2, 4, 4096, 1}, {12, 4, 4, 1}}});
 }
 
 TEST_CASE("mock map fds number maps of one type adjacently", "[platform][tables]") {
