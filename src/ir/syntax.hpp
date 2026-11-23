@@ -528,9 +528,16 @@ struct ValidMapType {
     bool operator==(const ValidMapType&) const = default;
 };
 
+/// Checks that the value returned by the program is provably one its program type may return.
+struct ValidReturnValue {
+    int32_t min{};
+    int32_t max{};
+    constexpr bool operator==(const ValidReturnValue&) const = default;
+};
+
 using Assertion = std::variant<Comparable, Addable, NonNull, ValidDivisor, ValidAccess, ValidStore, ValidSize,
                                ValidMapKeyValue, ValidCallbackTarget, TypeConstraint, FuncConstraint, ZeroCtxOffset,
-                               BoundedLoopCount, ValidArgZero, ValidArgNonNull, ValidMapType>;
+                               BoundedLoopCount, ValidArgZero, ValidArgNonNull, ValidMapType, ValidReturnValue>;
 
 std::ostream& operator<<(std::ostream& os, Instruction const& ins);
 std::string to_string(Instruction const& ins);

@@ -269,6 +269,107 @@ TEST_CASE("packet writes are rejected where the packet is read-only", "[platform
     }
 }
 
+TEST_CASE("a netfilter program returns NF_DROP or NF_ACCEPT", "[platform][tables]") {
+    const std::string invalid = "1: Invalid return value for the program type (r0.value in [0, 1])";
+    REQUIRE_FALSE(verify_lines("netfilter/n", {"r0 = 0", "exit"}).has_value());
+    REQUIRE_FALSE(verify_lines("netfilter/n", {"w0 = 1", "exit"}).has_value());
+    REQUIRE(verify_lines("netfilter/n", {"r0 = 2", "exit"}) == invalid);
+    REQUIRE(verify_lines("netfilter/n", {"r0 = -1", "exit"}) == invalid);
+    // NF_DROP with 0xffff as its errno bits: the packet is freed, and the hook's caller is told to go on with it.
+    REQUIRE(verify_lines("netfilter/n", {"r0 = 0xffff0000 ll", "exit"}) == invalid);
+    // A number the program knows nothing about, and the same number once it is bounded.
+    REQUIRE(verify_lines("netfilter/n", {"r0 = *(u64 *)(r1 + 0)", "exit"}) == invalid);
+    REQUIRE_FALSE(verify_lines("netfilter/n", {"r0 = *(u64 *)(r1 + 0)", "r0 &= 1", "exit"}).has_value());
+    // A pointer is still rejected by the type check.
+    REQUIRE(verify_lines("netfilter/n", {"r0 = r1", "exit"}) == "1: Invalid type (r0.type == number)");
+}
+
+TEST_CASE("linux program types return the values return_retval_range() allows", "[platform][tables]") {
+    struct Expectation {
+        const char* section;
+        std::optional<std::pair<int32_t, int32_t>> range;
+    };
+    const std::optional<std::pair<int32_t, int32_t>> any{};
+    const auto range = [](const int32_t min, const int32_t max) { return std::optional{std::pair{min, max}}; };
+    const std::vector<Expectation> expectations{
+        // The program type alone decides.
+        {"cgroup/dev", range(0, 1)},
+        {"cgroup/sock", range(0, 1)},
+        {"cgroup/sock_create", range(0, 1)},
+        {"sockops", range(0, 1)},
+        {"cgroup/getsockopt", range(0, 1)},
+        {"cgroup/setsockopt", range(0, 1)},
+        {"cgroup/sysctl", range(0, 1)},
+        {"sk_lookup/l", range(0, 1)},
+        {"netfilter/n", range(0, 1)},
+        // The attach point decides.
+        {"cgroup/skb", range(0, 1)},
+        {"cgroup_skb/ingress", range(0, 1)},
+        {"cgroup_skb/egress", range(0, 3)},
+        {"cgroup/connect4", range(0, 1)},
+        {"cgroup/sendmsg6", range(0, 1)},
+        {"cgroup/post_bind4", range(0, 1)},
+        {"cgroup/bind4", range(0, 3)},
+        {"cgroup/bind6", range(0, 3)},
+        {"cgroup/recvmsg4", range(1, 1)},
+        {"cgroup/getpeername6", range(1, 1)},
+        {"cgroup/getsockname4", range(1, 1)},
+        {"fentry/f", range(0, 0)},
+        {"fentry.s/f", range(0, 0)},
+        {"fexit/f", range(0, 0)},
+        {"fexit.s/f", range(0, 0)},
+        {"iter/i", range(0, 1)},
+        {"iter.s/i", range(0, 1)},
+        {"fmod_ret/f", any},
+        {"tp_btf/t", any},
+        // Linux does not limit these.
+        {"socket", any},
+        {"xdp", any},
+        {"classifier", any},
+        {"action", any},
+        {"kprobe/f", any},
+        {"tracepoint/t", any},
+        {"raw_tp/t", any},
+        {"perf_event", any},
+        {"sk_skb", any},
+        {"sk_msg", any},
+        {"lwt_in", any},
+        {"flow_dissector", any},
+        {"sk_reuseport/r", any},
+        {"syscall/s", any},
+        {"freplace/f", any},
+        // Linux limits these by the prototype of the hook, which is not modeled.
+        {"lsm/f", any},
+        {"struct_ops/f", any},
+    };
+    for (const auto& [section, expected] : expectations) {
+        CAPTURE(section);
+        const EbpfProgramType type = g_ebpf_platform_linux.get_program_type(section, "");
+        REQUIRE(type.return_range.has_value() == expected.has_value());
+        const auto returns = [&](const std::string& value) {
+            return !verify_lines(section, {"r0 = " + value, "exit"}).has_value();
+        };
+        if (!expected) {
+            REQUIRE(returns("0xffff0000 ll"));
+            REQUIRE(returns("-1"));
+            continue;
+        }
+        const auto [min, max] = *expected;
+        REQUIRE(type.return_range->min == min);
+        REQUIRE(type.return_range->max == max);
+        REQUIRE(returns(std::to_string(min)));
+        REQUIRE(returns(std::to_string(max)));
+        REQUIRE_FALSE(returns(std::to_string(min - 1)));
+        REQUIRE_FALSE(returns(std::to_string(max + 1)));
+        REQUIRE_FALSE(returns("0xffff0000 ll"));
+    }
+    // The attach point keeps its program type.
+    REQUIRE(g_ebpf_platform_linux.get_program_type("cgroup_skb/egress", "").name == "cgroup_skb");
+    REQUIRE(g_ebpf_platform_linux.get_program_type("cgroup/bind4", "").name == "cgroup_sock_addr");
+    REQUIRE(g_ebpf_platform_linux.get_program_type("iter/i", "").name == "tracing");
+    REQUIRE(g_ebpf_platform_linux.get_program_type("iter.s/i", "").is_sleepable);
+}
+
 TEST_CASE("linux map-type table covers post-cpumap map ids", "[platform][tables]") {
     const std::array<MapTypeExpectation, 17> expectations{{
         {17, "XSKMAP", true, EbpfMapValueType::ANY},

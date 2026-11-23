@@ -79,6 +79,10 @@ class AssertExtractor {
         if (!current_label || current_label->stack_frame_prefix.empty()) {
             // Verify that Exit returns a number.
             res.emplace_back(TypeConstraint{Reg{R0_RETURN_VALUE}, TypeGroup::number});
+            // Where the runtime gives that number a meaning, it must be one of the values it expects.
+            if (const auto& range = info.type.return_range) {
+                res.emplace_back(ValidReturnValue{range->min, range->max});
+            }
         }
         return res;
     }

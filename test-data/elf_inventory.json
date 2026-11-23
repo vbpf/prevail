@@ -3525,6 +3525,15 @@
                 "reject_load": false
               }
             ]
+          },
+          "test_overrides": {
+            "sections": {
+              "sk_lookup/": {
+                "kind": "VerifierBoundsTracking",
+                "reason": "the returned verdict is loaded from a frozen read-only map, whose contents are not tracked, so it is not known to be 0 or 1",
+                "status": "expected_failure"
+              }
+            }
           }
         },
         "errors-el.elf": {
