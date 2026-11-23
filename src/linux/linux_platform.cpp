@@ -143,6 +143,14 @@ static EbpfProgramType with_ctx_layout(EbpfProgramType type, const EbpfStructDes
     return type;
 }
 
+// Limits the values a program type may return. The ranges are those of return_retval_range() in
+// kernel/bpf/verifier.c. Where Linux makes the range depend on the attach point, the program type has one row
+// per range, told apart by the section prefix that names the attach point.
+static EbpfProgramType returning(EbpfProgramType type, const int32_t min, const int32_t max) {
+    type.return_range = EbpfReturnRange{min, max};
+    return type;
+}
+
 const EbpfProgramType linux_socket_filter_program_type =
     with_legacy_packet_access(PTYPE("socket_filter", &g_socket_filter_descr, BPF_PROG_TYPE_SOCKET_FILTER, {"socket"}));
 
@@ -156,9 +164,18 @@ const std::vector<EbpfProgramType> linux_program_types = {
     PTYPE("unspec", &g_unspec_descr, BPF_PROG_TYPE_UNSPEC, {}),
     linux_socket_filter_program_type,
     linux_xdp_program_type,
-    PTYPE_READONLY_CTX("cgroup_device", &g_cgroup_dev_descr, BPF_PROG_TYPE_CGROUP_DEVICE, {"cgroup/dev"}),
-    with_read_only_packet(PTYPE("cgroup_skb", &g_socket_filter_descr, BPF_PROG_TYPE_CGROUP_SKB, {"cgroup/skb"})),
-    PTYPE("cgroup_sock", &g_cgroup_sock_descr, BPF_PROG_TYPE_CGROUP_SOCK, {"cgroup/sock"}),
+    returning(PTYPE_READONLY_CTX("cgroup_device", &g_cgroup_dev_descr, BPF_PROG_TYPE_CGROUP_DEVICE, {"cgroup/dev"}), 0,
+              1),
+    // Without an attach point in the section name the range is that of ingress, as in Linux for a program
+    // loaded without an expected attach type.
+    returning(with_read_only_packet(PTYPE("cgroup_skb", &g_socket_filter_descr, BPF_PROG_TYPE_CGROUP_SKB,
+                                          {"cgroup/skb" COMMA "cgroup_skb/ingress"})),
+              0, 1),
+    // On egress, bit 1 of the result asks for congestion notification.
+    returning(with_read_only_packet(
+                  PTYPE("cgroup_skb", &g_socket_filter_descr, BPF_PROG_TYPE_CGROUP_SKB, {"cgroup_skb/egress"})),
+              0, 3),
+    returning(PTYPE("cgroup_sock", &g_cgroup_sock_descr, BPF_PROG_TYPE_CGROUP_SOCK, {"cgroup/sock"}), 0, 1),
     PTYPE_PRIVILEGED_READONLY_CTX("kprobe", &g_kprobe_descr, BPF_PROG_TYPE_KPROBE, {"kprobe/" COMMA "kretprobe/"}),
     with_read_only_packet(PTYPE("lwt_in", &g_lwt_inout_descr, BPF_PROG_TYPE_LWT_IN, {"lwt_in"})),
     with_read_only_packet(PTYPE("lwt_out", &g_lwt_inout_descr, BPF_PROG_TYPE_LWT_OUT, {"lwt_out"})),
@@ -170,10 +187,11 @@ const std::vector<EbpfProgramType> linux_program_types = {
     // libbpf also names tc programs "tc", "tc/..." and "tcx/...".
     with_legacy_packet_access(PTYPE("sched_cls", &g_sched_descr, BPF_PROG_TYPE_SCHED_CLS, {"classifier" COMMA "tc"})),
     PTYPE("sk_skb", &g_sk_skb_descr, BPF_PROG_TYPE_SK_SKB, {"sk_skb"}),
-    PTYPE("sock_ops", &g_sock_ops_descr, BPF_PROG_TYPE_SOCK_OPS, {"sockops"}),
+    returning(PTYPE("sock_ops", &g_sock_ops_descr, BPF_PROG_TYPE_SOCK_OPS, {"sockops"}), 0, 1),
     PTYPE_READONLY_CTX("tracepoint", &g_tracepoint_descr, BPF_PROG_TYPE_TRACEPOINT, {"tracepoint/"}),
-    PTYPE("cgroup_sockopt", &g_sockopt_descr, BPF_PROG_TYPE_CGROUP_SOCKOPT,
-          {"cgroup/getsockopt" COMMA "cgroup/setsockopt"}),
+    returning(PTYPE("cgroup_sockopt", &g_sockopt_descr, BPF_PROG_TYPE_CGROUP_SOCKOPT,
+                    {"cgroup/getsockopt" COMMA "cgroup/setsockopt"}),
+              0, 1),
     PTYPE_READONLY_CTX("sk_msg", &g_sk_msg_md, BPF_PROG_TYPE_SK_MSG, {"sk_msg"}),
     // Raw tracepoints receive the tracepoint arguments as a u64 array (bpf_tracing_ctx_access),
     // not a perf trace record.
@@ -183,27 +201,42 @@ const std::vector<EbpfProgramType> linux_program_types = {
     // from the context, not by storing into the context itself.
     PTYPE_PRIVILEGED_READONLY_CTX("raw_tracepoint_writable", &g_tracing_descr, BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE,
                                   {"raw_tracepoint.w/" COMMA "raw_tp.w/"}),
-    PTYPE("cgroup_sock_addr", &g_sock_addr_descr, BPF_PROG_TYPE_CGROUP_SOCK_ADDR,
-          {"cgroup/bind" COMMA "cgroup/post_bind" COMMA "cgroup/connect" COMMA "cgroup/sendmsg" COMMA
-           "cgroup/recvmsg" COMMA "cgroup/getpeername" COMMA "cgroup/getsockname"}),
+    returning(PTYPE("cgroup_sock_addr", &g_sock_addr_descr, BPF_PROG_TYPE_CGROUP_SOCK_ADDR,
+                    {"cgroup/post_bind" COMMA "cgroup/connect" COMMA "cgroup/sendmsg"}),
+              0, 1),
+    // Bit 1 of a bind program's result asks to skip the check of the port against the privileged range.
+    returning(PTYPE("cgroup_sock_addr", &g_sock_addr_descr, BPF_PROG_TYPE_CGROUP_SOCK_ADDR, {"cgroup/bind"}), 0, 3),
+    // These hooks run after the operation has happened and cannot refuse it.
+    returning(PTYPE("cgroup_sock_addr", &g_sock_addr_descr, BPF_PROG_TYPE_CGROUP_SOCK_ADDR,
+                    {"cgroup/recvmsg" COMMA "cgroup/getpeername" COMMA "cgroup/getsockname"}),
+              1, 1),
     with_read_only_packet(PTYPE("lwt_seg6local", &g_lwt_xmit_descr, BPF_PROG_TYPE_LWT_SEG6LOCAL, {"lwt_seg6local"})),
     PTYPE_READONLY_CTX("lirc_mode2", &g_lirc_mode2_descr, BPF_PROG_TYPE_LIRC_MODE2, {"lirc_mode2"}),
     with_read_only_packet(
         PTYPE_READONLY_CTX("sk_reuseport", &g_sk_reuseport_descr, BPF_PROG_TYPE_SK_REUSEPORT, {"sk_reuseport/"})),
     with_read_only_packet(PTYPE_READONLY_CTX("flow_dissector", &g_flow_dissector_descr, BPF_PROG_TYPE_FLOW_DISSECTOR,
                                              {"flow_dissector"})),
-    PTYPE("cgroup_sysctl", &g_cgroup_sysctl_descr, BPF_PROG_TYPE_CGROUP_SYSCTL, {"cgroup/sysctl"}),
+    returning(PTYPE("cgroup_sysctl", &g_cgroup_sysctl_descr, BPF_PROG_TYPE_CGROUP_SYSCTL, {"cgroup/sysctl"}), 0, 1),
     PTYPE("ext", &g_unspec_descr, BPF_PROG_TYPE_EXT, {"freplace/"}),
     // The argument array is where the trampoline saved the traced function's registers.
+    returning(PTYPE_READONLY_CTX("tracing", &g_tracing_descr, BPF_PROG_TYPE_TRACING,
+                                 {"fentry/" COMMA "fentry.s/" COMMA "fexit/" COMMA "fexit.s/"}),
+              0, 0),
+    // A fmod_ret program's result replaces that of the traced function, and a tp_btf program's is ignored.
     PTYPE_READONLY_CTX("tracing", &g_tracing_descr, BPF_PROG_TYPE_TRACING,
-                       {"fentry/" COMMA "fentry.s/" COMMA "fexit/" COMMA "fexit.s/" COMMA "fmod_ret/" COMMA
-                        "fmod_ret.s/" COMMA "iter/" COMMA "iter.s/" COMMA "tp_btf/" COMMA "tp_btf.s/"}),
+                       {"fmod_ret/" COMMA "fmod_ret.s/" COMMA "tp_btf/" COMMA "tp_btf.s/"}),
+    returning(PTYPE_READONLY_CTX("tracing", &g_tracing_descr, BPF_PROG_TYPE_TRACING, {"iter/" COMMA "iter.s/"}), 0, 1),
     // struct_ops callbacks receive function arguments as u64 array, same as fentry/fexit.
+    // What a struct_ops or lsm program may return depends on the prototype of the member or hook it implements
+    // (nothing, any number, an errno, a pointer), which is not known here: any number is accepted. See
+    // docs/parity/program-types.md.
     PTYPE_READONLY_CTX("struct_ops", &g_tracing_descr, BPF_PROG_TYPE_STRUCT_OPS, {"struct_ops/" COMMA "struct_ops.s/"}),
     PTYPE_READONLY_CTX("lsm", &g_tracing_descr, BPF_PROG_TYPE_LSM, {"lsm/" COMMA "lsm.s/"}),
-    PTYPE_READONLY_CTX("sk_lookup", &g_sk_lookup_descr, BPF_PROG_TYPE_SK_LOOKUP, {"sk_lookup/"}),
+    returning(PTYPE_READONLY_CTX("sk_lookup", &g_sk_lookup_descr, BPF_PROG_TYPE_SK_LOOKUP, {"sk_lookup/"}), 0, 1),
     PTYPE("syscall", &g_syscall_descr, BPF_PROG_TYPE_SYSCALL, {"syscall/"}),
-    PTYPE_READONLY_CTX("netfilter", &g_netfilter_descr, BPF_PROG_TYPE_NETFILTER, {"netfilter/"}),
+    // NF_DROP or NF_ACCEPT. nf_hook_slow() acts on the verdict as returned: the upper bits of an NF_DROP are a
+    // negated errno, and if that comes out as 1 the hook's caller continues with the packet that was just freed.
+    returning(PTYPE_READONLY_CTX("netfilter", &g_netfilter_descr, BPF_PROG_TYPE_NETFILTER, {"netfilter/"}), 0, 1),
 };
 
 static EbpfProgramType get_program_type_linux(const std::string& section, const std::string& path) {

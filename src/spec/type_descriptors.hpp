@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <map>
 #include <numeric>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -62,6 +63,11 @@ inline std::vector<int> mock_map_fds_by_type(const std::vector<uint32_t>& types,
 }
 
 struct EbpfStructDescriptor;
+/// Inclusive range of values that a program may return.
+struct EbpfReturnRange {
+    int32_t min{};
+    int32_t max{};
+};
 
 struct EbpfProgramType {
     std::string name{}; // For ease of display, not used by the verifier.
@@ -83,6 +89,11 @@ struct EbpfProgramType {
     // ebpf_platform_t). A load or store through the context must then be an access that one field admits.
     // Null when the context is plain memory: any access within ctx_descriptor->size is allowed.
     const EbpfStructDescriptor* ctx_layout{};
+    // The values the runtime gives a meaning to when a program of this type returns: r0 must be provably in
+    // this range at the program's exit. The runtime acts on the value as returned (a netfilter verdict, for
+    // instance, carries an errno in its upper bits), so a value outside the range is not a harmless "unknown
+    // verdict". Unset means any number may be returned.
+    std::optional<EbpfReturnRange> return_range{};
 };
 
 enum class EbpfStructFieldPermission { read_only, read_write };

@@ -117,6 +117,7 @@ class EbpfChecker final {
     void operator()(const ValidSize&) const;
     void operator()(const ValidArgZero&) const;
     void operator()(const ValidArgNonNull&) const;
+    void operator()(const ValidReturnValue&) const;
     void operator()(const ValidStore&) const;
     void operator()(const ZeroCtxOffset&) const;
 
@@ -349,6 +350,14 @@ void EbpfChecker::operator()(const ValidArgNonNull& s) const {
     using namespace dsl_syntax;
     const auto r = reg_pack(s.reg);
     require_value(dom.state, r.uvalue > 0, "Possible null argument");
+}
+
+void EbpfChecker::operator()(const ValidReturnValue& s) const {
+    using namespace dsl_syntax;
+    // The whole register is held to the range, whichever part of it the runtime reads.
+    const auto r = reg_pack(R0_RETURN_VALUE);
+    require_value(dom.state, r.svalue >= s.min, "Invalid return value for the program type");
+    require_value(dom.state, r.svalue <= s.max, "Invalid return value for the program type");
 }
 
 void EbpfChecker::operator()(const ValidCallbackTarget& s) const {

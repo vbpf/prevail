@@ -463,6 +463,10 @@ struct AssertionPrinterVisitor {
     void operator()(ValidArgZero const& a) { _os << a.reg << " == 0"; }
 
     void operator()(ValidArgNonNull const& a) { _os << a.reg << " != 0"; }
+
+    void operator()(ValidReturnValue const& a) {
+        _os << Reg{R0_RETURN_VALUE} << ".value in [" << a.min << ", " << a.max << "]";
+    }
 };
 
 // ReSharper disable CppMemberFunctionMayBeConst

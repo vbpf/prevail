@@ -161,6 +161,7 @@ Where:
 | `r<N>.type in {types}` | Register has one of the listed types |
 | `r<N>.type == number` | Register is a number (not a pointer) |
 | `r<N> != 0` | Register is non-zero (for division, or a helper pointer argument that must not be null) |
+| `r0.value in [min, max]` | Returned value is one the program type may return |
 | `pc[N] < 100000` | Loop counter is within limit |
 | `within(reg:key_size(map))` | Map key access is valid |
 
