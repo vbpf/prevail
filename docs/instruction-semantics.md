@@ -414,6 +414,7 @@ struct RegPack {
 
     // Size tracking
     Var shared_region_size;  // For T_SHARED
+    Var shared_access;       // For T_SHARED
     Var stack_numeric_size;  // For T_STACK spills
     Var alloc_mem_size;      // For T_ALLOC_MEM
 

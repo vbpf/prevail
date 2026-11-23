@@ -181,6 +181,26 @@ static std::optional<ResolvedCall> resolve_kfunc_call(const CallBtf& call_btf, c
 // kind=kfunc}; the ResolvedCall is reproduced on demand via resolve(call, info).
 using ResolvedKfuncCalls = std::map<Label, Call>;
 
+/// The descriptor of the map whose fd or value address the instruction loads, or null if it loads none.
+/// A map index out of range also gives null; pass_lower_pseudo_loads rejects it.
+static const EbpfMapDescriptor* loaded_map(const Instruction& ins, const ProgramInfo& info) {
+    const auto& descriptors = *info.map_descriptors;
+    if (const auto p = std::get_if<LoadMapFd>(&ins)) {
+        return &info.platform->get_map_descriptor(p->mapfd, descriptors);
+    }
+    if (const auto p = std::get_if<LoadMapAddress>(&ins)) {
+        return &info.platform->get_map_descriptor(p->mapfd, descriptors);
+    }
+    if (const auto p = std::get_if<LoadPseudo>(&ins)) {
+        if ((p->addr.kind == PseudoAddress::Kind::MAP_BY_IDX ||
+             p->addr.kind == PseudoAddress::Kind::MAP_VALUE_BY_IDX) &&
+            p->addr.imm >= 0 && static_cast<size_t>(p->addr.imm) < descriptors.size()) {
+            return &descriptors.at(static_cast<size_t>(p->addr.imm));
+        }
+    }
+    return nullptr;
+}
+
 [[nodiscard]]
 static std::optional<RejectionReason> check_instruction_feature_support(const Instruction& ins,
                                                                         const ProgramInfo& info) {
@@ -245,6 +265,8 @@ static std::optional<RejectionReason> check_instruction_feature_support(const In
             // the id would let a branch on the loaded address be pruned at verification time.
             return reject_not_implemented("lddw variable_addr pseudo");
         case PseudoAddress::Kind::CODE_ADDR:
+        case PseudoAddress::Kind::EXTERN_ADDR:
+        case PseudoAddress::Kind::FUNC_ADDR:
         case PseudoAddress::Kind::MAP_BY_IDX:
         case PseudoAddress::Kind::MAP_VALUE_BY_IDX: break; // Resolved during CFG construction.
         default: return reject_not_implemented("lddw unknown pseudo");
@@ -253,6 +275,15 @@ static std::optional<RejectionReason> check_instruction_feature_support(const In
     if ((std::holds_alternative<LoadMapFd>(ins) || std::holds_alternative<LoadMapAddress>(ins)) &&
         !supports(platform, bpf_conformance_groups_t::base64)) {
         return reject_capability("requires conformance group base64");
+    }
+    // A sleepable program can hold a map value across a sleep, so it may only use maps whose elements outlive it.
+    // Type 0 says nothing about the map, and is not restricted.
+    if (info.type.is_sleepable) {
+        if (const EbpfMapDescriptor* map = loaded_map(ins, info);
+            map && map->type != 0 && !platform.get_map_type(map->type).usable_in_sleepable) {
+            return reject_capability("map type " + std::to_string(map->type) +
+                                     " is not allowed in a sleepable program");
+        }
     }
     if (const auto p = std::get_if<Mem>(&ins)) {
         if (!supports(platform,
@@ -469,8 +500,9 @@ static void add_cfg_nodes(CfgBuilder& builder, const Cfg& original_cfg, const La
 
 /// Lower a single LoadPseudo to a concrete instruction.
 /// MAP_BY_IDX / MAP_VALUE_BY_IDX are rewritten against the current map descriptor table.
-/// CODE_ADDR is kept as LoadPseudo by pass_lower_pseudo_loads so the abstract transformer
-/// can type it as T_FUNC; this helper is never called for CODE_ADDR. VARIABLE_ADDR is
+/// CODE_ADDR, FUNC_ADDR and EXTERN_ADDR are kept as LoadPseudo by pass_lower_pseudo_loads so the abstract
+/// transformer can type them (T_FUNC, and an unknown number); this helper is never called for
+/// them. VARIABLE_ADDR is
 /// rejected earlier, by pass_validate_instruction_support.
 static Instruction lower_pseudo_load(const LoadPseudo& pseudo, const ProgramInfo& info) {
     const auto& descriptors = *info.map_descriptors;
@@ -493,9 +525,9 @@ using LoweredPseudoLoads = std::map<Label, Instruction>;
 // Pass: LowerPseudoLoads
 // Reads    : instruction sequence, program info (map_descriptors).
 // Writes   : returns a Label -> Instruction map with the concrete replacement for every
-//            LoadPseudo that is lowered. CODE_ADDR LoadPseudo instructions are intentionally
-//            excluded so they remain observable to the abstract transformer (which types
-//            them as T_FUNC); every other kind is replaced.
+//            LoadPseudo that is lowered. CODE_ADDR, FUNC_ADDR and EXTERN_ADDR LoadPseudo instructions are
+//            intentionally excluded so they remain observable to the abstract transformer (which
+//            types them as T_FUNC, and as an unknown number); every other kind is replaced.
 // Throws   : InvalidControlFlow if a MAP_BY_IDX / MAP_VALUE_BY_IDX references an out-of-range
 //            map descriptor.
 // Invariant: pass_populate_nodes consults this map to substitute LoadPseudo with its lowered
@@ -504,7 +536,9 @@ static LoweredPseudoLoads pass_lower_pseudo_loads(const InstructionSeq& insts, c
     LoweredPseudoLoads lowered;
     for (const auto& [label, inst, _] : insts) {
         const auto* pseudo = std::get_if<LoadPseudo>(&inst);
-        if (!pseudo || pseudo->addr.kind == PseudoAddress::Kind::CODE_ADDR) {
+        if (!pseudo || pseudo->addr.kind == PseudoAddress::Kind::CODE_ADDR ||
+            pseudo->addr.kind == PseudoAddress::Kind::FUNC_ADDR ||
+            pseudo->addr.kind == PseudoAddress::Kind::EXTERN_ADDR) {
             continue;
         }
         lowered.insert_or_assign(label, lower_pseudo_load(*pseudo, info));
@@ -515,8 +549,9 @@ static LoweredPseudoLoads pass_lower_pseudo_loads(const InstructionSeq& insts, c
 // Pass: BuildInitialCfg -- populate_nodes step.
 // Reads    : instruction sequence, program info, resolved kfunc map, lowered pseudo-load map.
 // Writes   : inserts one CFG node per live instruction into builder (labels + instructions).
-//            CallBtf is replaced with the resolved Call; non-CODE_ADDR LoadPseudo is replaced
-//            with its lowered form; every other instruction is inserted verbatim.
+//            CallBtf is replaced with the resolved Call; LoadPseudo other than CODE_ADDR, FUNC_ADDR and
+//            EXTERN_ADDR is replaced with its lowered form; every other instruction is inserted
+//            verbatim.
 // Throws   : InvalidControlFlow if either substitution map is inconsistent with the sequence
 //            (internal error; indicates a missing prior pass).
 // Invariant: pass_validate_instruction_support, pass_resolve_kfunc_calls and

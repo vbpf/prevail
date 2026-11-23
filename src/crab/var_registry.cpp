@@ -198,6 +198,8 @@ bool VariableRegistry::is_min_only(const Variable& v) const {
     return n.ends_with(".stack_numeric_size") || n.ends_with(".shared_region_size") || n == "packet_size";
 }
 
+bool VariableRegistry::is_shared_access(const Variable& v) const { return name(v).ends_with(".shared_access"); }
+
 Variable VariableRegistry::loop_counter(const std::string& label) const { return intern("pc[" + label + "]"); }
 
 std::string VariableRegistry::name(const Variable& v) const { return names.at(v._id); }
@@ -229,11 +231,13 @@ RegPack VariableRegistry::reg_pack(const int i) const {
         .shared_offset = reg(DataKind::shared_offsets, i),
         .stack_offset = reg(DataKind::stack_offsets, i),
         .shared_region_size = reg(DataKind::shared_region_sizes, i),
+        .shared_access = reg(DataKind::shared_accesses, i),
         .stack_numeric_size = reg(DataKind::stack_numeric_sizes, i),
         .socket_offset = reg(DataKind::socket_offsets, i),
         .btf_id_offset = reg(DataKind::btf_id_offsets, i),
         .alloc_mem_offset = reg(DataKind::alloc_mem_offsets, i),
         .alloc_mem_size = reg(DataKind::alloc_mem_sizes, i),
+        .func_offset = reg(DataKind::func_offsets, i),
     };
 }
 

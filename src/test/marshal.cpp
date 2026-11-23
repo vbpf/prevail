@@ -126,6 +126,10 @@ struct MarshalVisitor {
         }
         case PseudoAddress::Kind::MAP_BY_IDX: src = INST_LD_MODE_MAP_BY_IDX; break;
         case PseudoAddress::Kind::MAP_VALUE_BY_IDX: src = INST_LD_MODE_MAP_VALUE_BY_IDX; break;
+        // A plain lddw, which ProgramInfo::extern_address_offsets marks as an extern address.
+        case PseudoAddress::Kind::EXTERN_ADDR: src = INST_LD_MODE_IMM; break;
+        // Likewise, marked by ProgramInfo::func_address_offsets as the address of a function.
+        case PseudoAddress::Kind::FUNC_ADDR: src = INST_LD_MODE_IMM; break;
         }
         return makeLddw(b.dst, src, imm, b.addr.next_imm);
     }

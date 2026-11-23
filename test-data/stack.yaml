@@ -1240,3 +1240,161 @@ post:
   - r8.type=number
   - r10.type=stack
   - r10.stack_offset=4096
+---
+test-case: advancing a stack pointer over known-numeric bytes keeps its numeric size exact
+
+pre: ["r1.type=stack", "r1.stack_offset=[3840, 4048]", "r1.stack_numeric_size=16",
+      "r10.type=stack", "r10.stack_offset=4096"]
+
+code:
+  <start>: |
+    r2 = r1
+    r2 += 8
+
+post:
+  - r1.type=stack
+  - r1.stack_offset=[3840, 4048]
+  - r1.stack_numeric_size=16
+  - r1.stack_numeric_size=r2.stack_numeric_size+8
+  - r2.type=stack
+  - r2.stack_offset=[3848, 4056]
+  - r2.stack_offset=r1.stack_offset+8
+  - r2.stack_numeric_size=8
+  - r10.type=stack
+  - r10.stack_offset=4096
+---
+test-case: advancing a stack pointer over bytes not known to be numeric forgets its numeric size
+
+pre: ["r1.type=stack", "r1.stack_offset=[3840, 4048]", "r1.stack_numeric_size=4",
+      "r10.type=stack", "r10.stack_offset=4096"]
+
+code:
+  <start>: |
+    r2 = r1
+    r2 += 8
+
+post:
+  - r1.type=stack
+  - r1.stack_offset=[3840, 4048]
+  - r1.stack_numeric_size=4
+  - r2.type=stack
+  - r2.stack_offset=[3848, 4056]
+  - r2.stack_offset=r1.stack_offset+8
+  - r10.type=stack
+  - r10.stack_offset=4096
+---
+test-case: adding a number to a stack pointer over bytes not known to be numeric forgets its numeric size
+
+pre: ["r1.type=stack", "r1.stack_offset=[3840, 4048]", "r1.stack_numeric_size=4",
+      "r3.type=number", "r3.svalue=8", "r3.uvalue=8",
+      "r10.type=stack", "r10.stack_offset=4096"]
+
+code:
+  <start>: |
+    r2 = r1
+    r2 += r3
+
+post:
+  - r1.type=stack
+  - r1.stack_offset=[3840, 4048]
+  - r1.stack_numeric_size=4
+  - r2.type=stack
+  - r2.stack_offset=[3848, 4056]
+  - r2.stack_offset=r1.stack_offset+8
+  - r2.stack_offset-r3.svalue<=4048
+  - r3.svalue-r2.stack_offset<=-3840
+  - r3.type=number
+  - r3.svalue=8
+  - r3.uvalue=8
+  - r10.type=stack
+  - r10.stack_offset=4096
+---
+test-case: subtracting a negative number from a stack pointer over bytes not known to be numeric forgets its numeric size
+
+pre: ["r1.type=stack", "r1.stack_offset=[3840, 4048]", "r1.stack_numeric_size=4",
+      "r3.type=number", "r3.svalue=-8", "r3.uvalue=18446744073709551608",
+      "r10.type=stack", "r10.stack_offset=4096"]
+
+code:
+  <start>: |
+    r2 = r1
+    r2 -= r3
+
+post:
+  - r1.type=stack
+  - r1.stack_offset=[3840, 4048]
+  - r1.stack_numeric_size=4
+  - r2.type=stack
+  - r2.stack_offset=[3848, 4056]
+  - r2.stack_offset=r1.stack_offset+8
+  - r3.type=number
+  - r3.svalue=-8
+  - r3.uvalue=18446744073709551608
+  - r10.type=stack
+  - r10.stack_offset=4096
+---
+test-case: a pointer spilled below an advanced copy of a stack pointer is not read as a number
+
+# ANT-2026-5BZGMKXJ. In <near>, r6 points at the spilled ctx pointer (0 numeric bytes) and r7 = r6 + 8 at 8 numeric
+# bytes. Recording r7.stack_numeric_size = r6.stack_numeric_size - 8 there let the narrowing step at <head>, which
+# meets the widened invariant with a state that proves 8 numeric bytes at r7, raise r6.stack_numeric_size to 16.
+# The load in <out> then read the ctx pointer as a number. <near> is reached only once r9 has been widened, which
+# also makes r8 = 64 look feasible, so the stack model proves no size for r6 or r7 there.
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "r10.type=stack", "r10.stack_offset=4096"]
+
+code:
+  <start>: |
+    *(u64 *)(r10 - 48) = r1
+    r2 = 0
+    *(u64 *)(r10 - 40) = r2
+    *(u64 *)(r10 - 128) = r2
+    *(u64 *)(r10 - 120) = r2
+    *(u64 *)(r10 - 256) = r2
+    *(u64 *)(r10 - 248) = r2
+    r9 = 0
+    call 7; bpf_get_prandom_u32
+    r6 = r10
+    r6 += -128
+    if r0 == 0 goto <first_zeros>
+    r6 += -128
+  <first_zeros>: |
+    r7 = r6
+    r7 += 8
+  <head>: |
+    call 7; bpf_get_prandom_u32
+    r0 &= 1
+    if r0 == 0 goto <out>
+    if r9 >= 3 goto <last>
+    r9 += 1
+    call 7; bpf_get_prandom_u32
+    r6 = r10
+    r6 += -128
+    if r0 == 0 goto <zeros>
+    r6 += -128
+  <zeros>: |
+    r7 = r6
+    r7 += 8
+    goto <head>
+  <last>: |
+    r8 = 0
+    if r9 <= 100 goto <near>
+    r8 = 64
+  <near>: |
+    r6 = r10
+    r6 += -48
+    r6 -= r8
+    r7 = r6
+    r7 += 8
+    r9 = 3
+    goto <head>
+  <out>: |
+    r0 = *(u64 *)(r6 + 0)
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "29:30: Code becomes unreachable (assume r9 > 100)"
+  - "38: Stack content is not numeric (valid_access(r6.offset, width=8) for read)"

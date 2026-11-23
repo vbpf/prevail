@@ -108,6 +108,8 @@ struct PseudoAddress {
         CODE_ADDR,        // src=4; imm holds the label of the target, not the encoded relative offset
         MAP_BY_IDX,       // src=5
         MAP_VALUE_BY_IDX, // src=6
+        EXTERN_ADDR,      // src=0 at an index in ProgramInfo::extern_address_offsets: an unknown number
+        FUNC_ADDR,        // src=0 at an index in ProgramInfo::func_address_offsets: some function's address
     } kind{};
     int32_t imm{};
     int32_t next_imm{};
@@ -244,6 +246,7 @@ struct CallContract {
     std::optional<Reg> alloc_size_reg{}; ///< Register holding allocation size (for T_ALLOC_MEM returns).
     uint8_t zero_args_mask{};            ///< Bitmask of arg positions (0-4 for R1-R5) that must be zero.
     uint64_t allowed_map_types{};        ///< Bitmask of allowed map types for the MAP_FD argument (0 = any).
+    bool modifies_map{};                 ///< Whether the helper adds, replaces or removes elements of that map.
 };
 
 /// Resolved form of a Call: the key (via `call`) plus everything derivable
@@ -515,11 +518,13 @@ struct ValidArgNonNull {
     constexpr bool operator==(const ValidArgNonNull&) const = default;
 };
 
-/// Checks that the map type passed to a helper is in its allowed set.
+/// Checks that the map type passed to a helper is in its allowed set, and that the program may modify the map
+/// if the helper does.
 struct ValidMapType {
     Reg map_fd_reg;
     uint64_t allowed_map_types{};
     std::string helper_name;
+    bool modifies_map{};
     bool operator==(const ValidMapType&) const = default;
 };
 

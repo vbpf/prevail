@@ -58,11 +58,14 @@ struct FunctionRelocation {
     size_t prog_index{};
     ELFIO::Elf_Xword source_offset{};
     std::optional<ELFIO::Elf_Xword> relocation_entry_index;
-    /// Where the callee starts. This identifies the callee; target_function_name is only for
+    /// Where the call lands. This identifies the callee; target_function_name is only for
     /// diagnostics (ELF symbol names need not be unique).
     SectionOffset target;
     std::string target_function_name;
-    std::optional<size_t> target_prog_index; // Index into raw_programs, once every program has been read.
+    /// Index into raw_programs of the program whose code holds `target`, once every program has been read.
+    std::optional<size_t> target_prog_index;
+    /// Instruction index of `target` within that program: 0 unless the call lands on code that no FUNC symbol starts.
+    size_t target_entry{};
 };
 
 /// The named STT_FUNC symbols of one section, as indices into the symbol table.
@@ -139,8 +142,17 @@ std::optional<std::string> find_function_symbol_at_offset(const ELFIO::const_sym
                                                           const FunctionSymbols& function_symbols,
                                                           ELFIO::Elf_Half section_index, ELFIO::Elf_Xword offset);
 
-ELFIO::Elf_Xword compute_reachable_program_span(const std::vector<EbpfInst>& section_instructions,
-                                                ELFIO::Elf_Xword program_offset, ELFIO::Elf_Xword initial_size);
+/// A place where control leaves a function's instructions other than by exit or by a call: a jump to an instruction
+/// outside them, or an instruction that continues past the last of them.
+struct ControlFlowEscape {
+    size_t pc{};      ///< Index of the escaping instruction in the function.
+    int64_t target{}; ///< Index, relative to the start of the function, where control would continue.
+    bool is_jump{};   ///< A jump, rather than the fall-through of the last instruction.
+};
+
+/// The first escape of control from `instructions`, the code of one function. Calls are not escapes, since a callee
+/// returns to the instruction after the call.
+std::optional<ControlFlowEscape> find_control_flow_escape(const std::vector<EbpfInst>& instructions);
 
 std::vector<ELFIO::section*> global_sections(const ELFIO::elfio& reader);
 
@@ -156,10 +168,13 @@ ELFIO::const_symbol_section_accessor read_and_validate_symbol_section(const ELFI
 // ---------------------------------------------------------------------------
 
 std::optional<uint64_t> resolve_known_linux_extern_symbol(std::string_view symbol_name);
-EbpfInst make_mov_reg_nop(uint8_t reg);
 /// Indices of the instructions that some jump or local call in the program lands on.
 /// Throws UnmarshalError if a jump leaves the program.
 std::set<size_t> collect_jump_targets(const std::vector<EbpfInst>& instructions);
+/// Indices in the section of the instructions that the imm of some local call in it designates. Only a call without a
+/// relocation entry can land inside another function, and it lands on this index. Calls with an entry are included
+/// all the same: an index too many only prevents a fold, whereas one too few makes the fold unsound.
+std::set<size_t> collect_local_call_targets(const std::vector<EbpfInst>& section_instructions);
 bool rewrite_extern_constant_load(std::vector<EbpfInst>& instructions, size_t location, uint64_t value,
                                   const std::set<size_t>& jump_targets);
 bool rewrite_extern_address_load_to_zero(std::vector<EbpfInst>& instructions, size_t location);
@@ -203,14 +218,23 @@ class ProgramReader {
     std::vector<UnresolvedRelocation> unresolved_relocations;
     /// Indices in raw_programs of the programs holding an entry of unresolved_relocations.
     std::set<size_t> programs_with_unresolved_relocations;
+    /// Programs whose control flow leaves their own code other than by exit or a call, by index in raw_programs,
+    /// with the description of the first such place.
+    std::map<size_t, std::string> programs_with_escaping_control_flow;
     /// Only negative IDs are platform-internal builtins needing the gate;
     /// positive IDs are standard BPF helpers handled via normal prototype lookup.
     std::set<size_t> builtin_offsets_for_current_program;
+    /// The lddw instructions of the current program that load the address of an extern the loader cannot resolve.
+    std::set<size_t> extern_address_offsets_for_current_program;
+    /// The lddw instructions of the current program that load the address of a function.
+    std::set<size_t> func_address_offsets_for_current_program;
     std::set<size_t> jump_targets_for_current_program;
 
     // CO-RE relocation (elf_core_reloc.cpp)
+    /// `section_code` is the code of the program's section as the file holds it, before any relocation.
     static void apply_core_relocation(RawProgram& prog, const struct bpf_core_relo& relo,
-                                      std::string_view access_string, const libbtf::btf_type_data& btf_data);
+                                      std::string_view access_string, const struct CoreBtf& btf,
+                                      std::span<const EbpfInst> section_code);
     void process_core_relocations(const libbtf::btf_type_data& btf_data);
 
     int32_t compute_lddw_reloc_offset_imm(std::optional<ELFIO::Elf_Sxword> explicit_addend, ELFIO::Elf_Word index,
@@ -221,11 +245,21 @@ class ProgramReader {
     std::span<const FunctionRelocation> function_relocations_of(size_t prog_index) const;
     void resolve_function_relocation_targets();
     void build_ksym_function_resolution_cache();
+    /// Whether `symbol_name` is a weak kernel function that the platform reports absent, whose address is then 0.
+    [[nodiscard]]
+    bool is_absent_weak_kfunc(const std::string& symbol_name, unsigned char symbol_bind) const;
     void build_relocation_section_cache();
     void enqueue_synthetic_local_calls(const std::vector<EbpfInst>& instructions, ELFIO::Elf_Half section_index,
                                        ELFIO::Elf_Xword program_offset);
 
     void record_function_relocation(FunctionRelocation reloc);
+    /// The name of the function whose code holds `offset` of `section`: its FUNC symbol, or the section name for code
+    /// before the first FUNC symbol of the section.
+    [[nodiscard]]
+    std::string name_of_function_containing(const ELFIO::section& section, ELFIO::Elf_Xword offset) const;
+    [[nodiscard]]
+    std::string describe_control_flow_escape(const ELFIO::section& section, ELFIO::Elf_Xword program_offset,
+                                             const std::string& program_name, const ControlFlowEscape& escape) const;
     [[nodiscard]]
     std::string unresolved_relocation_message(const UnresolvedRelocation& unresolved) const;
     void read_programs(bool all_sections);

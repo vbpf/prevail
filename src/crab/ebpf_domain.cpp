@@ -417,6 +417,20 @@ Interval EbpfDomain::get_map_max_entries(const Reg& map_fd_reg, const AnalysisCo
     return result;
 }
 
+Interval EbpfDomain::get_map_program_access(const Reg& map_fd_reg, const AnalysisContext& context) const {
+    int start_fd, end_fd;
+    if (!get_map_fd_range(map_fd_reg, &start_fd, &end_fd)) {
+        return Interval::top();
+    }
+
+    Interval result = Interval::bottom();
+    for (int map_fd = start_fd; map_fd <= end_fd; map_fd++) {
+        const auto& map = context.map_descriptor(map_fd);
+        result = result | Interval(static_cast<int>(map.program_access));
+    }
+    return result;
+}
+
 ExtendedNumber EbpfDomain::get_loop_count_upper_bound(const std::span<const Variable> loop_counters) const {
     ExtendedNumber ub{0};
     if (is_bottom()) {
@@ -456,8 +470,8 @@ void EbpfDomain::initialize_packet(const AnalysisContext& context) {
     inv.havoc(variable_registry.meta_offset());
     inv.havoc(variable_registry.data_meta_offset());
 
+    // No upper bound: max_packet_size does not bound the packet (see do_load_ctx).
     inv.add_value_constraint(0 <= variable_registry.packet_size());
-    inv.add_value_constraint(variable_registry.packet_size() <= context.runtime().max_packet_size);
     if (context.program_info().type.ctx_descriptor->meta >= 0) {
         inv.add_value_constraint(variable_registry.meta_offset() <= 0);
         inv.add_value_constraint(variable_registry.meta_offset() >= -4098);
@@ -525,7 +539,15 @@ EbpfDomain EbpfDomain::setup_entry(const bool init_r1, const AnalysisContext& co
     if (init_r1) {
         const auto r1 = variable_registry.reg_pack(R1_ARG);
         constexpr Reg r1_reg{R1_ARG};
-        inv.state.values.add_constraint(1 <= r1.uvalue);
+        // The context pointer may be null. Linux starts syscall and raw tracepoint programs
+        // with r1 == 0 when BPF_PROG_RUN is given no context, so the entry state must admit 0:
+        // with a positive lower bound, the r1 == 0 edge of a null test of the context would be
+        // bottom and nothing behind it would be checked.
+        // Context accesses are checked through ctx_offset, not uvalue, so they stay accepted on
+        // that edge. That relies on a runtime contract, not on this state: a runtime starts a
+        // program without a context only if the program accesses none of it (Linux refuses the
+        // run unless ctx_size_in >= max_ctx_offset). See the T_CTX case of ValidAccess.
+        inv.state.values.add_constraint(0 <= r1.uvalue);
         inv.state.values.add_constraint(r1.uvalue <= ptr_max(context.runtime().max_packet_size));
         inv.state.values.assign(r1.ctx_offset, 0);
         inv.state.assign_type(r1_reg, T_CTX);

@@ -176,6 +176,8 @@ messages:
   - "1 (counter): Loop counter is too large (pc[1] < 100000)"
 
 ---
+# The loop runs once per packet byte. max_packet_size does not bound the packet
+# (see ctx.yaml), so the program bounds the length it takes from data_end - data.
 test-case: realistic forward loop
 options: ["termination"]
 
@@ -192,6 +194,7 @@ code:
     r1 = *(u32 *)(r1 + 0)
     assume r2 != r1
     r2 -= r1
+    assume r2 <= 65535
     r3 = 0
     r0 = 0
   #    r2 <<= 32; this fails with "11: Upper bound must be at most packet_size (valid_access(r4.offset, width=1) for read)"
@@ -211,13 +214,13 @@ code:
 post:
   - r2.uvalue=packet_size
   - r2.svalue=packet_size
-  - r3.uvalue=pc[7]
-  - r3.svalue=pc[7]
-  - r4.svalue=pc[7]
-  - r4.uvalue=pc[7]
+  - r3.uvalue=pc[8]
+  - r3.svalue=pc[8]
+  - r4.svalue=pc[8]
+  - r4.uvalue=pc[8]
   - meta_offset=[-4098, 0]
   - packet_size=1
-  - pc[7]=[1, 255]
+  - pc[8]=[1, 255]
   - r0.type=number
   - r1.packet_offset=0
   - r1.packet_offset-packet_size<=-1  # unclear if this should be here
@@ -818,6 +821,63 @@ post: ["_|_"]
 messages:
   - "6:13: Code becomes unreachable (assume r4 > 100)"
   - "18: Invalid type (r3.type in {ctx, stack, packet, shared, socket, alloc_mem})"
+---
+test-case: a pointer's null check is not decided by a leftover svalue
+
+# r7 enters the loop as a non-null pointer whose uvalue wrapped (r7 += r9; r7 += -8). svalue describes numbers
+# only, and subsumption ignores it for a pointer, so the null check must go by uvalue alone. When pointer
+# arithmetic left an svalue bounded away from 0 and the null check read it, the first pass treated r6 = 1 as
+# dead, and the loop head was accepted as stable although the back edge brings r7 = r8, which may be null:
+# <unchecked> was never checked (ANT-2026-0VVUN9A5).
+# At run time: pass 1 skips r6 = 1, pass 2 sees r7 = NULL and sets r6 = 1, pass 3 reaches <unchecked>.
+
+pre: ["r7.type=shared", "r7.shared_offset=0", "r7.shared_region_size=8", "r7.uvalue=[1, 2147418112]",
+      "r8.type=shared", "r8.shared_offset=0", "r8.shared_region_size=8", "r8.uvalue=[0, 2147418112]",
+      "r4.type=number", "r9.type=number", "r9.svalue=[0, 8]", "r9.uvalue=[0, 8]"]
+
+code:
+  <start>: |
+    r6 = 0
+    r7 += r9
+    r7 += -8
+    if r9 < 8 goto <out>
+  <head>: |
+    if r6 != 0 goto <unchecked>
+    if r7 != 0 goto <skip>
+    r6 = 1
+  <skip>: |
+    r7 = r8
+    if r4 != 0 goto <head>
+  <out>: |
+    r0 = 0
+    exit
+  <unchecked>: |
+    r3 = 1
+    r0 = *(u64 *)(r3 + 0)
+    exit
+
+post:
+  - r0.svalue=0
+  - r0.type=number
+  - r0.uvalue=0
+  - r4.type=number
+  - r6.svalue-r7.shared_offset<=8
+  - r6.svalue=[0, 1]
+  - r6.type=number
+  - r6.uvalue=r6.svalue
+  - r7.shared_offset=[-8, 0]
+  - r7.shared_region_size=8
+  - r7.type=shared
+  - r8.shared_offset=0
+  - r8.shared_region_size=8
+  - r8.type=shared
+  - r8.uvalue=[0, 2147418112]
+  - r9.svalue=r6.svalue
+  - r9.type=number
+  - r9.uvalue=r6.svalue
+
+messages:
+  - "12: Invalid type (r3.type in {ctx, stack, packet, shared, socket, alloc_mem})"
 ---
 test-case: counted loop with an unrelated constant live (zero)
 options: ["termination"]

@@ -160,7 +160,9 @@ Graph graph_widen(const ReadableGraph auto& l, const ReadableGraph auto& r, std:
 
 inline void apply_delta(Graph& g, const EdgeVector& delta) {
     for (const auto& [s, d, w] : delta) {
-        g.set_edge(s, w, d);
+        if (const auto derived = derived_weight(w)) {
+            g.set_edge(s, *derived, d);
+        }
     }
 }
 
@@ -173,17 +175,17 @@ inline void close_over_edge(Graph& g, const VertId ii, const VertId jj) {
     std::vector<std::pair<VertId, Weight>> src_dec;
     for (const auto& edge : g_excl.e_preds(ii)) {
         VertId se = edge.vert;
-        Weight wt_sij = edge.val + c;
+        const auto wt_sij = derived_weight(edge.val + c);
 
         assert(!std::ranges::empty(g_excl.succs(se)));
-        if (se != jj) {
+        if (se != jj && wt_sij) {
             if (Weight* pw = g_excl.lookup(se, jj)) {
-                if (*pw <= wt_sij) {
+                if (*pw <= *wt_sij) {
                     continue;
                 }
-                *pw = wt_sij;
+                *pw = *wt_sij;
             } else {
-                g_excl.add_edge(se, wt_sij, jj);
+                g_excl.add_edge(se, *wt_sij, jj);
             }
             src_dec.emplace_back(se, edge.val);
         }
@@ -192,15 +194,15 @@ inline void close_over_edge(Graph& g, const VertId ii, const VertId jj) {
     std::vector<std::pair<VertId, Weight>> dest_dec;
     for (const auto& edge : g_excl.e_succs(jj)) {
         VertId de = edge.vert;
-        Weight wt_ijd = edge.val + c;
-        if (de != ii) {
+        const auto wt_ijd = derived_weight(edge.val + c);
+        if (de != ii && wt_ijd) {
             if (Weight* pw = g_excl.lookup(ii, de)) {
-                if (*pw <= wt_ijd) {
+                if (*pw <= *wt_ijd) {
                     continue;
                 }
-                *pw = wt_ijd;
+                *pw = *wt_ijd;
             } else {
-                g_excl.add_edge(ii, wt_ijd, de);
+                g_excl.add_edge(ii, *wt_ijd, de);
             }
             dest_dec.emplace_back(de, edge.val);
         }
@@ -209,7 +211,6 @@ inline void close_over_edge(Graph& g, const VertId ii, const VertId jj) {
     for (const auto& [se, p1] : src_dec) {
         Weight wt_sij = c + p1;
         for (const auto& [de, p2] : dest_dec) {
-            Weight wt_sijd = wt_sij + p2;
             if (se == de) {
                 // se -> ii -> jj -> se is a cycle, not a difference constraint.
                 // Storing it would leave a self-loop `x - x <= k` that closure
@@ -220,16 +221,20 @@ inline void close_over_edge(Graph& g, const VertId ii, const VertId jj) {
                 // after adding that edge and reports infeasibility if the
                 // repair fails; a valid potential rules out a negative cycle,
                 // so the weight cannot be negative here.
-                assert(wt_sijd >= 0);
+                assert(wt_sij + p2 >= 0);
+                continue;
+            }
+            const auto wt_sijd = derived_weight(wt_sij + p2);
+            if (!wt_sijd) {
                 continue;
             }
             if (Weight* pw = g.lookup(se, de)) {
-                if (*pw <= wt_sijd) {
+                if (*pw <= *wt_sijd) {
                     continue;
                 }
-                *pw = wt_sijd;
+                *pw = *wt_sijd;
             } else {
-                g.add_edge(se, wt_sijd, de);
+                g.add_edge(se, *wt_sijd, de);
             }
         }
     }

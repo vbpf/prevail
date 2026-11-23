@@ -43,16 +43,6 @@ std::optional<uint64_t> resolve_known_linux_extern_symbol(const std::string_view
     return std::nullopt;
 }
 
-EbpfInst make_mov_reg_nop(const uint8_t reg) {
-    return EbpfInst{
-        .opcode = static_cast<uint8_t>(INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_REG),
-        .dst = reg,
-        .src = reg,
-        .offset = 0,
-        .imm = 0,
-    };
-}
-
 std::set<size_t> collect_jump_targets(const std::vector<EbpfInst>& instructions) {
     std::set<size_t> targets;
     for (size_t pc = 0; pc < instructions.size(); ++pc) {
@@ -73,6 +63,21 @@ std::set<size_t> collect_jump_targets(const std::vector<EbpfInst>& instructions)
             // Local calls leaving the program are resolved later; a jump leaving it would land
             // in a subprogram appended after this one, past any rewrite done for that program.
             throw UnmarshalError("Jump target out of program bounds");
+        }
+    }
+    return targets;
+}
+
+std::set<size_t> collect_local_call_targets(const std::vector<EbpfInst>& section_instructions) {
+    const auto size = gsl::narrow<int64_t>(section_instructions.size());
+    std::set<size_t> targets;
+    for (int64_t pc = 0; pc < size; ++pc) {
+        const EbpfInst& inst = section_instructions[gsl::narrow<size_t>(pc)];
+        if (inst.opcode != INST_OP_CALL || inst.src != INST_CALL_LOCAL) {
+            continue;
+        }
+        if (const int64_t target = pc + 1 + inst.imm; target >= 0 && target < size) {
+            targets.insert(gsl::narrow<size_t>(target));
         }
     }
     return targets;
@@ -127,7 +132,7 @@ bool rewrite_extern_constant_load(std::vector<EbpfInst>& instructions, const siz
     const auto truncated = static_cast<int32_t>(narrowed_value);
 
     // Use mov-imm to materialize the resolved constant in the destination register of
-    // the load, and replace the preceding LDDW pair.
+    // the load.
     const uint8_t mov_opcode = width == 8 || mode == INST_MODE_MEMSX
                                    ? static_cast<uint8_t>(INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM)
                                    : static_cast<uint8_t>(INST_CLS_ALU | INST_ALU_OP_MOV | INST_SRC_IMM);
@@ -136,21 +141,12 @@ bool rewrite_extern_constant_load(std::vector<EbpfInst>& instructions, const siz
     load_inst.offset = 0;
     load_inst.imm = truncated;
 
-    // The LDDW overwrites its destination register, so its replacement must too: a plain
-    // no-op would leave the register holding its previous value (possibly a valid pointer),
-    // and later accesses through it would be checked against that instead of the extern's
-    // address. As for every other extern address, the register becomes 0. A mov-imm rather
-    // than a zeroed LDDW, so that no further relocation can retarget it now that the load
-    // is gone.
-    const uint8_t address_reg = lo_inst.get().dst;
-    lo_inst.get() = EbpfInst{
-        .opcode = static_cast<uint8_t>(INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM),
-        .dst = address_reg,
-        .src = 0,
-        .offset = 0,
-        .imm = 0,
-    };
-    hi_inst.get() = make_mov_reg_nop(address_reg);
+    // The LDDW stays: it overwrites its destination register with the address of the extern,
+    // and later accesses through that register must be checked against that address, not
+    // against the register's previous value. Its immediate is a placeholder, as for every other
+    // extern address (see ProgramReader::try_reloc).
+    lo_inst.get().imm = 0;
+    hi_inst.get().imm = 0;
     return true;
 }
 

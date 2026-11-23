@@ -93,6 +93,8 @@ class EbpfTransformer final {
 
     void recompute_stack_numeric_size(TypeToNumDomain& state, Variable type_variable);
 
+    void advance_stack_numeric_size(TypeToNumDomain& state, const Reg& reg, const LinearExpression& advance);
+
     void do_load_stack(TypeToNumDomain& state, const Reg& target_reg, const LinearExpression& addr, int width,
                        const Reg& src_reg, int offset);
 
@@ -256,8 +258,12 @@ static bool offsets_decide_pointer_comparison(const TypeEncoding type, const Con
 }
 
 /// Narrow a pointer compared with zero: the comparison tests whether it is null.
+/// Nullness is decided by uvalue alone. svalue is a kind variable of T_NUM (type_to_kinds): for a pointer it is
+/// meaningless, and join, meet and subsumption treat it so. Whatever it still holds, from when the register was
+/// a number or from a stack slot, is forgotten first, so that it cannot decide the branch.
 static void assume_pointer_null_check(TypeToNumDomain& state, const Condition& cond, const RegPack& dst) {
     if (admits_pointer_operands(cond)) {
+        state.values.havoc(dst.svalue);
         for (const LinearConstraint& cst :
              state.values->assume_cst_imm(cond.op, cond.is64, dst.svalue, dst.uvalue, 0)) {
             state.values.add_constraint(cst);
@@ -323,22 +329,33 @@ void EbpfTransformer::operator()(const CallBtf&) {
     assert(false && "CallBtf should be rejected before abstract transformation");
 }
 
-static uint64_t merge_imm32_to_u64(const int32_t lo, const int32_t hi) {
-    return static_cast<uint64_t>(static_cast<uint32_t>(lo)) | (static_cast<uint64_t>(static_cast<uint32_t>(hi)) << 32);
-}
-
 void EbpfTransformer::operator()(const LoadPseudo& pseudo) {
     switch (pseudo.addr.kind) {
     case PseudoAddress::Kind::CODE_ADDR: {
+        // The register holds the address of a function, which is never null and which the program
+        // must not learn: like any pointer, its uvalue says only that. Which function it is, by the
+        // label of its first instruction, is kept apart in func_offset. Holding the label in uvalue
+        // made a pointer to the function at label 0 look null, and its null check prune live code.
         const auto dst = reg_pack(pseudo.dst);
-        const uint64_t imm64 = merge_imm32_to_u64(pseudo.addr.imm, pseudo.addr.next_imm);
         dom.state.forget_type_dependent_values(pseudo.dst);
-        dom.state.values.assign(dst.uvalue, imm64);
-        dom.state.values->overflow_bounds(dst.uvalue, 64, false);
         dom.state.assign_type(pseudo.dst, T_FUNC);
-        dom.state.havoc_offsets(pseudo.dst);
+        assign_valid_ptr(pseudo.dst, false);
+        dom.state.values.assign(dst.func_offset, pseudo.addr.imm);
         return;
     }
+    case PseudoAddress::Kind::FUNC_ADDR:
+        // The address of a function that the loader did not resolve to a label: a function pointer, so not
+        // null and not a number, whose func_offset is unknown. It can be tested, copied and spilled, but
+        // it is not a valid callback target.
+        dom.state.forget_type_dependent_values(pseudo.dst);
+        dom.state.assign_type(pseudo.dst, T_FUNC);
+        assign_valid_ptr(pseudo.dst, false);
+        return;
+    case PseudoAddress::Kind::EXTERN_ADDR:
+        // The address of an extern symbol that the loader resolves: any number.
+        dom.state.havoc_register(pseudo.dst);
+        dom.state.assign_type(pseudo.dst, T_NUM);
+        return;
     case PseudoAddress::Kind::VARIABLE_ADDR:
     case PseudoAddress::Kind::MAP_BY_IDX:
     case PseudoAddress::Kind::MAP_VALUE_BY_IDX:
@@ -606,10 +623,18 @@ static void do_load_ctx(TypeToNumDomain& state, const AnalysisContext& context, 
     } else if (addr == desc->end) {
         if (width == offset_width) {
             state.values.assign(target.packet_offset, variable_registry.packet_size());
-            // EXPERIMENTAL: Explicit upper bound since packet_size is min_only.
-            // This preserves the relational constraint (packet_offset <= packet_size)
-            // while ensuring comparison checks have a concrete upper bound.
-            state.values.add_constraint(target.packet_offset <= context.runtime().max_packet_size);
+            // The packet is not bounded by max_packet_size. Helpers that reallocate it set its length
+            // from their arguments (bpf_msg_pull_data, bpf_msg_push_data, bpf_skb_pull_data), and XDP
+            // and tc see 65549-byte frames from ordinary loopback traffic. Bounding packet_offset by
+            // max_packet_size here would make the code behind `data_end - data > max_packet_size`
+            // unreachable, and so never checked. max_packet_size only limits comparison operands that
+            // are not known to lie inside the packet (see EbpfChecker's ValidAccess).
+            //
+            // The one bound kept is the 32-bit cap the model puts on every pointer (see ptr_max): the
+            // linear part of a packet is one kernel allocation, and the largest one Linux can make
+            // (KMALLOC_MAX_SIZE: 4 MiB with 4 KiB pages) is far below 2 GiB. It keeps
+            // `data_end - data` a number that fits a signed 32-bit register, so `(u32)len` is exact.
+            state.values.add_constraint(target.packet_offset <= std::numeric_limits<int32_t>::max());
         }
     } else if (addr == desc->meta) {
         if (width == offset_width) {
@@ -1069,27 +1094,33 @@ void EbpfTransformer::operator()(const Call& call) {
     const auto r0_pack = reg_pack(r0_reg);
     dom.state.values.havoc(r0_pack.stack_numeric_size);
     // Set r0 as a nullable T_SHARED pointer at offset 0.
-    // If region_size is known, constrain it; otherwise havoc to prevent stale values.
-    auto assign_shared_map_value = [&](const std::optional<Interval>& region_size) {
+    auto assign_nullable_shared_pointer = [&] {
         dom.state.forget_type_dependent_values(r0_reg);
         dom.state.assign_type(r0_reg, T_SHARED);
         assign_valid_ptr(r0_reg, true);
         dom.state.values.assign(r0_pack.shared_offset, 0);
-        if (region_size) {
-            dom.state.values.set(r0_pack.shared_region_size, *region_size);
-        } else {
-            dom.state.values.havoc(r0_pack.shared_region_size);
-        }
+    };
+    // r0 points into a region of unknown size and access; havoc both to prevent stale values.
+    auto assign_unknown_shared_value = [&] {
+        assign_nullable_shared_pointer();
+        dom.state.values.havoc(r0_pack.shared_region_size);
+        dom.state.values.havoc(r0_pack.shared_access);
+    };
+    // r0 points into a value of one of the maps that fd_reg may refer to.
+    auto assign_map_value = [&](const Reg& fd_reg) {
+        assign_nullable_shared_pointer();
+        dom.state.values.set(r0_pack.shared_region_size, dom.get_map_value_size(fd_reg, context));
+        dom.state.values.set(r0_pack.shared_access, dom.get_map_program_access(fd_reg, context));
     };
     auto resolve_map_lookup = [&] {
         // Map lookup is the only way to get a null pointer.
         if (!maybe_fd_reg) {
-            assign_shared_map_value(std::nullopt);
+            assign_unknown_shared_value();
             return;
         }
         const auto map_type = dom.get_map_type(*maybe_fd_reg, context);
         if (!map_type) {
-            assign_shared_map_value(std::nullopt);
+            assign_unknown_shared_value();
             return;
         }
         if (context.platform().get_map_type(*map_type).value_type == EbpfMapValueType::MAP) {
@@ -1097,12 +1128,12 @@ void EbpfTransformer::operator()(const Call& call) {
             if (const auto inner_map_fd = dom.get_map_inner_map_fd(*maybe_fd_reg, context)) {
                 do_load_mapfd(r0_reg, *inner_map_fd, true);
             } else {
-                assign_shared_map_value(std::nullopt);
+                assign_unknown_shared_value();
             }
             return;
         }
         // Regular map: r0 is a shared pointer with known value size.
-        assign_shared_map_value(dom.get_map_value_size(*maybe_fd_reg, context));
+        assign_map_value(*maybe_fd_reg);
     };
     if (resolved.contract.is_map_lookup) {
         resolve_map_lookup();
@@ -1212,6 +1243,7 @@ void EbpfTransformer::do_load_map_address(const Reg& dst_reg, const int mapfd, c
     const RegPack& dst = reg_pack(dst_reg);
     dom.state.values.assign(dst.shared_offset, offset);
     dom.state.values.assign(dst.shared_region_size, desc.value_size);
+    dom.state.values.assign(dst.shared_access, static_cast<int>(desc.program_access));
     assign_valid_ptr(dst_reg, false);
 }
 
@@ -1253,6 +1285,33 @@ void EbpfTransformer::recompute_stack_numeric_size(TypeToNumDomain& state, const
     recompute_stack_numeric_size(state, reg_type(reg));
 }
 
+// Move a stack pointer's stack_numeric_size along with the pointer, which has advanced by `advance` bytes.
+// Precondition: `advance` >= 0 in every state of `state`; the callers havoc the size when the pointer may move down.
+//
+// Invariant: every constraint on a register's (or a spilled cell's) stack_numeric_size held by the numeric domain is
+// true of N, the length of the run of numeric bytes that starts at its stack_offset. The domain keeps no constant upper
+// bound on these variables (VariableRegistry::is_min_only), since a constant is only ever proved as a lower bound on N,
+// but it does keep relations between them, such as the equality a register copy creates. Join, meet and widening are
+// sound for such true facts, so the transfer functions must not record a relation that can be false.
+//
+// Let N be the run at the old offset and N' the run at the new one. If the `advance` skipped bytes are all numeric
+// (advance <= N), then N' = N - advance exactly, and recording that equality is sound. Otherwise N' is unrelated to N:
+// a skipped byte may be a pointer and any number of numeric bytes may follow. Recording N' = N - advance then would
+// bound N from below by N' + advance, so a later proof of numeric bytes at the new pointer (in a meet) would raise the
+// size of the old one, e.g., of a copy that still points at a spilled pointer (ANT-2026-5BZGMKXJ). In that case forget
+// the size and recompute what the stack contents prove.
+void EbpfTransformer::advance_stack_numeric_size(TypeToNumDomain& state, const Reg& reg,
+                                                 const LinearExpression& advance) {
+    using namespace dsl_syntax;
+    const Variable size = reg_pack(reg).stack_numeric_size;
+    if (state.values.entail(advance <= size)) {
+        state.values.assign(size, size - advance);
+    } else {
+        state.values.havoc(size);
+        recompute_stack_numeric_size(state, reg);
+    }
+}
+
 void EbpfTransformer::add(const Reg& dst_reg, const int64_t imm, const int finite_width) {
     const auto dst = reg_pack(dst_reg);
     if (dom.state.is_in_group(dst_reg, TS_NUM)) {
@@ -1278,10 +1337,11 @@ void EbpfTransformer::add(const Reg& dst_reg, const int64_t imm, const int finit
             }
         }
         dom.state.values->apply_unsigned(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.uvalue, imm, finite_width);
+        dom.state.values.havoc(dst.svalue); // A pointer has no svalue.
     }
     if (dom.state.may_have_type(dst_reg, T_STACK)) {
         if (imm > 0) {
-            dom.state.values->sub(dst.stack_numeric_size, imm);
+            advance_stack_numeric_size(dom.state, dst_reg, LinearExpression{imm});
         } else if (imm < 0) {
             dom.state.values.havoc(dst.stack_numeric_size);
         }
@@ -1469,8 +1529,10 @@ void EbpfTransformer::operator()(const Bin& bin) {
                                     }
                                     state.values->apply_unsigned(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.uvalue,
                                                                  src.uvalue, finite_width);
+                                    state.values.havoc(dst.svalue); // A pointer has no svalue.
                                     if (src_type == T_SHARED) {
                                         state.values.assign(dst.shared_region_size, src.shared_region_size);
+                                        state.values.assign(dst.shared_access, src.shared_access);
                                     }
                                 } else if (dst_type != T_NUM && src_type == T_NUM) {
                                     // ptr += num
@@ -1485,14 +1547,13 @@ void EbpfTransformer::operator()(const Bin& bin) {
                                                 state.values.havoc(dst.stack_numeric_size);
                                                 recompute_stack_numeric_size(state, bin.dst);
                                             } else {
-                                                state.values->apply_signed(ArithBinOp::SUB, dst.stack_numeric_size,
-                                                                           dst.stack_numeric_size,
-                                                                           dst.stack_numeric_size, src.svalue, 0);
+                                                advance_stack_numeric_size(state, bin.dst, src.svalue);
                                             }
                                         }
                                     }
                                     state.values->apply_unsigned(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.uvalue,
                                                                  src.uvalue, finite_width);
+                                    state.values.havoc(dst.svalue); // A pointer has no svalue.
                                 } else if (dst_type == T_NUM && src_type == T_NUM) {
                                     state.values->apply_signed(ArithBinOp::ADD, dst.svalue, dst.uvalue, dst.svalue,
                                                                src.svalue, finite_width);
@@ -1555,6 +1616,7 @@ void EbpfTransformer::operator()(const Bin& bin) {
                         }
                         dom.state.values->apply_unsigned(ArithBinOp::SUB, dst.svalue, dst.uvalue, dst.uvalue,
                                                          src.uvalue, finite_width);
+                        dom.state.values.havoc(dst.svalue); // A pointer has no svalue.
                     }
                     if (dom.state.may_have_type(bin.dst, T_STACK)) {
                         using namespace dsl_syntax;
@@ -1562,8 +1624,8 @@ void EbpfTransformer::operator()(const Bin& bin) {
                             dom.state.values.havoc(dst.stack_numeric_size);
                             recompute_stack_numeric_size(dom.state, bin.dst);
                         } else {
-                            dom.state.values->apply(ArithBinOp::ADD, dst.stack_numeric_size, dst.stack_numeric_size,
-                                                    src.svalue);
+                            using namespace dsl_syntax;
+                            advance_stack_numeric_size(dom.state, bin.dst, -LinearExpression{src.svalue});
                         }
                     }
                 } else {
@@ -1655,7 +1717,11 @@ void EbpfTransformer::operator()(const Bin& bin) {
             // Only when the result is 64 bits wide: a 32-bit MOVSX must still zero-extend its
             // 32-bit result into the upper half, and returning here would skip the truncation
             // applied at the end of this function.
-            if (bin.is64 && dst.svalue == src.svalue &&
+            // Only for a proven number: svalue is the kind variable of T_NUM, so for a register
+            // that may also be a pointer it bounds the numeric alternative alone and says nothing
+            // about the pointer, which sign extension does not preserve. The MOVSX that models a
+            // sign-extending load (see Mem) arrives here with no number TypeConstraint on it.
+            if (bin.is64 && dst.svalue == src.svalue && dom.state.is_in_group(src_reg, TS_NUM) &&
                 dom.state.values.eval_interval(dst.svalue) <= Interval::signed_int(source_width)) {
                 return;
             }

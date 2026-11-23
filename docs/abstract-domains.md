@@ -90,7 +90,7 @@ Each register has multiple associated variables:
 
 This affects the main domain operations:
 
-* **Subsumption (A ⊆ B)** is type-aware: kind variables that are inactive in A are treated as "don't care" during numeric comparison, so states like `{r is NUM}` can be subsumed by `{r is NUM or PACKET, r.packet_offset = 5}` without failing on `packet_offset`.
+* **Subsumption (A ⊆ B)** is type-aware: kind variables that are inactive in A are treated as "don't care" during numeric comparison, so states like `{r is NUM}` can be subsumed by `{r is NUM or PACKET, r.packet_offset = 5}` without failing on `packet_offset`. This is sound only because no transfer function decides anything by an inactive kind variable. In particular `svalue` belongs to NUM: a pointer has none, its null check goes by `uvalue` alone, and pointer arithmetic leaves no `svalue` behind.
 
 * **Join** is type-aware: constraints on kind variables that exist only on the branch where the guarding type is possible are preserved instead of being dropped by a naive numeric join.
 
@@ -292,6 +292,10 @@ for k in variables:
         for j in variables:
             m[i][j] = min(m[i][j], m[i][k] + m[k][j])
 ```
+
+### Weight Range
+
+Closure and join compute the weight of a derived edge as a sum of stored weights, and a loop-free program can feed each sum into the next one (for example, a join turns the bound `B` of one operand into the relation `x - y <= B`, and closing the next comparison adds that relation to the same bound). The weights would double with every round until the checked 128-bit `Number` overflows. `derived_weight()` therefore keeps derived weights within `[-2^65, 2^65)`, the range of differences between 64-bit values: a wider edge is not stored, and a lower weight is stored as `-2^65`. Both only weaken the constraints, so this is sound for every variable.
 
 ## ArrayDomain
 

@@ -1566,98 +1566,65 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         }
     }
 
-    SECTION("helper ptr_to_func argument type is accepted for bpf_loop") {
+    SECTION("a helper that takes a callback is rejected") {
+        // The body of a callback is not analyzed, so no call that passes one is accepted, even with a pointer
+        // to a function of the program that ends in an exit: here the function at slots 7-8.
         constexpr uint8_t mov64_imm = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
-        RawProgram raw_prog{
-            "",
-            "",
-            0,
-            "",
-            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 1}, EbpfInst{},
-             EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 1}, EbpfInst{.opcode = mov64_imm, .dst = 3, .imm = 0},
-             EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0}, EbpfInst{.opcode = INST_OP_CALL, .imm = 181}, exit},
-            info};
-        auto prog_or_error = unmarshal(raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
-        const Program prog = Program::from_sequence(std::get<InstructionSeq>(prog_or_error), info, {});
-        const auto* call = std::get_if<Call>(&prog.instruction_at(Label{5}));
-        REQUIRE(call != nullptr);
-        const ResolvedCall resolved = resolve(*call, info);
-        REQUIRE(resolved.is_supported);
-        REQUIRE(std::ranges::any_of(resolved.contract.singles, [](const ArgSingle& arg) {
-            return arg.kind == ArgSingle::Kind::PTR_TO_FUNC && arg.reg == Reg{2};
-        }));
+        // for_each_map_elem, timer_set_callback, find_vma, loop. The fifth helper that takes a callback,
+        // user_ringbuf_drain, is not usable at all.
+        for (const int32_t helper : {164, 170, 180, 181}) {
+            CAPTURE(helper);
+            const ProgramInfo helper_info{.platform = &g_ebpf_platform_linux,
+                                          .type = g_ebpf_platform_linux.get_program_type("kprobe", "")};
+            REQUIRE(g_ebpf_platform_linux.is_helper_usable(helper, helper_info.type));
+            RawProgram raw_prog{
+                "",
+                "",
+                0,
+                "",
+                {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 6}, EbpfInst{},
+                 EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 1}, EbpfInst{.opcode = mov64_imm, .dst = 3, .imm = 0},
+                 EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0}, EbpfInst{.opcode = INST_OP_CALL, .imm = helper},
+                 exit, EbpfInst{.opcode = mov64_imm, .dst = 0, .imm = 0}, exit},
+                helper_info};
+            auto prog_or_error = unmarshal(raw_prog, {});
+            REQUIRE(std::holds_alternative<InstructionSeq>(prog_or_error));
+            const auto& seq = std::get<InstructionSeq>(prog_or_error);
+            const auto* call = std::get_if<Call>(&std::get<1>(seq.at(4)));
+            REQUIRE(call != nullptr);
+            REQUIRE_FALSE(resolve(*call, helper_info).is_supported);
+            REQUIRE_THROWS_WITH(Program::from_sequence(seq, helper_info, {}),
+                                Catch::Matchers::ContainsSubstring(
+                                    "rejected: helper takes a callback, and callback bodies are not analyzed") &&
+                                    Catch::Matchers::ContainsSubstring("(at 5)"));
+        }
     }
 
-    SECTION("ptr_to_func argument enforces function type") {
+    SECTION("lddw code_addr immediate must name an instruction") {
         constexpr uint8_t mov64_imm = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
         RawProgram good_raw_prog{
             "",
             "",
             0,
             "",
-            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 6}, EbpfInst{},
-             EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 1}, EbpfInst{.opcode = mov64_imm, .dst = 3, .imm = 0},
-             EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0}, EbpfInst{.opcode = INST_OP_CALL, .imm = 181}, exit,
-             EbpfInst{.opcode = mov64_imm, .dst = 0, .imm = 0}, exit},
+            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 2}, EbpfInst{},
+             EbpfInst{.opcode = mov64_imm, .dst = 0, .imm = 0}, exit, EbpfInst{.opcode = mov64_imm, .dst = 0, .imm = 0},
+             exit},
             info};
-        auto good_prog_or_error = unmarshal(good_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(good_prog_or_error));
-        const Program good_prog = Program::from_sequence(std::get<InstructionSeq>(good_prog_or_error), info, {});
-        REQUIRE(verify(good_prog, {}));
-
-        RawProgram bad_raw_prog{
-            "",
-            "",
-            0,
-            "",
-            {EbpfInst{.opcode = mov64_imm, .dst = 2, .imm = 7}, EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 1},
-             EbpfInst{.opcode = mov64_imm, .dst = 3, .imm = 0}, EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0},
-             EbpfInst{.opcode = INST_OP_CALL, .imm = 181}, exit},
-            info};
-        auto bad_prog_or_error = unmarshal(bad_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(bad_prog_or_error));
-        const Program bad_prog = Program::from_sequence(std::get<InstructionSeq>(bad_prog_or_error), info, {});
-        REQUIRE_FALSE(verify(bad_prog, {}));
-    }
-
-    SECTION("ptr_to_func callback target must be a valid instruction label") {
-        constexpr uint8_t mov64_imm = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
-        RawProgram good_raw_prog{
-            "",
-            "",
-            0,
-            "",
-            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 6}, EbpfInst{},
-             EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 1}, EbpfInst{.opcode = mov64_imm, .dst = 3, .imm = 0},
-             EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0}, EbpfInst{.opcode = INST_OP_CALL, .imm = 181}, exit,
-             EbpfInst{.opcode = mov64_imm, .dst = 0, .imm = 0}, exit},
-            info};
-        auto good_prog_or_error = unmarshal(good_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(good_prog_or_error));
-        const Program good_prog = Program::from_sequence(std::get<InstructionSeq>(good_prog_or_error), info, {});
-        REQUIRE(verify(good_prog, {}));
+        REQUIRE(std::holds_alternative<InstructionSeq>(unmarshal(good_raw_prog, {})));
 
         // Offsets that name no instruction are rejected while decoding: the second slot of the lddw itself,
         // and the first slot past the end of the program.
-        for (const int32_t bad_imm : {0, 8}) {
+        for (const int32_t bad_imm : {0, 5}) {
             RawProgram bad_raw_prog = good_raw_prog;
             bad_raw_prog.prog[0].imm = bad_imm;
             REQUIRE(std::holds_alternative<std::string>(unmarshal(bad_raw_prog, {})));
         }
-
-        // The top-level exit at slot 6 is an instruction, but not a callback entry.
-        RawProgram bad_raw_prog = good_raw_prog;
-        bad_raw_prog.prog[0].imm = 5;
-        auto bad_prog_or_error = unmarshal(bad_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(bad_prog_or_error));
-        const Program bad_prog = Program::from_sequence(std::get<InstructionSeq>(bad_prog_or_error), info, {});
-        REQUIRE_FALSE(verify(bad_prog, {}));
     }
 
     SECTION("lddw code_addr immediate is relative to the next slot") {
         constexpr uint8_t mov64_imm = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
-        // The lddw is at slot 3 and the callback at slot 8.
+        // The lddw is at slot 3 and the function at slot 8.
         RawProgram raw_prog{
             "",
             "",
@@ -1666,7 +1633,7 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
             {EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 1}, EbpfInst{.opcode = mov64_imm, .dst = 3, .imm = 0},
              EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0},
              EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 4}, EbpfInst{},
-             EbpfInst{.opcode = INST_OP_CALL, .imm = 181}, EbpfInst{.opcode = mov64_imm, .dst = 0, .imm = 0}, exit,
+             EbpfInst{.opcode = mov64_imm, .dst = 5, .imm = 0}, EbpfInst{.opcode = mov64_imm, .dst = 0, .imm = 0}, exit,
              EbpfInst{.opcode = mov64_imm, .dst = 0, .imm = 0}, exit},
             info};
         auto prog_or_error = unmarshal(raw_prog, {});
@@ -1680,24 +1647,6 @@ TEST_CASE("instruction feature handling after unmarshal", "[unmarshal]") {
         // Slot 12 of a 10-slot program.
         raw_prog.prog[3].imm = 8;
         REQUIRE(std::holds_alternative<std::string>(unmarshal(raw_prog, {})));
-    }
-
-    SECTION("ptr_to_func callback target must have reachable exit") {
-        constexpr uint8_t mov64_imm = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
-        RawProgram bad_raw_prog{
-            "",
-            "",
-            0,
-            "",
-            {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = INST_LD_MODE_CODE_ADDR, .imm = 6}, EbpfInst{},
-             EbpfInst{.opcode = mov64_imm, .dst = 1, .imm = 1}, EbpfInst{.opcode = mov64_imm, .dst = 3, .imm = 0},
-             EbpfInst{.opcode = mov64_imm, .dst = 4, .imm = 0}, EbpfInst{.opcode = INST_OP_CALL, .imm = 181}, exit,
-             EbpfInst{.opcode = INST_OP_JA16, .offset = -1}},
-            info};
-        auto bad_prog_or_error = unmarshal(bad_raw_prog, {});
-        REQUIRE(std::holds_alternative<InstructionSeq>(bad_prog_or_error));
-        const Program bad_prog = Program::from_sequence(std::get<InstructionSeq>(bad_prog_or_error), info, {});
-        REQUIRE_FALSE(verify(bad_prog, {}));
     }
 
     SECTION("helper id not usable on platform") {

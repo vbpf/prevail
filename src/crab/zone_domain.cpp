@@ -748,12 +748,22 @@ StringInvariant ZoneDomain::to_set() const {
     // Extract all the edges
     SubGraph g_excl{g, 0};
 
+    // A shared_access is shown only by its interval, and only where it is not read-write (0): it relates only to
+    // other registers' shared_access, and read-write is what an invariant that does not mention it means.
+    const auto is_shared_access = [&](const VertId v) { return variable_registry.is_shared_access(*rev_map_.at(v)); };
+
     std::map<Variable, Variable> equivalence_classes;
     std::set<std::tuple<Variable, Variable, Weight>> diff_csts;
     for (const VertId s : g_excl.verts()) {
+        if (is_shared_access(s)) {
+            continue;
+        }
         const Variable vs = *rev_map_.at(s);
         Variable least = vs;
         for (const VertId d : g_excl.succs(s)) {
+            if (is_shared_access(d)) {
+                continue;
+            }
             const Variable vd = *rev_map_.at(d);
             const Weight w = g_excl.edge_val(s, d);
             if (w == 0) {
@@ -795,7 +805,11 @@ StringInvariant ZoneDomain::to_set() const {
     // Intervals
     for (VertId v : g_excl.verts()) {
         const auto pvar = this->rev_map_[v];
-        if (!pvar || !representatives.contains(*pvar)) {
+        if (!pvar) {
+            continue;
+        }
+        const bool shown_by_interval_only = variable_registry.is_shared_access(*pvar);
+        if (!shown_by_interval_only && !representatives.contains(*pvar)) {
             continue;
         }
         const bool has_lb = g.elem(v, 0);
@@ -806,6 +820,9 @@ StringInvariant ZoneDomain::to_set() const {
         Interval v_out{has_lb ? -Number(g.edge_val(v, 0)) : MINUS_INFINITY,
                        has_ub ? Number(g.edge_val(0, v)) : PLUS_INFINITY};
         assert(!v_out.is_bottom());
+        if (shown_by_interval_only && v_out == Interval{0}) {
+            continue;
+        }
 
         Variable variable = *pvar;
 

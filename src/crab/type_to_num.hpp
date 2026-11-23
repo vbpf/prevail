@@ -19,13 +19,13 @@ inline const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
     {T_MAP, {DataKind::map_fds}},
     {T_MAP_PROGRAMS, {DataKind::map_fd_programs}},
     {T_PACKET, {DataKind::packet_offsets}},
-    {T_SHARED, {DataKind::shared_offsets, DataKind::shared_region_sizes}},
+    {T_SHARED, {DataKind::shared_offsets, DataKind::shared_region_sizes, DataKind::shared_accesses}},
     {T_STACK, {DataKind::stack_offsets, DataKind::stack_numeric_sizes}},
     {T_NUM, {DataKind::svalues}},
     {T_SOCKET, {DataKind::socket_offsets}},
     {T_BTF_ID, {DataKind::btf_id_offsets}},
     {T_ALLOC_MEM, {DataKind::alloc_mem_offsets, DataKind::alloc_mem_sizes}},
-    {T_FUNC, {}},
+    {T_FUNC, {DataKind::func_offsets}},
 };
 
 /** TypeToNumDomain is a Reduced Product of TypeDomain x NumAbsDomain.

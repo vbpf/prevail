@@ -105,7 +105,7 @@ int main(int argc, char** argv) {
         ->check(CLI::Range(1, RuntimeConfig::MAX_INLINED_CALLS_LIMIT));
 
     app.add_option("--max-packet-size", ebpf_verifier_options.runtime.max_packet_size,
-                   "Maximum packet size in bytes (default: 65535)")
+                   "Maximum packet offset in a pointer comparison (default: 65535)")
         ->group("Features")
         ->check(CLI::Range(1, RuntimeConfig::MAX_PACKET_SIZE_LIMIT));
 

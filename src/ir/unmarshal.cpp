@@ -470,6 +470,16 @@ struct Unmarshaller {
 
         switch (inst.src) {
         case INST_LD_MODE_IMM:
+            if (info.extern_address_offsets.contains(pc)) {
+                return LoadPseudo{.dst = Reg{inst.dst},
+                                  .addr = PseudoAddress{
+                                      .kind = PseudoAddress::Kind::EXTERN_ADDR, .imm = inst.imm, .next_imm = next_imm}};
+            }
+            if (info.func_address_offsets.contains(pc)) {
+                return LoadPseudo{.dst = Reg{inst.dst},
+                                  .addr = PseudoAddress{
+                                      .kind = PseudoAddress::Kind::FUNC_ADDR, .imm = inst.imm, .next_imm = next_imm}};
+            }
             return Bin{
                 .op = Bin::Op::MOV,
                 .dst = Reg{inst.dst},

@@ -50,6 +50,8 @@ class AssertExtractor {
     vector<Assertion> operator()(const LoadPseudo& pseudo) const {
         switch (pseudo.addr.kind) {
         case PseudoAddress::Kind::CODE_ADDR:
+        case PseudoAddress::Kind::EXTERN_ADDR:
+        case PseudoAddress::Kind::FUNC_ADDR:
             // Type/offset semantics are handled during abstract transformation.
             return {};
         case PseudoAddress::Kind::VARIABLE_ADDR: [[fallthrough]];
@@ -141,6 +143,9 @@ class AssertExtractor {
                 // TODO: check 0 when null
                 break;
             case ArgSingle::Kind::PTR_TO_FUNC:
+                // Not reached at present: a function that takes a callback is rejected when its call is
+                // resolved (process_arg), because callback bodies are not analyzed. These checks on the
+                // argument are necessary for such a call but would not be sufficient.
                 res.emplace_back(TypeConstraint{arg.reg, TypeGroup::func});
                 res.emplace_back(ValidCallbackTarget{arg.reg});
                 break;
@@ -188,8 +193,11 @@ class AssertExtractor {
                 break;
             }
         }
-        if (map_fd_reg && resolved.contract.allowed_map_types != 0) {
-            res.emplace_back(ValidMapType{*map_fd_reg, resolved.contract.allowed_map_types, resolved.name});
+        if (map_fd_reg && (resolved.contract.allowed_map_types != 0 || resolved.contract.modifies_map)) {
+            res.emplace_back(ValidMapType{.map_fd_reg = *map_fd_reg,
+                                          .allowed_map_types = resolved.contract.allowed_map_types,
+                                          .helper_name = resolved.name,
+                                          .modifies_map = resolved.contract.modifies_map});
         }
         for (ArgPair arg : resolved.contract.pairs) {
             const auto group = arg.or_null ? mem_or_num : mem;

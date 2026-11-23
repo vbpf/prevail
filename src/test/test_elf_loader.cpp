@@ -19,10 +19,12 @@
 #include <map>
 #include <optional>
 #include <random>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 #include <boost/endian/conversion.hpp>
@@ -32,6 +34,7 @@
 #include <libbtf/btf_type_data.h>
 
 #include "config.hpp"
+#include "ebpf_verifier.hpp"
 #include "io/elf_loader.hpp"
 #include "io/elf_reader.hpp"
 #include "platform.hpp"
@@ -1362,14 +1365,13 @@ TEST_CASE("rewrite_extern_constant_load bails out on values exceeding int32 rang
 TEST_CASE("rewrite_extern_constant_load keeps the LDDW write to the address register", "[elf][hardening]") {
     constexpr EbpfInst lddw_lo{.opcode = INST_OP_LDDW_IMM, .dst = 2, .src = 0, .offset = 0, .imm = 0};
     constexpr EbpfInst ldx_w{.opcode = INST_CLS_LDX | INST_MODE_MEM | INST_SIZE_W, .dst = 3, .src = 2};
-    constexpr EbpfInst mov_zero{.opcode = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM, .dst = 2, .imm = 0};
     constexpr EbpfInst mov32_imm{.opcode = INST_CLS_ALU | INST_ALU_OP_MOV | INST_SRC_IMM, .dst = 3, .imm = 42};
     constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
 
-    SECTION("the address register is set to zero like any other extern address") {
+    SECTION("the LDDW stays, as the load of the extern's address") {
         std::vector<EbpfInst> insts{lddw_lo, {}, ldx_w, exit};
         REQUIRE(rewrite_extern_constant_load(insts, 0, 42, {}));
-        CHECK(insts == std::vector<EbpfInst>{mov_zero, make_mov_reg_nop(2), mov32_imm, exit});
+        CHECK(insts == std::vector<EbpfInst>{lddw_lo, {}, mov32_imm, exit});
     }
 
     // A path that jumps past the first slot of the LDDW does not read the extern.
@@ -1425,8 +1427,8 @@ TEST_CASE("read_elf succeeds with istream and non-file path", "[elf]") {
 }
 
 // Verify that the ELF loader rejects FUNC symbols at non-instruction-aligned offsets.
-// Such a symbol would cause compute_reachable_program_span to inflate the extracted byte
-// span via truncating integer division, leading to a read past the section data buffer.
+// Such a symbol would split the section at a byte offset that is not an instruction boundary,
+// so that the extracted byte span would run past the section data buffer.
 TEST_CASE("ELF loader rejects non-instruction-aligned FUNC symbol", "[elf][hardening]") {
 
     // Build a minimal ELF with an executable section and a FUNC symbol at an unaligned offset.
@@ -1439,8 +1441,8 @@ TEST_CASE("ELF loader rejects non-instruction-aligned FUNC symbol", "[elf][harde
     writer.set_machine(ELFIO::EM_BPF);
 
     // Create a .text section with 32 BPF "exit" instructions (256 bytes).
-    // This ensures the section is big enough that the second iteration's
-    // compute_reachable_program_span can return an aligned-but-overflowing span.
+    // This ensures the section is big enough that the second iteration starts
+    // at the unaligned boundary.
     ELFIO::section* text_sec = writer.sections.add(".text");
     text_sec->set_type(ELFIO::SHT_PROGBITS);
     text_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
@@ -1593,10 +1595,8 @@ TEST_CASE("ELF loader does not cross-apply relocations between same-named progra
     // is a local call to subprogram "sub", carrying a real .rel.text2 relocation with
     // source_offset 5. Under the bug this relocation matches section A's "shared" by
     // name and is applied at index 5 of A's 2-instruction vector (inserting "sub" and
-    // then writing past the end of the grown vector). A recorded relocation entry is
-    // required: the synthetic local-call path would not record source_offset 5 here,
-    // because compute_reachable_program_span already pulls "sub" into this program's
-    // span and enqueue_synthetic_local_calls skips targets inside the program.
+    // then writing past the end of the grown vector). The relocation entry is what
+    // carries the cross-applied source_offset 5.
     ELFIO::section* text_b = writer.sections.add(".text2");
     text_b->set_type(ELFIO::SHT_PROGBITS);
     text_b->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
@@ -1835,6 +1835,105 @@ TEST_CASE("ELF loader applies the in-instruction addend of an lddw relocation ag
     // arr is at .data+4, so arr+8 is offset 12 into the .data map value.
     REQUIRE(prog[0].src == INST_LD_MODE_MAP_VALUE);
     REQUIRE(prog[1].imm == 12);
+}
+
+// Regression test: applying a relocation overwrites the immediate in which a SHT_REL entry keeps
+// its addend, so an lddw must not be relocated twice. A second entry for it used to take the map fd
+// stored by the first one as its addend, and an entry for its second slot used to replace the offset:
+// either way the verified offset into the global data was not the one the object designates.
+TEST_CASE("ELF loader rejects a second relocation of an lddw", "[elf][hardening]") {
+    struct Relocation {
+        size_t slot;
+        bool against_arr;
+    };
+    const auto load = [](const std::vector<Relocation>& relocations) {
+        auto append_inst = [](std::string& data, const uint8_t opcode, const uint8_t dst, const int32_t imm) {
+            const EbpfInst inst{.opcode = opcode, .dst = dst, .src = 0, .offset = 0, .imm = imm};
+            data.append(reinterpret_cast<const char*>(&inst), sizeof(inst));
+        };
+        constexpr uint8_t MOV64_IMM = 0xb7;
+
+        ELFIO::elfio writer;
+        writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+        writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+        writer.set_type(ELFIO::ET_REL);
+        writer.set_machine(ELFIO::EM_BPF);
+
+        // xdp: r1 = arr+8 ll; r0 = 0; exit
+        ELFIO::section* prog_sec = writer.sections.add("xdp");
+        prog_sec->set_type(ELFIO::SHT_PROGBITS);
+        prog_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+        prog_sec->set_addr_align(8);
+        std::string prog_data;
+        append_inst(prog_data, INST_OP_LDDW_IMM, 1, 8);
+        append_inst(prog_data, 0, 0, 0);
+        append_inst(prog_data, MOV64_IMM, 0, 0);
+        append_inst(prog_data, INST_OP_EXIT, 0, 0);
+        prog_sec->set_data(prog_data);
+
+        ELFIO::section* data_sec = writer.sections.add(".data");
+        data_sec->set_type(ELFIO::SHT_PROGBITS);
+        data_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_WRITE);
+        data_sec->set_addr_align(4);
+        data_sec->set_data(std::string(16, '\0'));
+
+        ELFIO::section* str_sec = writer.sections.add(".strtab");
+        str_sec->set_type(ELFIO::SHT_STRTAB);
+        ELFIO::string_section_accessor str_writer(str_sec);
+
+        ELFIO::section* sym_sec = writer.sections.add(".symtab");
+        sym_sec->set_type(ELFIO::SHT_SYMTAB);
+        sym_sec->set_addr_align(8);
+        sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+        sym_sec->set_link(str_sec->get_index());
+        sym_sec->set_info(1);
+        ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+
+        sym_writer.add_symbol(str_writer, "prog", 0, 32, ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0, prog_sec->get_index());
+        const auto arr_sym = sym_writer.add_symbol(str_writer, "arr", 4, 12, ELFIO::STB_GLOBAL, ELFIO::STT_OBJECT, 0,
+                                                   data_sec->get_index());
+        const auto config_sym = sym_writer.add_symbol(str_writer, "__config_x", 0, 0, ELFIO::STB_GLOBAL,
+                                                      ELFIO::STT_NOTYPE, 0, ELFIO::SHN_UNDEF);
+
+        ELFIO::section* rel_sec = writer.sections.add(".relxdp");
+        rel_sec->set_type(ELFIO::SHT_REL);
+        rel_sec->set_addr_align(8);
+        rel_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_REL));
+        rel_sec->set_link(sym_sec->get_index());
+        rel_sec->set_info(prog_sec->get_index());
+        ELFIO::relocation_section_accessor rel_writer(writer, rel_sec);
+        for (const auto& [slot, against_arr] : relocations) {
+            rel_writer.add_entry(slot * sizeof(EbpfInst), against_arr ? arr_sym : config_sym, R_BPF_64_64_TYPE);
+        }
+
+        std::ostringstream out_stream;
+        writer.save(out_stream);
+        std::istringstream in_stream(out_stream.str());
+
+        VerifierOptions options{};
+        return read_elf(in_stream, "memory", "xdp", "", options, &g_ebpf_platform_linux);
+    };
+    const auto multiple_relocations = Catch::Matchers::ContainsSubstring("Multiple relocations in section xdp");
+
+    SECTION("one entry per instruction") {
+        const auto programs = load({{.slot = 0, .against_arr = true}});
+        REQUIRE(programs.size() == 1);
+        // arr is at .data+4, so arr+8 is offset 12 into the .data map value.
+        REQUIRE(programs[0].prog.at(0).src == INST_LD_MODE_MAP_VALUE);
+        REQUIRE(programs[0].prog.at(1).imm == 12);
+    }
+
+    SECTION("two entries for the lddw") {
+        REQUIRE_THROWS_WITH(load({{.slot = 0, .against_arr = true}, {.slot = 0, .against_arr = true}}),
+                            multiple_relocations);
+    }
+
+    SECTION("an entry for the second slot of the lddw") {
+        REQUIRE_THROWS_WITH(load({{.slot = 0, .against_arr = true}, {.slot = 1, .against_arr = false}}),
+                            multiple_relocations);
+        REQUIRE_THROWS_WITH(load({{.slot = 1, .against_arr = false}, {.slot = 0, .against_arr = true}}),
+                            multiple_relocations);
+    }
 }
 
 // Regression test: the callee of a local call is the function at the section offset
@@ -2480,6 +2579,110 @@ TEST_CASE("ELF loader resolves unambiguous BTF map symbols", "[elf][hardening]")
     REQUIRE(relocated_value_size(program, 1, INST_LD_MODE_MAP_FD) == 4096);
 }
 
+TEST_CASE("ELF loader records what the program may do with each map", "[elf][map]") {
+    constexpr uint32_t rdonly_prog = 1U << 7; // BPF_F_RDONLY_PROG
+    constexpr uint32_t wronly_prog = 1U << 8; // BPF_F_WRONLY_PROG
+    LddwRelocationElf elf;
+    // The access of the map that the n-th lddw of the program was relocated to.
+    const auto relocated_access = [](const RawProgram& program, const size_t n) {
+        const EbpfInst& inst = program.prog.at(2 * n);
+        for (const auto& descriptor : *program.info.map_descriptors) {
+            if (descriptor.original_fd == inst.imm) {
+                return descriptor.program_access;
+            }
+        }
+        FAIL("lddw does not refer to a map descriptor");
+        return EbpfMapAccess::read_write;
+    };
+
+    SECTION("map_flags of legacy map records") {
+        // {type, key_size, value_size, max_entries, map_flags, inner_map_idx, numa_node}
+        constexpr uint32_t records[3][7] = {{2, 4, 8, 1, 0}, {2, 4, 8, 1, rdonly_prog}, {2, 4, 8, 1, wronly_prog}};
+        const auto* maps_sec =
+            elf.add_data_section("maps", std::string(reinterpret_cast<const char*>(records), sizeof(records)));
+        const auto plain = elf.add_object("plain", 0, 28, maps_sec);
+        const auto read_only = elf.add_object("read_only", 28, 28, maps_sec);
+        const auto write_only = elf.add_object("write_only", 56, 28, maps_sec);
+
+        const auto program = elf.load({plain, read_only, write_only});
+        REQUIRE(relocated_access(program, 0) == EbpfMapAccess::read_write);
+        REQUIRE(relocated_access(program, 1) == EbpfMapAccess::read_only);
+        REQUIRE(relocated_access(program, 2) == EbpfMapAccess::write_only);
+    }
+    SECTION("a legacy map record that is both read-only and write-only") {
+        constexpr uint32_t record[7] = {2, 4, 8, 1, rdonly_prog | wronly_prog};
+        const auto* maps_sec =
+            elf.add_data_section("maps", std::string(reinterpret_cast<const char*>(record), sizeof(record)));
+        const auto map = elf.add_object("map", 0, 28, maps_sec);
+        REQUIRE_THROWS_WITH(elf.load({map}), Catch::Matchers::ContainsSubstring("both read-only and write-only"));
+    }
+    SECTION("map_flags of BTF-defined maps") {
+        // `struct { __uint(type, BPF_MAP_TYPE_ARRAY); __uint(max_entries, 1); int *key; int *value;
+        //           __uint(map_flags, flags); }` for each of the maps below, where __uint(name, val) is
+        // `int (*name)[val]`.
+        const std::vector<std::pair<std::string, uint32_t>> maps{
+            {"plain", 0}, {"read_only", rdonly_prog}, {"write_only", wronly_prog}};
+        constexpr uint32_t map_record_size = 40;
+        libbtf::btf_type_data btf;
+        const auto int_id = btf.append(libbtf::btf_kind_int{.name = "int",
+                                                            .size_in_bytes = 4,
+                                                            .offset_from_start_in_bits = 0,
+                                                            .field_width_in_bits = 32,
+                                                            .is_signed = true});
+        const auto int_ptr_id = btf.append(libbtf::btf_kind_ptr{.type = int_id});
+        const auto uint_member = [&](const uint32_t value) {
+            const auto array_id = btf.append(
+                libbtf::btf_kind_array{.element_type = int_id, .index_type = int_id, .count_of_elements = value});
+            return btf.append(libbtf::btf_kind_ptr{.type = array_id});
+        };
+        libbtf::btf_kind_data_section datasec{.name = ".maps", .members = {}, .size = 0};
+        for (const auto& [name, flags] : maps) {
+            const std::vector<libbtf::btf_kind_struct_member> members{
+                {.name = "type", .type = uint_member(2), .offset_from_start_in_bits = 0},
+                {.name = "max_entries", .type = uint_member(1), .offset_from_start_in_bits = 64},
+                {.name = "key", .type = int_ptr_id, .offset_from_start_in_bits = 128},
+                {.name = "value", .type = int_ptr_id, .offset_from_start_in_bits = 192},
+                {.name = "map_flags", .type = uint_member(flags), .offset_from_start_in_bits = 256},
+            };
+            const auto struct_id = btf.append(
+                libbtf::btf_kind_struct{.name = std::nullopt, .members = members, .size_in_bytes = map_record_size});
+            const auto var_id = btf.append(
+                libbtf::btf_kind_var{.name = name, .type = struct_id, .linkage = libbtf::BTF_LINKAGE_GLOBAL});
+            datasec.members.push_back({.type = var_id, .offset = datasec.size, .size = map_record_size});
+            datasec.size += map_record_size;
+        }
+        btf.append(datasec);
+        const auto btf_bytes = btf.to_bytes();
+        elf.add_data_section(".BTF", std::string(reinterpret_cast<const char*>(btf_bytes.data()), btf_bytes.size()));
+        const auto* maps_sec = elf.add_data_section(".maps", std::string(maps.size() * map_record_size, '\0'));
+        std::vector<ELFIO::Elf_Word> symbols;
+        for (size_t i = 0; i < maps.size(); i++) {
+            symbols.push_back(
+                elf.add_object(maps[i].first, i * map_record_size, map_record_size, maps_sec, ELFIO::STB_GLOBAL));
+        }
+
+        const auto program = elf.load(symbols);
+        REQUIRE(relocated_access(program, 0) == EbpfMapAccess::read_write);
+        REQUIRE(relocated_access(program, 1) == EbpfMapAccess::read_only);
+        REQUIRE(relocated_access(program, 2) == EbpfMapAccess::write_only);
+    }
+    SECTION("global variable sections") {
+        // Loaders create the maps behind .rodata and .rodata.* read-only for the program.
+        const auto* data_sec = elf.add_data_section(".data", std::string(8, '\0'));
+        const auto* bss_sec = elf.add_data_section(".bss", std::string(8, '\0'));
+        const auto* rodata_sec = elf.add_data_section(".rodata", std::string(8, '\0'));
+        const auto* rodata_str_sec = elf.add_data_section(".rodata.str1.1", std::string(8, '\0'));
+
+        const auto program =
+            elf.load({elf.add_object("d", 0, 8, data_sec), elf.add_object("b", 0, 8, bss_sec),
+                      elf.add_object("r", 0, 8, rodata_sec), elf.add_object("s", 0, 8, rodata_str_sec)});
+        REQUIRE(relocated_access(program, 0) == EbpfMapAccess::read_write);
+        REQUIRE(relocated_access(program, 1) == EbpfMapAccess::read_write);
+        REQUIRE(relocated_access(program, 2) == EbpfMapAccess::read_only);
+        REQUIRE(relocated_access(program, 3) == EbpfMapAccess::read_only);
+    }
+}
+
 TEST_CASE("ELF loader rejects relocations against ambiguous BTF map symbols", "[elf][hardening]") {
     LddwRelocationElf elf;
     ELFIO::Elf_Word relocation_symbol{};
@@ -2720,6 +2923,156 @@ TEST_CASE("CO-RE type id relocation keeps modifiers and patches both LDDW slots"
     CHECK(prog[3].imm == 0);
 }
 
+namespace {
+/// An object of executable sections, each with its FUNC symbols, and a .BTF and .BTF.ext with CO-RE relocations.
+/// The .BTF holds `int` (type 1) and `struct s` (type 2) or `union s`, with one int member `f`.
+struct CoreObject {
+    struct Function {
+        std::string name;
+        size_t start; ///< Index of the function's first instruction in its section.
+    };
+    struct Section {
+        std::string name;
+        std::vector<EbpfInst> insts;
+        std::vector<Function> functions;
+    };
+    struct Relocation {
+        uint32_t insn_off; ///< Byte offset of the relocated instruction in the section.
+        uint32_t kind;     ///< A bpf_core_relo_kind.
+    };
+
+    std::vector<Section> sections;
+    std::string core_section; ///< The section the CO-RE relocations name.
+    std::vector<Relocation> relocations;
+    /// Indices of the instructions of the first section with an entry against the undefined LINUX_KERNEL_VERSION.
+    std::vector<size_t> extern_relocations;
+    bool is_union = false;
+    bool kind_flag = false;
+    uint32_t member_offset_field = 32; ///< The btf_member offset field of `f`.
+    uint32_t aggregate_size = 8;
+
+    [[nodiscard]]
+    std::string build() const {
+        const auto append_u32 = [](std::string& data, const uint32_t value) {
+            const uint32_t le = boost::endian::native_to_little(value);
+            data.append(reinterpret_cast<const char*>(&le), sizeof(le));
+        };
+
+        const std::string strings = std::string{"\0int\0s\0f\0", 9} + core_section + '\0' + "0:0" + '\0';
+        constexpr uint32_t int_name = 1, aggregate_name = 5, member_name = 7, section_name = 9;
+        const auto access_string = gsl::narrow<uint32_t>(section_name + core_section.size() + 1);
+        std::string types;
+        append_u32(types, int_name); // Type 1: 32-bit int.
+        append_u32(types, 1U << 24);
+        append_u32(types, 4);
+        append_u32(types, 32);
+        append_u32(types, aggregate_name); // Type 2: struct or union with one member.
+        append_u32(types, (kind_flag ? 1U << 31 : 0U) | ((is_union ? 5U : 4U) << 24) | 1U);
+        append_u32(types, aggregate_size);
+        append_u32(types, member_name);
+        append_u32(types, 1);
+        append_u32(types, member_offset_field);
+
+        std::string btf;
+        append_u32(btf, 0x0001eb9f); // magic, version 1, no flags.
+        append_u32(btf, 24);         // hdr_len
+        append_u32(btf, 0);          // type_off
+        append_u32(btf, gsl::narrow<uint32_t>(types.size()));
+        append_u32(btf, gsl::narrow<uint32_t>(types.size())); // str_off
+        append_u32(btf, gsl::narrow<uint32_t>(strings.size()));
+        btf += types + strings;
+
+        std::string core_relos;
+        append_u32(core_relos, 16); // Record size.
+        append_u32(core_relos, section_name);
+        append_u32(core_relos, gsl::narrow<uint32_t>(relocations.size()));
+        for (const auto& [insn_off, kind] : relocations) {
+            append_u32(core_relos, insn_off);
+            append_u32(core_relos, 2); // type_id
+            append_u32(core_relos, access_string);
+            append_u32(core_relos, kind);
+        }
+        std::string btf_ext;
+        append_u32(btf_ext, 0x0001eb9f); // magic, version 1, no flags.
+        append_u32(btf_ext, 32);         // hdr_len
+        for (int i = 0; i < 4; ++i) {
+            append_u32(btf_ext, 0); // func_info and line_info offset and length.
+        }
+        append_u32(btf_ext, 0); // core_relo_off
+        append_u32(btf_ext, gsl::narrow<uint32_t>(core_relos.size()));
+        btf_ext += core_relos;
+
+        ELFIO::elfio writer;
+        writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+        writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+        writer.set_type(ELFIO::ET_REL);
+        writer.set_machine(ELFIO::EM_BPF);
+        std::vector<ELFIO::section*> code_sections;
+        for (const auto& section : sections) {
+            ELFIO::section* sec = writer.sections.add(section.name);
+            sec->set_type(ELFIO::SHT_PROGBITS);
+            sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+            sec->set_addr_align(8);
+            sec->set_data(reinterpret_cast<const char*>(section.insts.data()), section.insts.size() * sizeof(EbpfInst));
+            code_sections.push_back(sec);
+        }
+        for (const auto& [name, data] : {std::pair{".BTF", &btf}, std::pair{".BTF.ext", &btf_ext}}) {
+            ELFIO::section* sec = writer.sections.add(name);
+            sec->set_type(ELFIO::SHT_PROGBITS);
+            sec->set_addr_align(4);
+            sec->set_data(*data);
+        }
+
+        ELFIO::section* str_sec = writer.sections.add(".strtab");
+        str_sec->set_type(ELFIO::SHT_STRTAB);
+        ELFIO::string_section_accessor str_writer(str_sec);
+        ELFIO::section* sym_sec = writer.sections.add(".symtab");
+        sym_sec->set_type(ELFIO::SHT_SYMTAB);
+        sym_sec->set_addr_align(8);
+        sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+        sym_sec->set_link(str_sec->get_index());
+        sym_sec->set_info(1); // First global symbol.
+        ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+        for (size_t i = 0; i < sections.size(); ++i) {
+            const auto& functions = sections[i].functions;
+            for (size_t f = 0; f < functions.size(); ++f) {
+                const size_t end = f + 1 < functions.size() ? functions[f + 1].start : sections[i].insts.size();
+                sym_writer.add_symbol(str_writer, functions[f].name.c_str(), functions[f].start * sizeof(EbpfInst),
+                                      (end - functions[f].start) * sizeof(EbpfInst), ELFIO::STB_GLOBAL, ELFIO::STT_FUNC,
+                                      0, code_sections[i]->get_index());
+            }
+        }
+        if (!extern_relocations.empty()) {
+            const ELFIO::Elf_Word extern_symbol = sym_writer.add_symbol(
+                str_writer, "LINUX_KERNEL_VERSION", 0, 0, ELFIO::STB_GLOBAL, ELFIO::STT_NOTYPE, 0, ELFIO::SHN_UNDEF);
+            ELFIO::section* rel_sec = writer.sections.add(".rel" + sections.at(0).name);
+            rel_sec->set_type(ELFIO::SHT_REL);
+            rel_sec->set_addr_align(8);
+            rel_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_REL));
+            rel_sec->set_link(sym_sec->get_index());
+            rel_sec->set_info(code_sections.at(0)->get_index());
+            ELFIO::relocation_section_accessor rel_writer(writer, rel_sec);
+            for (const size_t instruction : extern_relocations) {
+                rel_writer.add_entry(instruction * sizeof(EbpfInst), extern_symbol, R_BPF_64_64_TYPE);
+            }
+        }
+
+        std::ostringstream out_stream;
+        writer.save(out_stream);
+        return out_stream.str();
+    }
+};
+
+constexpr uint32_t CORE_FIELD_BYTE_OFFSET = 0;
+constexpr uint8_t CORE_TEST_MOV64_IMM = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM;
+
+std::vector<RawProgram> read_core_object(const CoreObject& object, const std::string& section,
+                                         const std::string& function = "") {
+    std::istringstream in_stream(object.build());
+    return read_elf(in_stream, "memory", section, function, VerifierOptions{}, &g_ebpf_platform_linux);
+}
+} // namespace
+
 // A static map is referenced through the unnamed section symbol of its map section. The loader cannot resolve that to a
 // map, and must not leave the LDDW's placeholder immediate to be analyzed as a constant. The same object referencing
 // the map through its named symbol loads.
@@ -2795,6 +3148,45 @@ TEST_CASE("ELF loader rejects a map reference through a section symbol", "[elf][
     std::istringstream in_stream(build_object(false));
     REQUIRE_THROWS_WITH(read_elf(in_stream, "memory", "socket", "", options, &g_ebpf_platform_linux),
                         Catch::Matchers::ContainsSubstring("Unresolved symbols found"));
+}
+
+// The offset field of a btf_member packs a bitfield size into its top 8 bits only when the struct or union has
+// kind_flag set; otherwise all 32 bits are the member's bit offset, and a member 2 MiB or more into its aggregate
+// must not have its offset wrapped or be taken for a bitfield.
+TEST_CASE("CO-RE field relocations decode member offsets by the BTF kind_flag", "[elf][core]") {
+    constexpr uint32_t CORE_FIELD_BYTE_SIZE = 1;
+    constexpr uint32_t CORE_FIELD_LSHIFT_U64 = 4;
+    constexpr uint32_t CORE_FIELD_RSHIFT_U64 = 5;
+    const std::vector<EbpfInst> code(5, EbpfInst{.opcode = CORE_TEST_MOV64_IMM, .imm = -1});
+    CoreObject object{
+        .sections = {{"xdp", code, {{"prog", 0}}}},
+        .core_section = "xdp",
+        .relocations = {{0, CORE_FIELD_BYTE_OFFSET},
+                        {8, CORE_FIELD_BYTE_SIZE},
+                        {16, CORE_FIELD_LSHIFT_U64},
+                        {24, CORE_FIELD_RSHIFT_U64}},
+    };
+    object.sections[0].insts.back() = EbpfInst{.opcode = INST_OP_EXIT};
+    const auto relocated_values = [&] {
+        const auto programs = read_core_object(object, "xdp");
+        REQUIRE(programs.size() == 1);
+        REQUIRE(programs[0].core_relocation_count == object.relocations.size());
+        return std::array{programs[0].prog[0].imm, programs[0].prog[1].imm, programs[0].prog[2].imm,
+                          programs[0].prog[3].imm};
+    };
+
+    object.is_union = GENERATE(false, true);
+    object.aggregate_size = (1U << 21) + 16;
+
+    SECTION("kind_flag clear: the whole field is the bit offset") {
+        object.member_offset_field = (1U << 24) + 64; // Byte 2 MiB + 8, which has bits above the low 24 set.
+        REQUIRE(relocated_values() == std::array{(1 << 21) + 8, 4, 32, 32});
+    }
+    SECTION("kind_flag set: bitfield size and 24-bit bit offset") {
+        object.kind_flag = true;
+        object.member_offset_field = (12U << 24) | 68; // 12-bit bitfield at bit 68: in the int at byte 8.
+        REQUIRE(relocated_values() == std::array{8, 4, 48, 52});
+    }
 }
 
 namespace {
@@ -2939,14 +3331,130 @@ TEST_CASE("ELF loader rejects a link error without a section filter", "[elf][har
     REQUIRE(read_test_object(object, ".text").size() == 1);
 }
 
+// .BTF.ext names the section of each CO-RE relocation and line info record, and nothing else, so the records of two
+// executable sections with the same name cannot be told apart. Such an object is rejected rather than having the
+// records of one section patched into the other, or dropped.
+TEST_CASE("ELF loader rejects executable sections that share a name", "[elf][core][hardening]") {
+    const std::vector<EbpfInst> code{EbpfInst{.opcode = CORE_TEST_MOV64_IMM, .imm = -1},
+                                     EbpfInst{.opcode = INST_OP_EXIT}};
+    CoreObject object{
+        .sections = {{"xdp", code, {{"first", 0}}}, {"xdp", code, {{"second", 0}}}},
+        .core_section = "xdp",
+        .relocations = {{0, CORE_FIELD_BYTE_OFFSET}},
+    };
+    REQUIRE_THROWS_WITH(read_core_object(object, "xdp"),
+                        Catch::Matchers::ContainsSubstring("Duplicate executable section name xdp"));
+    REQUIRE_THROWS_WITH(read_core_object(object, ""),
+                        Catch::Matchers::ContainsSubstring("Duplicate executable section name xdp"));
+
+    // Distinct names load.
+    object.sections[1].name = "socket";
+    REQUIRE(read_core_object(object, "xdp").size() == 1);
+}
+
+// A CO-RE relocation patches only what libbpf's bpf_core_patch_insn() patches: the immediate of an ALU instruction or
+// of a plain lddw, and the offset of a load or store. Anything else fails the load there, and patching it here would
+// analyze a program that is never loaded. A patched jump could, for one, land on code whose checks relied on the
+// jump targets collected before.
+TEST_CASE("CO-RE relocation is rejected on an instruction libbpf does not patch", "[elf][core][hardening]") {
+    constexpr EbpfInst exit{.opcode = INST_OP_EXIT};
+    constexpr EbpfInst mov{.opcode = CORE_TEST_MOV64_IMM, .imm = -1};
+    constexpr EbpfInst load{.opcode = INST_CLS_LDX | INST_MODE_MEM | INST_SIZE_W, .dst = 0, .src = 1};
+    constexpr uint32_t CORE_FIELD_BYTE_SIZE = 1;
+    const auto object = [&](const EbpfInst relocated, const uint32_t kind = CORE_FIELD_BYTE_OFFSET) {
+        return CoreObject{
+            .sections = {{"xdp", {relocated, mov, mov, mov, mov, exit}, {{"prog", 0}}}},
+            .core_section = "xdp",
+            .relocations = {{0, kind}},
+        };
+    };
+    const auto rejects = [&](const CoreObject& o, const std::string& why) {
+        REQUIRE_THROWS_WITH(read_core_object(o, "xdp"), Catch::Matchers::ContainsSubstring(why));
+    };
+
+    SECTION("patched forms") {
+        CHECK(read_core_object(object(mov), "xdp")[0].prog[0].imm == 4);
+        CHECK(read_core_object(object(load), "xdp")[0].prog[0].offset == 4);
+    }
+    SECTION("jumps and calls") {
+        rejects(object({.opcode = INST_OP_JA32}), "cannot be relocated");
+        rejects(object({.opcode = INST_OP_JA16}), "cannot be relocated");
+        rejects(object({.opcode = INST_CLS_JMP | (0x1 << 4), .dst = 1}), "cannot be relocated"); // JEQ imm
+        rejects(object({.opcode = INST_OP_CALL, .imm = 1}), "cannot be relocated");
+        rejects(object(exit), "cannot be relocated");
+    }
+    SECTION("an ALU instruction with a register operand") {
+        rejects(object({.opcode = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_REG, .dst = 0, .src = 1}),
+                "without an immediate operand");
+    }
+    SECTION("a load with a relocation that is not a byte offset") {
+        rejects(object(load, CORE_FIELD_BYTE_SIZE), "other than a field byte offset");
+    }
+    SECTION("an lddw with a pseudo source") {
+        CoreObject o = object({.opcode = INST_OP_LDDW_IMM, .dst = 1, .src = INST_LD_MODE_MAP_FD});
+        o.sections[0].insts[1] = {};
+        rejects(o, "not a plain LDDW");
+    }
+}
+
+// The loader folds the load of a known extern into a constant before CO-RE relocations are applied. A relocation
+// of that load would then overwrite the constant, whereas libbpf patches the offset of the load.
+TEST_CASE("CO-RE relocation is rejected on an instruction another relocation rewrote", "[elf][core][hardening]") {
+    constexpr EbpfInst lddw{.opcode = INST_OP_LDDW_IMM, .dst = 2};
+    constexpr EbpfInst load{.opcode = INST_CLS_LDX | INST_MODE_MEM | INST_SIZE_W, .dst = 0, .src = 2};
+    CoreObject object{
+        .sections = {{"xdp", {lddw, {}, load, EbpfInst{.opcode = INST_OP_EXIT}}, {{"prog", 0}}}},
+        .core_section = "xdp",
+        .relocations = {{2 * sizeof(EbpfInst), CORE_FIELD_BYTE_OFFSET}},
+        .extern_relocations = {0},
+    };
+    REQUIRE_THROWS_WITH(read_core_object(object, "xdp"),
+                        Catch::Matchers::ContainsSubstring("an instruction that another relocation rewrote"));
+
+    // Without the CO-RE relocation the load is folded, and without the extern it is relocated.
+    object.relocations.clear();
+    CHECK(read_core_object(object, "xdp")[0].prog[2] != load);
+    object.relocations = {{2 * sizeof(EbpfInst), CORE_FIELD_BYTE_OFFSET}};
+    object.extern_relocations.clear();
+    CHECK(read_core_object(object, "xdp")[0].prog[2].offset == 4);
+}
+
+// Linking appends a copy of each callee to its caller, so a function called from another one in the same section is
+// held by both programs. A CO-RE relocation of its code must show in both copies.
+TEST_CASE("CO-RE relocation patches every program holding the instruction", "[elf][core]") {
+    // main: call sub; exit. sub: r0 = -1; exit.
+    const CoreObject object{
+        .sections = {{"xdp",
+                      {EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_LOCAL, .imm = 1},
+                       EbpfInst{.opcode = INST_OP_EXIT}, EbpfInst{.opcode = CORE_TEST_MOV64_IMM, .imm = -1},
+                       EbpfInst{.opcode = INST_OP_EXIT}},
+                      {{"main", 0}, {"sub", 2}}}},
+        .core_section = "xdp",
+        .relocations = {{2 * sizeof(EbpfInst), CORE_FIELD_BYTE_OFFSET}},
+    };
+
+    const auto main_programs = read_core_object(object, "xdp", "main");
+    REQUIRE(main_programs.size() == 1);
+    REQUIRE(main_programs[0].prog.size() == 4);
+    CHECK(main_programs[0].prog[2].imm == 4);
+
+    const auto sub_programs = read_core_object(object, "xdp", "sub");
+    REQUIRE(sub_programs.size() == 1);
+    REQUIRE(sub_programs[0].prog.size() == 2);
+    CHECK(sub_programs[0].prog[0].imm == 4);
+}
+
 // Unresolved relocations are stored without their names and only the first few are reported, so a file with many
 // entries against a long name costs memory and output linear in its size. Every entry still fails the load.
 TEST_CASE("ELF loader bounds the report of unresolved symbols", "[elf][hardening]") {
     const std::string long_name(10'000, 'x');
+    // One unresolved entry per instruction: an instruction may be relocated only once.
+    std::vector<EbpfInst> socket_insts(1000, test_mov_r0_0);
+    socket_insts.push_back(test_exit);
     TestObjectBuilder builder{
         .sections =
             {
-                {.name = "socket", .insts = {test_mov_r0_0, test_exit}},
+                {.name = "socket", .insts = socket_insts},
                 {.name = "xdp", .insts = {test_mov_r0_0, test_exit}},
                 {.name = "tc", .insts = {test_mov_r0_0, test_exit}},
             },
@@ -2956,7 +3464,7 @@ TEST_CASE("ELF loader bounds the report of unresolved symbols", "[elf][hardening
                     {.name = long_name}},
     };
     for (size_t i = 0; i < 1000; i++) {
-        builder.relocations.push_back({.section = 0, .instruction = 0, .symbol = 3, .type = R_BPF_64_32_TYPE});
+        builder.relocations.push_back({.section = 0, .instruction = i, .symbol = 3, .type = R_BPF_64_32_TYPE});
     }
     builder.relocations.push_back({.section = 1, .instruction = 0, .symbol = 3, .type = R_BPF_64_32_TYPE});
     const std::string object = builder.build();
@@ -3098,4 +3606,385 @@ TEST_CASE("ELF loader finds the symbol and relocation tables by their headers", 
     std::istringstream two_tables(TableLookupObject{.second_relocation_table = true}.build());
     REQUIRE_THROWS_WITH(read_elf(two_tables, "memory", "xdp", "", VerifierOptions{}, &g_ebpf_platform_linux),
                         Catch::Matchers::ContainsSubstring("Multiple relocation sections for section xdp"));
+}
+
+// The loader that resolves an extern symbol writes its address into the lddw that loads it, so the analysis may not
+// take the placeholder the ELF loader writes there as its value; otherwise a test of the address prunes the code it
+// guards, which is then never verified. Only a weak kernel function that the platform reports absent has the address
+// 0, as libbpf gives it.
+TEST_CASE("ELF loader treats the address of an unresolved extern as an unknown number", "[elf][hardening]") {
+    SECTION("code guarded by a test of the address is verified") {
+        // r6 = r1; r1 = &ksym_var ll; if r1 == 0 goto +3; r0 = *(u64 *)(r6 + 4096); *(u64 *)(r10 + 8) = r0; exit;
+        // r0 = 0; exit. The guarded block reads past the context and writes above the stack frame.
+        const TestObjectBuilder builder{
+            .sections =
+                {{.name = "xdp",
+                  .insts =
+                      {
+                          EbpfInst{.opcode = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_REG, .dst = 6, .src = 1},
+                          EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 1},
+                          EbpfInst{},
+                          EbpfInst{.opcode = INST_CLS_JMP | (0x1 << 4), .dst = 1, .offset = 3}, // if r1 == 0
+                          EbpfInst{.opcode = INST_CLS_LDX | INST_MODE_MEM | INST_SIZE_DW,
+                                   .dst = 0,
+                                   .src = 6,
+                                   .offset = 4096},
+                          EbpfInst{
+                              .opcode = INST_CLS_STX | INST_MODE_MEM | INST_SIZE_DW, .dst = 10, .src = 0, .offset = 8},
+                          test_exit,
+                          test_mov_r0_0,
+                          test_exit,
+                      }}},
+            .symbols = {{.name = "prog", .section = 0}, {.name = "ksym_var"}},
+            .relocations = {{.section = 0, .instruction = 1, .symbol = 1, .type = R_BPF_64_64_TYPE}},
+        };
+        const auto programs = read_test_object(builder.build(), "xdp");
+        REQUIRE(programs.size() == 1);
+        REQUIRE(programs[0].info.extern_address_offsets == std::set<size_t>{1});
+
+        const VerifierOptions options{};
+        const auto sequence = unmarshal(programs[0], options);
+        REQUIRE(std::holds_alternative<InstructionSeq>(sequence));
+        const auto& [label, load, _] = std::get<InstructionSeq>(sequence).at(1);
+        REQUIRE(load == Instruction{LoadPseudo{.dst = Reg{1}, .addr = {.kind = PseudoAddress::Kind::EXTERN_ADDR}}});
+        const ThreadLocalGuard guard;
+        REQUIRE_FALSE(
+            verify(Program::from_sequence(std::get<InstructionSeq>(sequence), programs[0].info, options), options));
+    }
+
+    SECTION("strong and weak data symbols") {
+        ElfObject elf{"ebpf-samples/cilium-ebpf/ksym-el.elf", {}, &g_ebpf_platform_linux};
+        // lddw r1, bpf_init (GLOBAL) at 0; lddw r1, bpf_trace_run1 (WEAK) at 17.
+        const auto& ksym_test = elf.get_programs("socket", "ksym_test");
+        REQUIRE(ksym_test.size() == 1);
+        REQUIRE(ksym_test[0].info.extern_address_offsets == std::set<size_t>{0, 17});
+        const auto& ksym_missing_test = elf.get_programs("socket", "ksym_missing_test");
+        REQUIRE(ksym_missing_test.size() == 1);
+        REQUIRE_FALSE(ksym_missing_test[0].info.extern_address_offsets.empty());
+    }
+
+    SECTION("a weak kernel function that the platform reports absent has the address 0") {
+        ElfObject elf{"ebpf-samples/cilium-ebpf/kfunc-el.elf", {}, &g_ebpf_platform_linux};
+        const auto& programs = elf.get_programs("tp_btf/task_newtask", "weak_kfunc_missing");
+        REQUIRE(programs.size() == 1);
+        REQUIRE(programs[0].prog.at(1).opcode == INST_OP_LDDW_IMM);
+        REQUIRE(programs[0].prog.at(1).imm == 0);
+        REQUIRE(programs[0].info.extern_address_offsets.empty());
+    }
+
+    SECTION("the load of a folded configuration constant still loads the extern's address") {
+        ElfObject elf{"ebpf-samples/cilium-ebpf/kconfig-el.elf", {}, &g_ebpf_platform_linux};
+        const auto& programs = elf.get_programs("socket", "kconfig");
+        REQUIRE(programs.size() == 1);
+        // lddw r1, LINUX_KERNEL_VERSION at 1, followed by the folded constant.
+        REQUIRE(programs[0].prog.at(1).opcode == INST_OP_LDDW_IMM);
+        REQUIRE(programs[0].info.extern_address_offsets.contains(1));
+        REQUIRE(programs[0].prog.at(3) ==
+                EbpfInst{.opcode = INST_CLS_ALU | INST_ALU_OP_MOV | INST_SRC_IMM, .dst = 1, .imm = 394752});
+    }
+}
+
+namespace {
+/// A local call without a relocation entry, to the instruction imm + 1 ahead of it in the section.
+constexpr EbpfInst test_call_local(const int32_t imm) {
+    return {.opcode = INST_OP_CALL, .src = INST_CALL_LOCAL, .imm = imm};
+}
+
+constexpr EbpfInst test_mov_r0(const int32_t imm) {
+    return {.opcode = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM, .imm = imm};
+}
+} // namespace
+
+// A program is the code from its FUNC symbol to the next one, whatever its control flow reaches. Extending it over
+// the code its calls and jumps reach stores N functions that each call (or run into) a later one as N overlapping
+// copies of the rest of the section, which is quadratic in the size of the object. A local call brings in its
+// callee alone, whether the callee lies ahead of the caller or behind it.
+TEST_CASE("ELF loader does not extend a program past the next FUNC symbol", "[elf][hardening]") {
+    const TestObjectBuilder builder{
+        .sections =
+            {
+                {.name = ".text",
+                 .insts = {test_call_local(4), test_exit,                   // f0 calls f2
+                           test_mov_r0_0, test_mov_r0_0, test_exit,         // f1
+                           test_mov_r0_0, test_exit,                        // f2
+                           test_mov_r0_0, test_call_local(-4), test_exit}}, // f3 calls f2
+            },
+        .symbols = {{.name = "f0", .section = 0, .value = 0},
+                    {.name = "f1", .section = 0, .value = 2 * sizeof(EbpfInst)},
+                    {.name = "f2", .section = 0, .value = 5 * sizeof(EbpfInst)},
+                    {.name = "f3", .section = 0, .value = 7 * sizeof(EbpfInst)}},
+    };
+    const auto programs = read_test_object(builder.build(), ".text");
+    REQUIRE(programs.size() == 4);
+    REQUIRE(programs[0].prog == std::vector{test_call_local(1), test_exit, test_mov_r0_0, test_exit});
+    REQUIRE(programs[1].prog == std::vector{test_mov_r0_0, test_mov_r0_0, test_exit});
+    REQUIRE(programs[2].prog == std::vector{test_mov_r0_0, test_exit});
+    REQUIRE(programs[3].prog == std::vector{test_mov_r0_0, test_call_local(1), test_exit, test_mov_r0_0, test_exit});
+}
+
+// A known extern's load is folded into a constant only if every path reaches it through the lddw of the extern's
+// address. A local call from another function can enter at the load, with any value in the address register.
+TEST_CASE("ELF loader keeps an extern load that another function calls into", "[elf][hardening]") {
+    constexpr EbpfInst lddw{.opcode = INST_OP_LDDW_IMM, .dst = 2};
+    constexpr EbpfInst load{.opcode = INST_CLS_LDX | INST_MODE_MEM | INST_SIZE_W, .dst = 0, .src = 2};
+    const bool caller_first = GENERATE(true, false);
+    const size_t entry = GENERATE(0, 1, 2); // The lddw, its second slot, or the load.
+    CAPTURE(caller_first, entry);
+
+    const size_t caller = caller_first ? 0 : 4;
+    const size_t callee = caller_first ? 2 : 0;
+    std::vector<EbpfInst> insts(6, test_exit);
+    insts[caller] = test_call_local(static_cast<int32_t>(callee + entry) - static_cast<int32_t>(caller) - 1);
+    insts[callee] = lddw;
+    insts[callee + 1] = {};
+    insts[callee + 2] = load;
+    const TestObjectBuilder builder{
+        .sections = {{.name = ".text", .insts = insts}},
+        .symbols = {{.name = "caller", .section = 0, .value = caller * sizeof(EbpfInst)},
+                    {.name = "callee", .section = 0, .value = callee * sizeof(EbpfInst)},
+                    {.name = "LINUX_KERNEL_VERSION"}},
+        .relocations = {{.section = 0, .instruction = callee, .symbol = 2, .type = R_BPF_64_64_TYPE}},
+    };
+    const auto programs = read_test_object(builder.build(), ".text");
+    REQUIRE(programs.size() == 2);
+    const bool load_is_folded = entry == 0;
+    for (const RawProgram& program : programs) {
+        CAPTURE(program.function_name);
+        // Linking puts the callee after the caller's two instructions.
+        const size_t callee_start = program.function_name == "caller" ? 2 : 0;
+        CHECK((program.prog.at(callee_start + 2) != load) == load_is_folded);
+    }
+}
+
+// Since a program ends at the next FUNC symbol, control may leave it only by exit or by a call, as Linux requires of
+// each subprogram. Otherwise it would run into whatever code linking places after it, which is a callee rather than
+// the code that follows in the section.
+TEST_CASE("ELF loader rejects control flow that runs out of a function", "[elf][hardening]") {
+    const EbpfInst call_sub{.opcode = INST_OP_CALL, .src = INST_CALL_LOCAL, .imm = -1};
+
+    SECTION("falling through into the next function") {
+        const TestObjectBuilder builder{
+            .sections = {{.name = ".text", .insts = {test_mov_r0_0, test_mov_r0_0, test_exit}}},
+            .symbols = {{.name = "f0", .section = 0, .value = 0},
+                        {.name = "f1", .section = 0, .value = sizeof(EbpfInst)}},
+        };
+        REQUIRE_THROWS_WITH(
+            read_test_object(builder.build(), ".text"),
+            Catch::Matchers::ContainsSubstring("Function f0 in section .text falls through into function f1"));
+    }
+
+    SECTION("jumping into the next function") {
+        const TestObjectBuilder builder{
+            .sections = {{.name = ".text",
+                          .insts = {EbpfInst{.opcode = INST_OP_JA16, .offset = 1}, test_exit, test_mov_r0_0,
+                                    test_exit}}},
+            .symbols = {{.name = "f0", .section = 0, .value = 0},
+                        {.name = "f1", .section = 0, .value = 2 * sizeof(EbpfInst)}},
+        };
+        REQUIRE_THROWS_WITH(read_test_object(builder.build(), ".text"),
+                            Catch::Matchers::ContainsSubstring("Function f0 in section .text jumps into function f1"));
+    }
+
+    SECTION("falling off the end of the section into a callee") {
+        const TestObjectBuilder builder{
+            .sections = {{.name = "socket", .insts = {call_sub, test_mov_r0_0}},
+                         {.name = ".text", .insts = {test_mov_r0_0, test_exit}}},
+            .symbols = {{.name = "entry", .section = 0}, {.name = "sub", .section = 1}},
+            .relocations = {{.section = 0, .instruction = 0, .symbol = 1, .type = R_BPF_64_32_TYPE}},
+        };
+        REQUIRE_THROWS_WITH(
+            read_test_object(builder.build(), "socket"),
+            Catch::Matchers::ContainsSubstring("Function entry in section socket falls through out of the section"));
+    }
+
+    SECTION("calling a function that runs out of its code") {
+        // sub falls through into last; entry calls sub, other calls last.
+        const TestObjectBuilder builder{
+            .sections = {{.name = "socket", .insts = {call_sub, test_exit}},
+                         {.name = "xdp", .insts = {call_sub, test_exit}},
+                         {.name = ".text", .insts = {test_mov_r0_0, test_mov_r0_0, test_exit}}},
+            .symbols = {{.name = "entry", .section = 0},
+                        {.name = "other", .section = 1},
+                        {.name = "sub", .section = 2, .value = 0},
+                        {.name = "last", .section = 2, .value = sizeof(EbpfInst)}},
+            .relocations = {{.section = 0, .instruction = 0, .symbol = 2, .type = R_BPF_64_32_TYPE},
+                            {.section = 1, .instruction = 0, .symbol = 3, .type = R_BPF_64_32_TYPE}},
+        };
+        const std::string object = builder.build();
+        REQUIRE_THROWS_WITH(read_test_object(object, "socket"),
+                            Catch::Matchers::ContainsSubstring("Function sub in section .text falls through"));
+        REQUIRE(read_test_object(object, "xdp").size() == 1);
+    }
+}
+
+// A local call without a relocation entry may land on code that no FUNC symbol starts. It then calls into the
+// function whose code holds its target, which linking appends to the caller.
+TEST_CASE("ELF loader links a local call into the middle of a function", "[elf]") {
+    const TestObjectBuilder builder{
+        .sections = {{.name = ".text",
+                      .insts =
+                          {
+                              test_call_local(3), test_exit,                       // f0 calls f1 + 2
+                              test_mov_r0(1), test_exit, test_mov_r0(2), test_exit // f1
+                          }}},
+        .symbols = {{.name = "f0", .section = 0, .value = 0},
+                    {.name = "f1", .section = 0, .value = 2 * sizeof(EbpfInst)}},
+    };
+    const auto programs = read_test_object(builder.build(), ".text");
+    REQUIRE(programs.size() == 2);
+    const std::vector<EbpfInst>& f0 = programs[0].prog;
+    REQUIRE(f0.size() == 6);
+    REQUIRE(f0[0].opcode == INST_OP_CALL);
+    REQUIRE(f0.at(1 + f0[0].imm) == test_mov_r0(2));
+}
+
+// Every legacy map symbol has the size of its record, and the records of a section all have one size, which is also
+// the stride between them. Symbols that disagree on it leave the record size undetermined: taking the smallest
+// would shorten every record of the section and silently drop the fields past it, such as inner_map_idx.
+TEST_CASE("ELF loader rejects a legacy maps section whose symbols disagree on the record size", "[elf][hardening]") {
+    // Four 32-byte bpf_map_def records: two ARRAYs with 4096- and 8-byte values, an ARRAY_OF_MAPS whose
+    // inner_map_idx (offset 20) names the second one, and a HASH.
+    constexpr uint32_t record_size = 32;
+    const std::vector<uint32_t> records = {
+        2,  4, 4096, 1, 0, 0, 0, 0, // inner_big
+        2,  4, 8,    1, 0, 0, 0, 0, // inner_small
+        12, 4, 4,    1, 0, 1, 0, 0, // outer
+        1,  4, 4,    1, 0, 0, 0, 0, // unrelated
+    };
+    const std::vector<std::string> map_names = {"inner_big", "inner_small", "outer", "unrelated"};
+
+    auto build_object = [&](const ELFIO::Elf_Xword unrelated_symbol_size) {
+        ELFIO::elfio writer;
+        writer.create(ELFIO::ELFCLASS64, ELFIO::ELFDATA2LSB);
+        writer.set_os_abi(ELFIO::ELFOSABI_NONE);
+        writer.set_type(ELFIO::ET_REL);
+        writer.set_machine(ELFIO::EM_BPF);
+
+        ELFIO::section* text_sec = writer.sections.add("xdp");
+        text_sec->set_type(ELFIO::SHT_PROGBITS);
+        text_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_EXECINSTR);
+        text_sec->set_addr_align(8);
+        const std::vector insts = {EbpfInst{.opcode = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_IMM},
+                                   EbpfInst{.opcode = INST_OP_EXIT}};
+        text_sec->set_data(reinterpret_cast<const char*>(insts.data()), insts.size() * sizeof(EbpfInst));
+
+        ELFIO::section* maps_sec = writer.sections.add("maps");
+        maps_sec->set_type(ELFIO::SHT_PROGBITS);
+        maps_sec->set_flags(ELFIO::SHF_ALLOC | ELFIO::SHF_WRITE);
+        maps_sec->set_addr_align(4);
+        maps_sec->set_data(reinterpret_cast<const char*>(records.data()), records.size() * sizeof(uint32_t));
+
+        ELFIO::section* str_sec = writer.sections.add(".strtab");
+        str_sec->set_type(ELFIO::SHT_STRTAB);
+        ELFIO::string_section_accessor str_writer(str_sec);
+        ELFIO::section* sym_sec = writer.sections.add(".symtab");
+        sym_sec->set_type(ELFIO::SHT_SYMTAB);
+        sym_sec->set_addr_align(8);
+        sym_sec->set_entry_size(writer.get_default_entry_size(ELFIO::SHT_SYMTAB));
+        sym_sec->set_link(str_sec->get_index());
+        sym_sec->set_info(1);
+        ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
+        sym_writer.add_symbol(str_writer, "prog", 0, insts.size() * sizeof(EbpfInst), ELFIO::STB_GLOBAL,
+                              ELFIO::STT_FUNC, 0, text_sec->get_index());
+        for (size_t i = 0; i < map_names.size(); ++i) {
+            const ELFIO::Elf_Xword size = map_names[i] == "unrelated" ? unrelated_symbol_size : record_size;
+            sym_writer.add_symbol(str_writer, map_names[i].c_str(), i * record_size, size, ELFIO::STB_GLOBAL,
+                                  ELFIO::STT_OBJECT, 0, maps_sec->get_index());
+        }
+
+        std::ostringstream out_stream;
+        writer.save(out_stream);
+        return out_stream.str();
+    };
+
+    SECTION("all symbols have the record size") {
+        std::istringstream in_stream(build_object(record_size));
+        const auto programs = read_elf(in_stream, "memory", "xdp", "", VerifierOptions{}, &g_ebpf_platform_linux);
+        REQUIRE(programs.size() == 1);
+        const auto& descriptors = *programs[0].info.map_descriptors;
+        REQUIRE(descriptors.size() == map_names.size());
+        // outer's inner map is inner_small, as its record says.
+        REQUIRE(descriptors[2].inner_map_fd == descriptors[1].original_fd);
+    }
+
+    SECTION("one symbol is smaller than its record") {
+        std::istringstream in_stream(build_object(16));
+        REQUIRE_THROWS_WITH(read_elf(in_stream, "memory", "xdp", "", VerifierOptions{}, &g_ebpf_platform_linux),
+                            Catch::Matchers::ContainsSubstring("map symbols disagree on the record size"));
+    }
+
+    SECTION("one symbol is larger than its record") {
+        std::istringstream in_stream(build_object(64));
+        REQUIRE_THROWS_WITH(read_elf(in_stream, "memory", "xdp", "", VerifierOptions{}, &g_ebpf_platform_linux),
+                            Catch::Matchers::ContainsSubstring("map symbols disagree on the record size"));
+    }
+}
+
+// The loader that resolves the address of a function (libbpf, for the callback a program passes to a helper) writes
+// a function's address into the lddw that loads it. The immediate the file holds there, usually 0, is a placeholder:
+// analyzed as that number, a test of the address against null prunes the code that runs, and the address can leave
+// the program as a number. The lddw is marked as loading a function pointer instead. Its target is not resolved:
+// the body of a callback is not analyzed, so a helper must not accept it.
+TEST_CASE("ELF loader loads the address of code as a function pointer", "[elf][hardening]") {
+    constexpr EbpfInst lddw_r1{.opcode = INST_OP_LDDW_IMM, .dst = 1};
+    constexpr EbpfInst mov_r6_r1{.opcode = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_REG, .dst = 6, .src = 1};
+    // The unnamed symbol stands for the section symbol of .text, against which clang relocates `&static_function`.
+    const auto object = [&](const std::vector<EbpfInst>& insts, const std::string& section) {
+        return TestObjectBuilder{
+            .sections = {{.name = section, .insts = insts}, {.name = ".text", .insts = {test_mov_r0_0, test_exit}}},
+            .symbols = {{.name = "prog", .section = 0}, {.name = "", .section = 1}},
+            .relocations = {{.section = 0, .instruction = 1, .symbol = 1, .type = R_BPF_64_64_TYPE}},
+        }
+            .build();
+    };
+    const VerifierOptions options{};
+    const auto verifies = [&](const RawProgram& program) {
+        const auto sequence = unmarshal(program, options);
+        REQUIRE(std::holds_alternative<InstructionSeq>(sequence));
+        const ThreadLocalGuard guard;
+        return verify(Program::from_sequence(std::get<InstructionSeq>(sequence), program.info, options), options);
+    };
+
+    SECTION("code guarded by a test of the address is verified") {
+        // r6 = r1; r1 = &function ll; if r1 == 0 goto +3; r0 = *(u64 *)(r6 + 4096); *(u64 *)(r10 + 8) = r0; exit;
+        // r0 = 0; exit. The guarded block reads past the context and writes above the stack frame.
+        const auto programs = read_test_object(
+            object({mov_r6_r1, lddw_r1, EbpfInst{},
+                    EbpfInst{.opcode = INST_CLS_JMP | (0x1 << 4), .dst = 1, .offset = 3}, // if r1 == 0
+                    EbpfInst{.opcode = INST_CLS_LDX | INST_MODE_MEM | INST_SIZE_DW, .dst = 0, .src = 6, .offset = 4096},
+                    EbpfInst{.opcode = INST_CLS_STX | INST_MODE_MEM | INST_SIZE_DW, .dst = 10, .src = 0, .offset = 8},
+                    test_exit, test_mov_r0_0, test_exit},
+                   "xdp"),
+            "xdp");
+        REQUIRE(programs.size() == 1);
+        REQUIRE(programs[0].info.func_address_offsets == std::set<size_t>{1});
+        const auto sequence = unmarshal(programs[0], options);
+        REQUIRE(std::holds_alternative<InstructionSeq>(sequence));
+        const auto& [label, load, _] = std::get<InstructionSeq>(sequence).at(1);
+        REQUIRE(load == Instruction{LoadPseudo{.dst = Reg{1}, .addr = {.kind = PseudoAddress::Kind::FUNC_ADDR}}});
+        REQUIRE_FALSE(verifies(programs[0]));
+    }
+
+    SECTION("the address cannot be returned as a number") {
+        // r6 = r1; r1 = &function ll; r0 = r1; exit.
+        const auto programs = read_test_object(
+            object({mov_r6_r1, lddw_r1, EbpfInst{},
+                    EbpfInst{.opcode = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_REG, .dst = 0, .src = 1}, test_exit},
+                   "socket"),
+            "socket");
+        REQUIRE(programs.size() == 1);
+        REQUIRE_FALSE(verifies(programs[0]));
+    }
+
+    SECTION("taking the address without using it is accepted") {
+        const auto programs =
+            read_test_object(object({mov_r6_r1, lddw_r1, EbpfInst{}, test_mov_r0_0, test_exit}, "xdp"), "xdp");
+        REQUIRE(programs.size() == 1);
+        REQUIRE(verifies(programs[0]));
+    }
+
+    SECTION("a relocation against code on another instruction stays unresolved") {
+        REQUIRE_THROWS_WITH(read_test_object(object({mov_r6_r1, test_mov_r0_0, test_exit}, "xdp"), "xdp"),
+                            Catch::Matchers::ContainsSubstring("Unresolved symbols found"));
+    }
 }

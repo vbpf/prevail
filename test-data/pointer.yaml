@@ -407,9 +407,8 @@ post:
   - r3.shared_offset=32
   - r3.shared_region_size=56
   - r3.stack_numeric_size=1
-  - r3.svalue=[33, 2147418144]
-  - r3.svalue=r8.uvalue+32
-  - r3.uvalue=r3.svalue
+  - r3.uvalue=[33, 2147418144]
+  - r3.uvalue=r8.uvalue+32
   - r8.type=r3.type
   - r8.stack_offset=3936
   - r8.stack_numeric_size=56
@@ -799,6 +798,5 @@ post:
   - r0.type=shared
   - r0.shared_offset=4
   - r0.shared_region_size=4
-  - r0.svalue=[5, 2147418116]
-  - r0.uvalue=r0.svalue
+  - r0.uvalue=[5, 2147418116]
   - r1.type=number

@@ -137,6 +137,12 @@ static EbpfProgramType with_read_only_packet(EbpfProgramType type) {
     return type;
 }
 
+// Gives a program type the layout of its context: the fields it has and the accesses each admits.
+static EbpfProgramType with_ctx_layout(EbpfProgramType type, const EbpfStructDescriptor& layout) {
+    type.ctx_layout = &layout;
+    return type;
+}
+
 const EbpfProgramType linux_socket_filter_program_type =
     with_legacy_packet_access(PTYPE("socket_filter", &g_socket_filter_descr, BPF_PROG_TYPE_SOCKET_FILTER, {"socket"}));
 
@@ -157,8 +163,9 @@ const std::vector<EbpfProgramType> linux_program_types = {
     with_read_only_packet(PTYPE("lwt_in", &g_lwt_inout_descr, BPF_PROG_TYPE_LWT_IN, {"lwt_in"})),
     with_read_only_packet(PTYPE("lwt_out", &g_lwt_inout_descr, BPF_PROG_TYPE_LWT_OUT, {"lwt_out"})),
     PTYPE("lwt_xmit", &g_lwt_xmit_descr, BPF_PROG_TYPE_LWT_XMIT, {"lwt_xmit"}),
-    PTYPE_READONLY_CTX("perf_event", &g_perf_event_descr, BPF_PROG_TYPE_PERF_EVENT,
-                       {"perf_section" COMMA "perf_event"}),
+    with_ctx_layout(PTYPE_READONLY_CTX("perf_event", &g_perf_event_descr, BPF_PROG_TYPE_PERF_EVENT,
+                                       {"perf_section" COMMA "perf_event"}),
+                    bpf_perf_event_data_layout),
     with_legacy_packet_access(PTYPE("sched_act", &g_sched_descr, BPF_PROG_TYPE_SCHED_ACT, {"action"})),
     // libbpf also names tc programs "tc", "tc/..." and "tcx/...".
     with_legacy_packet_access(PTYPE("sched_cls", &g_sched_descr, BPF_PROG_TYPE_SCHED_CLS, {"classifier" COMMA "tc"})),
@@ -234,41 +241,44 @@ static EbpfProgramType get_program_type_linux(const std::string& section, const 
 #define BPF_MAP_TYPE(x) 0, #x
 #endif
 
+// The last column marks the map types that check_map_prog_compatibility() in the Linux verifier lets a sleepable
+// program use: those whose elements are freed only after a tasks-trace RCU grace period, which a sleeping program
+// holds off.
 static const EbpfMapType linux_map_types[] = {
-    {BPF_MAP_TYPE(UNSPEC)},
-    {BPF_MAP_TYPE(HASH)},
-    {BPF_MAP_TYPE(ARRAY), true},
-    {BPF_MAP_TYPE(PROG_ARRAY), true, EbpfMapValueType::PROGRAM},
-    {BPF_MAP_TYPE(PERF_EVENT_ARRAY), true},
-    {BPF_MAP_TYPE(PERCPU_HASH)},
-    {BPF_MAP_TYPE(PERCPU_ARRAY), true},
-    {BPF_MAP_TYPE(STACK_TRACE)},
-    {BPF_MAP_TYPE(CGROUP_ARRAY), true},
-    {BPF_MAP_TYPE(LRU_HASH)},
-    {BPF_MAP_TYPE(LRU_PERCPU_HASH)},
-    {BPF_MAP_TYPE(LPM_TRIE)},
-    {BPF_MAP_TYPE(ARRAY_OF_MAPS), true, EbpfMapValueType::MAP},
-    {BPF_MAP_TYPE(HASH_OF_MAPS), false, EbpfMapValueType::MAP},
-    {BPF_MAP_TYPE(DEVMAP), true},
-    {BPF_MAP_TYPE(SOCKMAP), true},
-    {BPF_MAP_TYPE(CPUMAP), true},
-    {BPF_MAP_TYPE(XSKMAP), true},
-    {BPF_MAP_TYPE(SOCKHASH)},
-    {BPF_MAP_TYPE(CGROUP_STORAGE)},
-    {BPF_MAP_TYPE(REUSEPORT_SOCKARRAY), true},
-    {BPF_MAP_TYPE(PERCPU_CGROUP_STORAGE)},
-    {BPF_MAP_TYPE(QUEUE)},
-    {BPF_MAP_TYPE(STACK)},
-    {BPF_MAP_TYPE(SK_STORAGE)},
-    {BPF_MAP_TYPE(DEVMAP_HASH)},
-    {BPF_MAP_TYPE(STRUCT_OPS)},
-    {BPF_MAP_TYPE(RINGBUF)},
-    {BPF_MAP_TYPE(INODE_STORAGE)},
-    {BPF_MAP_TYPE(TASK_STORAGE)},
-    {BPF_MAP_TYPE(BLOOM_FILTER)},
-    {BPF_MAP_TYPE(USER_RINGBUF)},
-    {BPF_MAP_TYPE(CGRP_STORAGE)},
-    {BPF_MAP_TYPE(ARENA)},
+    {BPF_MAP_TYPE(UNSPEC), false, EbpfMapValueType::ANY, false},
+    {BPF_MAP_TYPE(HASH), false, EbpfMapValueType::ANY, true},
+    {BPF_MAP_TYPE(ARRAY), true, EbpfMapValueType::ANY, true},
+    {BPF_MAP_TYPE(PROG_ARRAY), true, EbpfMapValueType::PROGRAM, false},
+    {BPF_MAP_TYPE(PERF_EVENT_ARRAY), true, EbpfMapValueType::ANY, false},
+    {BPF_MAP_TYPE(PERCPU_HASH), false, EbpfMapValueType::ANY, true},
+    {BPF_MAP_TYPE(PERCPU_ARRAY), true, EbpfMapValueType::ANY, true},
+    {BPF_MAP_TYPE(STACK_TRACE), false, EbpfMapValueType::ANY, false},
+    {BPF_MAP_TYPE(CGROUP_ARRAY), true, EbpfMapValueType::ANY, false},
+    {BPF_MAP_TYPE(LRU_HASH), false, EbpfMapValueType::ANY, true},
+    {BPF_MAP_TYPE(LRU_PERCPU_HASH), false, EbpfMapValueType::ANY, true},
+    {BPF_MAP_TYPE(LPM_TRIE), false, EbpfMapValueType::ANY, false},
+    {BPF_MAP_TYPE(ARRAY_OF_MAPS), true, EbpfMapValueType::MAP, true},
+    {BPF_MAP_TYPE(HASH_OF_MAPS), false, EbpfMapValueType::MAP, true},
+    {BPF_MAP_TYPE(DEVMAP), true, EbpfMapValueType::ANY, false},
+    {BPF_MAP_TYPE(SOCKMAP), true, EbpfMapValueType::ANY, false},
+    {BPF_MAP_TYPE(CPUMAP), true, EbpfMapValueType::ANY, false},
+    {BPF_MAP_TYPE(XSKMAP), true, EbpfMapValueType::ANY, false},
+    {BPF_MAP_TYPE(SOCKHASH), false, EbpfMapValueType::ANY, false},
+    {BPF_MAP_TYPE(CGROUP_STORAGE), false, EbpfMapValueType::ANY, false},
+    {BPF_MAP_TYPE(REUSEPORT_SOCKARRAY), true, EbpfMapValueType::ANY, false},
+    {BPF_MAP_TYPE(PERCPU_CGROUP_STORAGE), false, EbpfMapValueType::ANY, false},
+    {BPF_MAP_TYPE(QUEUE), false, EbpfMapValueType::ANY, true},
+    {BPF_MAP_TYPE(STACK), false, EbpfMapValueType::ANY, true},
+    {BPF_MAP_TYPE(SK_STORAGE), false, EbpfMapValueType::ANY, true},
+    {BPF_MAP_TYPE(DEVMAP_HASH), false, EbpfMapValueType::ANY, false},
+    {BPF_MAP_TYPE(STRUCT_OPS), false, EbpfMapValueType::ANY, false},
+    {BPF_MAP_TYPE(RINGBUF), false, EbpfMapValueType::ANY, true},
+    {BPF_MAP_TYPE(INODE_STORAGE), false, EbpfMapValueType::ANY, true},
+    {BPF_MAP_TYPE(TASK_STORAGE), false, EbpfMapValueType::ANY, true},
+    {BPF_MAP_TYPE(BLOOM_FILTER), false, EbpfMapValueType::ANY, false},
+    {BPF_MAP_TYPE(USER_RINGBUF), false, EbpfMapValueType::ANY, true},
+    {BPF_MAP_TYPE(CGRP_STORAGE), false, EbpfMapValueType::ANY, true},
+    {BPF_MAP_TYPE(ARENA), false, EbpfMapValueType::ANY, true},
 };
 
 EbpfMapType get_map_type_linux(const uint32_t platform_specific_type) {
@@ -316,6 +326,7 @@ void parse_maps_section_linux(std::vector<EbpfMapDescriptor>& map_descriptors, c
             .value_size = s.value_size,
             .max_entries = s.max_entries,
             .inner_map_fd = gsl::narrow<int32_t>(s.inner_map_idx),
+            .program_access = map_flags_to_program_access(s.map_flags),
         });
     }
 }

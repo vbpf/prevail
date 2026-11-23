@@ -3,6 +3,7 @@
 #include <cstring>
 #include <map>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -43,6 +44,18 @@ struct bpf_core_relo {
 };
 static_assert(sizeof(bpf_core_relo) == 16);
 
+/// The local BTF that CO-RE relocations are resolved against.
+struct CoreBtf {
+    const libbtf::btf_type_data& types;
+    /// The ids of the types whose kind_flag is set.
+    std::set<uint32_t> types_with_kind_flag;
+
+    [[nodiscard]]
+    bool kind_flag(const uint32_t type_id) const {
+        return types_with_kind_flag.contains(type_id);
+    }
+};
+
 namespace {
 
 // This type is used only for offsetof() lookups of core_relo fields in
@@ -70,8 +83,25 @@ struct btf_string_table_view_t {
 struct core_field_resolution_t {
     uint32_t type_id;
     uint64_t offset_bits;
-    std::optional<uint32_t> member_offset_encoding;
+    /// The declared width of the field when the access ends at a bitfield member of a struct or union whose BTF
+    /// kind_flag is set, and 0 otherwise.
+    uint32_t bitfield_size;
 };
+
+/// Where a struct or union member lies, decoded from the offset field of its btf_member.
+struct btf_member_location_t {
+    uint32_t bit_offset;
+    uint32_t bitfield_size;
+};
+
+/// With kind_flag clear, the offset field of a btf_member is the member's bit offset, all 32 bits of it. With
+/// kind_flag set, it packs the bitfield size into its top 8 bits and the bit offset into its low 24.
+btf_member_location_t decode_btf_member_offset(const uint32_t offset_field, const bool kind_flag) {
+    if (!kind_flag) {
+        return {offset_field, 0};
+    }
+    return {BTF_MEMBER_BIT_OFFSET(offset_field), BTF_MEMBER_BITFIELD_SIZE(offset_field)};
+}
 
 struct core_field_storage_t {
     uint64_t byte_offset;
@@ -113,6 +143,65 @@ btf_string_table_view_t parse_btf_string_table(const ELFIO::section& btf_section
     const size_t str_start = checked_add(hdr.hdr_len, hdr.str_off, btf_size, "BTF string table");
     const size_t str_end = checked_add(str_start, hdr.str_len, btf_size, "BTF string table");
     return {btf_data + str_start, str_end - str_start};
+}
+
+size_t btf_type_extra_size(const uint32_t kind, const uint32_t vlen) {
+    switch (kind) {
+    case libbtf::BTF_KIND_PTR:
+    case libbtf::BTF_KIND_FWD:
+    case libbtf::BTF_KIND_TYPEDEF:
+    case libbtf::BTF_KIND_VOLATILE:
+    case libbtf::BTF_KIND_CONST:
+    case libbtf::BTF_KIND_RESTRICT:
+    case libbtf::BTF_KIND_FUNCTION:
+    case libbtf::BTF_KIND_FLOAT:
+    case libbtf::BTF_KIND_TYPE_TAG: return 0;
+    case libbtf::BTF_KIND_INT: return sizeof(uint32_t);
+    case libbtf::BTF_KIND_VAR: return sizeof(btf_var_t);
+    case libbtf::BTF_KIND_DECL_TAG: return sizeof(btf_decl_tag_t);
+    case libbtf::BTF_KIND_ARRAY: return sizeof(btf_array_t);
+    case libbtf::BTF_KIND_STRUCT:
+    case libbtf::BTF_KIND_UNION: return size_t{vlen} * sizeof(btf_member_t);
+    case libbtf::BTF_KIND_ENUM: return size_t{vlen} * sizeof(btf_enum_t);
+    case libbtf::BTF_KIND_FUNCTION_PROTOTYPE: return size_t{vlen} * sizeof(btf_param_t);
+    case libbtf::BTF_KIND_DATA_SECTION: return size_t{vlen} * sizeof(btf_var_secinfo_t);
+    case libbtf::BTF_KIND_ENUM64: return size_t{vlen} * sizeof(btf_enum64_t);
+    default: throw UnmarshalError("Invalid BTF kind " + std::to_string(kind));
+    }
+}
+
+/// The ids of the types in a .BTF section whose kind_flag is set. libbtf's parsed types do not carry the flag of a
+/// struct or union, which decides how its members' offset fields are encoded, so the type section is walked again
+/// here, in the same order libbtf assigns ids (from 1; id 0 is void).
+std::set<uint32_t> parse_btf_kind_flags(const ELFIO::section& btf_section) {
+    if (!btf_section.get_data()) {
+        throw UnmarshalError(".BTF section has no data");
+    }
+    const char* btf_data = btf_section.get_data();
+    const size_t btf_size = btf_section.get_size();
+    const auto hdr = read_struct_at<btf_header_t>(btf_data, btf_size, 0, "BTF header");
+    if (hdr.magic != BTF_HEADER_MAGIC || hdr.version != BTF_HEADER_VERSION) {
+        throw UnmarshalError("Invalid .BTF header");
+    }
+    if (hdr.hdr_len < sizeof(btf_header_t) || hdr.hdr_len > btf_size) {
+        throw UnmarshalError("Invalid .BTF header length");
+    }
+
+    const size_t type_start = checked_add(hdr.hdr_len, hdr.type_off, btf_size, "BTF type section");
+    const size_t type_end = checked_add(type_start, hdr.type_len, btf_size, "BTF type section");
+    std::set<uint32_t> types_with_kind_flag;
+    uint32_t type_id = 0;
+    for (size_t offset = type_start; offset < type_end;) {
+        const auto type = read_struct_at<btf_type_t>(btf_data, type_end, offset, "BTF type");
+        ++type_id;
+        if (BPF_TYPE_INFO_KIND_FLAG(type.info) != 0) {
+            types_with_kind_flag.insert(type_id);
+        }
+        offset = checked_add(offset, sizeof(btf_type_t), type_end, "BTF type");
+        offset = checked_add(offset, btf_type_extra_size(BPF_TYPE_INFO_KIND(type.info), BPF_TYPE_INFO_VLEN(type.info)),
+                             type_end, "BTF type");
+    }
+    return types_with_kind_flag;
 }
 
 std::string_view btf_string_at(const btf_string_table_view_t& strings, const uint32_t string_offset,
@@ -169,10 +258,11 @@ std::vector<uint32_t> parse_core_access_string(const std::string_view s) {
     return indices;
 }
 
-core_field_resolution_t resolve_core_field(const libbtf::btf_type_data& btf_data, const uint32_t type_id,
+core_field_resolution_t resolve_core_field(const CoreBtf& btf, const uint32_t type_id,
                                            const std::string_view access_string) {
+    const libbtf::btf_type_data& btf_data = btf.types;
     auto indices = parse_core_access_string(access_string);
-    core_field_resolution_t result{strip_type_modifiers(btf_data, type_id), 0, std::nullopt};
+    core_field_resolution_t result{strip_type_modifiers(btf_data, type_id), 0, 0};
 
     // The first accessor is not a member index: it indexes the root type as an array element
     // (ptr[N], contributing N * sizeof(root) bytes), and Clang emits 0 unless the source
@@ -200,37 +290,31 @@ core_field_resolution_t resolve_core_field(const libbtf::btf_type_data& btf_data
         result.offset_bits += member_offset;
     };
 
+    // Steps into member `index` of the struct or union result.type_id, whose members are `members`.
+    const auto enter_member = [&](const std::vector<libbtf::btf_kind_struct_member>& members,
+                                  const std::string_view aggregate_kind, const uint32_t index) {
+        if (index >= members.size()) {
+            throw UnmarshalError("CO-RE: " + std::string(aggregate_kind) + " member index " + std::to_string(index) +
+                                 " out of bounds (size " + std::to_string(members.size()) + ") for access path " +
+                                 std::string(access_string));
+        }
+        const auto& member = members[index];
+        final_member = index == members.size() - 1 && member.name && !member.name->empty();
+        const auto location = decode_btf_member_offset(member.offset_from_start_in_bits, btf.kind_flag(result.type_id));
+        add_member_offset(location.bit_offset);
+        result.bitfield_size = location.bitfield_size;
+        result.type_id = member.type;
+    };
+
     for (const uint32_t index : indices) {
         result.type_id = strip_type_modifiers(btf_data, result.type_id);
         switch (btf_data.get_kind_index(result.type_id)) {
-        case libbtf::BTF_KIND_STRUCT: {
-            const auto s = btf_data.get_kind_type<libbtf::btf_kind_struct>(result.type_id);
-            if (index >= s.members.size()) {
-                throw UnmarshalError("CO-RE: struct member index " + std::to_string(index) + " out of bounds (size " +
-                                     std::to_string(s.members.size()) + ") for access path " +
-                                     std::string(access_string));
-            }
-            const auto& member = s.members[index];
-            final_member = index == s.members.size() - 1 && member.name && !member.name->empty();
-            add_member_offset(BTF_MEMBER_BIT_OFFSET(member.offset_from_start_in_bits));
-            result.member_offset_encoding = member.offset_from_start_in_bits;
-            result.type_id = member.type;
+        case libbtf::BTF_KIND_STRUCT:
+            enter_member(btf_data.get_kind_type<libbtf::btf_kind_struct>(result.type_id).members, "struct", index);
             break;
-        }
-        case libbtf::BTF_KIND_UNION: {
-            const auto u = btf_data.get_kind_type<libbtf::btf_kind_union>(result.type_id);
-            if (index >= u.members.size()) {
-                throw UnmarshalError("CO-RE: union member index " + std::to_string(index) + " out of bounds (size " +
-                                     std::to_string(u.members.size()) + ") for access path " +
-                                     std::string(access_string));
-            }
-            const auto& member = u.members[index];
-            final_member = index == u.members.size() - 1 && member.name && !member.name->empty();
-            add_member_offset(BTF_MEMBER_BIT_OFFSET(member.offset_from_start_in_bits));
-            result.member_offset_encoding = member.offset_from_start_in_bits;
-            result.type_id = member.type;
+        case libbtf::BTF_KIND_UNION:
+            enter_member(btf_data.get_kind_type<libbtf::btf_kind_union>(result.type_id).members, "union", index);
             break;
-        }
         case libbtf::BTF_KIND_ARRAY: {
             const auto a = btf_data.get_kind_type<libbtf::btf_kind_array>(result.type_id);
             if (index >= a.count_of_elements && !(final_member && a.count_of_elements == 0)) {
@@ -244,7 +328,7 @@ core_field_resolution_t resolve_core_field(const libbtf::btf_type_data& btf_data
                 throw UnmarshalError("CO-RE: array offset overflow for access path " + std::string(access_string));
             }
             result.offset_bits += static_cast<uint64_t>(index) * element_size * 8;
-            result.member_offset_encoding.reset();
+            result.bitfield_size = 0;
             result.type_id = a.element_type;
             final_member = false;
             break;
@@ -258,8 +342,8 @@ core_field_resolution_t resolve_core_field(const libbtf::btf_type_data& btf_data
 }
 
 uint32_t core_field_bit_width(const libbtf::btf_type_data& btf_data, const core_field_resolution_t& field) {
-    if (field.member_offset_encoding && BTF_MEMBER_BITFIELD_SIZE(*field.member_offset_encoding) != 0) {
-        return BTF_MEMBER_BITFIELD_SIZE(*field.member_offset_encoding);
+    if (field.bitfield_size != 0) {
+        return field.bitfield_size;
     }
 
     const auto kind = btf_data.get_kind_index(field.type_id);
@@ -277,14 +361,14 @@ uint32_t core_field_bit_width(const libbtf::btf_type_data& btf_data, const core_
 // all describe that same unit, or the analyzed constants differ from the ones a CO-RE loader patches in.
 core_field_storage_t core_field_storage(const libbtf::btf_type_data& btf_data, const core_field_resolution_t& field) {
     core_field_storage_t storage{field.offset_bits / 8, btf_data.get_size(field.type_id)};
-    if (!field.member_offset_encoding || BTF_MEMBER_BITFIELD_SIZE(*field.member_offset_encoding) == 0) {
+    if (field.bitfield_size == 0) {
         return storage;
     }
     if (storage.byte_size == 0) {
         throw UnmarshalError("CO-RE bitfield has zero-sized type");
     }
 
-    const uint64_t end_bits = field.offset_bits + BTF_MEMBER_BITFIELD_SIZE(*field.member_offset_encoding);
+    const uint64_t end_bits = field.offset_bits + field.bitfield_size;
     storage.byte_offset = field.offset_bits / 8 / storage.byte_size * storage.byte_size;
     while (end_bits - storage.byte_offset * 8 > storage.byte_size * 8) {
         if (storage.byte_size >= 8) {
@@ -313,7 +397,9 @@ bool core_field_offset_uses_offset_field(const EbpfInst& inst) {
 // ---------------------------------------------------------------------------
 
 void ProgramReader::apply_core_relocation(RawProgram& prog, const bpf_core_relo& relo,
-                                          const std::string_view access_string, const libbtf::btf_type_data& btf_data) {
+                                          const std::string_view access_string, const CoreBtf& btf,
+                                          const std::span<const EbpfInst> section_code) {
+    const libbtf::btf_type_data& btf_data = btf.types;
     if (relo.insn_off < prog.insn_off) {
         throw UnmarshalError("CO-RE relocation offset before program start");
     }
@@ -336,10 +422,58 @@ void ProgramReader::apply_core_relocation(RawProgram& prog, const bpf_core_relo&
         throw UnmarshalError("CO-RE relocation at offset " + std::to_string(relo.insn_off) +
                              " targets LDDW continuation slot");
     }
+    const auto reject = [&](const std::string& why) {
+        throw UnmarshalError("CO-RE relocation at offset " + std::to_string(relo.insn_off) + " targets " + why);
+    };
+
+    // The loader's own rewrites are done by now, and their soundness was argued for the code they left: a known
+    // extern's load is folded into a constant, and jump targets were collected to decide that. A CO-RE relocation
+    // applied on top of a rewritten instruction would patch something other than what the file relocates.
+    const bool is_lddw = inst.opcode == INST_OP_LDDW_IMM;
+    const size_t section_idx = relo.insn_off / sizeof(EbpfInst);
+    if (is_lddw && inst_idx + 1 >= prog.prog.size()) {
+        reject("incomplete LDDW");
+    }
+    if (section_idx + (is_lddw ? 1 : 0) >= section_code.size() || inst != section_code[section_idx] ||
+        (is_lddw && prog.prog[inst_idx + 1] != section_code[section_idx + 1])) {
+        reject("an instruction that another relocation rewrote");
+    }
+
+    // Only the instructions that libbpf's bpf_core_patch_insn() patches are patched here; it fails the load for
+    // any other. In particular no jump or call is patched: their targets decide which code is checked at all.
+    switch (inst.opcode & INST_CLS_MASK) {
+    case INST_CLS_ALU:
+    case INST_CLS_ALU64:
+        if ((inst.opcode & INST_SRC_REG) != 0) {
+            reject("an ALU instruction without an immediate operand");
+        }
+        break;
+    case INST_CLS_LDX:
+    case INST_CLS_ST:
+    case INST_CLS_STX:
+        // libbpf patches the offset field of these, whatever the relocation kind. Only a field's byte offset
+        // belongs there, so any other kind is rejected instead of being written to imm.
+        if (relo.kind != BPF_CORE_FIELD_BYTE_OFFSET || !core_field_offset_uses_offset_field(inst)) {
+            reject("a load or store with a relocation other than a field byte offset");
+        }
+        break;
+    case INST_CLS_LD: {
+        if (!is_lddw || inst.src != 0 || inst.offset != 0) {
+            reject("a load that is not a plain LDDW");
+        }
+        const EbpfInst& next = prog.prog[inst_idx + 1];
+        if (next.opcode != 0 || next.dst != 0 || next.src != 0 || next.offset != 0) {
+            reject("a load that is not a plain LDDW");
+        }
+        break;
+    }
+    default: reject("an instruction that cannot be relocated");
+    }
+
     std::optional<core_field_resolution_t> resolved_field;
     const auto get_field = [&]() -> const core_field_resolution_t& {
         if (!resolved_field) {
-            resolved_field = resolve_core_field(btf_data, relo.type_id, access_string);
+            resolved_field = resolve_core_field(btf, relo.type_id, access_string);
         }
         return *resolved_field;
     };
@@ -509,6 +643,7 @@ void ProgramReader::process_core_relocations(const libbtf::btf_type_data& btf_da
     }
 
     const auto strings = parse_btf_string_table(*btf_sec);
+    const CoreBtf btf{btf_data, parse_btf_kind_flags(*btf_sec)};
     std::map<std::string, std::vector<RawProgram*>> programs_by_section;
     for (auto& prog : raw_programs) {
         programs_by_section[prog.section_name].push_back(&prog);
@@ -535,19 +670,30 @@ void ProgramReader::process_core_relocations(const libbtf::btf_type_data& btf_da
             continue;
         }
 
+        // Executable sections have distinct names (read_programs), so this is the code the records refer to.
+        std::vector<EbpfInst> section_code;
+        for (const auto& sec : reader.sections) {
+            if ((sec->get_flags() & ELFIO::SHF_EXECINSTR) && sec->get_data() && sec->get_name() == section_name) {
+                section_code = vector_of<EbpfInst>(*sec);
+                break;
+            }
+        }
+
         for (size_t i = 0; i < section.num_info; ++i) {
             const size_t record_offset = offset + i * core_relo_rec_size;
             const auto reloc =
                 read_struct_at<bpf_core_relo>(btf_ext_data, btf_ext_size, record_offset, "CO-RE relocation");
             const auto access_string = btf_string_at(strings, reloc.access_str_off, "CO-RE access string");
 
+            // This runs before linking, when the programs of a section do not overlap; linking then copies the
+            // patched code into the callers. Every program that covers the instruction is patched nonetheless,
+            // so that no copy would keep its placeholder if they did.
             bool applied = false;
             for (RawProgram* prog : prog_it->second) {
                 const size_t prog_size = prog->prog.size() * sizeof(EbpfInst);
                 if (reloc.insn_off >= prog->insn_off && reloc.insn_off < prog->insn_off + prog_size) {
-                    apply_core_relocation(*prog, reloc, access_string, btf_data);
+                    apply_core_relocation(*prog, reloc, access_string, btf, section_code);
                     applied = true;
-                    break;
                 }
             }
 

@@ -245,6 +245,47 @@ post:
   - r2.svalue=[-2147483648, 2147483647]
 
 ---
+# A sign-extending load of a pointer slot yields the sign-extended low half of the address, not
+# the pointer, so the result must carry no type.
+test-case: load s32 of a ctx pointer slot is not a packet pointer
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0"]
+
+code:
+  <start>: |
+    r2 = *(s32 *)(r1 + 0)
+
+post:
+  - r1.ctx_offset=0
+  - r1.type=ctx
+
+---
+# The same load through a pointer that is either stack or ctx joins a number (the stack bytes)
+# with the slot's packet pointer. The number's svalue describes the numeric alternative only: it
+# must not make the sign extension a no-op for the pointer as well, or the result stays a packet
+# pointer at offset 0 that compares equal to ctx->data while the runtime value differs.
+test-case: load s32 of a ctx pointer slot through a stack-or-ctx pointer is not a packet pointer
+
+pre: ["r10.type=stack", "r10.stack_offset=4096",
+      "r9.type in {ctx, stack}", "r9.ctx_offset=0", "r9.stack_offset=4088", "r9.stack_numeric_size=8",
+      "s[4088...4095].type=number", "s[4088...4095].svalue=0", "s[4088...4095].uvalue=0"]
+
+code:
+  <start>: |
+    r3 = *(s32 *)(r9 + 0)
+
+post:
+  - r10.type=stack
+  - r10.stack_offset=4096
+  - r9.type in {ctx, stack}
+  - r9.ctx_offset=0
+  - r9.stack_offset=4088
+  - r9.stack_numeric_size=8
+  - s[4088...4095].type=number
+  - s[4088...4095].svalue=0
+  - s[4088...4095].uvalue=0
+
+---
 # A load straddling a pointer slot reads real pointer bytes. Typing the result as
 # a number would let the program store those bytes into a map shared with
 # userspace -- a pointer/KASLR leak (#1204). The result must carry no type, so the
@@ -334,6 +375,139 @@ post:
 
 messages:
   - "4: Upper bound must be at most packet_size (valid_access(r2.offset, width=1) for read)"
+
+---
+# max_packet_size bounds comparison operands, not the packet: helpers that
+# reallocate it (bpf_msg_pull_data, bpf_msg_push_data, bpf_skb_pull_data) set
+# its length from their arguments, and XDP and tc see 65549-byte frames. The
+# data_end load must not assume a longer packet away, or the code behind the
+# length test below is never verified.
+test-case: code guarded by data_end - data above max_packet_size is verified
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "meta_offset=0", "packet_size=[0, 2147483647]"]
+
+code:
+  <start>: |
+    r2 = *(u32 *)(r1 + 0)
+    r3 = *(u32 *)(r1 + 4)
+    r3 -= r2
+    if r3 <= 65535 goto <out>
+    r5 = 0x41414141
+    *(u64 *)(r5 + 0) = r5
+  <out>: |
+    r0 = 0
+    exit
+
+post:
+  - meta_offset=0
+  - packet_size=0
+  - r0.svalue=0
+  - r0.type=number
+  - r0.uvalue=0
+  - r1.ctx_offset=0
+  - r1.type=ctx
+  - r2.packet_offset=0
+  - r2.type=packet
+  - r2.uvalue=[0, 2147418112]
+  - r3.svalue=packet_size
+  - r3.type=number
+  - r3.uvalue=packet_size
+
+messages:
+  - "5: Invalid type (r5.type in {ctx, stack, packet, shared, socket, alloc_mem})"
+
+---
+# The same guard as a pointer comparison at the ceiling: the fall-through edge
+# is a packet longer than max_packet_size.
+test-case: code guarded by data + max_packet_size below data_end is verified
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "meta_offset=0", "packet_size=[0, 2147483647]"]
+
+code:
+  <start>: |
+    r2 = *(u32 *)(r1 + 0)
+    r3 = *(u32 *)(r1 + 4)
+    r2 += 65535
+    if r2 >= r3 goto <out>
+    r5 = 0x41414141
+    *(u64 *)(r5 + 0) = r5
+  <out>: |
+    r0 = 0
+    exit
+
+post:
+  - meta_offset=0
+  - packet_size=0
+  - r0.svalue=0
+  - r0.type=number
+  - r0.uvalue=0
+  - r1.ctx_offset=0
+  - r1.type=ctx
+  - r2.packet_offset=packet_size
+  - r2.type=packet
+  - r2.uvalue=[65535, 2147483647]
+  - r3.packet_offset=packet_size
+  - r3.type=packet
+  - r3.uvalue=[0, 2147418112]
+
+messages:
+  - "5: Invalid type (r5.type in {ctx, stack, packet, shared, socket, alloc_mem})"
+
+---
+# A length taken as data_end - data, with no constant bound on the packet, is
+# still a number that bounds packet accesses, also through its 32-bit view.
+test-case: data_end - data guards a packet access
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "meta_offset=0", "packet_size=[0, 2147483647]"]
+
+code:
+  <start>: |
+    r2 = *(u32 *)(r1 + 0)
+    r3 = *(u32 *)(r1 + 4)
+    r3 -= r2
+    if w3 < 8 goto <out>
+    r0 = *(u64 *)(r2 + 0)
+  <out>: |
+    r0 = 0
+    exit
+
+post:
+  - meta_offset=0
+  - packet_size=0
+  - r0.svalue=0
+  - r0.type=number
+  - r0.uvalue=0
+  - r1.ctx_offset=0
+  - r1.type=ctx
+  - r2.packet_offset=0
+  - r2.type=packet
+  - r2.uvalue=[0, 2147418112]
+  - r3.svalue=packet_size
+  - r3.type=number
+  - r3.uvalue=packet_size
+
+---
+# A comparison operand that may lie past data_end is still held to
+# max_packet_size, so that its address cannot wrap around.
+test-case: pointer past data_end is not comparable above max_packet_size
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "meta_offset=0", "packet_size=[0, 2147483647]"]
+
+code:
+  <start>: |
+    r2 = *(u32 *)(r1 + 0)
+    r3 = *(u32 *)(r1 + 4)
+    r3 += 1
+    if r2 > r3 goto <out>
+  <out>: |
+    r0 = 0
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "3: Upper bound must be at most 65535 (valid_access(r3.offset) for comparison/subtraction)"
 
 ---
 # A packet pointer loaded from the context is not known to be non-null: Linux

@@ -23,11 +23,13 @@ struct RegPack {
     Variable shared_offset;
     Variable stack_offset;
     Variable shared_region_size;
+    Variable shared_access; // What the program may do with the region, as an EbpfMapAccess value.
     Variable stack_numeric_size;
     Variable socket_offset;
     Variable btf_id_offset;
     Variable alloc_mem_offset;
     Variable alloc_mem_size;
+    Variable func_offset; // The label of the function a T_FUNC register points to.
 };
 
 // Variables are represented throughout the domains as compact interned ids
@@ -79,8 +81,15 @@ class VariableRegistry final {
     Variable packet_size() const;
 
     /// EXPERIMENTAL: Variables where only the lower bound is semantically meaningful.
+    /// The numeric domain drops constant upper bounds on them. Relations between them are kept, so the transfer
+    /// functions must record only relations that are true of the quantity itself; for stack_numeric_size see
+    /// EbpfTransformer::advance_stack_numeric_size.
     [[nodiscard]]
     bool is_min_only(const Variable& v) const;
+
+    /// Whether `v` is a register's shared_access, which invariants show only where it is not read-write.
+    [[nodiscard]]
+    bool is_shared_access(const Variable& v) const;
 
     std::vector<Variable> get_loop_counters() const;
     Variable loop_counter(const std::string& label) const;

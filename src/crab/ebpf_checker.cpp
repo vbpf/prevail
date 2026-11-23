@@ -34,10 +34,21 @@ bool is_power_of_two(const int size) { return size > 0 && (size & (size - 1)) ==
 
 bool field_is_present(const EbpfStructFieldDescriptor& field) { return field.offset >= 0 && field.span > 0; }
 
-bool field_allows_access(const EbpfStructFieldDescriptor& field, const int offset, const int size,
+/// One past the last byte of a field, over all of its elements.
+int field_end(const EbpfStructFieldDescriptor& field) { return field.offset + field.span * field.count; }
+
+bool field_allows_access(EbpfStructFieldDescriptor field, const int offset, const int size,
                          const AccessType access_type) {
     if (!field_is_present(field)) {
         return false;
+    }
+    if (field.count != 1) {
+        // An array: the access is judged against the element that holds its first byte.
+        if (field.count < 1 || offset < field.offset || offset >= field_end(field)) {
+            return false;
+        }
+        field.offset += (offset - field.offset) / field.span * field.span;
+        field.count = 1;
     }
     if (access_type == AccessType::write && field.permission == EbpfStructFieldPermission::read_only) {
         return false;
@@ -77,7 +88,7 @@ bool write_may_touch_readonly_field(const NumAbsDomain& values, const LinearExpr
             continue;
         }
         if (values.intersect(ub > LinearExpression{field.offset}) &&
-            values.intersect(lb < LinearExpression{field.offset + field.span})) {
+            values.intersect(lb < LinearExpression{field_end(field)})) {
             return true;
         }
     }
@@ -133,6 +144,16 @@ class EbpfChecker final {
                              const std::string& msg) const {
         using namespace dsl_syntax;
         require_value(dom.state, access_ub <= ceiling, msg);
+    }
+
+    // Map memory may be read or written only as the map lets the program (see EbpfMapAccess).
+    void require_shared_access(const RegPack& reg, const AccessType access_type) const {
+        using namespace dsl_syntax;
+        switch (access_type) {
+        case AccessType::compare: break;
+        case AccessType::read: require_value(dom.state, reg.shared_access <= 0, "Shared memory is write-only"); break;
+        case AccessType::write: require_value(dom.state, reg.shared_access >= 0, "Shared memory is read-only"); break;
+        }
     }
 
     // A null pointer access is only valid with zero width.
@@ -218,8 +239,10 @@ void EbpfChecker::operator()(const Addable& s) const {
 
 void EbpfChecker::operator()(const NonNull& s) const {
     using namespace dsl_syntax;
-    // Numbers and pointers to the singleton regions are never null. Any other pointer is
-    // null unless uvalue > 0 has been established, the same fact a dereference requires.
+    // Numbers and pointers to the singleton regions need no null check. Stack and packet
+    // pointers are never null; the context pointer may be null at entry, but it is never
+    // dereferenced then (see the T_CTX case of ValidAccess). Any other pointer is null unless
+    // uvalue > 0 has been established, the same fact a dereference requires.
     if (dom.state.is_in_group(s.reg, TS_NUM | TS_SINGLETON_PTR)) {
         return;
     }
@@ -329,7 +352,7 @@ void EbpfChecker::operator()(const ValidArgNonNull& s) const {
 }
 
 void EbpfChecker::operator()(const ValidCallbackTarget& s) const {
-    const auto callback_interval = dom.state.values.eval_interval(reg_pack(s.reg).uvalue);
+    const auto callback_interval = dom.state.values.eval_interval(reg_pack(s.reg).func_offset);
     const auto callback_target = callback_interval.singleton();
     if (!callback_target.has_value() || !callback_target->fits<int32_t>()) {
         throw_fail("callback function pointer must be a singleton code address");
@@ -456,7 +479,8 @@ void EbpfChecker::operator()(const ValidMapKeyValue& s) const {
             require_upper_bound(ub, access_reg.shared_region_size,
                                 "Upper bound must be at most " + variable_registry.name(access_reg.shared_region_size));
             require_value(dom.state, access_reg.uvalue > 0, "Possible null access");
-            // Shared memory is zero-initialized when created so is safe to read and write.
+            // Shared memory is zero-initialized when created, so it may be read and written as the map allows.
+            require_shared_access(access_reg, s.access_type);
             if (array_max_entries.has_value() && s.key) {
                 // Shared memory contents are not tracked, so the index cannot be bounded.
                 throw_fail("Array index must be on the stack");
@@ -479,7 +503,14 @@ void EbpfChecker::operator()(const ValidMapType& s) const {
         throw_fail("map type is not known for " + s.helper_name);
     }
     for (int32_t map_fd = start_fd; map_fd <= end_fd; map_fd++) {
-        const uint32_t map_type = context.map_descriptor(map_fd).type;
+        const EbpfMapDescriptor& map = context.map_descriptor(map_fd);
+        if (s.modifies_map && map.program_access == EbpfMapAccess::read_only) {
+            throw_fail("Map is read-only for " + s.helper_name);
+        }
+        if (s.allowed_map_types == 0) {
+            continue;
+        }
+        const uint32_t map_type = map.type;
         // UNSPEC (0) means the ELF metadata did not say; allow it rather than reject every such program.
         if (map_type == 0) {
             continue;
@@ -572,19 +603,48 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             if (s.access_type == AccessType::write && context.program_info().type.ctx_read_only) {
                 throw_fail("Context is read-only");
             }
-            // T_CTX: non-null when in bounds.
+            // Where the runtime rewrites a context access by the field it names, being in bounds is not
+            // enough: what executes is an access to whatever backs that field, of the width the runtime
+            // chooses. So the access must be one that a field of the layout admits, which takes a known
+            // offset and width.
+            if (const auto* layout = context.program_info().type.ctx_layout; layout && !is_comparison_check) {
+                if (!std::holds_alternative<Imm>(s.width)) {
+                    throw_fail("Context access size must be constant");
+                }
+                const auto exact_offset = dom.state.values.eval_interval(lb).singleton();
+                if (!exact_offset || !exact_offset->fits_cast_to<int32_t>()) {
+                    throw_fail("Context access offset must be precise");
+                }
+                const auto width = static_cast<int>(std::get<Imm>(s.width).v);
+                if (!is_valid_struct_access(*layout, exact_offset->cast_to<int32_t>(), width, s.access_type)) {
+                    throw_fail("Invalid context access");
+                }
+            }
+            // T_CTX: no null test. The entry state admits a null context (see
+            // EbpfDomain::setup_entry), but the access is still sound under the runtime
+            // contract: a program is started without a context only if it accesses none of it
+            // (Linux refuses the run unless ctx_size_in >= max_ctx_offset), so an access here
+            // never executes with a null base.
             break;
         }
         case T_PACKET: {
             const auto [lb, ub] = lb_ub_access_pair(s, reg.packet_offset);
             require_lower_bound(lb, variable_registry.meta_offset(), "Lower bound must be at least meta_offset");
             // Pointer-comparison checks (width == 0) may legitimately reach
-            // past the runtime packet_size, so they use the looser
-            // max_packet_size ceiling. Real dereferences must be bounded by
-            // the runtime packet_size variable.
+            // past the runtime packet_size, as `data + 14 > data_end` does.
+            // Such an operand must stay within max_packet_size of data so
+            // that its address cannot wrap around. An operand provably
+            // inside the packet (data_end itself, or a pointer already
+            // checked against it) is a real address in the packet buffer
+            // and cannot wrap, whatever the packet's length, which
+            // max_packet_size does not bound (see do_load_ctx).
+            // Real dereferences must be bounded by the runtime packet_size.
             if (is_comparison_check) {
-                const auto max = context.runtime().max_packet_size;
-                require_upper_bound(ub, LinearExpression{max}, "Upper bound must be at most " + std::to_string(max));
+                if (!dom.state.values.entail(ub <= variable_registry.packet_size())) {
+                    const auto max = context.runtime().max_packet_size;
+                    require_upper_bound(ub, LinearExpression{max},
+                                        "Upper bound must be at most " + std::to_string(max));
+                }
             } else {
                 require_upper_bound(ub, variable_registry.packet_size(), "Upper bound must be at most packet_size");
             }
@@ -598,6 +658,7 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
             require_lower_bound(lb, LinearExpression{0}, "Lower bound must be at least 0");
             require_upper_bound(ub, reg.shared_region_size,
                                 "Upper bound must be at most " + variable_registry.name(reg.shared_region_size));
+            require_shared_access(reg, s.access_type);
             if (!is_comparison_check) {
                 require_non_null_or_zero_width(s);
             }

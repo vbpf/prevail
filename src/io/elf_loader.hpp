@@ -17,6 +17,9 @@ class UnmarshalError : public RuntimeInputError {
     explicit UnmarshalError(const std::string& what) : RuntimeInputError(what) {}
 };
 
+/// What the map_flags of a map definition (BPF_F_RDONLY_PROG, BPF_F_WRONLY_PROG) let the program do with its values.
+EbpfMapAccess map_flags_to_program_access(uint32_t map_flags);
+
 struct ElfProgramInfo {
     std::string section_name;
     std::string function_name;
