@@ -2535,12 +2535,91 @@ std::string small_and_large_btf_maps(const std::string& small_name, const std::s
 TEST_CASE("ELF loader resolves same-named legacy map symbols by identity", "[elf][hardening]") {
     LddwRelocationElf elf;
     const auto* maps_sec = elf.add_data_section("maps", small_and_large_legacy_maps());
-    const auto small_sym = elf.add_object("map", 0, 28, maps_sec);
-    const auto large_sym = elf.add_object("map", 28, 28, maps_sec);
+    const auto small_sym = elf.add_object("map", 0, 28, maps_sec, ELFIO::STB_GLOBAL);
+    const auto large_sym = elf.add_object("map", 28, 28, maps_sec, ELFIO::STB_GLOBAL);
 
     const auto program = elf.load({small_sym, large_sym});
     REQUIRE(relocated_value_size(program, 0, INST_LD_MODE_MAP_FD) == 4);
     REQUIRE(relocated_value_size(program, 1, INST_LD_MODE_MAP_FD) == 4096);
+}
+
+// The record size of a legacy maps section is the size of the section divided by the number of its map symbols,
+// which is how loaders compute it, and the section must leave no other reading: one global object symbol at the
+// start of each record. The size decides the layout of the record, so a section that this reader and a loader
+// could divide differently would be verified with fields that mean something else at run time.
+TEST_CASE("ELF loader takes the record size of a legacy maps section from its symbols", "[elf][hardening]") {
+    LddwRelocationElf elf;
+    constexpr auto global = ELFIO::STB_GLOBAL;
+    constexpr auto object = ELFIO::STT_OBJECT;
+    const auto malformed = [&elf](const ELFIO::Elf_Word symbol, const std::string& why) {
+        REQUIRE_THROWS_WITH(elf.load({symbol}), Catch::Matchers::ContainsSubstring("Malformed legacy maps section") &&
+                                                    Catch::Matchers::ContainsSubstring(why));
+    };
+
+    SECTION("symbols that state no size, one of them unnamed") {
+        // Old compilers emit NOTYPE symbols of size 0. An unnamed symbol defines a map like any other.
+        const auto* maps_sec = elf.add_data_section("maps", small_and_large_legacy_maps());
+        elf.add_symbol("", 0, 0, global, ELFIO::STT_NOTYPE, maps_sec);
+        const auto large = elf.add_symbol("large", 28, 0, global, ELFIO::STT_NOTYPE, maps_sec);
+        const auto program = elf.load({large});
+        REQUIRE(program.info.map_descriptors->size() == 2);
+        REQUIRE(relocated_value_size(program, 0, INST_LD_MODE_MAP_FD) == 4096);
+    }
+    SECTION("iproute2 records whose named symbols state another size") {
+        // Three 36-byte struct bpf_elf_map records. Read as 24-byte records by the size of the named symbol,
+        // `outer` at byte 72 would be record 3 and its word at byte 92, its own id, an inner_map_idx.
+        // {type, size_key, size_value, max_elem, flags, id, pinning, inner_id, inner_idx}
+        constexpr uint32_t records[3][9] = {
+            {2, 4, 4096, 1, 0, 0, 0, 0, 0}, {2, 4, 8, 1, 0, 2, 0, 0, 0}, {12, 4, 4, 1, 0, 0, 0, 2, 0}};
+        const auto* maps_sec =
+            elf.add_data_section("maps", std::string(reinterpret_cast<const char*>(records), sizeof(records)));
+        elf.add_symbol("", 0, 0, global, object, maps_sec);
+        elf.add_symbol("", 36, 0, global, object, maps_sec);
+        const auto outer = elf.add_symbol("outer", 72, 24, global, object, maps_sec);
+        malformed(outer, "map symbols disagree on the record size (outer has 24 bytes, the records have 36)");
+    }
+    SECTION("a record without a symbol") {
+        // Two 28-byte records and one symbol: a loader would read one 56-byte record.
+        const auto* maps_sec = elf.add_data_section("maps", small_and_large_legacy_maps());
+        const auto small = elf.add_symbol("small", 0, 28, global, object, maps_sec);
+        malformed(small, "map symbols disagree on the record size (small has 28 bytes, the records have 56)");
+    }
+    SECTION("two symbols in one record") {
+        const auto* maps_sec = elf.add_data_section("maps", small_and_large_legacy_maps());
+        elf.add_symbol("small", 0, 28, global, object, maps_sec);
+        const auto alias = elf.add_symbol("alias", 0, 28, global, object, maps_sec);
+        malformed(alias, "symbol 'alias' shares its record with another symbol");
+    }
+    SECTION("a symbol inside a record") {
+        const auto* maps_sec = elf.add_data_section("maps", small_and_large_legacy_maps());
+        elf.add_symbol("small", 0, 0, global, object, maps_sec);
+        const auto inside = elf.add_symbol("inside", 32, 0, global, object, maps_sec);
+        malformed(inside, "symbol 'inside' is not at the start of a record of 28 bytes");
+    }
+    SECTION("a section that the symbols do not divide") {
+        const auto* maps_sec = elf.add_data_section("maps", small_and_large_legacy_maps());
+        elf.add_symbol("a", 0, 0, global, object, maps_sec);
+        elf.add_symbol("b", 16, 0, global, object, maps_sec);
+        const auto c = elf.add_symbol("c", 32, 0, global, object, maps_sec);
+        malformed(c, "56 bytes do not divide into the records of 3 map symbols");
+    }
+    SECTION("a symbol that iproute2 does not count") {
+        // iproute2 counts the global OBJECT and NOTYPE symbols. Here it would count one and read a 56-byte record.
+        const auto* maps_sec = elf.add_data_section("maps", small_and_large_legacy_maps());
+        const auto small = elf.add_symbol("small", 0, 28, global, object, maps_sec);
+        SECTION("local") {
+            elf.add_symbol("large", 28, 28, ELFIO::STB_LOCAL, object, maps_sec);
+            malformed(small, "symbol 'large' is not a global object");
+        }
+        SECTION("weak") {
+            elf.add_symbol("large", 28, 28, ELFIO::STB_WEAK, object, maps_sec);
+            malformed(small, "symbol 'large' is not a global object");
+        }
+        SECTION("a function") {
+            elf.add_symbol("large", 28, 28, global, ELFIO::STT_FUNC, maps_sec);
+            malformed(small, "symbol 'large' is not a global object");
+        }
+    }
 }
 
 TEST_CASE("ELF loader resolves same-named global variable sections by identity", "[elf][hardening]") {
@@ -2559,7 +2638,8 @@ TEST_CASE("ELF loader does not confuse a legacy map symbol with a same-named sec
     LddwRelocationElf elf;
     const auto* maps_sec = elf.add_data_section("maps", small_and_large_legacy_maps());
     const auto* data_sec = elf.add_data_section(".data", std::string(64, '\0'));
-    const auto map_sym = elf.add_object(".data", 28, 28, maps_sec);
+    elf.add_object("small", 0, 28, maps_sec, ELFIO::STB_GLOBAL);
+    const auto map_sym = elf.add_object(".data", 28, 28, maps_sec, ELFIO::STB_GLOBAL);
     const auto var_sym = elf.add_object("var", 0, 4, data_sec);
 
     const auto program = elf.load({map_sym, var_sym});
@@ -2600,9 +2680,9 @@ TEST_CASE("ELF loader records what the program may do with each map", "[elf][map
         constexpr uint32_t records[3][7] = {{2, 4, 8, 1, 0}, {2, 4, 8, 1, rdonly_prog}, {2, 4, 8, 1, wronly_prog}};
         const auto* maps_sec =
             elf.add_data_section("maps", std::string(reinterpret_cast<const char*>(records), sizeof(records)));
-        const auto plain = elf.add_object("plain", 0, 28, maps_sec);
-        const auto read_only = elf.add_object("read_only", 28, 28, maps_sec);
-        const auto write_only = elf.add_object("write_only", 56, 28, maps_sec);
+        const auto plain = elf.add_object("plain", 0, 28, maps_sec, ELFIO::STB_GLOBAL);
+        const auto read_only = elf.add_object("read_only", 28, 28, maps_sec, ELFIO::STB_GLOBAL);
+        const auto write_only = elf.add_object("write_only", 56, 28, maps_sec, ELFIO::STB_GLOBAL);
 
         const auto program = elf.load({plain, read_only, write_only});
         REQUIRE(relocated_access(program, 0) == EbpfMapAccess::read_write);
@@ -2613,7 +2693,7 @@ TEST_CASE("ELF loader records what the program may do with each map", "[elf][map
         constexpr uint32_t record[7] = {2, 4, 8, 1, rdonly_prog | wronly_prog};
         const auto* maps_sec =
             elf.add_data_section("maps", std::string(reinterpret_cast<const char*>(record), sizeof(record)));
-        const auto map = elf.add_object("map", 0, 28, maps_sec);
+        const auto map = elf.add_object("map", 0, 28, maps_sec, ELFIO::STB_GLOBAL);
         REQUIRE_THROWS_WITH(elf.load({map}), Catch::Matchers::ContainsSubstring("both read-only and write-only"));
     }
     SECTION("map_flags of BTF-defined maps") {
@@ -2712,7 +2792,7 @@ TEST_CASE("ELF loader rejects relocations against ambiguous BTF map symbols", "[
 // Regression test: marking inner-map templates used to scan the whole descriptor table once
 // per inner-map reference, and on the legacy maps path every record has one, so an object
 // defining n legacy maps cost O(n^2) before analysis started; n is chosen by the file
-// (24 bytes per record, and several `maps` section headers may describe the same bytes).
+// (24 bytes and a symbol per record).
 TEST_CASE("ELF loader handles large legacy maps sections in linear time", "[elf][hardening]") {
     constexpr uint32_t record_count = 262144;
     constexpr uint32_t bpf_map_type_hash = 1;
@@ -2763,9 +2843,12 @@ TEST_CASE("ELF loader handles large legacy maps sections in linear time", "[elf]
     ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
     sym_writer.add_symbol(str_writer, "prog", 0, sizeof(insts), ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0,
                           text_sec->get_index());
-    // One named symbol is needed for the section to be parsed; its size sets the record size.
-    sym_writer.add_symbol(str_writer, "map0", 0, 6 * sizeof(uint32_t), ELFIO::STB_GLOBAL, ELFIO::STT_OBJECT, 0,
-                          maps_sec->get_index());
+    // Each record is a map only with a symbol of its own. The symbols may share a name.
+    const ELFIO::Elf_Word map_name = str_writer.add_string("map");
+    for (uint32_t i = 0; i < record_count; ++i) {
+        sym_writer.add_symbol(map_name, i * 6 * sizeof(uint32_t), 6 * sizeof(uint32_t), ELFIO::STB_GLOBAL,
+                              ELFIO::STT_OBJECT, 0, maps_sec->get_index());
+    }
 
     std::ostringstream out_stream;
     writer.save(out_stream);

@@ -64,7 +64,8 @@ struct ebpf_platform_t {
     ebpf_get_builtin_call_fn get_builtin_call;
     ebpf_resolve_kfunc_call_fn resolve_kfunc_call;
 
-    // Size of a record in the "maps" section of an ELF file.
+    // Size of the platform's own record in the "maps" section of an ELF file. The ELF reader does not use it:
+    // the record size of a section follows from the section's symbols.
     size_t map_record_size;
 
     ebpf_parse_maps_section_fn parse_maps_section;

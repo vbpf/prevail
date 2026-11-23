@@ -228,6 +228,63 @@ ElfGlobalData create_global_variable_maps(const ELFIO::elfio& reader) {
     return global;
 }
 
+/// The size of the records of a legacy maps section, given the symbols that define its maps.
+///
+/// Such a section is an array of records. Each record is one map, and one symbol at its first byte gives the map
+/// its name. Nothing in the object states the record size. The loaders that read these sections (iproute2, and
+/// libbpf before 1.0) divide the size of the section by the number of its map symbols, and so does this function.
+///
+/// The platform derives the layout of a record from its size, and the layout decides what the fields mean (which
+/// word names an inner map, for one). So the size returned here must be the one the loader will compute, and the
+/// function refuses a section about which loaders could disagree:
+///  - Every symbol is a global symbol of type OBJECT or NOTYPE. iproute2 counts only those, so with any other
+///    symbol in the section it would divide by a smaller number and read longer records.
+///  - There is exactly one symbol at the start of each record. Then the symbols, not just their number, say
+///    where the records are.
+///  - A symbol that states a size states the record size. Compilers give every map symbol the size of its
+///    struct, though old ones leave it 0.
+size_t legacy_map_record_size(const ELFIO::section& section, const std::vector<symbol_details_t>& map_symbols) {
+    const std::string malformed = "Malformed legacy maps section " + section.get_name() + ": ";
+    for (const auto& symbol : map_symbols) {
+        if (symbol.bind != ELFIO::STB_GLOBAL ||
+            (symbol.type != ELFIO::STT_OBJECT && symbol.type != ELFIO::STT_NOTYPE)) {
+            throw UnmarshalError(malformed + "symbol '" + symbol.name + "' is not a global object");
+        }
+    }
+
+    const size_t section_size = gsl::narrow<size_t>(section.get_size());
+    const size_t map_count = map_symbols.size();
+    if (section_size == 0 || section_size % map_count != 0) {
+        throw UnmarshalError(malformed + std::to_string(section_size) + " bytes do not divide into the records of " +
+                             std::to_string(map_count) + " map symbols");
+    }
+    const size_t record_size = section_size / map_count;
+    // A record has at least type, key_size, value_size and max_entries, and is made of 32-bit words.
+    if (record_size < 4 * sizeof(uint32_t) || record_size % sizeof(uint32_t) != 0) {
+        throw UnmarshalError(malformed + "a record of " + std::to_string(record_size) + " bytes is not a map");
+    }
+
+    std::vector<bool> has_symbol(map_count);
+    for (const auto& symbol : map_symbols) {
+        if (symbol.size != 0 && symbol.size != record_size) {
+            throw UnmarshalError(malformed + "map symbols disagree on the record size (" + symbol.name + " has " +
+                                 std::to_string(symbol.size) + " bytes, the records have " +
+                                 std::to_string(record_size) + ")");
+        }
+        if (symbol.value % record_size != 0 || symbol.value >= section_size) {
+            throw UnmarshalError(malformed + "symbol '" + symbol.name + "' is not at the start of a record of " +
+                                 std::to_string(record_size) + " bytes");
+        }
+        const size_t record = gsl::narrow<size_t>(symbol.value / record_size);
+        if (has_symbol[record]) {
+            throw UnmarshalError(malformed + "symbol '" + symbol.name + "' shares its record with another symbol");
+        }
+        has_symbol[record] = true;
+    }
+    // As many symbols as records, each at a record of its own: every record has one.
+    return record_size;
+}
+
 ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO::elfio& reader,
                                  const ELFIO::const_symbol_section_accessor& symbols) {
     ElfGlobalData global;
@@ -242,10 +299,11 @@ ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO
             continue;
         }
 
+        // The symbols that define the maps of the section: all its symbols but the section symbol.
         std::vector<symbol_details_t> map_symbols;
         for (ELFIO::Elf_Xword index = 0; index < symbols.get_symbols_num(); ++index) {
             const auto symbol_details = get_symbol_details(symbols, index);
-            if (symbol_details.section_index == i && !symbol_details.name.empty()) {
+            if (symbol_details.section_index == i && symbol_details.type != ELFIO::STT_SECTION) {
                 map_symbols.push_back(symbol_details);
             }
         }
@@ -261,65 +319,14 @@ ElfGlobalData parse_map_sections(const parse_params_t& parse_params, const ELFIO
             throw UnmarshalError("Malformed legacy maps section: " + s->get_name());
         }
 
-        // Each map symbol has the size of its record (compilers give every legacy map symbol that size), and the
-        // records of a section share one size, which is also the stride between them. Symbols that disagree on
-        // it leave the layout of the section undetermined. Symbols of size 0 do not say.
-        size_t map_record_size = 0;
-        const symbol_details_t* record_size_symbol = nullptr;
-        for (const auto& symbol : map_symbols) {
-            if (symbol.size == 0) {
-                continue;
-            }
-            const auto symbol_size = gsl::narrow<size_t>(symbol.size);
-            if (record_size_symbol && symbol_size != map_record_size) {
-                throw UnmarshalError("Malformed legacy maps section " + s->get_name() +
-                                     ": map symbols disagree on the record size (" + record_size_symbol->name +
-                                     " has " + std::to_string(map_record_size) + " bytes, " + symbol.name + " has " +
-                                     std::to_string(symbol_size) + ")");
-            }
-            map_record_size = symbol_size;
-            record_size_symbol = &symbol;
-        }
-        if (map_record_size == 0) {
-            map_record_size = parse_params.platform->map_record_size;
-        }
-
-        if (map_record_size < 4 * sizeof(uint32_t) || map_record_size % sizeof(uint32_t) != 0) {
-            throw UnmarshalError("Malformed legacy maps section: " + s->get_name());
-        }
-        if (s->get_size() < map_record_size) {
-            throw UnmarshalError("Malformed legacy maps section: " + s->get_name());
-        }
-
-        size_t map_count = s->get_size() / map_record_size;
-        if (map_count == 0) {
-            throw UnmarshalError("Malformed legacy maps section: " + s->get_name());
-        }
-        if (s->get_size() % map_record_size != 0) {
-            size_t max_record_end = 0;
-            for (const auto& symbol : map_symbols) {
-                const size_t symbol_offset = gsl::narrow<size_t>(symbol.value);
-                if (symbol_offset >= s->get_size()) {
-                    throw UnmarshalError("Malformed legacy maps section: " + s->get_name());
-                }
-                max_record_end = std::max(max_record_end, symbol_offset + map_record_size);
-            }
-            if (max_record_end > s->get_size()) {
-                throw UnmarshalError("Malformed legacy maps section: " + s->get_name());
-            }
-            // Use floor division to ensure map_count * map_record_size <= section size.
-            // Ceiling division can produce a count whose last record extends past the buffer,
-            // causing a heap-buffer-overflow in the platform's parse_maps_section callback.
-            map_count = max_record_end / map_record_size;
-        }
+        const size_t map_record_size = legacy_map_record_size(*s, map_symbols);
+        const size_t map_count = map_symbols.size();
 
         section_record_sizes[i] = map_record_size;
         section_base_index[i] = base_index;
 
-        // Safety invariant: all records must fit within the section data.
-        if (map_count * map_record_size > s->get_size()) {
-            throw UnmarshalError("Malformed legacy maps section: " + s->get_name());
-        }
+        // The records fill the section exactly, so the platform reads no byte outside it.
+        assert(map_count * map_record_size == s->get_size());
 
         parse_params.platform->parse_maps_section(map_descriptors, s->get_data(), map_record_size,
                                                   gsl::narrow<int>(map_count), parse_params.platform,
