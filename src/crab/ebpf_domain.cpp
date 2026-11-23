@@ -283,6 +283,10 @@ std::optional<int> EbpfDomain::get_map_inner_map_fd(const Reg& map_fd_reg, const
     std::optional<int> inner_map_fd;
     for (int map_fd = start_fd; map_fd <= end_fd; map_fd++) {
         const auto& map = context.map_descriptor(map_fd);
+        if (map.inner_map_fd == NO_INNER_MAP_FD) {
+            // Nothing says which maps this one holds, so nothing is known about the map a lookup yields.
+            return {};
+        }
         if (!inner_map_fd.has_value()) {
             inner_map_fd = map.inner_map_fd;
         } else if (map.inner_map_fd != *inner_map_fd) {

@@ -32,6 +32,9 @@ struct EbpfMapType {
     bool usable_in_sleepable{};        // True if a sleepable program may use maps of this type.
 };
 
+/// EbpfMapDescriptor::inner_map_fd of a map whose definition names no inner map.
+constexpr int NO_INNER_MAP_FD = -1;
+
 struct EbpfMapDescriptor {
     int original_fd;
     uint32_t type; // Platform-specific type value in ELF file.

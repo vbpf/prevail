@@ -1,5 +1,8 @@
 // Copyright (c) Prevail Verifier contributors.
 // SPDX-License-Identifier: MIT
+#include <algorithm>
+#include <cstddef>
+#include <limits>
 #include <stdexcept>
 #if __linux__
 #include <linux/bpf.h>
@@ -115,6 +118,20 @@ struct BpfLoadMapDef {
     uint32_t map_flags;
     uint32_t inner_map_idx;
     uint32_t numa_node;
+};
+
+// iproute2's struct bpf_elf_map. Only its first five fields are those of BpfLoadMapDef: the word that is
+// inner_map_idx there is the map's own id here, and a map of maps names its inner map by that map's id.
+struct BpfElfMapDef {
+    uint32_t type;
+    uint32_t size_key;
+    uint32_t size_value;
+    uint32_t max_elem;
+    uint32_t flags;
+    uint32_t id;
+    uint32_t pinning;
+    uint32_t inner_id;
+    uint32_t inner_idx;
 };
 
 static int create_map_linux(uint32_t map_type, uint32_t key_size, uint32_t value_size, uint32_t max_entries);
@@ -295,6 +312,84 @@ EbpfMapType get_map_type_linux(const uint32_t platform_specific_type) {
     return type;
 }
 
+// How the records of a legacy maps section name the inner map of a map of maps.
+enum class InnerMapNaming {
+    none,     // The record has no field for it.
+    by_index, // BpfLoadMapDef::inner_map_idx: the position of the inner map in the table of maps.
+    by_id,    // BpfElfMapDef::inner_id: the id of the inner map.
+};
+
+// A legacy record carries no tag saying which loader's struct it is. Loaders go by its size, and so does this:
+//   up to 20 bytes  libbpf's struct bpf_map_def, which ends with map_flags. No field names an inner map.
+//   24 or 28 bytes  BpfLoadMapDef, the struct of the kernel samples' loader, with or without numa_node.
+//   32 or 36 bytes  iproute2's struct bpf_elf_map, with or without inner_idx. iproute2 reads a record shorter
+//                   than its struct as one padded with zeros, so a 32-byte record still has inner_id.
+//   longer          No known layout, so no field is known to name an inner map.
+// iproute2 also accepts records of 28 bytes and less. They end before inner_id, so it creates no map of maps from
+// them, and reading them the other loaders' way gives such a map no meaning that iproute2 gives it another.
+static InnerMapNaming inner_map_naming(const size_t map_def_size) {
+    if (map_def_size < offsetof(BpfLoadMapDef, inner_map_idx) + sizeof(uint32_t)) {
+        return InnerMapNaming::none;
+    }
+    if (map_def_size <= sizeof(BpfLoadMapDef)) {
+        return InnerMapNaming::by_index;
+    }
+    if (map_def_size <= sizeof(BpfElfMapDef)) {
+        return InnerMapNaming::by_id;
+    }
+    return InnerMapNaming::none;
+}
+
+// For each record of a legacy maps section, the position in the table of maps of the inner map it names, or
+// NO_INNER_MAP_FD. The first record of the section will be at position base_index.
+//
+// A lookup in a map of maps is analyzed as yielding the map named here, so this must be the map the loader gives
+// the kernel as the inner map: the kernel then lets only maps of that type, key size and value size into the outer
+// map. A record that names none must get none. Reading a missing field as 0 would name the first map.
+//
+// Only a map of maps names an inner map. In other records loaders ignore the field, and so does this function.
+static std::vector<int> legacy_inner_map_indices(const char* data, const size_t map_def_size, const int map_count,
+                                                 const size_t base_index, const ebpf_platform_t* platform) {
+    std::vector<int> result(map_count, NO_INNER_MAP_FD);
+    const InnerMapNaming naming = inner_map_naming(map_def_size);
+    if (naming == InnerMapNaming::none) {
+        return result;
+    }
+    // Both structs fit in a BpfElfMapDef and share the fields up to flags. The bytes a shorter record lacks are 0.
+    std::vector<BpfElfMapDef> defs(map_count);
+    for (int i = 0; i < map_count; i++) {
+        memcpy(&defs[i], data + i * map_def_size, std::min(map_def_size, sizeof(BpfElfMapDef)));
+    }
+    for (int i = 0; i < map_count; i++) {
+        if (platform->get_map_type(defs[i].type).value_type != EbpfMapValueType::MAP) {
+            continue;
+        }
+        if (naming == InnerMapNaming::by_index) {
+            // The word after flags. resolve_inner_map_references_linux checks that it is a position in the table.
+            const uint32_t inner_map_idx = defs[i].id;
+            if (inner_map_idx > static_cast<uint32_t>(std::numeric_limits<int>::max())) {
+                throw UnmarshalError("bad inner map index " + std::to_string(inner_map_idx) + " for map " +
+                                     std::to_string(base_index + i));
+            }
+            result[i] = static_cast<int>(inner_map_idx);
+            continue;
+        }
+        // iproute2 (bpf_find_map_id in lib/bpf_legacy.c) takes the first map of the object with this id, and
+        // refuses to load a map of maps whose inner_id is 0 or is the id of no map.
+        const uint32_t inner_id = defs[i].inner_id;
+        if (inner_id == 0) {
+            continue;
+        }
+        const auto inner = std::ranges::find(defs, inner_id, &BpfElfMapDef::id);
+        if (inner == defs.end()) {
+            throw UnmarshalError("unknown inner map id " + std::to_string(inner_id) + " for map " +
+                                 std::to_string(base_index + i));
+        }
+        result[i] = gsl::narrow<int>(base_index + (inner - defs.begin()));
+    }
+    return result;
+}
+
 void parse_maps_section_linux(std::vector<EbpfMapDescriptor>& map_descriptors, const char* data,
                               const size_t map_def_size, const int map_count, const ebpf_platform_t* platform,
                               const VerifierOptions& options) {
@@ -304,6 +399,8 @@ void parse_maps_section_linux(std::vector<EbpfMapDescriptor>& map_descriptors, c
         memcpy(&def, data + i * map_def_size, std::min(map_def_size, sizeof(def)));
         mapdefs.emplace_back(def);
     }
+    const std::vector<int> inner_map_indices =
+        legacy_inner_map_indices(data, map_def_size, map_count, map_descriptors.size(), platform);
 
     // The fd is the only identity a map has in the analysis (get_map_descriptor_linux returns the first
     // descriptor carrying it), so every definition gets its own mock fd even when its shape matches an
@@ -325,16 +422,19 @@ void parse_maps_section_linux(std::vector<EbpfMapDescriptor>& map_descriptors, c
             .key_size = s.key_size,
             .value_size = s.value_size,
             .max_entries = s.max_entries,
-            .inner_map_fd = gsl::narrow<int32_t>(s.inner_map_idx),
+            .inner_map_fd = inner_map_indices[i], // A position; see resolve_inner_map_references_linux.
             .program_access = map_flags_to_program_access(s.map_flags),
         });
     }
 }
 
-// Initialize the inner_map_fd in each map descriptor.
+// Replace the position that parse_maps_section_linux left in each inner_map_fd by the fd of the map there.
 void resolve_inner_map_references_linux(std::vector<EbpfMapDescriptor>& map_descriptors) {
     for (size_t i = 0; i < map_descriptors.size(); i++) {
-        const int inner = map_descriptors[i].inner_map_fd; // Get the inner_map_idx back.
+        const int inner = map_descriptors[i].inner_map_fd;
+        if (inner == NO_INNER_MAP_FD) {
+            continue;
+        }
         if (inner < 0 || inner >= gsl::narrow<int>(map_descriptors.size())) {
             throw UnmarshalError("bad inner map index " + std::to_string(inner) + " for map " + std::to_string(i));
         }

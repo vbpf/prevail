@@ -3842,14 +3842,14 @@ TEST_CASE("ELF loader links a local call into the middle of a function", "[elf]"
 // the stride between them. Symbols that disagree on it leave the record size undetermined: taking the smallest
 // would shorten every record of the section and silently drop the fields past it, such as inner_map_idx.
 TEST_CASE("ELF loader rejects a legacy maps section whose symbols disagree on the record size", "[elf][hardening]") {
-    // Four 32-byte bpf_map_def records: two ARRAYs with 4096- and 8-byte values, an ARRAY_OF_MAPS whose
+    // Four 28-byte bpf_load_map_def records: two ARRAYs with 4096- and 8-byte values, an ARRAY_OF_MAPS whose
     // inner_map_idx (offset 20) names the second one, and a HASH.
-    constexpr uint32_t record_size = 32;
+    constexpr uint32_t record_size = 28;
     const std::vector<uint32_t> records = {
-        2,  4, 4096, 1, 0, 0, 0, 0, // inner_big
-        2,  4, 8,    1, 0, 0, 0, 0, // inner_small
-        12, 4, 4,    1, 0, 1, 0, 0, // outer
-        1,  4, 4,    1, 0, 0, 0, 0, // unrelated
+        2,  4, 4096, 1, 0, 0, 0, // inner_big
+        2,  4, 8,    1, 0, 0, 0, // inner_small
+        12, 4, 4,    1, 0, 1, 0, // outer
+        1,  4, 4,    1, 0, 0, 0, // unrelated
     };
     const std::vector<std::string> map_names = {"inner_big", "inner_small", "outer", "unrelated"};
 
@@ -3914,7 +3914,7 @@ TEST_CASE("ELF loader rejects a legacy maps section whose symbols disagree on th
     }
 
     SECTION("one symbol is larger than its record") {
-        std::istringstream in_stream(build_object(64));
+        std::istringstream in_stream(build_object(56));
         REQUIRE_THROWS_WITH(read_elf(in_stream, "memory", "xdp", "", VerifierOptions{}, &g_ebpf_platform_linux),
                             Catch::Matchers::ContainsSubstring("map symbols disagree on the record size"));
     }
