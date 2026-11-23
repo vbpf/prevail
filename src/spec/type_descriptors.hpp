@@ -30,6 +30,9 @@ struct EbpfMapType {
     bool is_array{};                   // True if key is integer in range [0,max_entries-1].
     EbpfMapValueType value_type{};     // The type of items stored in the map.
     bool usable_in_sleepable{};        // True if a sleepable program may use maps of this type.
+    // True if a program may reference at most one map of this type: the runtime binds the program to one
+    // such map, and a helper given any map of the type reaches the bound one.
+    bool one_per_program{};
 };
 
 struct EbpfMapDescriptor {

@@ -546,6 +546,61 @@ static LoweredPseudoLoads pass_lower_pseudo_loads(const InstructionSeq& insts, c
     return lowered;
 }
 
+// Pass: ValidateOnePerProgramMaps
+// Reads    : lowered instruction sequence, program info (map_descriptors), platform map types.
+// Writes   : nothing.
+// Throws   : InvalidControlFlow if the program references two different maps of a type the
+//            platform marks one_per_program, or a map of maps whose inner map has such a type.
+// Notes    : A program is bound to one map of such a type (Linux cgroup storage), and a helper
+//            taking a map of that type (bpf_get_local_storage) reaches the bound map's storage
+//            whichever map it is passed, while the analysis sizes the result by the map passed.
+//            The two agree only when the program names a single map of the type, and names it
+//            directly: a lookup in a map of maps yields the inner map without binding it.
+//            The references counted are this program's own; the descriptor table is shared by
+//            all programs of an ELF object, which may each use a different map.
+static void pass_validate_one_per_program_maps(const InstructionSeq& insts,
+                                               const LoweredPseudoLoads& lowered_pseudo_loads,
+                                               const ProgramInfo& info) {
+    const auto find_descriptor = [&](const int mapfd) -> const EbpfMapDescriptor* {
+        const auto it = std::ranges::find(*info.map_descriptors, mapfd, &EbpfMapDescriptor::original_fd);
+        return it == info.map_descriptors->end() ? nullptr : &*it;
+    };
+    const auto map_type = [&](const EbpfMapDescriptor& desc) { return info.platform->get_map_type(desc.type); };
+
+    std::map<uint32_t, int> bound_fd_of_type;
+    for (const auto& [label, original, _] : insts) {
+        const auto lowered = lowered_pseudo_loads.find(label);
+        const Instruction& inst = lowered == lowered_pseudo_loads.end() ? original : lowered->second;
+        int mapfd;
+        if (const auto* load_fd = std::get_if<LoadMapFd>(&inst)) {
+            mapfd = load_fd->mapfd;
+        } else if (const auto* load_address = std::get_if<LoadMapAddress>(&inst)) {
+            mapfd = load_address->mapfd;
+        } else {
+            continue;
+        }
+        const EbpfMapDescriptor* desc = find_descriptor(mapfd);
+        if (!desc) {
+            continue;
+        }
+        if (const EbpfMapType type = map_type(*desc); type.one_per_program) {
+            if (bound_fd_of_type.emplace(desc->type, mapfd).first->second != mapfd) {
+                throw InvalidControlFlow{"rejected: only one map of type " + type.name +
+                                         " is allowed per program (at " + to_string(label) + ")"};
+            }
+        }
+        // Inner maps may nest, and a crafted table may make them cyclic.
+        std::set<int> seen{mapfd};
+        while (desc && map_type(*desc).value_type == EbpfMapValueType::MAP && seen.insert(desc->inner_map_fd).second) {
+            desc = find_descriptor(desc->inner_map_fd);
+            if (desc && map_type(*desc).one_per_program) {
+                throw InvalidControlFlow{"rejected: map of type " + map_type(*desc).name +
+                                         " cannot be an inner map (at " + to_string(label) + ")"};
+            }
+        }
+    }
+}
+
 // Pass: BuildInitialCfg -- populate_nodes step.
 // Reads    : instruction sequence, program info, resolved kfunc map, lowered pseudo-load map.
 // Writes   : inserts one CFG node per live instruction into builder (labels + instructions).
@@ -913,6 +968,9 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
 
     // --- Pass: LowerPseudoLoads -------------------------------------------
     const LoweredPseudoLoads lowered_pseudo_loads = pass_lower_pseudo_loads(inst_seq, info);
+
+    // --- Pass: ValidateOnePerProgramMaps ----------------------------------
+    pass_validate_one_per_program_maps(inst_seq, lowered_pseudo_loads, info);
 
     // --- Pass: BuildInitialCfg (nodes, then edges with InsertAssumeEdges) -
     CfgBuilder builder;
