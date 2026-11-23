@@ -29,6 +29,7 @@ struct RegPack {
     Variable btf_id_offset;
     Variable alloc_mem_offset;
     Variable alloc_mem_size;
+    Variable func_offset; // The label of the function a T_FUNC register points to.
 };
 
 // Variables are represented throughout the domains as compact interned ids

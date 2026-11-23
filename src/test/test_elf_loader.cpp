@@ -3919,3 +3919,72 @@ TEST_CASE("ELF loader rejects a legacy maps section whose symbols disagree on th
                             Catch::Matchers::ContainsSubstring("map symbols disagree on the record size"));
     }
 }
+
+// The loader that resolves the address of a function (libbpf, for the callback a program passes to a helper) writes
+// a function's address into the lddw that loads it. The immediate the file holds there, usually 0, is a placeholder:
+// analyzed as that number, a test of the address against null prunes the code that runs, and the address can leave
+// the program as a number. The lddw is marked as loading a function pointer instead. Its target is not resolved:
+// the body of a callback is not analyzed, so a helper must not accept it.
+TEST_CASE("ELF loader loads the address of code as a function pointer", "[elf][hardening]") {
+    constexpr EbpfInst lddw_r1{.opcode = INST_OP_LDDW_IMM, .dst = 1};
+    constexpr EbpfInst mov_r6_r1{.opcode = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_REG, .dst = 6, .src = 1};
+    // The unnamed symbol stands for the section symbol of .text, against which clang relocates `&static_function`.
+    const auto object = [&](const std::vector<EbpfInst>& insts, const std::string& section) {
+        return TestObjectBuilder{
+            .sections = {{.name = section, .insts = insts}, {.name = ".text", .insts = {test_mov_r0_0, test_exit}}},
+            .symbols = {{.name = "prog", .section = 0}, {.name = "", .section = 1}},
+            .relocations = {{.section = 0, .instruction = 1, .symbol = 1, .type = R_BPF_64_64_TYPE}},
+        }
+            .build();
+    };
+    const VerifierOptions options{};
+    const auto verifies = [&](const RawProgram& program) {
+        const auto sequence = unmarshal(program, options);
+        REQUIRE(std::holds_alternative<InstructionSeq>(sequence));
+        const ThreadLocalGuard guard;
+        return verify(Program::from_sequence(std::get<InstructionSeq>(sequence), program.info, options), options);
+    };
+
+    SECTION("code guarded by a test of the address is verified") {
+        // r6 = r1; r1 = &function ll; if r1 == 0 goto +3; r0 = *(u64 *)(r6 + 4096); *(u64 *)(r10 + 8) = r0; exit;
+        // r0 = 0; exit. The guarded block reads past the context and writes above the stack frame.
+        const auto programs = read_test_object(
+            object({mov_r6_r1, lddw_r1, EbpfInst{},
+                    EbpfInst{.opcode = INST_CLS_JMP | (0x1 << 4), .dst = 1, .offset = 3}, // if r1 == 0
+                    EbpfInst{.opcode = INST_CLS_LDX | INST_MODE_MEM | INST_SIZE_DW, .dst = 0, .src = 6, .offset = 4096},
+                    EbpfInst{.opcode = INST_CLS_STX | INST_MODE_MEM | INST_SIZE_DW, .dst = 10, .src = 0, .offset = 8},
+                    test_exit, test_mov_r0_0, test_exit},
+                   "xdp"),
+            "xdp");
+        REQUIRE(programs.size() == 1);
+        REQUIRE(programs[0].info.func_address_offsets == std::set<size_t>{1});
+        const auto sequence = unmarshal(programs[0], options);
+        REQUIRE(std::holds_alternative<InstructionSeq>(sequence));
+        const auto& [label, load, _] = std::get<InstructionSeq>(sequence).at(1);
+        REQUIRE(load == Instruction{LoadPseudo{.dst = Reg{1}, .addr = {.kind = PseudoAddress::Kind::FUNC_ADDR}}});
+        REQUIRE_FALSE(verifies(programs[0]));
+    }
+
+    SECTION("the address cannot be returned as a number") {
+        // r6 = r1; r1 = &function ll; r0 = r1; exit.
+        const auto programs = read_test_object(
+            object({mov_r6_r1, lddw_r1, EbpfInst{},
+                    EbpfInst{.opcode = INST_CLS_ALU64 | INST_ALU_OP_MOV | INST_SRC_REG, .dst = 0, .src = 1}, test_exit},
+                   "socket"),
+            "socket");
+        REQUIRE(programs.size() == 1);
+        REQUIRE_FALSE(verifies(programs[0]));
+    }
+
+    SECTION("taking the address without using it is accepted") {
+        const auto programs =
+            read_test_object(object({mov_r6_r1, lddw_r1, EbpfInst{}, test_mov_r0_0, test_exit}, "xdp"), "xdp");
+        REQUIRE(programs.size() == 1);
+        REQUIRE(verifies(programs[0]));
+    }
+
+    SECTION("a relocation against code on another instruction stays unresolved") {
+        REQUIRE_THROWS_WITH(read_test_object(object({mov_r6_r1, test_mov_r0_0, test_exit}, "xdp"), "xdp"),
+                            Catch::Matchers::ContainsSubstring("Unresolved symbols found"));
+    }
+}

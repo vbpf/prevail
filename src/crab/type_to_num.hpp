@@ -25,7 +25,7 @@ inline const std::map<TypeEncoding, std::vector<DataKind>> type_to_kinds{
     {T_SOCKET, {DataKind::socket_offsets}},
     {T_BTF_ID, {DataKind::btf_id_offsets}},
     {T_ALLOC_MEM, {DataKind::alloc_mem_offsets, DataKind::alloc_mem_sizes}},
-    {T_FUNC, {}},
+    {T_FUNC, {DataKind::func_offsets}},
 };
 
 /** TypeToNumDomain is a Reduced Product of TypeDomain x NumAbsDomain.

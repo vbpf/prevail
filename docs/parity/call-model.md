@@ -4,6 +4,7 @@
 
 - [x] **`PTR_TO_FUNC` argument type** — helper signatures carry `PTR_TO_FUNC`; verifier enforces `T_FUNC` type on the register.
 - [x] **Callback target validity** — helper calls with `PTR_TO_FUNC` require a singleton code-address register that resolves to a valid top-level instruction label (not a jump target, not Entry/Exit) with a reachable exit.
+- [x] **Function addresses from relocations** — an `lddw` relocated against code (clang's `&static_function`) loads a function pointer: `func` type, not null, not a number. Its target is deliberately left unknown (`func_offset` unconstrained), so it fails the callback target check: a clang-built program that passes a callback to a helper is rejected until callback bodies are analyzed. A function pointer's target label lives in `func_offset`, never in `uvalue`.
 - [ ] **Callback body analysis** — the callback subprogram body is not verified. Only structural checks are performed (valid label, reachable exit). No checking of callback argument types, return type, or side-effect constraints. The callback's code is present in the CFG but not analyzed under a callback-specific contract.
 - [ ] **Callback frame semantics** — model the callback's stack frame and register state as a nested verification context.
 

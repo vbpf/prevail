@@ -486,6 +486,7 @@ struct CommandPrinterVisitor {
         case PseudoAddress::Kind::VARIABLE_ADDR: os_ << "variable_addr(" << b.addr.imm << ")"; break;
         case PseudoAddress::Kind::CODE_ADDR: os_ << "code_addr(" << b.addr.imm << ")"; break;
         case PseudoAddress::Kind::EXTERN_ADDR: os_ << "extern_addr"; break;
+        case PseudoAddress::Kind::FUNC_ADDR: os_ << "func_addr"; break;
         case PseudoAddress::Kind::MAP_BY_IDX: os_ << "map_by_idx(" << b.addr.imm << ")"; break;
         case PseudoAddress::Kind::MAP_VALUE_BY_IDX:
             os_ << "mva(map_by_idx(" << b.addr.imm << ")) + " << b.addr.next_imm;

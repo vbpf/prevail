@@ -282,6 +282,7 @@ void TypeToNumDomain::havoc_offsets(const Reg& reg) {
     values.havoc(r.btf_id_offset);
     values.havoc(r.alloc_mem_offset);
     values.havoc(r.alloc_mem_size);
+    values.havoc(r.func_offset);
 }
 
 void TypeToNumDomain::havoc_register_except_type(const Reg& reg) {

@@ -341,7 +341,7 @@ void EbpfChecker::operator()(const ValidArgNonNull& s) const {
 }
 
 void EbpfChecker::operator()(const ValidCallbackTarget& s) const {
-    const auto callback_interval = dom.state.values.eval_interval(reg_pack(s.reg).uvalue);
+    const auto callback_interval = dom.state.values.eval_interval(reg_pack(s.reg).func_offset);
     const auto callback_target = callback_interval.singleton();
     if (!callback_target.has_value() || !callback_target->fits<int32_t>()) {
         throw_fail("callback function pointer must be a singleton code address");

@@ -408,3 +408,116 @@ code:
 
 post:
   - r1.type=number
+---
+# The address of a function, as a relocation against code yields it, is a function pointer: not null and not a
+# number. The loader does not resolve which function, so it is not a valid callback target either.
+test-case: load of a function address
+
+pre: ["r1.type=number", "r1.svalue=7", "r1.uvalue=7"]
+
+code:
+  <start>: |
+    r1 = func_addr
+
+post:
+  - r1.type=func
+  - r1.uvalue=[1, 2147418112]
+---
+# A function pointer is never null, so only the null edge of a test of it is dead. Which function it points to is
+# held in func_offset, not in uvalue: with the label in uvalue, a pointer to the function at label 0 looked null,
+# and the edge that runs was pruned with the code behind it unchecked.
+test-case: code behind a null test of a pointer to the function at label 0 is verified
+
+pre: []
+
+code:
+  <start>: |
+    r2 = code_addr(0)
+    if r2 == 0 goto <out>
+    r3 = 1
+    r0 = *(u64 *)(r3 + 0)
+  <out>: |
+    r0 = 0
+    exit
+
+post: ["_|_"]
+
+messages:
+  - "1:4: Code becomes unreachable (assume r2 == 0)"
+  - "3: Invalid type (r3.type in {ctx, stack, packet, shared, socket, alloc_mem})"
+---
+test-case: code behind a null test of a function address is verified
+
+pre: []
+
+code:
+  <start>: |
+    r2 = func_addr
+    if r2 == 0 goto <out>
+    r3 = 1
+    r0 = *(u64 *)(r3 + 0)
+  <out>: |
+    r0 = 0
+    exit
+
+post: ["_|_"]
+
+messages:
+  - "1:4: Code becomes unreachable (assume r2 == 0)"
+  - "3: Invalid type (r3.type in {ctx, stack, packet, shared, socket, alloc_mem})"
+---
+test-case: a function address is not a number that may be returned
+
+pre: []
+
+code:
+  <start>: |
+    r0 = func_addr
+    exit
+
+post: ["_|_"]
+
+messages:
+  - "1: Invalid type (r0.type == number)"
+---
+# The callback check reads the target from func_offset.
+test-case: a callback helper accepts a pointer to a known function
+
+pre: ["r10.type=stack", "r10.stack_offset=4096"]
+
+code:
+  <start>: |
+    r1 = 1
+    r2 = code_addr(0)
+    r3 = 0
+    r4 = 0
+    call 181
+    r0 = 0
+    exit
+
+post:
+  - r0.svalue=0
+  - r0.type=number
+  - r0.uvalue=0
+  - r10.stack_offset=4096
+  - r10.type=stack
+---
+# The body of a callback is not analyzed, so a helper must not be given a function the loader did not resolve.
+test-case: a callback helper rejects a function address with an unknown target
+
+pre: ["r10.type=stack", "r10.stack_offset=4096"]
+
+code:
+  <start>: |
+    r1 = 1
+    r2 = func_addr
+    r3 = 0
+    r4 = 0
+    call 181
+    r0 = 0
+    exit
+
+post: ["_|_"]
+
+messages:
+  - "4: callback function pointer must be a singleton code address (valid_callback_target(r2))"

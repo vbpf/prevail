@@ -51,6 +51,7 @@ class AssertExtractor {
         switch (pseudo.addr.kind) {
         case PseudoAddress::Kind::CODE_ADDR:
         case PseudoAddress::Kind::EXTERN_ADDR:
+        case PseudoAddress::Kind::FUNC_ADDR:
             // Type/offset semantics are handled during abstract transformation.
             return {};
         case PseudoAddress::Kind::VARIABLE_ADDR: [[fallthrough]];
