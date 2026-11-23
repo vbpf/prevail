@@ -310,6 +310,15 @@ TEST_CASE("linux map types usable in sleepable programs follow check_map_prog_co
     }
 }
 
+TEST_CASE("linux map-type table marks only the cgroup storage maps as one per program", "[platform][tables]") {
+    // A program has one storage buffer per cgroup storage type, and bpf_get_local_storage returns it
+    // whichever map of that type it is passed.
+    for (uint32_t id = 0; id <= 33; id++) {
+        CAPTURE(id);
+        REQUIRE(g_ebpf_platform_linux.get_map_type(id).one_per_program == (id == 19 || id == 21));
+    }
+}
+
 TEST_CASE("linux legacy map definitions of the same shape get distinct mock fds", "[platform][tables]") {
     // {type, key_size, value_size, max_entries, map_flags, inner_map_idx, numa_node}
     constexpr std::array<std::array<uint32_t, 7>, 7> defs{{

@@ -201,6 +201,50 @@ TEST_CASE("pass_inline_local_calls returns a successful tail call to the caller 
     REQUIRE(prog.cfg().children_of(Label{2}) == std::set{Label{3}});
 }
 
+TEST_CASE("pass_validate_one_per_program_maps allows one cgroup storage map of each type", "[passes]") {
+    // bpf_get_local_storage returns the program's storage of the type of the map it is passed, so a
+    // second map of that type would lend its value_size to the first one's buffer.
+    constexpr uint32_t cgroup_storage = 19;
+    constexpr uint32_t percpu_cgroup_storage = 21;
+    constexpr uint32_t array_of_maps = 12;
+    ProgramInfo info = default_info();
+    info.map_descriptors.get_mutable() = {
+        {.original_fd = 1, .type = cgroup_storage, .key_size = 16, .value_size = 8},
+        {.original_fd = 2, .type = cgroup_storage, .key_size = 16, .value_size = 4096},
+        {.original_fd = 3, .type = percpu_cgroup_storage, .key_size = 16, .value_size = 4096},
+        {.original_fd = 4, .type = array_of_maps, .key_size = 4, .value_size = 4, .max_entries = 1, .inner_map_fd = 2},
+        // Its inner map is itself: following inner maps must terminate.
+        {.original_fd = 5, .type = array_of_maps, .key_size = 4, .value_size = 4, .max_entries = 1, .inner_map_fd = 5},
+    };
+    const auto load_maps = [&](const std::vector<int>& mapfds) {
+        InstructionSeq seq;
+        int index = 0;
+        for (const int mapfd : mapfds) {
+            seq.push_back(at(index++, LoadMapFd{.dst = Reg{1}, .mapfd = mapfd}));
+        }
+        seq.push_back(at(index, Exit{}));
+        return Program::from_sequence(seq, info, {});
+    };
+
+    REQUIRE_NOTHROW(load_maps({1, 1, 3, 5}));
+    REQUIRE_NOTHROW(load_maps({2, 3}));
+    REQUIRE_THROWS_WITH(load_maps({1, 3, 2}),
+                        Catch::Matchers::ContainsSubstring("only one map of type CGROUP_STORAGE is allowed"));
+    // A lookup in a map of maps would yield the storage map without a reference to it.
+    REQUIRE_THROWS_WITH(load_maps({1, 4}),
+                        Catch::Matchers::ContainsSubstring("map of type CGROUP_STORAGE cannot be an inner map"));
+
+    // A reference by map index counts as the map it is lowered to.
+    InstructionSeq by_index;
+    for (const int map_index : {0, 1}) {
+        const PseudoAddress addr{.kind = PseudoAddress::Kind::MAP_BY_IDX, .imm = map_index, .next_imm = 0};
+        by_index.push_back(at(map_index, LoadPseudo{.dst = Reg{1}, .addr = addr}));
+    }
+    by_index.push_back(at(2, Exit{}));
+    REQUIRE_THROWS_WITH(Program::from_sequence(by_index, info, {}),
+                        Catch::Matchers::ContainsSubstring("only one map of type CGROUP_STORAGE is allowed"));
+}
+
 TEST_CASE("pass_compute_callback_metadata excludes Exit labels and synthetic jump labels", "[passes]") {
     const ProgramInfo info = default_info();
     InstructionSeq seq;
