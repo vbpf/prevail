@@ -87,6 +87,7 @@ std::string name_of(const DataKind kind) {
     case DataKind::btf_id_offsets: return "btf_id_offset";
     case DataKind::alloc_mem_offsets: return "alloc_mem_offset";
     case DataKind::alloc_mem_sizes: return "alloc_mem_size";
+    case DataKind::func_offsets: return "func_offset";
     case DataKind::svalues: return "svalue";
     case DataKind::types: return "type";
     case DataKind::uvalues: return "uvalue";
@@ -110,6 +111,7 @@ DataKind regkind(const std::string& s) {
         {"btf_id_offset", DataKind::btf_id_offsets},
         {"alloc_mem_offset", DataKind::alloc_mem_offsets},
         {"alloc_mem_size", DataKind::alloc_mem_sizes},
+        {"func_offset", DataKind::func_offsets},
         {"svalue", DataKind::svalues},
         {"uvalue", DataKind::uvalues},
     };

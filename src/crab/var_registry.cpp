@@ -237,6 +237,7 @@ RegPack VariableRegistry::reg_pack(const int i) const {
         .btf_id_offset = reg(DataKind::btf_id_offsets, i),
         .alloc_mem_offset = reg(DataKind::alloc_mem_offsets, i),
         .alloc_mem_size = reg(DataKind::alloc_mem_sizes, i),
+        .func_offset = reg(DataKind::func_offsets, i),
     };
 }
 

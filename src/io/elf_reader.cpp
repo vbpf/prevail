@@ -784,6 +784,9 @@ std::string ProgramReader::append_subprograms(RawProgram& prog, const size_t pro
         for (const size_t extern_address_offset : sub.info.extern_address_offsets) {
             prog.info.extern_address_offsets.insert(base + extern_address_offset);
         }
+        for (const size_t func_address_offset : sub.info.func_address_offsets) {
+            prog.info.func_address_offsets.insert(base + func_address_offset);
+        }
     }
 
     // Patch every relocated call, in `prog` itself and in each placed callee.
@@ -1003,11 +1006,26 @@ bool ProgramReader::try_reloc(const std::string& symbol_name, const ELFIO::Elf_H
             lo_inst.get().imm = relocate_global_variable(symbol_section_index);
             return true;
         }
-        // A code address (e.g., a callback in .text) is kept as the file encodes it. Any other section symbol,
-        // such as a static map referenced through its map section, names data this loader cannot resolve, and
-        // leaving the placeholder in place would analyze it as a constant.
-        const ELFIO::section* target_section = reader.sections[symbol_section_index];
-        return target_section != nullptr && (target_section->get_flags() & ELFIO::SHF_EXECINSTR) != 0;
+        // The address of code, as when a program takes the address of a static function to pass it as a
+        // callback. The loader that resolves it writes a function's address into the lddw, so the immediate
+        // the file holds, usually 0, is a placeholder: analyzing it as that number would make a test of the
+        // address against null prune the branch that runs, and would let the address leave the program as a
+        // number. The lddw is marked as loading a function pointer instead: not null, and not a number.
+        // Which function it points to is deliberately not resolved. The body of a callback is not analyzed
+        // (docs/parity/call-model.md), so a pointer with a known target would let a helper run code that was
+        // never checked, where one with an unknown target fails the helper's callback check.
+        if (const ELFIO::section* target_section = reader.sections[symbol_section_index];
+            target_section != nullptr && (target_section->get_flags() & ELFIO::SHF_EXECINSTR) != 0 &&
+            instruction_to_relocate.opcode == INST_OP_LDDW_IMM && instruction_to_relocate.src == INST_LD_MODE_IMM) {
+            auto [lo_inst, hi_inst] = validate_and_get_lddw_pair(instructions, location, "code address");
+            lo_inst.get().imm = 0;
+            hi_inst.get().imm = 0;
+            func_address_offsets_for_current_program.insert(location);
+            return true;
+        }
+        // Any other section symbol, such as a static map referenced through its map section, names data this
+        // loader cannot resolve, and leaving the placeholder in place would analyze it as a constant.
+        return false;
     }
 
     if ((instruction_to_relocate.opcode & INST_CLS_MASK) != INST_CLS_LD) {
@@ -1152,6 +1170,7 @@ void ProgramReader::read_programs(const bool all_sections) {
         for (ELFIO::Elf_Xword offset = 0; offset < sec->get_size();) {
             builtin_offsets_for_current_program.clear();
             extern_address_offsets_for_current_program.clear();
+            func_address_offsets_for_current_program.clear();
             // A program is the code from its FUNC symbol to the next one, so that the programs of a
             // section do not overlap. Control may leave it only by exit or by a call: a callee is
             // appended to the program on linking, and other code it would run into is not.
@@ -1181,6 +1200,7 @@ void ProgramReader::read_programs(const bool all_sections) {
                 .type = prog_type,
                 .builtin_call_offsets = std::move(builtin_offsets_for_current_program),
                 .extern_address_offsets = std::move(extern_address_offsets_for_current_program),
+                .func_address_offsets = std::move(func_address_offsets_for_current_program),
             };
             raw_program_index_.emplace(SectionOffset{.section_index = sec->get_index(), .offset = offset},
                                        raw_programs.size());

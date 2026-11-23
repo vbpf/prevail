@@ -329,22 +329,28 @@ void EbpfTransformer::operator()(const CallBtf&) {
     assert(false && "CallBtf should be rejected before abstract transformation");
 }
 
-static uint64_t merge_imm32_to_u64(const int32_t lo, const int32_t hi) {
-    return static_cast<uint64_t>(static_cast<uint32_t>(lo)) | (static_cast<uint64_t>(static_cast<uint32_t>(hi)) << 32);
-}
-
 void EbpfTransformer::operator()(const LoadPseudo& pseudo) {
     switch (pseudo.addr.kind) {
     case PseudoAddress::Kind::CODE_ADDR: {
+        // The register holds the address of a function, which is never null and which the program
+        // must not learn: like any pointer, its uvalue says only that. Which function it is, by the
+        // label of its first instruction, is kept apart in func_offset. Holding the label in uvalue
+        // made a pointer to the function at label 0 look null, and its null check prune live code.
         const auto dst = reg_pack(pseudo.dst);
-        const uint64_t imm64 = merge_imm32_to_u64(pseudo.addr.imm, pseudo.addr.next_imm);
         dom.state.forget_type_dependent_values(pseudo.dst);
-        dom.state.values.assign(dst.uvalue, imm64);
-        dom.state.values->overflow_bounds(dst.uvalue, 64, false);
         dom.state.assign_type(pseudo.dst, T_FUNC);
-        dom.state.havoc_offsets(pseudo.dst);
+        assign_valid_ptr(pseudo.dst, false);
+        dom.state.values.assign(dst.func_offset, pseudo.addr.imm);
         return;
     }
+    case PseudoAddress::Kind::FUNC_ADDR:
+        // The address of a function that the loader did not resolve to a label: a function pointer, so not
+        // null and not a number, whose func_offset is unknown. It can be tested, copied and spilled, but
+        // it is not a valid callback target.
+        dom.state.forget_type_dependent_values(pseudo.dst);
+        dom.state.assign_type(pseudo.dst, T_FUNC);
+        assign_valid_ptr(pseudo.dst, false);
+        return;
     case PseudoAddress::Kind::EXTERN_ADDR:
         // The address of an extern symbol that the loader resolves: any number.
         dom.state.havoc_register(pseudo.dst);

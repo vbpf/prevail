@@ -226,6 +226,8 @@ class ProgramReader {
     std::set<size_t> builtin_offsets_for_current_program;
     /// The lddw instructions of the current program that load the address of an extern the loader cannot resolve.
     std::set<size_t> extern_address_offsets_for_current_program;
+    /// The lddw instructions of the current program that load the address of a function.
+    std::set<size_t> func_address_offsets_for_current_program;
     std::set<size_t> jump_targets_for_current_program;
 
     // CO-RE relocation (elf_core_reloc.cpp)

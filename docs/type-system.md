@@ -116,9 +116,9 @@ Each pointer type has associated numeric variables:
 | T_SOCKET | socket_offset |
 | T_BTF_ID | btf_id_offset |
 | T_ALLOC_MEM | alloc_mem_offset, alloc_mem_size |
-| T_FUNC | *(none)* |
+| T_FUNC | func_offset |
 
-> **Note:** `T_FUNC` intentionally has no associated offset or size variables. Function pointers (callback targets) are treated as opaque numeric values; see the empty mapping in `src/crab/type_to_num.hpp`.
+> **Note:** `func_offset` is the label of the first instruction of the function a `T_FUNC` register points to. It is not the pointer's address: like any pointer, a function pointer has a non-null `uvalue` of which nothing else is known.
 
 ### Register Pack
 

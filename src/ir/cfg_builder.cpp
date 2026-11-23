@@ -266,6 +266,7 @@ static std::optional<RejectionReason> check_instruction_feature_support(const In
             return reject_not_implemented("lddw variable_addr pseudo");
         case PseudoAddress::Kind::CODE_ADDR:
         case PseudoAddress::Kind::EXTERN_ADDR:
+        case PseudoAddress::Kind::FUNC_ADDR:
         case PseudoAddress::Kind::MAP_BY_IDX:
         case PseudoAddress::Kind::MAP_VALUE_BY_IDX: break; // Resolved during CFG construction.
         default: return reject_not_implemented("lddw unknown pseudo");
@@ -499,7 +500,7 @@ static void add_cfg_nodes(CfgBuilder& builder, const Cfg& original_cfg, const La
 
 /// Lower a single LoadPseudo to a concrete instruction.
 /// MAP_BY_IDX / MAP_VALUE_BY_IDX are rewritten against the current map descriptor table.
-/// CODE_ADDR and EXTERN_ADDR are kept as LoadPseudo by pass_lower_pseudo_loads so the abstract
+/// CODE_ADDR, FUNC_ADDR and EXTERN_ADDR are kept as LoadPseudo by pass_lower_pseudo_loads so the abstract
 /// transformer can type them (T_FUNC, and an unknown number); this helper is never called for
 /// them. VARIABLE_ADDR is
 /// rejected earlier, by pass_validate_instruction_support.
@@ -524,7 +525,7 @@ using LoweredPseudoLoads = std::map<Label, Instruction>;
 // Pass: LowerPseudoLoads
 // Reads    : instruction sequence, program info (map_descriptors).
 // Writes   : returns a Label -> Instruction map with the concrete replacement for every
-//            LoadPseudo that is lowered. CODE_ADDR and EXTERN_ADDR LoadPseudo instructions are
+//            LoadPseudo that is lowered. CODE_ADDR, FUNC_ADDR and EXTERN_ADDR LoadPseudo instructions are
 //            intentionally excluded so they remain observable to the abstract transformer (which
 //            types them as T_FUNC, and as an unknown number); every other kind is replaced.
 // Throws   : InvalidControlFlow if a MAP_BY_IDX / MAP_VALUE_BY_IDX references an out-of-range
@@ -536,6 +537,7 @@ static LoweredPseudoLoads pass_lower_pseudo_loads(const InstructionSeq& insts, c
     for (const auto& [label, inst, _] : insts) {
         const auto* pseudo = std::get_if<LoadPseudo>(&inst);
         if (!pseudo || pseudo->addr.kind == PseudoAddress::Kind::CODE_ADDR ||
+            pseudo->addr.kind == PseudoAddress::Kind::FUNC_ADDR ||
             pseudo->addr.kind == PseudoAddress::Kind::EXTERN_ADDR) {
             continue;
         }
@@ -547,7 +549,7 @@ static LoweredPseudoLoads pass_lower_pseudo_loads(const InstructionSeq& insts, c
 // Pass: BuildInitialCfg -- populate_nodes step.
 // Reads    : instruction sequence, program info, resolved kfunc map, lowered pseudo-load map.
 // Writes   : inserts one CFG node per live instruction into builder (labels + instructions).
-//            CallBtf is replaced with the resolved Call; LoadPseudo other than CODE_ADDR and
+//            CallBtf is replaced with the resolved Call; LoadPseudo other than CODE_ADDR, FUNC_ADDR and
 //            EXTERN_ADDR is replaced with its lowered form; every other instruction is inserted
 //            verbatim.
 // Throws   : InvalidControlFlow if either substitution map is inconsistent with the sequence

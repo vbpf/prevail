@@ -109,6 +109,7 @@ struct PseudoAddress {
         MAP_BY_IDX,       // src=5
         MAP_VALUE_BY_IDX, // src=6
         EXTERN_ADDR,      // src=0 at an index in ProgramInfo::extern_address_offsets: an unknown number
+        FUNC_ADDR,        // src=0 at an index in ProgramInfo::func_address_offsets: some function's address
     } kind{};
     int32_t imm{};
     int32_t next_imm{};

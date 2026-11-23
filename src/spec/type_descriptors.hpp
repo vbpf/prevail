@@ -161,6 +161,10 @@ struct ProgramInfo {
     // resolve: whatever immediate they hold, the loader that resolves the symbol writes its address there, so
     // their destination holds an unknown number.
     std::set<size_t> extern_address_offsets{};
+    // Instruction indices of the lddw instructions that load the address of a function, by a relocation against
+    // code. The loader does not resolve which function: their destination holds a function pointer that is not
+    // null and whose target is unknown.
+    std::set<size_t> func_address_offsets{};
 };
 
 struct RawProgram {

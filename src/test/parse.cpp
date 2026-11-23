@@ -50,12 +50,12 @@ namespace prevail {
 
 #define SPECIAL_VAR R"_(\s*(packet_size|meta_offset)\s*)_"
 #define KIND \
-    R"_(\s*(svalue|uvalue|ctx_offset|map_fd|map_fd_programs|packet_offset|shared_offset|stack_offset|shared_region_size|shared_access|stack_numeric_size)\s*)_"
+    R"_(\s*(svalue|uvalue|ctx_offset|map_fd|map_fd_programs|packet_offset|shared_offset|stack_offset|shared_region_size|shared_access|stack_numeric_size|func_offset)\s*)_"
 #define INTERVAL R"_(\s*\[([-+]?\d+),\s*([-+]?\d+)\]?\s*)_"
 #define ARRAY_RANGE R"_(\s*\[([-+]?\d+)\.\.\.\s*([-+]?\d+)\]?\s*)_"
 
 #define DOT "[.]"
-#define TYPE R"_(\s*(shared|number|packet|stack|ctx|map_fd|map_fd_programs)\s*)_"
+#define TYPE R"_(\s*(shared|number|packet|stack|ctx|map_fd|map_fd_programs|func)\s*)_"
 
 // Match map_val(fd) + offset
 #define MAP_VAL R"_(\s*map_val\((\d+)\)\s*\+\s*(\d+)\s*)_"
@@ -69,6 +69,7 @@ namespace prevail {
 #define RE_VARIABLE_ADDR R"_(\s*variable_addr\(([-+]?(?:0x)?[0-9a-f]+)\)\s*)_"
 #define RE_CODE_ADDR R"_(\s*code_addr\(([-+]?(?:0x)?[0-9a-f]+)\)\s*)_"
 #define RE_EXTERN_ADDR R"_(\s*extern_addr\s*)_"
+#define RE_FUNC_ADDR R"_(\s*func_addr\s*)_"
 #define RE_MAP_BY_IDX R"_(\s*map_by_idx\(([-+]?(?:0x)?[0-9a-f]+)\)\s*)_"
 #define RE_MAP_VALUE_BY_IDX R"_(\s*mva\(map_by_idx\(([-+]?(?:0x)?[0-9a-f]+)\)\)\s*\+\s*([-+]?(?:0x)?[0-9a-f]+)\s*)_"
 
@@ -256,6 +257,9 @@ static Instruction parse_instruction_inner(const std::string& line,
     }
     if (regex_match(text, m, regex(WREG ASSIGN RE_EXTERN_ADDR))) {
         return LoadPseudo{reg(m[1]), PseudoAddress{PseudoAddress::Kind::EXTERN_ADDR, 0, 0}};
+    }
+    if (regex_match(text, m, regex(WREG ASSIGN RE_FUNC_ADDR))) {
+        return LoadPseudo{reg(m[1]), PseudoAddress{PseudoAddress::Kind::FUNC_ADDR, 0, 0}};
     }
     if (regex_match(text, m, regex(WREG ASSIGN RE_MAP_BY_IDX))) {
         return LoadPseudo{reg(m[1]), PseudoAddress{PseudoAddress::Kind::MAP_BY_IDX, to_int(m[2]), 0}};
