@@ -27,7 +27,7 @@ enforcement, tracked in [lifetime.md](lifetime.md).
 
 ## Blocked by callback body analysis
 
-- [ ] **`bpf_loop`** (181) — `PTR_TO_FUNC` argument type is checked (singleton code address, reachable exit), but the callback body is not verified against its contract (expected argument types, return type, side-effect constraints).
+- [ ] **`bpf_loop`** (181) — rejected, like every helper that takes a callback (`for_each_map_elem` 164, `timer_set_callback` 170, `find_vma` 180), until the callback body is verified against its contract (expected argument types, return range, effect on the caller's state).
 - [ ] **`bpf_for_each_map_elem`** (164) — same: target validation only, no body analysis.
 - [ ] **`bpf_find_vma`** (180) — same, plus requires `PTR_TO_BTF_ID` for the VMA argument.
 

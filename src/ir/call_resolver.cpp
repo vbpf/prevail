@@ -65,6 +65,10 @@ ResolvedCall resolve_helper(const Call& call, const ProgramInfo& info) {
         case ArgOutcome::Unavailable:
             return make_unsupported(call, helper_prototype_name,
                                     "helper argument type is unavailable on this platform: " + helper_prototype_name);
+        case ArgOutcome::Callback:
+            return make_unsupported(call, helper_prototype_name,
+                                    "helper takes a callback, and callback bodies are not analyzed: " +
+                                        helper_prototype_name);
         case ArgOutcome::MismatchedSize:
             return make_unsupported(call, helper_prototype_name,
                                     "Pointer argument not followed by EBPF_ARGUMENT_TYPE_CONST_SIZE or "

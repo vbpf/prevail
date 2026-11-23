@@ -2,10 +2,10 @@
 
 ## Callback verification
 
-- [x] **`PTR_TO_FUNC` argument type** — helper signatures carry `PTR_TO_FUNC`; verifier enforces `T_FUNC` type on the register.
-- [x] **Callback target validity** — helper calls with `PTR_TO_FUNC` require a singleton code-address register that resolves to a valid top-level instruction label (not a jump target, not Entry/Exit) with a reachable exit.
-- [x] **Function addresses from relocations** — an `lddw` relocated against code (clang's `&static_function`) loads a function pointer: `func` type, not null, not a number. Its target is deliberately left unknown (`func_offset` unconstrained), so it fails the callback target check: a clang-built program that passes a callback to a helper is rejected until callback bodies are analyzed. A function pointer's target label lives in `func_offset`, never in `uvalue`.
-- [ ] **Callback body analysis** — the callback subprogram body is not verified. Only structural checks are performed (valid label, reachable exit). No checking of callback argument types, return type, or side-effect constraints. The callback's code is present in the CFG but not analyzed under a callback-specific contract.
+- [x] **Helpers that take a callback are rejected** — the body of a callback is not analyzed, so a call to a helper or kfunc whose signature carries `PTR_TO_FUNC` is rejected when the program is prepared (`rejected: helper takes a callback, and callback bodies are not analyzed`), whatever the argument holds. This is conservative: accepting the call would run code that was never checked.
+- [ ] **Callback target validity** — the check that the argument is a `func` whose `func_offset` is a single top-level instruction label with a reachable exit (`ValidCallbackTarget`) is kept, but not reached while such calls are rejected. It is necessary for accepting a callback and not sufficient.
+- [x] **Function addresses from relocations** — an `lddw` relocated against code (clang's `&static_function`) loads a function pointer: `func` type, not null, not a number. Its target is left unknown (`func_offset` unconstrained). A function pointer's target label lives in `func_offset`, never in `uvalue`.
+- [ ] **Callback body analysis** — the callback subprogram body is not verified under the contract its helper calls it with: argument types, return range, and the effect of zero or more runs on the caller's state. Tracked in [#797](https://github.com/vbpf/prevail/issues/797).
 - [ ] **Callback frame semantics** — model the callback's stack frame and register state as a nested verification context.
 
 ## Tail calls

@@ -480,8 +480,9 @@ post: ["_|_"]
 messages:
   - "1: Invalid type (r0.type == number)"
 ---
-# The callback check reads the target from func_offset.
-test-case: a callback helper accepts a pointer to a known function
+# The body of a callback is not analyzed, so a helper that takes one is rejected whatever its argument holds,
+# even a pointer to a known function.
+test-case: a helper that takes a callback is rejected
 
 pre: ["r10.type=stack", "r10.stack_offset=4096"]
 
@@ -495,29 +496,7 @@ code:
     r0 = 0
     exit
 
-post:
-  - r0.svalue=0
-  - r0.type=number
-  - r0.uvalue=0
-  - r10.stack_offset=4096
-  - r10.type=stack
----
-# The body of a callback is not analyzed, so a helper must not be given a function the loader did not resolve.
-test-case: a callback helper rejects a function address with an unknown target
-
-pre: ["r10.type=stack", "r10.stack_offset=4096"]
-
-code:
-  <start>: |
-    r1 = 1
-    r2 = func_addr
-    r3 = 0
-    r4 = 0
-    call 181
-    r0 = 0
-    exit
-
-post: ["_|_"]
+post: []
 
 messages:
-  - "4: callback function pointer must be a singleton code address (valid_callback_target(r2))"
+  - "rejected: helper takes a callback, and callback bodies are not analyzed: loop (at 4)"

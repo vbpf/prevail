@@ -191,6 +191,10 @@ std::optional<ResolvedCall> make_kfunc_call(const int32_t btf_id, const int16_t 
         case ArgOutcome::Unavailable:
             set_unsupported(why_not, std::string("kfunc argument type is unsupported on this platform: ") + proto.name);
             return std::nullopt;
+        case ArgOutcome::Callback:
+            set_unsupported(why_not,
+                            std::string("kfunc takes a callback, and callback bodies are not analyzed: ") + proto.name);
+            return std::nullopt;
         case ArgOutcome::MismatchedSize:
             set_unsupported(why_not,
                             std::string("kfunc pointer argument not followed by EBPF_ARGUMENT_TYPE_CONST_SIZE or "

@@ -66,6 +66,7 @@ enum class ArgOutcome {
     Stop,           ///< DONTCARE reached; remaining positions are unused.
     Unavailable,    ///< Argument type is not supported on this platform.
     MismatchedSize, ///< Pointer arg not followed by CONST_SIZE/CONST_SIZE_OR_ZERO.
+    Callback,       ///< The function takes a callback, whose body is not analyzed.
 };
 
 /// Process a single position in the argument array, populating
@@ -81,6 +82,12 @@ inline ArgOutcome process_arg(CallContract& contract, const std::array<ebpf_argu
     case EBPF_ARGUMENT_TYPE_CONST_SIZE:
     case EBPF_ARGUMENT_TYPE_CONST_SIZE_OR_ZERO: return ArgOutcome::MismatchedSize;
     case EBPF_ARGUMENT_TYPE_PTR_TO_CONST_STR: return ArgOutcome::Unavailable;
+    case EBPF_ARGUMENT_TYPE_PTR_TO_FUNC:
+        // The function runs the code this argument points to. That code is not analyzed under the contract
+        // the function calls it with (argument types, return range, effect on the caller's state), so a call
+        // that passes one would run code that was never checked. Until callback bodies are analyzed
+        // (docs/parity/call-model.md), no such call is accepted, whatever the argument holds.
+        return ArgOutcome::Callback;
     case EBPF_ARGUMENT_TYPE_PTR_TO_BTF_ID_SOCK_COMMON:
     case EBPF_ARGUMENT_TYPE_PTR_TO_SOCK_COMMON:
         contract.singles.push_back({ArgSingle::Kind::PTR_TO_SOCKET, false, reg});

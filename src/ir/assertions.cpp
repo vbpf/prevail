@@ -143,6 +143,9 @@ class AssertExtractor {
                 // TODO: check 0 when null
                 break;
             case ArgSingle::Kind::PTR_TO_FUNC:
+                // Not reached at present: a function that takes a callback is rejected when its call is
+                // resolved (process_arg), because callback bodies are not analyzed. These checks on the
+                // argument are necessary for such a call but would not be sufficient.
                 res.emplace_back(TypeConstraint{arg.reg, TypeGroup::func});
                 res.emplace_back(ValidCallbackTarget{arg.reg});
                 break;
