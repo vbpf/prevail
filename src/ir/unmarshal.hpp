@@ -18,6 +18,13 @@ namespace prevail {
  *  \param raw_prog is the input program to parse.
  *  \param[out] notes is a vector for storing errors and warnings.
  *  \return a sequence of instructions if successful, an error string otherwise.
+ *
+ *  Every fault of the program is reported by the error string, which starts with the index of the instruction
+ *  at fault. That includes a program with no instructions (reported at index 0). A caller may therefore pass
+ *  bytecode it did not write without guarding the call.
+ *
+ *  \throw std::invalid_argument if options.runtime is invalid (RuntimeConfig::validate). That is a fault of the
+ *  caller, not of the program.
  */
 [[nodiscard]]
 std::variant<InstructionSeq, std::string> unmarshal(const RawProgram& raw_prog,

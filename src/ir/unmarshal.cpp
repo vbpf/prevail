@@ -692,7 +692,9 @@ struct Unmarshaller {
         vector<LabeledInstruction> prog;
         int exit_count = 0;
         if (insts.empty()) {
-            throw std::invalid_argument("Zero length programs are not allowed");
+            // An InvalidInstruction, like every other fault of the program, so that the caller gets an error
+            // string for it. Instruction 0 is the one that is missing.
+            throw InvalidInstruction(0, "Zero length programs are not allowed");
         }
         for (size_t pc = 0; pc < insts.size();) {
             const EbpfInst inst = insts[pc];
