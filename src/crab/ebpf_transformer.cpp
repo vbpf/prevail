@@ -242,20 +242,23 @@ static LinearConstraint assume_cst_offsets_reg(const Condition::Op op, const Var
     }
 }
 
-/// Whether comparing two pointers of type `type` by their offsets decides the comparison.
-/// Pointers to a singleton region share one base, so offsets order them. Map descriptors are
-/// equal exactly when they denote the same map. Pointers into other regions are equal only if
-/// their offsets are, but equal offsets in different regions are different addresses.
-static bool offsets_decide_pointer_comparison(const TypeEncoding type, const Condition::Op op) {
-    using Op = Condition::Op;
-    if (TS_SINGLETON_PTR.contains(type)) {
-        return true;
-    }
-    if (TS_MAP.contains(type)) {
-        return op == Op::EQ || op == Op::NE;
-    }
-    return op == Op::EQ;
-}
+/// Whether comparing two pointers of type `type` by their primary kind variable (the offset in the region,
+/// or the descriptor of a map) decides the comparison.
+///
+/// It does for the singleton regions only: context, stack and packet each have one base per run, so two
+/// pointers into one of them are ordered, and equal, exactly as their offsets are.
+///
+/// It decides nothing for any other type, because the kind variable does not say which object is pointed to:
+/// - An offset into a map value, allocated memory, a socket or a kernel object is relative to whichever
+///   object the register points into, and two registers may point into different ones. Equal offsets are
+///   then different addresses, and unequal offsets may be one address: the elements of an array map lie
+///   back to back, so one past the end of an element (offset = value size) is the start of the next
+///   (offset 0).
+/// - A map descriptor names a shape, not a map. The result of a lookup in a map of maps carries the
+///   descriptor of the inner-map template whichever map the slot holds, so equal descriptors may be
+///   different maps (or one of them null), and maps looked up in two outer maps with different templates
+///   may be the same map (or both null).
+static bool offsets_decide_pointer_comparison(const TypeEncoding type) { return TS_SINGLETON_PTR.contains(type); }
 
 /// Narrow a pointer compared with zero: the comparison tests whether it is null.
 /// Nullness is decided by uvalue alone. svalue is a kind variable of T_NUM (type_to_kinds): for a pointer it is
@@ -291,7 +294,7 @@ void EbpfTransformer::operator()(const Assume& s) {
                         state.values.add_constraint(cst);
                     }
                 } else if (dst_type == src_type) {
-                    if (admits_pointer_operands(cond) && offsets_decide_pointer_comparison(dst_type, cond.op)) {
+                    if (admits_pointer_operands(cond) && offsets_decide_pointer_comparison(dst_type)) {
                         const auto dst_offset = primary_kind_variable_for_type(cond.left, dst_type);
                         const auto src_offset = primary_kind_variable_for_type(src_reg, src_type);
                         if (dst_offset && src_offset) {

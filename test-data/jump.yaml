@@ -572,6 +572,8 @@ code:
 post:
   - r1.type=map_fd
 ---
+# A map descriptor does not say which map a register holds (the result of a lookup in a map of maps has the
+# descriptor of the inner-map template, whichever map is in the slot), so it decides no comparison.
 test-case: assume map_fd != map_fd
 
 pre: ["r1.type=map_fd"]
@@ -581,9 +583,7 @@ code:
     assume r1 != r1
 
 post:
-  - "_|_"
-messages:
-  - "0: Code becomes unreachable (assume r1 != r1)"
+  - r1.type=map_fd
 ---
 test-case: assume map_fd1 != map_fd2
 
@@ -599,7 +599,7 @@ post:
   - r2.type=map_fd
   - r2.map_fd=2
 ---
-test-case: assume map_fd1 != map_fd2
+test-case: maps with equal descriptors may be different maps
 
 pre: ["r1.type=map_fd", "r1.map_fd=1", "r2.type=map_fd", "r2.map_fd=1"]
 
@@ -608,9 +608,24 @@ code:
     assume r1 != r2
 
 post:
-  - "_|_"
-messages:
-  - "0: Code becomes unreachable (assume r1 != r2)"
+  - r1.type=map_fd
+  - r1.map_fd=1
+  - r2.type=map_fd
+  - r2.map_fd=1
+---
+test-case: maps with different descriptors may be the same map
+
+pre: ["r1.type=map_fd", "r1.map_fd=1", "r2.type=map_fd", "r2.map_fd=2"]
+
+code:
+  <start>: |
+    assume r1 == r2
+
+post:
+  - r1.type=map_fd
+  - r1.map_fd=1
+  - r2.type=map_fd
+  - r2.map_fd=2
 ---
 test-case: assume map_fd1 < map_fd2
 

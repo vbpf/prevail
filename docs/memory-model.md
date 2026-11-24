@@ -367,3 +367,15 @@ Prevail assumes no aliasing between:
 - Packet and context
 
 This simplifies analysis but matches eBPF semantics.
+
+### Comparing pointers
+
+"No aliasing" says that two regions do not overlap. It does not say where they lie, so a comparison of two
+pointers narrows the state only when both point into the same singleton region (context, stack or packet),
+where pointers are equal and ordered as their offsets are. Every other comparison keeps both branches:
+
+- Two pointers into map values (or allocated memory, sockets or kernel objects) may point into different
+  objects. Equal offsets are then different addresses, and unequal offsets may be one address: the elements of
+  an array map lie back to back, so one past the end of an element is the start of the next.
+- Two map descriptors do not tell maps apart. The result of a lookup in a map of maps carries the descriptor of
+  the inner-map template, whichever map the slot holds.
