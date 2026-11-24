@@ -277,6 +277,24 @@ std::optional<std::string> find_function_symbol_at_offset(const ELFIO::const_sym
     return get_symbol_details(symbols, it->second.first).name;
 }
 
+std::optional<size_t> find_literal_map_load(const std::vector<EbpfInst>& instructions) {
+    for (size_t pc = 0; pc < instructions.size(); pc++) {
+        const EbpfInst& inst = instructions[pc];
+        if (inst.opcode != INST_OP_LDDW_IMM) {
+            continue;
+        }
+        switch (inst.src) {
+        case INST_LD_MODE_MAP_FD:
+        case INST_LD_MODE_MAP_VALUE:
+        case INST_LD_MODE_MAP_BY_IDX:
+        case INST_LD_MODE_MAP_VALUE_BY_IDX: return pc;
+        default: break;
+        }
+        pc++; // The second slot of the lddw holds the upper half of its immediate, not an instruction.
+    }
+    return {};
+}
+
 std::optional<ControlFlowEscape> find_control_flow_escape(const std::vector<EbpfInst>& instructions) {
     const auto size = gsl::narrow<int64_t>(instructions.size());
     for (int64_t pc = 0; pc < size;) {
@@ -754,9 +772,8 @@ std::string ProgramReader::append_subprograms(RawProgram& prog, const size_t pro
             if (programs_with_unresolved_relocations.contains(callee)) {
                 return "Unresolved symbols found in subprogram " + abbreviate_name(raw_programs[callee].function_name);
             }
-            if (const auto escape = programs_with_escaping_control_flow.find(callee);
-                escape != programs_with_escaping_control_flow.end()) {
-                return escape->second;
+            if (const auto unloadable = unloadable_programs.find(callee); unloadable != unloadable_programs.end()) {
+                return unloadable->second;
             }
             visit[callee] = Visit::in_progress;
             path.emplace_back(callee, function_relocations_of(callee));
@@ -1177,8 +1194,8 @@ void ProgramReader::read_programs(const bool all_sections) {
             auto [name, size] = get_program_name_and_size(*sec, offset, symbols, function_symbols);
             auto instructions = vector_of<EbpfInst>(sec->get_data() + offset, size);
             if (const auto escape = find_control_flow_escape(instructions)) {
-                programs_with_escaping_control_flow.emplace(raw_programs.size(),
-                                                            describe_control_flow_escape(*sec, offset, name, *escape));
+                unloadable_programs.emplace(raw_programs.size(),
+                                            describe_control_flow_escape(*sec, offset, name, *escape));
                 jump_targets_for_current_program.clear();
             } else {
                 jump_targets_for_current_program = collect_jump_targets(instructions);
@@ -1189,6 +1206,15 @@ void ProgramReader::read_programs(const bool all_sections) {
                      it != local_call_targets.end() && *it < start + instructions.size(); ++it) {
                     jump_targets_for_current_program.insert(*it - start);
                 }
+            }
+            // Before relocations are applied: after them, a map load that this reader bound to a map of the object
+            // looks the same as one the file came with.
+            if (const auto pc = find_literal_map_load(instructions)) {
+                unloadable_programs.try_emplace(
+                    raw_programs.size(),
+                    "Function " + abbreviate_name(name) + " in section " + abbreviate_name(sec_name) +
+                        " loads a map by a literal fd or index at instruction " + std::to_string(*pc) +
+                        ": it names a map of the loading process, not one of this object");
             }
             if (const auto reloc_sec = get_relocation_section(*sec)) {
                 process_relocations(instructions, *reloc_sec, sec_name, offset, size);
@@ -1284,9 +1310,8 @@ void ProgramReader::read_programs(const bool all_sections) {
         }
         RawProgram& prog = linked_programs.emplace_back(raw_programs[i]);
         std::string err;
-        if (const auto escape = programs_with_escaping_control_flow.find(i);
-            escape != programs_with_escaping_control_flow.end()) {
-            err = escape->second;
+        if (const auto unloadable = unloadable_programs.find(i); unloadable != unloadable_programs.end()) {
+            err = unloadable->second;
         } else {
             err = append_subprograms(prog, i);
         }
