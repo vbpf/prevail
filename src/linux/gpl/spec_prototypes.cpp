@@ -1,5 +1,6 @@
 #include "linux/gpl/spec_type_descriptors.hpp"
 #include "platform.hpp"
+#include <map>
 #include <set>
 #include <string_view>
 
@@ -1860,7 +1861,8 @@ static constexpr EbpfHelperPrototype bpf_task_storage_delete_proto = {
 };
 
 static constexpr EbpfHelperPrototype bpf_get_current_task_btf_proto = {
-    .name = "get_current_task_btf", .return_type = EBPF_RETURN_TYPE_PTR_TO_BTF_ID,
+    .name = "get_current_task_btf",
+    .return_type = EBPF_RETURN_TYPE_PTR_TO_BTF_ID,
     // .ret_btf_id = &bpf_get_current_btf_ids[0],
 };
 
@@ -2758,6 +2760,19 @@ std::optional<int32_t> resolve_helper_id_linux(const std::string& name) {
     return std::nullopt;
 }
 
+/// Helpers whose prototype row takes the context, with the program types in which Linux binds the id to
+/// the function that does. See is_helper_usable_linux().
+static const std::map<int32_t, std::set<std::string_view>> context_variant_program_types = {
+    // bpf_get_socket_cookie. sk_reuseport, tracing and lsm bind the id to bpf_get_socket_ptr_cookie(sk).
+    {46,
+     {"socket_filter", "sched_act", "sched_cls", "sk_skb", "cgroup_skb", "cgroup_sock", "cgroup_sock_addr",
+      "sock_ops"}},
+    // bpf_setsockopt and bpf_getsockopt. cgroup_sockopt, struct_ops (tcp_congestion_ops), lsm (lsm_cgroup) and
+    // tracing (iter/tcp) bind the ids to bpf_sk_setsockopt(sk) and bpf_sk_getsockopt(sk).
+    {49, {"sock_ops", "cgroup_sock_addr"}},
+    {57, {"sock_ops", "cgroup_sock_addr"}},
+};
+
 bool is_helper_usable_linux(const int32_t n, const EbpfProgramType& program_type) {
     if (n >= static_cast<int>(std::size(prototypes)) || n < 0) {
         return false;
@@ -2768,18 +2783,14 @@ bool is_helper_usable_linux(const int32_t n, const EbpfProgramType& program_type
         return false;
     }
 
-    // Some helpers support multiple incompatible ctx layouts in Linux.
-    // Until attach-type-level helper gating is modeled, keep a conservative
-    // program-type allowlist here instead of treating them as fully generic.
-    // Only list program types whose Linux variant takes the ctx pointer: sk_reuseport, tracing
-    // and lsm bind the same id to bpf_get_socket_ptr_cookie(sk), which takes a `struct sock *`
-    // that the PTR_TO_CTX prototype row does not describe.
-    if (n == 46) { // bpf_get_socket_cookie
-        static const std::set<std::string_view> socket_cookie_types = {
-            "socket_filter", "sched_act",   "sched_cls",        "sk_skb",
-            "cgroup_skb",    "cgroup_sock", "cgroup_sock_addr", "sock_ops",
-        };
-        if (!socket_cookie_types.contains(program_type.name)) {
+    // Linux binds one helper id to a different function in each program type, and for some ids those
+    // functions disagree on what the first argument is: the context in some program types, a
+    // `struct sock *` in others. The prototype row describes the function that takes the context, so
+    // the helper is offered only to the program types that bind the id to that function. In any other
+    // program type the context is the one argument the function must not get.
+    // Until attach-type-level helper gating is modeled, the lists are by program type.
+    if (const auto variant = context_variant_program_types.find(n); variant != context_variant_program_types.end()) {
+        if (!variant->second.contains(program_type.name)) {
             return false;
         }
     }
