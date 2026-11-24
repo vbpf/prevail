@@ -18,6 +18,7 @@
 #include <set>
 #include <span>
 #include <string>
+#include <string_view>
 #include <sys/stat.h>
 #include <type_traits>
 #include <variant>
@@ -525,6 +526,43 @@ static void validate_section_header_table_bounds(std::istream& input_stream, con
     }
 }
 
+/// Checks the sections that the loader finds by their name: .BTF, .BTF.ext and .maps. Every lookup of the form
+/// `reader.sections["name"]` uses one of these names, and relies on this check.
+///
+/// ELF does not require section names to be unique, and a lookup by name has to pick one section. Loaders pick
+/// differently: `reader.sections["name"]` yields the first section of that name, and libbpf walks the section
+/// table and keeps the last. The sizes of the maps come from .BTF, and the CO-RE records that rewrite
+/// instructions from .BTF.ext. With two such sections, the program verified here and the program a loader runs
+/// could be given different maps or different instructions. So an object that repeats one of the names is
+/// refused, and each lookup has one answer whatever a loader's rule is.
+///
+/// libbpf also refuses an object whose .BTF or .BTF.ext is not SHT_PROGBITS, and so does this function. (It
+/// skips sections of some other types before it looks at their names, so a section of such a type is not the
+/// BTF it reads.) The loader uses .maps only for its index, to tell which symbols are maps.
+static void validate_sections_found_by_name(const ELFIO::elfio& reader, const std::string& path) {
+    struct NamedSection {
+        std::string_view name;
+        bool must_be_progbits;
+        bool found;
+    };
+    std::array<NamedSection, 3> named{{{".BTF", true, false}, {".BTF.ext", true, false}, {".maps", false, false}}};
+    for (const auto& section : reader.sections) {
+        const std::string name = section->get_name();
+        for (auto& [expected_name, must_be_progbits, found] : named) {
+            if (name != expected_name) {
+                continue;
+            }
+            if (found) {
+                throw UnmarshalError("ELF file " + path + " has more than one section named " + name);
+            }
+            found = true;
+            if (must_be_progbits && section->get_type() != ELFIO::SHT_PROGBITS) {
+                throw UnmarshalError("Section " + name + " of ELF file " + path + " is not of type SHT_PROGBITS");
+            }
+        }
+    }
+}
+
 ELFIO::elfio load_elf(std::istream& input_stream, const std::string& path) {
     const std::uintmax_t data_size = get_data_size(input_stream, path);
     validate_section_header_table_bounds(input_stream, path, data_size);
@@ -560,6 +598,7 @@ ELFIO::elfio load_elf(std::istream& input_stream, const std::string& path) {
         }
     }
 
+    validate_sections_found_by_name(reader, path);
     return reader;
 }
 
