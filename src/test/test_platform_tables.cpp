@@ -1013,12 +1013,10 @@ TEST_CASE("context-taking helpers without a descriptor are a closed set", "[plat
     // signature per context) and therefore cannot carry a single ctx_descriptor.
     // A new PTR_TO_CTX prototype must either name its descriptor or be added here
     // deliberately, so that it does not silently become usable from every program type.
-    constexpr std::array<int32_t, 15> multi_context_helpers{
+    constexpr std::array<int32_t, 13> multi_context_helpers{
         12,  // tail_call
         25,  // perf_event_output
         27,  // get_stackid
-        49,  // setsockopt
-        57,  // getsockopt
         67,  // get_stack
         69,  // fib_lookup
         84,  // sk_lookup_tcp
@@ -1097,6 +1095,67 @@ TEST_CASE("get_socket_cookie is unavailable where Linux binds the id to a struct
     for (const auto* section : {"socket", "sockops", "cgroup/connect4", "cgroup/skb"}) {
         CAPTURE(section);
         REQUIRE(g_ebpf_platform_linux.is_helper_usable(46, g_ebpf_platform_linux.get_program_type(section, "")));
+    }
+}
+
+TEST_CASE("setsockopt and getsockopt are unavailable where Linux binds the ids to a struct sock variant",
+          "[platform][tables]") {
+    // In these program types the ids are bpf_sk_setsockopt(sk, ...) and bpf_sk_getsockopt(sk, ...), or nothing at
+    // all. The prototype rows take the context, the one thing those functions must not be given.
+    for (const int32_t id : {49, 57}) {
+        CAPTURE(id);
+        for (const auto* section :
+             {"cgroup/setsockopt", "cgroup/getsockopt", "struct_ops/x", "lsm/x", "lsm.s/x", "iter/tcp", "fentry/x",
+              "cgroup/sock_create", "cgroup/post_bind4", "sk_msg", "sk_skb", "socket", "tc", "xdp", "kprobe/x"}) {
+            CAPTURE(section);
+            REQUIRE_FALSE(
+                g_ebpf_platform_linux.is_helper_usable(id, g_ebpf_platform_linux.get_program_type(section, "")));
+        }
+        // bpf_sock_ops_setsockopt(ctx, ...) and bpf_sock_addr_setsockopt(ctx, ...).
+        for (const auto* section : {"sockops", "cgroup/connect4", "cgroup/bind6", "cgroup/sendmsg4"}) {
+            CAPTURE(section);
+            const EbpfProgramType type = g_ebpf_platform_linux.get_program_type(section, "");
+            REQUIRE(g_ebpf_platform_linux.is_helper_usable(id, type));
+            REQUIRE(g_ebpf_platform_linux.get_helper_prototype(id, type).argument_type[0] ==
+                    EBPF_ARGUMENT_TYPE_PTR_TO_CTX);
+        }
+    }
+}
+
+TEST_CASE("setsockopt on the context of a cgroup/setsockopt program is refused", "[platform][tables]") {
+    // bpf_setsockopt(ctx, SOL_SOCKET, SO_MAX_PACING_RATE, &value, 4), with r1 still the context.
+    const auto first_error = [](const char* section, const int32_t helper) {
+        const ProgramInfo info{.platform = &g_ebpf_platform_linux,
+                               .type = g_ebpf_platform_linux.get_program_type(section, "")};
+        InstructionSeq seq;
+        const auto add = [&](Instruction ins) {
+            seq.emplace_back(Label{gsl::narrow<int>(seq.size())}, std::move(ins), std::nullopt);
+        };
+        add(Mem{.access = {.width = 4, .basereg = Reg{10}, .offset = -4}, .value = Imm{0x41414141}, .is_load = false});
+        add(Bin{.op = Bin::Op::MOV, .dst = Reg{2}, .v = Imm{1}, .is64 = true});
+        add(Bin{.op = Bin::Op::MOV, .dst = Reg{3}, .v = Imm{47}, .is64 = true});
+        add(Bin{.op = Bin::Op::MOV, .dst = Reg{4}, .v = Reg{10}, .is64 = true});
+        add(Bin{.op = Bin::Op::ADD, .dst = Reg{4}, .v = Imm{static_cast<uint64_t>(-4)}, .is64 = true});
+        add(Bin{.op = Bin::Op::MOV, .dst = Reg{5}, .v = Imm{4}, .is64 = true});
+        add(Call{.func = helper, .kind = CallKind::helper});
+        add(Bin{.op = Bin::Op::MOV, .dst = Reg{0}, .v = Imm{1}, .is64 = true});
+        add(Exit{});
+        try {
+            const auto error = analyze(Program::from_sequence(seq, info, {}), {}).find_first_error();
+            return error ? error->message : std::string{};
+        } catch (const std::exception& ex) {
+            return std::string{ex.what()};
+        }
+    };
+    using Catch::Matchers::ContainsSubstring;
+    for (const int32_t helper : {49, 57}) {
+        CAPTURE(helper);
+        REQUIRE_THAT(first_error("cgroup/setsockopt", helper),
+                     ContainsSubstring("helper function is unavailable on this platform"));
+        REQUIRE_THAT(first_error("cgroup/getsockopt", helper),
+                     ContainsSubstring("helper function is unavailable on this platform"));
+        REQUIRE(first_error("sockops", helper).empty());
+        REQUIRE(first_error("cgroup/connect4", helper).empty());
     }
 }
 
