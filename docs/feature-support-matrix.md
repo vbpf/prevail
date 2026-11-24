@@ -74,7 +74,8 @@ Capability and configuration checks are described in `Notes / Evidence`; they do
 | BPF-to-BPF non-recursive local call expansion | Supported | `src/ir/cfg_builder.cpp`; `src/elf_loader.cpp` |
 | Maximum call depth guard | Supported | `src/ir/cfg_builder.cpp`: `max_call_stack_frames` option (default 8) |
 | Maximum inlined call count guard | Supported | `src/ir/cfg_builder.cpp`: `max_inlined_calls` option (default 256) |
-| Tail call chain depth guard | Supported | `src/ir/cfg_builder.cpp`: `validate_tail_call_chain_depth` (limit 33) |
+| Tail call chain depth guard | Supported | `src/ir/cfg_builder.cpp`: `pass_validate_tail_calls` (limit 33) |
+| Tail call caller-stack guard | Supported | `src/ir/cfg_builder.cpp`: `tail_call_stack_violation`; a tail call is refused where the callers' frames hold 256 bytes or more, so with the default 512-byte frames it is accepted in the entry function only |
 
 ### BTF/ELF Language-Relevant Handling
 

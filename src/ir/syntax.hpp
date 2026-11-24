@@ -243,6 +243,7 @@ struct CallContract {
     std::optional<Reg> return_arg{};               ///< Argument register the call returns unchanged, if any.
     bool is_map_lookup{};
     bool reallocate_packet{};
+    bool is_tail_call{}; ///< Whether the call, if it succeeds, replaces the calling function by another program.
     std::optional<Reg> alloc_size_reg{}; ///< Register holding allocation size (for T_ALLOC_MEM returns).
     uint8_t zero_args_mask{};            ///< Bitmask of arg positions (0-4 for R1-R5) that must be zero.
     uint64_t allowed_map_types{};        ///< Bitmask of allowed map types for the MAP_FD argument (0 = any).
@@ -485,6 +486,7 @@ struct TypeConstraint {
 
 struct FuncConstraint {
     Reg reg;
+    int call_stack_depth{1}; ///< Of the function making the call (1 for the entry function).
     constexpr bool operator==(const FuncConstraint&) const = default;
 };
 

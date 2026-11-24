@@ -745,9 +745,18 @@ static bool is_tail_call_site(const Instruction& ins, const ebpf_platform_t& pla
     return false;
 }
 
+std::optional<std::string> tail_call_stack_violation(const int call_stack_depth, const RuntimeConfig& runtime) {
+    const int caller_stack = runtime.caller_stack_size(call_stack_depth);
+    if (caller_stack < RuntimeConfig::TAIL_CALL_CALLER_STACK_LIMIT) {
+        return std::nullopt;
+    }
+    return "tail call not allowed where the frames of the callers hold " + std::to_string(caller_stack) +
+           " bytes of stack (must be less than " + std::to_string(RuntimeConfig::TAIL_CALL_CALLER_STACK_LIMIT) + ")";
+}
+
 static void collect_wto_labels(const CycleOrLabel& component, std::set<Label>& labels) {
     // Iterative (explicit work-stack) rather than recursive on cycle-nesting depth.
-    // This runs unconditionally for every program via pass_validate_tail_call_depth,
+    // This runs unconditionally for every program via pass_validate_tail_calls,
     // so a crafted deeply-nested CFG must not be able to overflow the C++ stack here.
     std::vector<const CycleOrLabel*> stack{&component};
     while (!stack.empty()) {
@@ -763,15 +772,22 @@ static void collect_wto_labels(const CycleOrLabel& component, std::set<Label>& l
     }
 }
 
-// Pass: ValidateTailCallDepth
-// Reads    : Program (CFG + instructions), Wto, platform, program type.
+// Pass: ValidateTailCalls
+// Reads    : Program (CFG + instructions), Wto, platform, program type, runtime configuration.
 // Writes   : nothing.
-// Throws   : InvalidControlFlow if the reachable tail-call chain exceeds the fixed limit.
-// Notes    : Counts tail-call sites along the longest path through the reachable maximal-SCC DAG
+// Throws   : InvalidControlFlow if the reachable tail-call chain exceeds the fixed limit, or if a
+//            reachable tail call is made where the callers' frames hold too much stack.
+// Notes    : Together the two limits bound the stack of a chain of tail calls. A tail call replaces
+//            only the frame that makes it, so each call of the chain leaves the frames of its
+//            callers on the stack: at most tail_call_chain_limit times less than
+//            RuntimeConfig::TAIL_CALL_CALLER_STACK_LIMIT bytes, on top of the total_stack_size()
+//            of the last program. A callx is checked when its helper id is known, by the
+//            FuncConstraint assertion.
+//            Counts tail-call sites along the longest path through the reachable maximal-SCC DAG
 //            so cycles do not inflate depth. Maximal SCCs are derived from WTO nesting: labels in
 //            the same outermost WTO cycle are mutually reachable and form one maximal SCC.
-static void pass_validate_tail_call_depth(const Program& prog, const Wto& wto, const ebpf_platform_t& platform,
-                                          const EbpfProgramType& program_type) {
+static void pass_validate_tail_calls(const Program& prog, const Wto& wto, const ebpf_platform_t& platform,
+                                     const EbpfProgramType& program_type, const RuntimeConfig& runtime) {
     constexpr int tail_call_chain_limit = 33;
 
     // WTO only covers labels reachable from entry.
@@ -804,6 +820,11 @@ static void pass_validate_tail_call_depth(const Program& prog, const Wto& wto, c
     for (const auto& label : reachable) {
         const Label src_scc = maximal_scc_of.at(label);
         if (is_tail_call_site(prog.instruction_at(label), platform, program_type)) {
+            if (std::holds_alternative<Call>(prog.instruction_at(label))) {
+                if (const auto violation = tail_call_stack_violation(label.call_stack_depth(), runtime)) {
+                    throw InvalidControlFlow{*violation + " (at " + to_string(label) + ")"};
+                }
+            }
             ++tail_sites_per_scc.at(src_scc);
             auto& representative = representative_tail_label.at(src_scc);
             if (!representative.has_value()) {
@@ -983,10 +1004,10 @@ Program Program::from_sequence(const InstructionSeq& inst_seq, const ProgramInfo
     // --- Pass: InlineLocalCalls -------------------------------------------
     pass_inline_local_calls(builder, inst_seq, options.runtime);
 
-    // --- Pass: ValidateTailCallDepth --------------------------------------
+    // --- Pass: ValidateTailCalls ------------------------------------------
     // Wto construction throws RuntimeInputError if loops nest deeper than Wto::max_nesting_depth.
     const Wto wto{builder.prog.cfg()};
-    pass_validate_tail_call_depth(builder.prog, wto, *info.platform, info.type);
+    pass_validate_tail_calls(builder.prog, wto, *info.platform, info.type, options.runtime);
 
     // --- Pass: ComputeCallbackMetadata ------------------------------------
     pass_compute_callback_metadata(builder);

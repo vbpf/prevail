@@ -393,6 +393,10 @@ static VerifierOptions raw_options_to_options(const std::set<string>& raw_option
             options.runtime.big_endian = true;
         } else if (name == "!big_endian") {
             options.runtime.big_endian = false;
+        } else if (const string prefix = "stack_size="; name.starts_with(prefix)) {
+            // The size of each stack frame; the whole stack is max_call_stack_frames of them.
+            options.runtime.subprogram_stack_size = std::stoi(name.substr(prefix.size()));
+            options.runtime.validate();
         } else {
             throw RuntimeInputError("Unknown option: " + name);
         }

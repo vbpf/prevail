@@ -233,7 +233,8 @@ class AssertExtractor {
     vector<Assertion> operator()(const Callx& callx) const {
         vector<Assertion> res;
         res.emplace_back(TypeConstraint{callx.func, TypeGroup::number});
-        res.emplace_back(FuncConstraint{callx.func});
+        const int depth = current_label.has_value() ? current_label.value().call_stack_depth() : 1;
+        res.emplace_back(FuncConstraint{callx.func, depth});
         return res;
     }
 

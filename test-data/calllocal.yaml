@@ -314,7 +314,59 @@ post:
 #   - r0.uvalue=0
 #   - r6.type=r7.type
 ---
+# A tail call replaces only the frame that makes it, so one made in a subprogram leaves the frames of its
+# callers on the stack, once for each call of a chain of tail calls. It is allowed only where those frames hold
+# less than 256 bytes. A frame is 512 bytes by default, so the cases that follow the first two use 64-byte frames.
+test-case: tail call from within a subprogram is refused where the caller holds a full frame
+
+pre: ["r0.type=number", "r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r2.uvalue=[1, 2147418112]", "r3.type=number"]
+
+code:
+  <start>: |
+    call <sub>
+    exit
+  <sub>: |
+    call 12; bpf_tail_call
+    r0 = 0
+    exit
+
+post: []
+
+messages:
+  - "tail call not allowed where the frames of the callers hold 512 bytes of stack (must be less than 256) (at 0/2)"
+---
+test-case: tail call in the entry function is allowed after a local call
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r2.uvalue=[1, 2147418112]", "r3.type=number"]
+
+code:
+  <start>: |
+    r6 = r1
+    r7 = r2
+    call <sub>
+    r1 = r6
+    r2 = r7
+    r3 = 0
+    call 12; bpf_tail_call
+    r0 = 0
+    exit
+  <sub>: |
+    r0 = 0
+    exit
+
+post:
+  - r0.type=number
+  - r0.svalue=0
+  - r0.uvalue=0
+  - r6.type=ctx
+  - r6.ctx_offset=0
+  - r7.type=map_fd_programs
+  - r7.uvalue=[1, 2147418112]
+  - meta_offset=0
+  - packet_size=0
+---
 test-case: allow tail call from within a subprogram
+options: ["stack_size=64"]
 
 pre: ["r0.type=number", "r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r2.uvalue=[1, 2147418112]", "r3.type=number"]
 
@@ -333,13 +385,14 @@ post:
   - packet_size=0
 ---
 test-case: tail call from within a subprogram returns the target's r0 to the caller
+options: ["stack_size=64"]
 
 # A successful tail call replaces only the subprogram's frame, so the target program's
 # exit returns to <start> with the target's r0, not with the 0 that <sub> sets when the
 # tail call fails. The store must be checked against both.
 
 pre: ["r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r2.uvalue=[1, 2147418112]", "r3.type=number",
-      "r10.type=stack", "r10.stack_offset=4096"]
+      "r10.type=stack", "r10.stack_offset=512"]
 
 code:
   <start>: |
@@ -361,6 +414,7 @@ messages:
   - "3: Lower bound must be at least r10.stack_offset - subprogram_stack_size (valid_access(r1.offset-1, width=1) for write)"
 ---
 test-case: callx tail call from within a subprogram returns the target's r0 to the caller
+options: ["stack_size=64"]
 
 pre: ["r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r2.uvalue=[1, 2147418112]", "r3.type=number"]
 
@@ -380,6 +434,7 @@ post:
   - packet_size=0
 ---
 test-case: tail call from within a nested subprogram returns to the innermost caller
+options: ["stack_size=64"]
 
 pre: ["r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r2.uvalue=[1, 2147418112]", "r3.type=number"]
 
@@ -404,11 +459,12 @@ post:
   - packet_size=0
 ---
 test-case: tail call from within a subprogram skips the rest of the subprogram
+options: ["stack_size=64"]
 
 # The caller's stack slot is written by <sub> only if the tail call fails.
 
 pre: ["r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r2.uvalue=[1, 2147418112]", "r3.type=number",
-      "r10.type=stack", "r10.stack_offset=4096"]
+      "r10.type=stack", "r10.stack_offset=512"]
 
 code:
   <start>: |
@@ -429,6 +485,7 @@ messages:
   - "3: Invalid type (r0.type == number)"
 ---
 test-case: tail call from within a subprogram invalidates packet pointers in the caller
+options: ["stack_size=64"]
 
 # The tail-called program may reallocate the packet before its exit returns to <start>.
 
@@ -450,6 +507,95 @@ post:
 
 messages:
   - "1: Invalid type (r6.type in {ctx, stack, packet, shared, socket, alloc_mem})"
+---
+test-case: tail call is allowed where the callers hold 192 bytes of stack
+options: ["stack_size=64"]
+
+pre: ["r0.type=number", "r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r2.uvalue=[1, 2147418112]", "r3.type=number"]
+
+code:
+  <start>: |
+    call <a>
+    exit
+  <a>: |
+    call <b>
+    exit
+  <b>: |
+    call <c>
+    exit
+  <c>: |
+    call 12; bpf_tail_call
+    r0 = 0
+    exit
+
+post:
+  - r0.type=number
+  - meta_offset=0
+  - packet_size=0
+---
+test-case: tail call is refused where the callers hold 256 bytes of stack
+options: ["stack_size=64"]
+
+pre: ["r0.type=number", "r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r2.uvalue=[1, 2147418112]", "r3.type=number"]
+
+code:
+  <start>: |
+    call <a>
+    exit
+  <a>: |
+    call <b>
+    exit
+  <b>: |
+    call <c>
+    exit
+  <c>: |
+    call <d>
+    exit
+  <d>: |
+    call 12; bpf_tail_call
+    r0 = 0
+    exit
+
+post: []
+
+messages:
+  - "tail call not allowed where the frames of the callers hold 256 bytes of stack (must be less than 256) (at 0/2/4/6/8)"
+---
+test-case: callx tail call from within a subprogram is refused where the caller holds a full frame
+
+pre: ["r1.type=ctx", "r1.ctx_offset=0", "r2.type=map_fd_programs", "r2.uvalue=[1, 2147418112]", "r3.type=number"]
+
+code:
+  <start>: |
+    call <sub>
+    exit
+  <sub>: |
+    r8 = 12
+    callx r8; bpf_tail_call
+    r0 = 0
+    exit
+
+post:
+  - "_|_"
+
+messages:
+  - "0/3: tail call not allowed where the frames of the callers hold 512 bytes of stack (must be less than 256) (r8.type is helper)"
+---
+test-case: callx of a helper that is not a tail call is allowed in a subprogram
+
+pre: []
+
+code:
+  <start>: |
+    call <sub>
+    exit
+  <sub>: |
+    r8 = 5
+    callx r8; bpf_ktime_get_ns
+    exit
+
+post:
+  - r0.type=number
 ---
 test-case: fail infinite self-recursion
 

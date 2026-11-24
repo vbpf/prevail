@@ -190,7 +190,10 @@ TEST_CASE("pass_inline_local_calls returns a successful tail call to the caller 
     seq.push_back(at(3, Bin{.op = Bin::Op::MOV, .dst = Reg{0}, .v = Imm{0}, .is64 = true}));
     seq.push_back(at(4, Exit{}));
 
-    const Program prog = Program::from_sequence(seq, info, {});
+    // With 64-byte frames, so that the caller's frame is small enough to stay under a tail call.
+    VerifierOptions options{};
+    options.runtime.subprogram_stack_size = 64;
+    const Program prog = Program::from_sequence(seq, info, options);
     // The inlined tail-call site has the fall-through (tail call failed) and a synthetic
     // Exit of the inlined frame (tail call succeeded, the target returned to the caller).
     const Label tail_exit{2, 1, "0"};
@@ -199,6 +202,46 @@ TEST_CASE("pass_inline_local_calls returns a successful tail call to the caller 
     REQUIRE(prog.cfg().children_of(tail_exit) == std::set{Label{1}});
     // Outside an inlined frame nothing under verification runs after a successful tail call.
     REQUIRE(prog.cfg().children_of(Label{2}) == std::set{Label{3}});
+}
+
+TEST_CASE("pass_validate_tail_calls bounds the stack that a tail call leaves to its callers", "[passes]") {
+    // A tail call replaces only the frame that makes it: the frames of its callers stay on the stack, once
+    // for each call of a chain. They must hold less than 256 bytes.
+    const ProgramInfo info = default_info();
+    const auto nested = [](const int functions) {
+        // Function i is `call <next>; exit`; the last one is `bpf_tail_call(); r0 = 0; exit`.
+        InstructionSeq seq;
+        int pc = 0;
+        for (int i = 0; i + 1 < functions; i++) {
+            seq.push_back(at(pc, CallLocal{.target = Label{pc + 2}}));
+            seq.push_back(at(pc + 1, Exit{}));
+            pc += 2;
+        }
+        seq.push_back(at(pc, Call{.func = 12})); // bpf_tail_call
+        seq.push_back(at(pc + 1, Bin{.op = Bin::Op::MOV, .dst = Reg{0}, .v = Imm{0}, .is64 = true}));
+        seq.push_back(at(pc + 2, Exit{}));
+        return seq;
+    };
+    const auto with_frames_of = [](const int bytes) {
+        VerifierOptions options{};
+        options.runtime.subprogram_stack_size = bytes;
+        return options;
+    };
+
+    // The entry function has no caller.
+    REQUIRE_NOTHROW(Program::from_sequence(nested(1), info, {}));
+    // By default a frame is 512 bytes, so one caller is already too many.
+    REQUIRE_THROWS_WITH(
+        Program::from_sequence(nested(2), info, {}),
+        Catch::Matchers::Equals("tail call not allowed where the frames of the callers hold 512 bytes of stack "
+                                "(must be less than 256) (at 0/2)"));
+    // The limit is on the bytes, not on the number of callers.
+    REQUIRE_NOTHROW(Program::from_sequence(nested(2), info, with_frames_of(255)));
+    REQUIRE_THROWS_WITH(Program::from_sequence(nested(2), info, with_frames_of(256)),
+                        Catch::Matchers::ContainsSubstring("hold 256 bytes of stack"));
+    REQUIRE_NOTHROW(Program::from_sequence(nested(4), info, with_frames_of(64)));
+    REQUIRE_THROWS_WITH(Program::from_sequence(nested(5), info, with_frames_of(64)),
+                        Catch::Matchers::ContainsSubstring("hold 256 bytes of stack"));
 }
 
 TEST_CASE("pass_validate_one_per_program_maps allows one cgroup storage map of each type", "[passes]") {
