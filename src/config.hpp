@@ -74,6 +74,12 @@ struct RuntimeConfig {
     // itself: helpers that reallocate the packet, and ordinary traffic, can make it longer.
     int max_packet_size = 0xffff;
 
+    // A tail call replaces only the frame that makes it. The frames of that function's callers stay on the
+    // stack, under the frames of the target program, until the target returns to them; a chain of tail calls
+    // holds them once per call. So that a chain's stack stays bounded, a tail call is allowed only where the
+    // callers' frames hold less than this many bytes (Linux: check_max_stack_depth_subprog()).
+    static constexpr int TAIL_CALL_CALLER_STACK_LIMIT = 256;
+
     static constexpr int MAX_SUBPROGRAM_STACK_SIZE = 1024 * 1024;
     static constexpr int MAX_CALL_STACK_FRAMES_LIMIT = 128;
     static constexpr int MAX_INLINED_CALLS_LIMIT = (1 << 20);
@@ -82,6 +88,13 @@ struct RuntimeConfig {
     [[nodiscard]]
     int total_stack_size() const noexcept {
         return max_call_stack_frames * subprogram_stack_size;
+    }
+
+    /// The stack held by the callers of a function at `call_stack_depth` (1 for the entry function, which has
+    /// no caller). Each frame is subprogram_stack_size bytes, whatever part of it the function uses.
+    [[nodiscard]]
+    int caller_stack_size(const int call_stack_depth) const noexcept {
+        return (call_stack_depth - 1) * subprogram_stack_size;
     }
 
     void validate() const {

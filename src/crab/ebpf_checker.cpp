@@ -321,8 +321,16 @@ void EbpfChecker::operator()(const FuncConstraint& s) const {
             const Call call{.func = imm, .kind = CallKind::helper};
             // The id was unknown to cfg_builder::check_instruction_feature_support, so apply its gate here:
             // an unsupported call has an empty contract and would produce no preconditions below.
-            if (const ResolvedCall resolved = resolve(call, context.program_info()); !resolved.is_supported) {
+            const ResolvedCall resolved = resolve(call, context.program_info());
+            if (!resolved.is_supported) {
                 throw_fail(resolved.unsupported_reason);
+            }
+            // Likewise the limit on the stack that a tail call may leave to its callers, which the CFG
+            // builder applies to a call whose helper is named in the instruction.
+            if (resolved.contract.is_tail_call) {
+                if (const auto violation = tail_call_stack_violation(s.call_stack_depth, context.runtime())) {
+                    throw_fail(*violation);
+                }
             }
             for (const Assertion& sub_assertion : get_assertions(call, context.program_info(), context.runtime(), {})) {
                 // TODO: create explicit sub assertions elsewhere

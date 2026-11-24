@@ -76,6 +76,11 @@ class InvalidControlFlow final : public RuntimeInputError {
     explicit InvalidControlFlow(const std::string& what) : RuntimeInputError(what) {}
 };
 
+/// Why a tail call made by a function at `call_stack_depth` (1 for the entry function) is refused, if it is:
+/// its callers' frames hold RuntimeConfig::TAIL_CALL_CALLER_STACK_LIMIT bytes of stack or more.
+[[nodiscard]]
+std::optional<std::string> tail_call_stack_violation(int call_stack_depth, const RuntimeConfig& runtime);
+
 std::vector<Assertion> get_assertions(const Instruction& ins, const ProgramInfo& info, const RuntimeConfig& runtime,
                                       const std::optional<Label>& label);
 

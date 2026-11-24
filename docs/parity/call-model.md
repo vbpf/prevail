@@ -11,6 +11,8 @@
 ## Tail calls
 
 - [x] **Tail calls in subprograms** — no longer rejected unconditionally. A successful tail call replaces only the subprogram's frame, so each inlined tail-call site also has a successor that returns to the subprogram's caller with an unknown numeric `r0`, as if the subprogram had exited there. Like Linux, `bpf_tail_call` is treated as a packet-reallocating helper, since the target program may change packet data before that return.
+- [x] **Stack left under a tail call** — the frames of the callers stay on the stack under the target program, once for each call of a chain, so as in Linux (`check_max_stack_depth_subprog()`) a tail call is refused where they hold 256 bytes or more. With the 33-call chain limit this bounds the stack of a chain. A `callx` is checked when its helper id is known.
+- [ ] **Stack actually used by the callers** — Linux counts the bytes each caller's frame uses, rounded up to 32. Here every frame is `subprogram_stack_size` bytes whatever the function uses, so with the default 512-byte frames a tail call is accepted in the entry function only; `--stack-size` below 256 admits it in subprograms.
 - [x] **Tail call chain depth tracking** — verifier enforces a tail-call chain limit of 33 during CFG validation.
 - [x] **Failed tail call leaves `r0` unwritten** — `bpf_tail_call` is `RET_VOID` on Linux; after the call `r0` is unreadable (as in Linux), not a number.
 

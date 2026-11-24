@@ -33,6 +33,12 @@ stack_size = subprogram_stack_size (default 512)
 Total: stack_size × max_call_stack_frames (default 8)
 ```
 
+The total is the stack of one program. A tail call replaces only the frame that makes it, so the frames of
+its callers stay on the stack under the target program, once for each call of a chain of tail calls. A tail
+call is therefore allowed only where those frames hold less than 256 bytes: a chain of at most 33 tail calls
+then uses less than 33 × 256 bytes more than the total above. With the default frame size that means the
+entry function only.
+
 ### Stack Tracking
 
 The stack is modeled using `ArrayDomain`:
