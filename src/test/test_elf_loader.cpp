@@ -3900,6 +3900,66 @@ TEST_CASE("ELF loader rejects control flow that runs out of a function", "[elf][
     }
 }
 
+// A compiler emits a map load as an lddw with src 0 and a relocation against the map's symbol; the loader writes
+// the src and the fd. An lddw that is marked as a map load in the file itself holds an fd, or an index into the
+// table of fds, of the process that will load the program. This reader gives the object's maps mock fds 1, 2, ...,
+// so reading the stored number as one of those would let the object pick, by position, the map its access is
+// checked against. The program is refused, like one with an unresolved relocation, and so is a caller of it.
+TEST_CASE("ELF loader rejects a map load that the object stores without a relocation", "[elf][hardening]") {
+    constexpr EbpfInst call_sub{.opcode = INST_OP_CALL, .src = INST_CALL_LOCAL, .imm = -1};
+    const auto lddw_r1 = [](const uint8_t src) {
+        return EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 1, .src = src, .imm = 1};
+    };
+    const std::string message = "loads a map by a literal fd or index at instruction 1";
+
+    for (const uint8_t src :
+         {INST_LD_MODE_MAP_FD, INST_LD_MODE_MAP_VALUE, INST_LD_MODE_MAP_BY_IDX, INST_LD_MODE_MAP_VALUE_BY_IDX}) {
+        CAPTURE(src);
+        // entry holds the load; other, in a section of its own, does not.
+        const TestObjectBuilder builder{
+            .sections = {{.name = "socket", .insts = {test_mov_r0_0, lddw_r1(src), EbpfInst{}, test_exit}},
+                         {.name = "xdp", .insts = {test_mov_r0_0, test_exit}}},
+            .symbols = {{.name = "entry", .section = 0}, {.name = "other", .section = 1}},
+        };
+        const std::string object = builder.build();
+        REQUIRE_THROWS_WITH(read_test_object(object, "socket"),
+                            Catch::Matchers::ContainsSubstring("Function entry in section socket " + message));
+        REQUIRE(read_test_object(object, "xdp").size() == 1);
+    }
+
+    SECTION("in a subprogram") {
+        const TestObjectBuilder builder{
+            .sections = {{.name = "socket", .insts = {call_sub, test_exit}},
+                         {.name = ".text",
+                          .insts = {test_mov_r0_0, lddw_r1(INST_LD_MODE_MAP_FD), EbpfInst{}, test_exit}}},
+            .symbols = {{.name = "entry", .section = 0}, {.name = "sub", .section = 1}},
+            .relocations = {{.section = 0, .instruction = 0, .symbol = 1, .type = R_BPF_64_32_TYPE}},
+        };
+        REQUIRE_THROWS_WITH(read_test_object(builder.build(), "socket"),
+                            Catch::Matchers::ContainsSubstring("Function sub in section .text " + message));
+    }
+
+    SECTION("the second slot of an lddw is not an instruction") {
+        // The upper half of this 64-bit immediate has the bytes of `lddw r1, map_fd`.
+        constexpr EbpfInst upper_half{.opcode = INST_OP_LDDW_IMM, .dst = 1, .src = INST_LD_MODE_MAP_FD};
+        const TestObjectBuilder builder{
+            .sections = {{.name = "socket",
+                          .insts = {EbpfInst{.opcode = INST_OP_LDDW_IMM, .dst = 1}, upper_half, test_mov_r0_0,
+                                    test_exit}}},
+            .symbols = {{.name = "entry", .section = 0}},
+        };
+        REQUIRE(read_test_object(builder.build(), "socket").size() == 1);
+    }
+
+    SECTION("a relocated map load is not affected") {
+        LddwRelocationElf elf;
+        const auto* maps_sec = elf.add_data_section("maps", small_and_large_legacy_maps());
+        elf.add_object("small", 0, 28, maps_sec, ELFIO::STB_GLOBAL);
+        const auto large = elf.add_object("large", 28, 28, maps_sec, ELFIO::STB_GLOBAL);
+        REQUIRE(relocated_value_size(elf.load({large}), 0, INST_LD_MODE_MAP_FD) == 4096);
+    }
+}
+
 // A local call without a relocation entry may land on code that no FUNC symbol starts. It then calls into the
 // function whose code holds its target, which linking appends to the caller.
 TEST_CASE("ELF loader links a local call into the middle of a function", "[elf]") {

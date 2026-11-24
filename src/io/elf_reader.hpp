@@ -154,6 +154,17 @@ struct ControlFlowEscape {
 /// returns to the instruction after the call.
 std::optional<ControlFlowEscape> find_control_flow_escape(const std::vector<EbpfInst>& instructions);
 
+/// The index of the first lddw of `instructions`, as they are in the file, that is already marked as a map load:
+/// its src is the fd of a map, or an index into a table of map fds (INST_LD_MODE_MAP_FD, _MAP_VALUE, _MAP_BY_IDX,
+/// _MAP_VALUE_BY_IDX).
+///
+/// A compiler leaves src 0 and a relocation against the map's symbol, and whoever loads the object writes src and
+/// the fd. An lddw that carries them in the file names an fd, or an fd table entry, of the process that will load
+/// the program. The object cannot know either, and this reader cannot know which map it will be: the fds it gives
+/// the object's maps are mock ones. Read as one of those, the number would pick the map the access is checked
+/// against, by its position among the object's maps.
+std::optional<size_t> find_literal_map_load(const std::vector<EbpfInst>& instructions);
+
 std::vector<ELFIO::section*> global_sections(const ELFIO::elfio& reader);
 
 std::pair<std::reference_wrapper<EbpfInst>, std::reference_wrapper<EbpfInst>>
@@ -218,9 +229,10 @@ class ProgramReader {
     std::vector<UnresolvedRelocation> unresolved_relocations;
     /// Indices in raw_programs of the programs holding an entry of unresolved_relocations.
     std::set<size_t> programs_with_unresolved_relocations;
-    /// Programs whose control flow leaves their own code other than by exit or a call, by index in raw_programs,
-    /// with the description of the first such place.
-    std::map<size_t, std::string> programs_with_escaping_control_flow;
+    /// Programs whose own code cannot be loaded, by index in raw_programs, with the first reason: control flow that
+    /// leaves the code other than by exit or a call, or a map load that names an fd of the loading process. Neither
+    /// such a program nor a caller of it is returned; the rest of the object is.
+    std::map<size_t, std::string> unloadable_programs;
     /// Only negative IDs are platform-internal builtins needing the gate;
     /// positive IDs are standard BPF helpers handled via normal prototype lookup.
     std::set<size_t> builtin_offsets_for_current_program;

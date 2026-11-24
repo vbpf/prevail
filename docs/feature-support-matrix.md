@@ -50,12 +50,12 @@ Capability and configuration checks are described in `Notes / Evidence`; they do
 | `LDX/ST/STX` memory width forms (B/H/W/DW) | Supported | `src/ir/unmarshal.cpp`: `makeMemOp`; `src/ir/syntax.hpp`: `Mem` |
 | Legacy packet access (`LD_ABS`/`LD_IND`) | Supported | `src/ir/unmarshal.cpp`; `src/ir/cfg_builder.cpp`: `check_instruction_feature_support` (packet conformance group, and `EbpfProgramType::legacy_packet_access` for the program type) |
 | LDDW immediate (`src=0`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_IMM`) |
-| LDDW map FD pseudo (`src=1`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_MAP_FD`, `LoadMapFd`); `src/elf_loader.cpp`: `try_reloc` |
-| LDDW map value pseudo (`src=2`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_MAP_VALUE`, `LoadMapAddress`); `src/elf_loader.cpp`: `try_reloc` |
+| LDDW map FD pseudo (`src=1`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_MAP_FD`, `LoadMapFd`); `src/elf_loader.cpp`: `try_reloc`. In an ELF object the loader's relocation must produce it: one stored in the file is refused by `find_literal_map_load` in `src/io/elf_reader.cpp`. |
+| LDDW map value pseudo (`src=2`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_MAP_VALUE`, `LoadMapAddress`); `src/elf_loader.cpp`: `try_reloc`. In an ELF object the loader's relocation must produce it: one stored in the file is refused by `find_literal_map_load` in `src/io/elf_reader.cpp`. |
 | LDDW variable address pseudo (`src=3`) | Not implemented | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_VARIABLE_ADDR`, `LoadPseudo`); `src/ir/cfg_builder.cpp`: `check_instruction_feature_support` rejects it (no platform description of the variable behind an id) |
 | LDDW code address pseudo (`src=4`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw` (`INST_LD_MODE_CODE_ADDR`, `LoadPseudo`); `src/crab/ebpf_transformer.cpp`: `operator()(LoadPseudo)` assigns `T_FUNC` |
-| LDDW map-by-index pseudo (`src=5`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw`; `src/ir/cfg_builder.cpp`: `resolve_pseudo_load` converts to `LoadMapFd` |
-| LDDW map-value-by-index pseudo (`src=6`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw`; `src/ir/cfg_builder.cpp`: `resolve_pseudo_load` converts to `LoadMapAddress` |
+| LDDW map-by-index pseudo (`src=5`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw`; `src/ir/cfg_builder.cpp`: `resolve_pseudo_load` converts to `LoadMapFd`. In an ELF object the loader's relocation must produce it: one stored in the file is refused by `find_literal_map_load` in `src/io/elf_reader.cpp`. |
+| LDDW map-value-by-index pseudo (`src=6`) | Supported | `src/ir/unmarshal.cpp`: `makeLddw`; `src/ir/cfg_builder.cpp`: `resolve_pseudo_load` converts to `LoadMapAddress`. In an ELF object the loader's relocation must produce it: one stored in the file is refused by `find_literal_map_load` in `src/io/elf_reader.cpp`. |
 | MEMSX sign-extending loads (`LDXSB/LDXSH/LDXSW`) | Supported | `src/ir/unmarshal.cpp`: `makeMemOp` (`INST_MODE_MEMSX`); `src/crab/ebpf_transformer.cpp`: `operator()(const Mem&)`, `do_load_packet_or_shared` |
 
 ### Atomics
