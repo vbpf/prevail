@@ -2659,6 +2659,82 @@ TEST_CASE("ELF loader resolves unambiguous BTF map symbols", "[elf][hardening]")
     REQUIRE(relocated_value_size(program, 1, INST_LD_MODE_MAP_FD) == 4096);
 }
 
+// .BTF, .BTF.ext and .maps are found by name. Section names need not be unique, and loaders that find a section by
+// name differ in which of several they take: a first-match lookup takes the first, libbpf the last. So an object
+// that repeats one of these names could be verified against other maps, or with other CO-RE records, than the
+// ones it is loaded with, and it is refused.
+TEST_CASE("ELF loader rejects an object that repeats a section it finds by name", "[elf][hardening]") {
+    using Catch::Matchers::ContainsSubstring;
+
+    SECTION("one section of each name is accepted") {
+        LddwRelocationElf elf;
+        elf.add_data_section(".BTF", small_and_large_btf_maps("map", "other"));
+        const auto* maps_sec = elf.add_data_section(".maps", std::string(64, '\0'));
+        const auto map_sym = elf.add_object("map", 0, 32, maps_sec, ELFIO::STB_GLOBAL);
+        REQUIRE(relocated_value_size(elf.load({map_sym}), 0, INST_LD_MODE_MAP_FD) == 4);
+    }
+    // The two .BTF sections give the map "map" a value of 4096 bytes and of 4 bytes.
+    SECTION("two .BTF sections, the larger map first") {
+        LddwRelocationElf elf;
+        elf.add_data_section(".BTF", small_and_large_btf_maps("other", "map"));
+        elf.add_data_section(".BTF", small_and_large_btf_maps("map", "other"));
+        const auto* maps_sec = elf.add_data_section(".maps", std::string(64, '\0'));
+        const auto map_sym = elf.add_object("map", 0, 32, maps_sec, ELFIO::STB_GLOBAL);
+        REQUIRE_THROWS_WITH(elf.load({map_sym}), ContainsSubstring("has more than one section named .BTF"));
+    }
+    SECTION("two .BTF sections, the larger map last") {
+        LddwRelocationElf elf;
+        elf.add_data_section(".BTF", small_and_large_btf_maps("map", "other"));
+        const auto* maps_sec = elf.add_data_section(".maps", std::string(64, '\0'));
+        elf.add_data_section(".BTF", small_and_large_btf_maps("other", "map"));
+        const auto map_sym = elf.add_object("map", 0, 32, maps_sec, ELFIO::STB_GLOBAL);
+        REQUIRE_THROWS_WITH(elf.load({map_sym}), ContainsSubstring("has more than one section named .BTF"));
+    }
+    SECTION("two .BTF.ext sections") {
+        LddwRelocationElf elf;
+        elf.add_data_section(".BTF", small_and_large_btf_maps("map", "other"));
+        elf.add_data_section(".BTF.ext", std::string(32, '\0'));
+        elf.add_data_section(".BTF.ext", std::string(32, '\0'));
+        const auto* maps_sec = elf.add_data_section(".maps", std::string(64, '\0'));
+        const auto map_sym = elf.add_object("map", 0, 32, maps_sec, ELFIO::STB_GLOBAL);
+        REQUIRE_THROWS_WITH(elf.load({map_sym}), ContainsSubstring("has more than one section named .BTF.ext"));
+    }
+    SECTION("two .maps sections") {
+        LddwRelocationElf elf;
+        elf.add_data_section(".BTF", small_and_large_btf_maps("map", "other"));
+        elf.add_data_section(".maps", std::string(64, '\0'));
+        const auto* maps_sec = elf.add_data_section(".maps", std::string(64, '\0'));
+        const auto map_sym = elf.add_object("map", 0, 32, maps_sec, ELFIO::STB_GLOBAL);
+        REQUIRE_THROWS_WITH(elf.load({map_sym}), ContainsSubstring("has more than one section named .maps"));
+    }
+    // libbpf does not read BTF from a section of another type, so the BTF in it is not what the object is loaded with.
+    SECTION("a .BTF section that is not SHT_PROGBITS") {
+        LddwRelocationElf elf;
+        elf.add_data_section(".BTF", small_and_large_btf_maps("map", "other"))->set_type(ELFIO::SHT_NOTE);
+        const auto* maps_sec = elf.add_data_section(".maps", std::string(64, '\0'));
+        const auto map_sym = elf.add_object("map", 0, 32, maps_sec, ELFIO::STB_GLOBAL);
+        REQUIRE_THROWS_WITH(elf.load({map_sym}),
+                            ContainsSubstring("Section .BTF of ELF file memory is not of type SHT_PROGBITS"));
+    }
+    SECTION("a .BTF.ext section that is not SHT_PROGBITS") {
+        LddwRelocationElf elf;
+        elf.add_data_section(".BTF", small_and_large_btf_maps("map", "other"));
+        elf.add_data_section(".BTF.ext", std::string(32, '\0'))->set_type(ELFIO::SHT_NOTE);
+        const auto* maps_sec = elf.add_data_section(".maps", std::string(64, '\0'));
+        const auto map_sym = elf.add_object("map", 0, 32, maps_sec, ELFIO::STB_GLOBAL);
+        REQUIRE_THROWS_WITH(elf.load({map_sym}),
+                            ContainsSubstring("Section .BTF.ext of ELF file memory is not of type SHT_PROGBITS"));
+    }
+    // Sections that the loader finds by index may share a name.
+    SECTION("two .data sections") {
+        LddwRelocationElf elf;
+        elf.add_data_section(".data", std::string(4, '\0'));
+        const auto* data_sec = elf.add_data_section(".data", std::string(64, '\0'));
+        const auto var_sym = elf.add_object("var", 0, 8, data_sec, ELFIO::STB_GLOBAL);
+        REQUIRE(relocated_value_size(elf.load({var_sym}), 0, INST_LD_MODE_MAP_VALUE) == 64);
+    }
+}
+
 TEST_CASE("ELF loader records what the program may do with each map", "[elf][map]") {
     constexpr uint32_t rdonly_prog = 1U << 7; // BPF_F_RDONLY_PROG
     constexpr uint32_t wronly_prog = 1U << 8; // BPF_F_WRONLY_PROG

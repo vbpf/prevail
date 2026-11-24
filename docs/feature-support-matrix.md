@@ -82,6 +82,7 @@ Capability and configuration checks are described in `Notes / Evidence`; they do
 |---|---|---|
 | BTF data handling | Supported | `src/elf_loader.cpp`: `parse_btf_section`; invalid data rejected as `UnmarshalError` |
 | CO-RE/BTF relocation handling | Supported | `src/elf_loader.cpp`: `process_core_relocations`, `apply_core_relocation`; invalid/unsupported relocation data rejected as `UnmarshalError` |
+| Sections found by name (`.BTF`, `.BTF.ext`, `.maps`) | Supported | `src/io/elf_reader.cpp`: `validate_sections_found_by_name`. ELF section names need not be unique, and loaders that find these sections by name differ in which of several they use (libbpf keeps the last). An object that repeats one of the names, or whose `.BTF` or `.BTF.ext` is not `SHT_PROGBITS`, is rejected as `UnmarshalError`, so the BTF and CO-RE records a program is verified with are the only ones in the file |
 
 ## Diagnostics
 
