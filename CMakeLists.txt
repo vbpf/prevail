@@ -318,6 +318,7 @@ if (prevail_ENABLE_TESTS)
     src/test/test_subsumption.cpp
     src/test/test_type_domain.cpp
     src/test/test_type_to_num.cpp
+    src/test/test_var_registry.cpp
     # Full-program verification of the sample corpus is data-driven from
     # test-data/elf_inventory.json (see src/test/test_verify_samples.cpp).
     src/test/test_verify_samples.cpp

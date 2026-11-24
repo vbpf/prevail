@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "arith/num_big.hpp"
@@ -39,10 +41,17 @@ struct RegPack {
 //
 // The registry is stored thread-locally, so `intern`'s append path has no
 // concurrency concerns on the current design. Sharing a registry across
-// threads would require synchronization on `names`.
+// threads would require synchronization on `names` and `ids`.
+//
+// Names are never removed, so the registry grows for the life of its thread, over every analysis the thread runs.
+// The analyzed program decides how many names there are: a set per stack cell and a set per inlined call site.
 class VariableRegistry final {
     Variable intern(const std::string& name) const;
+    // The id of a variable is the position of its name here, in order of first use.
     mutable std::vector<std::string> names;
+    // The inverse of `names`: ids.at(names[i]) == i for every i. Looking a name up must not scan `names`, whose
+    // length the analyzed programs choose; the fixpoint looks up a dozen names per stack cell at every loop head.
+    mutable std::unordered_map<std::string, uint64_t> ids;
 
   public:
     VariableRegistry();

@@ -204,7 +204,7 @@ if (!result.failed) {
 ## Thread Safety
 
 The verifier uses thread-local storage for:
-- **Variable registry**: Maps variable names to indices
+- **Variable registry**: Maps variable names to indices. Names are never removed, so the registry of a thread grows over all the analyses the thread runs; lookup is by hash, so that growth costs memory and not time
 - **Global program counter**: Tracks current instruction during analysis
 
 This allows multiple verification instances to run concurrently without interference.

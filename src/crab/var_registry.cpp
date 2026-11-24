@@ -4,19 +4,27 @@
  * Factories for variable names.
  */
 
-#include "crab/var_registry.hpp"
+#include <cassert>
+
 #include "arith/variable.hpp"
 #include "cfg/label.hpp"
+#include "crab/var_registry.hpp"
 
 namespace prevail {
 
 Variable VariableRegistry::intern(const std::string& name) const {
-    const auto it = std::ranges::find(names, name);
-    if (it == names.end()) {
-        names.emplace_back(name);
-        return Variable(names.size() - 1);
+    const auto [it, inserted] = ids.try_emplace(name, names.size());
+    if (inserted) {
+        try {
+            names.emplace_back(name);
+        } catch (...) {
+            // Keep `ids` the inverse of `names`. The registry outlives a failed analysis, and an id left here
+            // without a name would be given again to the next new name: two variables with one id.
+            ids.erase(it);
+            throw;
+        }
     }
-    return Variable(std::distance(names.begin(), it));
+    return Variable(it->second);
 }
 
 static std::vector<std::string> default_variable_names() {
@@ -139,7 +147,13 @@ static std::vector<std::string> default_variable_names() {
     };
 }
 
-VariableRegistry::VariableRegistry() : names(default_variable_names()) {}
+VariableRegistry::VariableRegistry() : names(default_variable_names()) {
+    for (size_t i = 0; i < names.size(); i++) {
+        [[maybe_unused]]
+        const bool inserted = ids.emplace(names[i], i).second;
+        assert(inserted); // A name listed twice would have two ids.
+    }
+}
 
 VariableRegistry& get_variable_registry() {
     // Use function-local thread_local to defer construction until first use,
