@@ -123,9 +123,12 @@ bool has_single_arg(const ResolvedCall& rc, const ArgSingle::Kind kind, const Re
 } // namespace
 
 TEST_CASE("linux program-type table maps modern section prefixes", "[platform][tables]") {
-    const std::array<ProgramTypeExpectation, 15> expectations{{
+    const std::array<ProgramTypeExpectation, 18> expectations{{
         {"cgroup/bind4", "cgroup_sock_addr", &g_sock_addr_descr},
-        {"cgroup/post_bind6", "cgroup_sock_addr", &g_sock_addr_descr},
+        {"cgroup/sock_create", "cgroup_sock", &g_cgroup_sock_descr},
+        {"cgroup/sock_release", "cgroup_sock", &g_cgroup_sock_descr},
+        {"cgroup/post_bind4", "cgroup_sock", &g_cgroup_sock_descr},
+        {"cgroup/post_bind6", "cgroup_sock", &g_cgroup_sock_descr},
         {"cgroup/connect6", "cgroup_sock_addr", &g_sock_addr_descr},
         {"cgroup/recvmsg4", "cgroup_sock_addr", &g_sock_addr_descr},
         {"cgroup/getpeername6", "cgroup_sock_addr", &g_sock_addr_descr},
@@ -151,10 +154,12 @@ TEST_CASE("linux program-type table maps modern section prefixes", "[platform][t
 
 TEST_CASE("linux program-type table marks contexts the kernel keeps read-only", "[platform][tables]") {
     // Program types whose is_valid_access() rejects every BPF_WRITE.
-    for (const char* section :
-         {"kprobe/f", "kretprobe/f", "perf_event",     "tracepoint/t",   "raw_tp/t",     "raw_tp.w/t", "fentry/f",
-          "fexit/f",  "fmod_ret/f",  "iter/i",         "lsm/f",          "struct_ops/f", "cgroup/dev", "sk_lookup/l",
-          "xdp",      "sk_msg",      "sk_reuseport/r", "flow_dissector", "lirc_mode2",   "netfilter/n"}) {
+    for (const char* section : {"kprobe/f",          "kretprobe/f",      "perf_event", "tracepoint/t",
+                                "raw_tp/t",          "raw_tp.w/t",       "fentry/f",   "fexit/f",
+                                "fmod_ret/f",        "iter/i",           "lsm/f",      "struct_ops/f",
+                                "cgroup/dev",        "sk_lookup/l",      "xdp",        "sk_msg",
+                                "sk_reuseport/r",    "flow_dissector",   "lirc_mode2", "netfilter/n",
+                                "cgroup/post_bind4", "cgroup/post_bind6"}) {
         CAPTURE(section);
         REQUIRE(g_ebpf_platform_linux.get_program_type(section, "").ctx_read_only);
     }
@@ -200,6 +205,41 @@ TEST_CASE("stores through a read-only context are rejected", "[platform][tables]
             "1: Context is read-only (valid_access(r1.offset, width=8) for write)");
     // __sk_buff.mark, which a tc program may set.
     REQUIRE_FALSE(verify_lines("classifier", {"r2 = 1", "*(u32 *)(r1 + 8) = r2", "r0 = 0", "exit"}).has_value());
+}
+
+TEST_CASE("a post_bind program is checked against the socket it runs on", "[platform][tables]") {
+    // bpf_bind(ctx, addr, addr_len) reads a struct bpf_sock_addr. A post_bind hook has a struct bpf_sock.
+    const std::vector<std::string> bind{"r2 = 0",
+                                        "*(u64 *)(r10 - 16) = r2",
+                                        "*(u64 *)(r10 - 8) = r2",
+                                        "r2 = r10",
+                                        "r2 += -16",
+                                        "r3 = 16",
+                                        "call 64",
+                                        "r0 = 1",
+                                        "exit"};
+    REQUIRE_FALSE(verify_lines("cgroup/connect4", bind).has_value());
+    for (const char* section :
+         {"cgroup/post_bind4", "cgroup/post_bind6", "cgroup/sock_create", "cgroup/sock_release"}) {
+        CAPTURE(section);
+        const EbpfProgramType type = g_ebpf_platform_linux.get_program_type(section, "");
+        REQUIRE(type.ctx_descriptor == &g_cgroup_sock_descr);
+        REQUIRE_FALSE(g_ebpf_platform_linux.is_helper_usable(64, type));
+        REQUIRE_THROWS_WITH(verify_lines(section, bind),
+                            Catch::Matchers::ContainsSubstring("helper function is unavailable on this platform"));
+    }
+
+    // bpf_sock.state, at offset 72. A struct bpf_sock_addr ends there.
+    const std::vector<std::string> read_state{"r0 = *(u32 *)(r1 + 72)", "r0 = 1", "exit"};
+    REQUIRE_FALSE(verify_lines("cgroup/post_bind4", read_state).has_value());
+    REQUIRE_FALSE(verify_lines("cgroup/sock_create", read_state).has_value());
+    REQUIRE(verify_lines("cgroup/connect4", read_state).has_value());
+
+    // bpf_sock.mark, which a sock_create or sock_release program may set and a post_bind program may not.
+    const std::vector<std::string> set_mark{"r2 = 1", "*(u32 *)(r1 + 16) = r2", "r0 = 1", "exit"};
+    REQUIRE_FALSE(verify_lines("cgroup/sock_create", set_mark).has_value());
+    REQUIRE(verify_lines("cgroup/post_bind4", set_mark) ==
+            "1: Context is read-only (valid_access(r1.offset+16, width=4) for write)");
 }
 
 TEST_CASE("legacy packet access is limited to program types whose context is an sk_buff", "[platform][tables]") {
