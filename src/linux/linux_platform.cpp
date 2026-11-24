@@ -193,6 +193,11 @@ const std::vector<EbpfProgramType> linux_program_types = {
                   PTYPE("cgroup_skb", &g_socket_filter_descr, BPF_PROG_TYPE_CGROUP_SKB, {"cgroup_skb/egress"})),
               0, 3),
     returning(PTYPE("cgroup_sock", &g_cgroup_sock_descr, BPF_PROG_TYPE_CGROUP_SOCK, {"cgroup/sock"}), 0, 1),
+    // A post_bind hook runs on the socket that was bound, a struct bpf_sock like the other cgroup_sock hooks and
+    // unlike cgroup/bind, which runs on the address before the bind. It may store to no field of the socket
+    // (__sock_filter_check_attach_type() in net/core/filter.c).
+    returning(PTYPE_READONLY_CTX("cgroup_sock", &g_cgroup_sock_descr, BPF_PROG_TYPE_CGROUP_SOCK, {"cgroup/post_bind"}),
+              0, 1),
     PTYPE_PRIVILEGED_READONLY_CTX("kprobe", &g_kprobe_descr, BPF_PROG_TYPE_KPROBE, {"kprobe/" COMMA "kretprobe/"}),
     with_read_only_packet(PTYPE("lwt_in", &g_lwt_inout_descr, BPF_PROG_TYPE_LWT_IN, {"lwt_in"})),
     with_read_only_packet(PTYPE("lwt_out", &g_lwt_inout_descr, BPF_PROG_TYPE_LWT_OUT, {"lwt_out"})),
@@ -219,7 +224,7 @@ const std::vector<EbpfProgramType> linux_program_types = {
     PTYPE_PRIVILEGED_READONLY_CTX("raw_tracepoint_writable", &g_tracing_descr, BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE,
                                   {"raw_tracepoint.w/" COMMA "raw_tp.w/"}),
     returning(PTYPE("cgroup_sock_addr", &g_sock_addr_descr, BPF_PROG_TYPE_CGROUP_SOCK_ADDR,
-                    {"cgroup/post_bind" COMMA "cgroup/connect" COMMA "cgroup/sendmsg"}),
+                    {"cgroup/connect" COMMA "cgroup/sendmsg"}),
               0, 1),
     // Bit 1 of a bind program's result asks to skip the check of the port against the privileged range.
     returning(PTYPE("cgroup_sock_addr", &g_sock_addr_descr, BPF_PROG_TYPE_CGROUP_SOCK_ADDR, {"cgroup/bind"}), 0, 3),
