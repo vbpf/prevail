@@ -861,6 +861,24 @@ static void check_instruction_variations(const std::optional<const EbpfInstructi
     }
 }
 
+TEST_CASE("fail unmarshal empty program", "[disasm][marshal]") {
+    // A program with no instructions is a fault of the program: unmarshal reports it by its error string, as it
+    // does a bad instruction, and does not throw.
+    const ProgramInfo info{.platform = &g_ebpf_platform_linux,
+                           .type = g_ebpf_platform_linux.get_program_type("unspec", "unspec")};
+    const RawProgram empty{"", "", 0, "", {}, info};
+    std::variant<InstructionSeq, std::string> result;
+    REQUIRE_NOTHROW(result = unmarshal(empty, VerifierOptions{}));
+    const auto* error_message = std::get_if<std::string>(&result);
+    REQUIRE(error_message != nullptr);
+    REQUIRE(*error_message == "0: Zero length programs are not allowed\n");
+
+    // Invalid options are a fault of the caller, and still throw.
+    VerifierOptions bad_options{};
+    bad_options.runtime.subprogram_stack_size = 0;
+    REQUIRE_THROWS_AS(unmarshal(empty, bad_options), std::invalid_argument);
+}
+
 TEST_CASE("fail unmarshal bad instructions", "[disasm][marshal]") {
     constexpr size_t template_count = std::size(instruction_template);
 
