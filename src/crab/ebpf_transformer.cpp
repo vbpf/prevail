@@ -246,7 +246,8 @@ static LinearConstraint assume_cst_offsets_reg(const Condition::Op op, const Var
 /// or the descriptor of a map) decides the comparison.
 ///
 /// It does for the singleton regions only: context, stack and packet each have one base per run, so two
-/// pointers into one of them are ordered, and equal, exactly as their offsets are.
+/// pointers into one of them are ordered, and equal, exactly as their offsets are (while both lie within
+/// the region, see is_within_region()).
 ///
 /// It decides nothing for any other type, because the kind variable does not say which object is pointed to:
 /// - An offset into a map value, allocated memory, a socket or a kernel object is relative to whichever
@@ -260,12 +261,55 @@ static LinearConstraint assume_cst_offsets_reg(const Condition::Op op, const Var
 ///   may be the same map (or both null).
 static bool offsets_decide_pointer_comparison(const TypeEncoding type) { return TS_SINGLETON_PTR.contains(type); }
 
-/// Narrow a pointer compared with zero: the comparison tests whether it is null.
+/// Whether the pointer in `reg`, when it is a `type`, is known to lie within its region or one past its end.
+///
+/// Only there does what the analysis tracks of a pointer stand for its address. A region is an object in
+/// memory: it does not contain address zero and it does not wrap around the address space. So within it
+/// two pointers are ordered, and equal, as their offsets are, and a pointer is null only if it was null
+/// when the program got it. An offset, though, is an unbounded integer, while the address is the base plus
+/// the offset modulo 2^64. Outside the region two different offsets may be one address (r10 + 2^63 + 2^63
+/// is r10), the larger offset may be the lower address, and a pointer that was not null may be zero
+/// (r1 + -r1).
+///
+/// The bounds are at least as wide as those the checker requires of a pointer that an unprivileged program
+/// compares (ValidAccess of width zero), so a comparison that the checker lets through is decided here as
+/// before. They are stated again because the checker requires nothing of a privileged program's
+/// comparisons: this is what keeps the transformer sound on its own.
+///
+/// A packet pointer may be compared past the end of the packet, as `data + 14 > data_end` is, so its
+/// ceiling is max_packet_size, a distance from the start over which a packet address is taken not to wrap.
+/// A pointer known to be inside the packet is a real address whatever the packet's length.
+///
+/// Only arithmetic moves a pointer, and arithmetic is admitted on these four types alone (TS_POINTER: the
+/// type constraints of Bin, which every program gets). A pointer of any other type is where the runtime
+/// put it.
+static bool is_within_region(const TypeToNumDomain& state, const AnalysisContext& context, const Reg& reg,
+                             const TypeEncoding type) {
+    using namespace dsl_syntax;
+    const RegPack r = reg_pack(reg);
+    const auto between = [&](const Variable offset, const LinearExpression& floor, const LinearExpression& ceiling) {
+        return state.values.entail(offset >= floor) && state.values.entail(offset <= ceiling);
+    };
+    switch (type) {
+    case T_STACK: return between(r.stack_offset, 0, context.runtime().total_stack_size());
+    case T_CTX: return between(r.ctx_offset, 0, context.program_info().type.ctx_descriptor->size);
+    case T_PACKET:
+        return between(r.packet_offset, variable_registry.meta_offset(), variable_registry.packet_size()) ||
+               between(r.packet_offset, variable_registry.meta_offset(), context.runtime().max_packet_size);
+    case T_SHARED: return between(r.shared_offset, 0, r.shared_region_size);
+    default: return true;
+    }
+}
+
+/// Narrow a pointer compared with zero: the comparison tests whether it is null, provided the pointer is
+/// within its region (see is_within_region()). Otherwise both outcomes remain.
 /// Nullness is decided by uvalue alone. svalue is a kind variable of T_NUM (type_to_kinds): for a pointer it is
 /// meaningless, and join, meet and subsumption treat it so. Whatever it still holds, from when the register was
 /// a number or from a stack slot, is forgotten first, so that it cannot decide the branch.
-static void assume_pointer_null_check(TypeToNumDomain& state, const Condition& cond, const RegPack& dst) {
-    if (admits_pointer_operands(cond)) {
+static void assume_pointer_null_check(TypeToNumDomain& state, const AnalysisContext& context, const Condition& cond,
+                                      const TypeEncoding dst_type) {
+    const RegPack dst = reg_pack(cond.left);
+    if (admits_pointer_operands(cond) && is_within_region(state, context, cond.left, dst_type)) {
         state.values.havoc(dst.svalue);
         for (const LinearConstraint& cst :
              state.values->assume_cst_imm(cond.op, cond.is64, dst.svalue, dst.uvalue, 0)) {
@@ -276,7 +320,8 @@ static void assume_pointer_null_check(TypeToNumDomain& state, const Condition& c
 
 // The checker restricts which comparisons unprivileged programs may make, but privileged programs
 // are not checked, so each case below narrows only what holds regardless of where regions lie.
-// A pointer compared with anything but a same-region pointer or zero yields no information.
+// A pointer compared with anything but a same-region pointer or zero yields no information, and
+// neither does a pointer that may have left its region (see is_within_region()).
 void EbpfTransformer::operator()(const Assume& s) {
     if (dom.is_bottom()) {
         return;
@@ -294,7 +339,9 @@ void EbpfTransformer::operator()(const Assume& s) {
                         state.values.add_constraint(cst);
                     }
                 } else if (dst_type == src_type) {
-                    if (admits_pointer_operands(cond) && offsets_decide_pointer_comparison(dst_type)) {
+                    if (admits_pointer_operands(cond) && offsets_decide_pointer_comparison(dst_type) &&
+                        is_within_region(state, context, cond.left, dst_type) &&
+                        is_within_region(state, context, src_reg, src_type)) {
                         const auto dst_offset = primary_kind_variable_for_type(cond.left, dst_type);
                         const auto src_offset = primary_kind_variable_for_type(src_reg, src_type);
                         if (dst_offset && src_offset) {
@@ -305,7 +352,7 @@ void EbpfTransformer::operator()(const Assume& s) {
                 } else if (src_type == T_NUM) {
                     using namespace dsl_syntax;
                     if (state.values.entail(src.svalue == 0)) {
-                        assume_pointer_null_check(state, cond, dst);
+                        assume_pointer_null_check(state, context, cond, dst_type);
                     }
                 }
             });
@@ -319,7 +366,7 @@ void EbpfTransformer::operator()(const Assume& s) {
                     state.values.add_constraint(cst);
                 }
             } else if (imm == 0) {
-                assume_pointer_null_check(state, cond, dst);
+                assume_pointer_null_check(state, context, cond, dst_type);
             }
         });
     }

@@ -385,3 +385,14 @@ where pointers are equal and ordered as their offsets are. Every other compariso
   an array map lie back to back, so one past the end of an element is the start of the next.
 - Two map descriptors do not tell maps apart. The result of a lookup in a map of maps carries the descriptor of
   the inner-map template, whichever map the slot holds.
+
+Even within one singleton region, the offsets decide a comparison only while both pointers lie within the
+region or one past its end. An offset is an unbounded integer, but the address is the base plus the offset
+modulo 2^64. A region does not wrap around the address space and does not contain address zero, so inside
+it larger offsets are higher addresses. Outside it they need not be: `r10 + 2^63 + 2^63` is `r10` again at
+an offset 2^64 away, and `r10 + 2^62` is below `r10` wherever the stack lies high enough. The same holds for
+a pointer compared with zero, which tests whether it is null: a pointer that was not null when the program
+got it is known to be nonzero only while it lies within its region, since `r1 + -r1` is zero.
+
+For an unprivileged program the checker refuses a comparison of a pointer outside these bounds. A privileged
+program may make it, and then both branches are kept.
