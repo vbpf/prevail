@@ -585,6 +585,9 @@ void EbpfChecker::operator()(const ValidAccess& s) const {
                 // offset alone. A shifted base would select a different runtime
                 // field than the total offset used by our abstract transformer.
                 require_value(dom.state, reg.ctx_offset == 0, "Nonzero context offset");
+                // The rewrite also needs the base to be the context in every state that
+                // reaches the instruction. One state cannot show that: the analyzer checks
+                // it over all of them (find_mixed_lowered_bases in fwd_analyzer.cpp).
             }
             const auto* desc = context.program_info().type.ctx_descriptor;
             const auto [lb, ub] = lb_ub_access_pair(s, reg.ctx_offset);

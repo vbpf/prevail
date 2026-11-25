@@ -131,6 +131,12 @@ class EbpfDomain final {
 
     bool get_map_fd_range(const Reg& map_fd_reg, int32_t* start_fd, int32_t* end_fd) const;
 
+    /// The types the register may have in this state.
+    [[nodiscard]]
+    std::vector<TypeEncoding> enumerate_types(const Reg& reg) const {
+        return state.enumerate_types(reg);
+    }
+
   private:
     // Generic domain mutators. The first three maintain the
     // `state.is_bottom() <=> !stack` invariant via normalize_after_state_mutation.

@@ -177,6 +177,7 @@ Where:
 | `Possible null access` | Pointer might be NULL |
 | `Possible null argument` | Pointer passed to a helper might be NULL |
 | `Nonzero context offset` | Context pointer was modified before passing to helper |
+| `Same instruction cannot be used with base pointers of types {...}` | A load or store has the context (or a socket) as its base on one path or call site and another region on another |
 
 ---
 
