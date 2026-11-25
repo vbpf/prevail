@@ -217,12 +217,12 @@ const std::vector<EbpfProgramType> linux_program_types = {
     PTYPE_READONLY_CTX("sk_msg", &g_sk_msg_md, BPF_PROG_TYPE_SK_MSG, {"sk_msg"}),
     // Raw tracepoints receive the tracepoint arguments as a u64 array (bpf_tracing_ctx_access),
     // not a perf trace record.
-    PTYPE_PRIVILEGED_READONLY_CTX("raw_tracepoint", &g_tracing_descr, BPF_PROG_TYPE_RAW_TRACEPOINT,
+    PTYPE_PRIVILEGED_READONLY_CTX("raw_tracepoint", &g_raw_tracepoint_descr, BPF_PROG_TYPE_RAW_TRACEPOINT,
                                   {"raw_tracepoint/" COMMA "raw_tp/"}),
     // The writable buffer of a writable raw tracepoint is reached through a pointer loaded
     // from the context, not by storing into the context itself.
-    PTYPE_PRIVILEGED_READONLY_CTX("raw_tracepoint_writable", &g_tracing_descr, BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE,
-                                  {"raw_tracepoint.w/" COMMA "raw_tp.w/"}),
+    PTYPE_PRIVILEGED_READONLY_CTX("raw_tracepoint_writable", &g_raw_tracepoint_descr,
+                                  BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE, {"raw_tracepoint.w/" COMMA "raw_tp.w/"}),
     returning(PTYPE("cgroup_sock_addr", &g_sock_addr_descr, BPF_PROG_TYPE_CGROUP_SOCK_ADDR,
                     {"cgroup/connect" COMMA "cgroup/sendmsg"}),
               0, 1),
@@ -244,15 +244,19 @@ const std::vector<EbpfProgramType> linux_program_types = {
     returning(PTYPE_READONLY_CTX("tracing", &g_tracing_descr, BPF_PROG_TYPE_TRACING,
                                  {"fentry/" COMMA "fentry.s/" COMMA "fexit/" COMMA "fexit.s/"}),
               0, 0),
-    // A fmod_ret program's result replaces that of the traced function, and a tp_btf program's is ignored.
-    PTYPE_READONLY_CTX("tracing", &g_tracing_descr, BPF_PROG_TYPE_TRACING,
-                       {"fmod_ret/" COMMA "fmod_ret.s/" COMMA "tp_btf/" COMMA "tp_btf.s/"}),
-    returning(PTYPE_READONLY_CTX("tracing", &g_tracing_descr, BPF_PROG_TYPE_TRACING, {"iter/" COMMA "iter.s/"}), 0, 1),
-    // struct_ops callbacks receive function arguments as u64 array, same as fentry/fexit.
+    // A fmod_ret program's result replaces that of the traced function.
+    PTYPE_READONLY_CTX("tracing", &g_tracing_descr, BPF_PROG_TYPE_TRACING, {"fmod_ret/" COMMA "fmod_ret.s/"}),
+    // The other attach types of the program type do not run from a trampoline, and their contexts are not the
+    // frame of one (see tracing_descr). A tp_btf program is a raw tracepoint program with typed arguments; its
+    // result is ignored.
+    PTYPE_READONLY_CTX("tracing", &g_raw_tracepoint_descr, BPF_PROG_TYPE_TRACING, {"tp_btf/" COMMA "tp_btf.s/"}),
+    returning(PTYPE_READONLY_CTX("tracing", &g_iter_descr, BPF_PROG_TYPE_TRACING, {"iter/" COMMA "iter.s/"}), 0, 1),
     // What a struct_ops or lsm program may return depends on the prototype of the member or hook it implements
     // (nothing, any number, an errno, a pointer), which is not known here: any number is accepted. See
     // docs/parity/program-types.md.
-    PTYPE_READONLY_CTX("struct_ops", &g_tracing_descr, BPF_PROG_TYPE_STRUCT_OPS, {"struct_ops/" COMMA "struct_ops.s/"}),
+    PTYPE_READONLY_CTX("struct_ops", &g_struct_ops_descr, BPF_PROG_TYPE_STRUCT_OPS,
+                       {"struct_ops/" COMMA "struct_ops.s/"}),
+    // An lsm program runs from a trampoline, like fentry.
     PTYPE_READONLY_CTX("lsm", &g_tracing_descr, BPF_PROG_TYPE_LSM, {"lsm/" COMMA "lsm.s/"}),
     returning(PTYPE_READONLY_CTX("sk_lookup", &g_sk_lookup_descr, BPF_PROG_TYPE_SK_LOOKUP, {"sk_lookup/"}), 0, 1),
     PTYPE("syscall", &g_syscall_descr, BPF_PROG_TYPE_SYSCALL, {"syscall/"}),
