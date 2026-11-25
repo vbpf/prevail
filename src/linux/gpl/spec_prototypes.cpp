@@ -1,7 +1,11 @@
 #include "linux/gpl/spec_type_descriptors.hpp"
+#include "linux/linux_platform.hpp"
 #include "platform.hpp"
-#include <map>
-#include <set>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <initializer_list>
+#include <stdexcept>
 #include <string_view>
 
 namespace prevail {
@@ -2760,18 +2764,593 @@ std::optional<int32_t> resolve_helper_id_linux(const std::string& name) {
     return std::nullopt;
 }
 
-/// Helpers whose prototype row takes the context, with the program types in which Linux binds the id to
-/// the function that does. See is_helper_usable_linux().
-static const std::map<int32_t, std::set<std::string_view>> context_variant_program_types = {
-    // bpf_get_socket_cookie. sk_reuseport, tracing and lsm bind the id to bpf_get_socket_ptr_cookie(sk).
-    {46,
-     {"socket_filter", "sched_act", "sched_cls", "sk_skb", "cgroup_skb", "cgroup_sock", "cgroup_sock_addr",
-      "sock_ops"}},
-    // bpf_setsockopt and bpf_getsockopt. cgroup_sockopt, struct_ops (tcp_congestion_ops), lsm (lsm_cgroup) and
-    // tracing (iter/tcp) bind the ids to bpf_sk_setsockopt(sk) and bpf_sk_getsockopt(sk).
-    {49, {"sock_ops", "cgroup_sock_addr"}},
-    {57, {"sock_ops", "cgroup_sock_addr"}},
+// ---- Helper availability by program type ----------------------------------------------------------------------
+//
+// Linux decides per program type whether a program may call a helper: every program type has a
+// get_func_proto() callback that maps a helper id to the function the id stands for in that type, or to none.
+// A helper that is safe where the hook has prepared for it is not safe elsewhere: bpf_skb_pull_data(), say,
+// recomputes two pointers into skb->cb, which belongs to the program in a tc hook and to the receiving protocol
+// in a socket filter.
+//
+// The sets below transcribe those callbacks from Linux 6.18. Each is named after the kernel function it
+// transcribes and is built the way that function is: the cases of its own switch, joined with the set of the
+// function it falls back to.
+//
+// An id is in a set only if the prototype row above describes the function the id is bound to there. Linux
+// binds some ids to functions of different signatures in different program types. Where the row takes the
+// context and the bound function takes something else (a `struct sock *`, an `xdp_buff *`), the id is left
+// out, with a comment: the context is the one argument such a function must not be given. Those functions
+// are not modeled, so the program type cannot call the helper at all.
+//
+// Capabilities (CAP_BPF, CAP_PERFMON, CAP_SYS_ADMIN), lockdown and kernel configuration are taken as granted:
+// the sets are what a fully privileged loader on a full kernel is offered.
+//
+// EbpfProgramType::name does not tell the attach types of a program type apart, nor the functions a program
+// attaches to. A helper that a callback offers to some of them only is offered to the whole program type, and
+// its set says so (docs/parity/program-types.md).
+namespace {
+constexpr size_t helper_count = std::size(prototypes);
+
+/// The lengths of the names of the prototype rows, by helper id. They are measured once, and a name is compared
+/// with the rows of its own length only, to keep the compile-time lookups below well within the evaluation
+/// limits of the compilers.
+struct HelperNameLengths {
+    size_t of[helper_count]{};
 };
+constexpr HelperNameLengths helper_name_length = [] {
+    HelperNameLengths lengths;
+    for (size_t id = 0; id < helper_count; ++id) {
+        lengths.of[id] = std::string_view{prototypes[id].name}.size();
+    }
+    return lengths;
+}();
+
+/// The id of the helper called `name`. Not a constant expression if there is none, so a misspelt name in a
+/// set below does not compile.
+constexpr size_t helper_id(const std::string_view name) {
+    const size_t length = name.size();
+    for (size_t id = 0; id < helper_count; ++id) {
+        if (helper_name_length.of[id] == length && name == std::string_view{prototypes[id].name, length}) {
+            return id;
+        }
+    }
+    throw std::invalid_argument("no helper has this name");
+}
+
+/// A set of helper ids.
+class HelperSet {
+    static constexpr size_t word_bits = 64;
+    std::array<uint64_t, (helper_count + word_bits - 1) / word_bits> words{};
+
+  public:
+    constexpr HelperSet() = default;
+
+    /// The helpers of these names: the names of the prototype rows, which are those of the kernel's
+    /// BPF_FUNC_<name> but for two rows (see tracing_prog_func_proto_any).
+    constexpr HelperSet(const std::initializer_list<std::string_view> names) {
+        for (const std::string_view name : names) {
+            const size_t id = helper_id(name);
+            words[id / word_bits] |= uint64_t{1} << (id % word_bits);
+        }
+    }
+
+    constexpr HelperSet operator|(const HelperSet& other) const {
+        HelperSet result = *this;
+        for (size_t i = 0; i < words.size(); ++i) {
+            result.words[i] |= other.words[i];
+        }
+        return result;
+    }
+
+    constexpr HelperSet without(const HelperSet& other) const {
+        HelperSet result = *this;
+        for (size_t i = 0; i < words.size(); ++i) {
+            result.words[i] &= ~other.words[i];
+        }
+        return result;
+    }
+
+    [[nodiscard]]
+    constexpr bool contains(const int32_t id) const {
+        if (id < 0 || static_cast<size_t>(id) >= helper_count) {
+            return false;
+        }
+        const auto index = static_cast<size_t>(id);
+        return (words[index / word_bits] >> (index % word_bits) & 1) != 0;
+    }
+};
+
+// kernel/bpf/helpers.c
+// get_cgroup_classid is bpf_get_cgroup_classid_curr() here, which takes no argument and reads the current task.
+// The row asks for an sk_buff context, which is more than that function needs and harms nothing.
+constexpr HelperSet bpf_base_func_proto{
+    "map_lookup_elem",
+    "map_update_elem",
+    "map_delete_elem",
+    "map_push_elem",
+    "map_pop_elem",
+    "map_peek_elem",
+    "map_lookup_percpu_elem",
+    "get_prandom_u32",
+    "get_smp_processor_id",
+    "get_numa_node_id",
+    "tail_call",
+    "ktime_get_ns",
+    "ktime_get_boot_ns",
+    "ktime_get_tai_ns",
+    "ringbuf_output",
+    "ringbuf_reserve",
+    "ringbuf_submit",
+    "ringbuf_discard",
+    "ringbuf_query",
+    "strncmp",
+    "strtol",
+    "strtoul",
+    "get_current_pid_tgid",
+    "get_ns_current_pid_tgid",
+    "get_current_uid_gid",
+    "spin_lock",
+    "spin_unlock",
+    "jiffies64",
+    "per_cpu_ptr",
+    "this_cpu_ptr",
+    "timer_init",
+    "timer_set_callback",
+    "timer_start",
+    "timer_cancel",
+    "kptr_xchg",
+    "for_each_map_elem",
+    "loop",
+    "user_ringbuf_drain",
+    "ringbuf_reserve_dynptr",
+    "ringbuf_submit_dynptr",
+    "ringbuf_discard_dynptr",
+    "dynptr_from_mem",
+    "dynptr_read",
+    "dynptr_write",
+    "dynptr_data",
+    "cgrp_storage_get",
+    "cgrp_storage_delete",
+    "get_current_cgroup_id",
+    "get_current_ancestor_cgroup_id",
+    "current_task_under_cgroup",
+    "get_cgroup_classid",
+    "task_storage_get",
+    "task_storage_delete",
+    "trace_printk",
+    "get_current_task",
+    "get_current_task_btf",
+    "get_current_comm",
+    "probe_read_user",
+    "probe_read_kernel",
+    "probe_read_user_str",
+    "probe_read_kernel_str",
+    "copy_from_user",
+    "copy_from_user_task",
+    "snprintf_btf",
+    "snprintf",
+    "task_pt_regs",
+    "trace_vprintk",
+    "perf_event_read_value",
+    "perf_event_read",
+    "send_signal",
+    "send_signal_thread",
+    "get_task_stack",
+    "get_branch_snapshot",
+    "find_vma",
+};
+
+// kernel/bpf/cgroup.c: cgroup_common_func_proto(), which the cgroup program types consult first. It offers
+// get_local_storage to all of them. It offers get_retval and set_retval except on the attach types
+// BPF_CGROUP_INET_INGRESS and BPF_CGROUP_INET_EGRESS (all of cgroup_skb), BPF_CGROUP_SOCK_OPS (all of sock_ops)
+// and the recvmsg, getpeername and getsockname hooks of cgroup_sock_addr.
+constexpr HelperSet cgroup_common_storage{"get_local_storage"};
+constexpr HelperSet cgroup_common_func_proto = HelperSet{"get_retval", "set_retval"} | cgroup_common_storage;
+
+// net/core/filter.c
+constexpr HelperSet bpf_sk_base_func_proto =
+    HelperSet{
+        "skc_to_tcp6_sock", "skc_to_tcp_sock",  "skc_to_tcp_timewait_sock", "skc_to_tcp_request_sock",
+        "skc_to_udp6_sock", "skc_to_unix_sock", "skc_to_mptcp_sock",        "ktime_get_coarse_ns",
+    } |
+    bpf_base_func_proto;
+
+// cgroup_sock: the context is the socket, a struct bpf_sock.
+constexpr HelperSet sock_filter_func_proto =
+    HelperSet{
+        "get_socket_cookie", "get_netns_cookie", "perf_event_output", "sk_storage_get", "ktime_get_coarse_ns",
+    } |
+    bpf_base_func_proto | cgroup_common_func_proto;
+
+// cgroup_sock_addr. Offered to some of its attach types only, and listed because the program type has one
+// name here:
+// - bind: the connect4 and connect6 hooks, which hold the lock of the socket they would rebind.
+// - get_retval, set_retval: all but the recvmsg, getpeername and getsockname hooks (see
+//   cgroup_common_func_proto above).
+// setsockopt and getsockopt are bpf_sock_addr_setsockopt(ctx) and bpf_sock_addr_getsockopt(ctx), on every attach
+// type of the program type.
+constexpr HelperSet sock_addr_func_proto =
+    HelperSet{
+        "bind",       "get_socket_cookie", "get_netns_cookie", "perf_event_output", "sk_lookup_tcp", "sk_lookup_udp",
+        "sk_release", "skc_lookup_tcp",    "sk_storage_get",   "sk_storage_delete", "setsockopt",    "getsockopt",
+    } |
+    bpf_sk_base_func_proto | cgroup_common_func_proto;
+
+// socket_filter
+constexpr HelperSet sk_filter_func_proto =
+    HelperSet{
+        "skb_load_bytes",   "skb_load_bytes_relative", "get_socket_cookie",
+        "get_netns_cookie", "get_socket_uid",          "perf_event_output",
+    } |
+    bpf_sk_base_func_proto;
+
+// cgroup_skb. Not get_retval and set_retval (see cgroup_common_func_proto above).
+constexpr HelperSet cg_skb_func_proto =
+    HelperSet{
+        "sk_fullsock",   "sk_storage_get",         "sk_storage_delete", "perf_event_output",
+        "skb_cgroup_id", "skb_ancestor_cgroup_id", "sk_cgroup_id",      "sk_ancestor_cgroup_id",
+        "sk_lookup_tcp", "sk_lookup_udp",          "sk_release",        "skc_lookup_tcp",
+        "tcp_sock",      "get_listener_sock",      "skb_ecn_set_ce",
+    } |
+    sk_filter_func_proto | cgroup_common_storage;
+
+// sched_cls and sched_act
+constexpr HelperSet tc_cls_act_func_proto =
+    HelperSet{
+        "skb_store_bytes",
+        "skb_load_bytes",
+        "skb_load_bytes_relative",
+        "skb_pull_data",
+        "csum_diff",
+        "csum_update",
+        "csum_level",
+        "l3_csum_replace",
+        "l4_csum_replace",
+        "clone_redirect",
+        "get_cgroup_classid",
+        "skb_vlan_push",
+        "skb_vlan_pop",
+        "skb_change_proto",
+        "skb_change_type",
+        "skb_adjust_room",
+        "skb_change_tail",
+        "skb_change_head",
+        "skb_get_tunnel_key",
+        "skb_set_tunnel_key",
+        "skb_get_tunnel_opt",
+        "skb_set_tunnel_opt",
+        "redirect",
+        "redirect_neigh",
+        "redirect_peer",
+        "get_route_realm",
+        "get_hash_recalc",
+        "set_hash_invalid",
+        "set_hash",
+        "perf_event_output",
+        "get_smp_processor_id",
+        "skb_under_cgroup",
+        "get_socket_cookie",
+        "get_netns_cookie",
+        "get_socket_uid",
+        "fib_lookup",
+        "check_mtu",
+        "sk_fullsock",
+        "sk_storage_get",
+        "sk_storage_delete",
+        "skb_get_xfrm_state",
+        "skb_cgroup_classid",
+        "skb_cgroup_id",
+        "skb_ancestor_cgroup_id",
+        "sk_lookup_tcp",
+        "sk_lookup_udp",
+        "sk_release",
+        "tcp_sock",
+        "get_listener_sock",
+        "skc_lookup_tcp",
+        "tcp_check_syncookie",
+        "skb_ecn_set_ce",
+        "tcp_gen_syncookie",
+        "sk_assign",
+        "skb_set_tstamp",
+        "tcp_raw_gen_syncookie_ipv4",
+        "tcp_raw_gen_syncookie_ipv6",
+        "tcp_raw_check_syncookie_ipv4",
+        "tcp_raw_check_syncookie_ipv6",
+    } |
+    bpf_sk_base_func_proto;
+
+constexpr HelperSet xdp_func_proto =
+    HelperSet{
+        "perf_event_output",
+        "get_smp_processor_id",
+        "csum_diff",
+        "xdp_adjust_head",
+        "xdp_adjust_meta",
+        "redirect",
+        "redirect_map",
+        "xdp_adjust_tail",
+        "xdp_get_buff_len",
+        "xdp_load_bytes",
+        "xdp_store_bytes",
+        "fib_lookup",
+        "check_mtu",
+        "sk_lookup_udp",
+        "sk_lookup_tcp",
+        "sk_release",
+        "skc_lookup_tcp",
+        "tcp_check_syncookie",
+        "tcp_gen_syncookie",
+        "tcp_raw_gen_syncookie_ipv4",
+        "tcp_raw_gen_syncookie_ipv6",
+        "tcp_raw_check_syncookie_ipv4",
+        "tcp_raw_check_syncookie_ipv6",
+    } |
+    bpf_sk_base_func_proto;
+
+// setsockopt and getsockopt are bpf_sock_ops_setsockopt(ctx) and bpf_sock_ops_getsockopt(ctx).
+// Not get_retval and set_retval (see cgroup_common_func_proto above).
+constexpr HelperSet sock_ops_func_proto =
+    HelperSet{
+        "setsockopt",        "getsockopt",        "sock_ops_cb_flags_set", "sock_map_update",   "sock_hash_update",
+        "get_socket_cookie", "perf_event_output", "sk_storage_get",        "sk_storage_delete", "get_netns_cookie",
+        "load_hdr_opt",      "store_hdr_opt",     "reserve_hdr_opt",       "tcp_sock",
+    } |
+    bpf_sk_base_func_proto | cgroup_common_storage;
+
+constexpr HelperSet sk_msg_func_proto =
+    HelperSet{
+        "msg_redirect_map", "msg_redirect_hash", "msg_apply_bytes",  "msg_cork_bytes",
+        "msg_pull_data",    "msg_push_data",     "msg_pop_data",     "perf_event_output",
+        "sk_storage_get",   "sk_storage_delete", "get_netns_cookie",
+    } |
+    bpf_sk_base_func_proto;
+
+// skb_pull_data, skb_change_tail, skb_change_head and skb_adjust_room are sk_skb's own functions here, which
+// do not recompute the packet pointers in skb->cb.
+constexpr HelperSet sk_skb_func_proto =
+    HelperSet{
+        "skb_store_bytes",   "skb_load_bytes",    "skb_pull_data",  "skb_change_tail", "skb_change_head",
+        "skb_adjust_room",   "get_socket_cookie", "get_socket_uid", "sk_redirect_map", "sk_redirect_hash",
+        "perf_event_output", "sk_lookup_tcp",     "sk_lookup_udp",  "sk_release",      "skc_lookup_tcp",
+    } |
+    bpf_sk_base_func_proto;
+
+constexpr HelperSet flow_dissector_func_proto = HelperSet{"skb_load_bytes"} | bpf_sk_base_func_proto;
+
+constexpr HelperSet lwt_out_func_proto =
+    HelperSet{
+        "skb_load_bytes",     "skb_pull_data",        "csum_diff",
+        "get_cgroup_classid", "get_route_realm",      "get_hash_recalc",
+        "perf_event_output",  "get_smp_processor_id", "skb_under_cgroup",
+    } |
+    bpf_sk_base_func_proto;
+
+constexpr HelperSet lwt_in_func_proto = HelperSet{"lwt_push_encap"} | lwt_out_func_proto;
+
+constexpr HelperSet lwt_xmit_func_proto =
+    HelperSet{
+        "skb_get_tunnel_key", "skb_set_tunnel_key", "skb_get_tunnel_opt", "skb_set_tunnel_opt", "redirect",
+        "clone_redirect",     "skb_change_tail",    "skb_change_head",    "skb_store_bytes",    "csum_update",
+        "csum_level",         "l3_csum_replace",    "l4_csum_replace",    "set_hash_invalid",   "lwt_push_encap",
+    } |
+    lwt_out_func_proto;
+
+// Not skb_pull_data, which Linux 6.18 offers here through lwt_out_func_proto() and later kernels refuse
+// (commit e4a62833adff): the hook keeps a pointer to the segment routing header in per-CPU state, and the
+// helper may reallocate the packet head that it points into.
+constexpr HelperSet lwt_seg6local_func_proto =
+    HelperSet{"lwt_seg6_store_bytes", "lwt_seg6_action", "lwt_seg6_adjust_srh"} |
+    lwt_out_func_proto.without(HelperSet{"skb_pull_data"});
+
+// Not get_socket_cookie: here the id is bpf_get_socket_ptr_cookie(sk).
+constexpr HelperSet sk_reuseport_func_proto =
+    HelperSet{"sk_select_reuseport", "skb_load_bytes", "skb_load_bytes_relative", "ktime_get_coarse_ns"} |
+    bpf_base_func_proto;
+
+constexpr HelperSet sk_lookup_func_proto =
+    HelperSet{"perf_event_output", "sk_assign", "sk_release"} | bpf_sk_base_func_proto;
+
+// kernel/bpf/cgroup.c
+constexpr HelperSet cgroup_dev_func_proto =
+    HelperSet{"perf_event_output"} | bpf_base_func_proto | cgroup_common_func_proto;
+
+constexpr HelperSet sysctl_func_proto =
+    HelperSet{
+        "sysctl_get_name",      "sysctl_get_current_value", "sysctl_get_new_value",
+        "sysctl_set_new_value", "ktime_get_coarse_ns",      "perf_event_output",
+    } |
+    bpf_base_func_proto | cgroup_common_func_proto;
+
+// cgroup_sockopt. Not setsockopt and getsockopt: here the ids are bpf_sk_setsockopt(sk) and
+// bpf_sk_getsockopt(sk), offered to the setsockopt hook only.
+constexpr HelperSet cg_sockopt_func_proto =
+    HelperSet{"get_netns_cookie", "sk_storage_get", "sk_storage_delete", "tcp_sock", "perf_event_output"} |
+    bpf_base_func_proto | cgroup_common_func_proto;
+
+// kernel/trace/bpf_trace.c
+//
+// bpf_tracing_func_proto() also has a case for get_func_ip, but the verifier then refuses the call
+// (check_get_func_ip()) except in kprobe programs and in tracing programs that run from a trampoline, so the
+// helper is listed with those two.
+constexpr HelperSet bpf_tracing_func_proto =
+    HelperSet{"get_smp_processor_id", "probe_read", "probe_read_str", "probe_write_user"} | bpf_base_func_proto;
+
+constexpr HelperSet kprobe_prog_func_proto =
+    HelperSet{
+        "perf_event_output", "get_stackid", "get_stack", "override_return", "get_func_ip", "get_attach_cookie",
+    } |
+    bpf_tracing_func_proto;
+
+// tracepoint
+constexpr HelperSet tp_prog_func_proto =
+    HelperSet{"perf_event_output", "get_stackid", "get_stack", "get_attach_cookie"} | bpf_tracing_func_proto;
+
+// perf_event
+constexpr HelperSet pe_prog_func_proto =
+    HelperSet{
+        "perf_event_output",    "get_stackid",         "get_stack",
+        "perf_prog_read_value", "read_branch_records", "get_attach_cookie",
+    } |
+    bpf_tracing_func_proto;
+
+// raw_tracepoint and raw_tracepoint_writable
+constexpr HelperSet raw_tp_prog_func_proto =
+    HelperSet{"perf_event_output", "get_stackid", "get_stack", "get_attach_cookie"} | bpf_tracing_func_proto;
+
+// What tracing_prog_func_proto() offers whatever the program is: what it takes from raw_tp_prog_func_proto(),
+// and those of its own cases that depend neither on the attach type nor on an `allowed` callback of the
+// function. It serves the tracing, lsm and syscall program types.
+// skb_event_output and xdp_event_output are the rows of BPF_FUNC_skb_output and BPF_FUNC_xdp_output.
+// Not get_socket_cookie: here the id is bpf_get_socket_ptr_cookie(sk).
+// Not xdp_get_buff_len: here the id is a function that takes an `xdp_buff *`, not the context.
+// Not get_attach_cookie: tracing_prog_func_proto() has a case of its own, which hides the one of
+// raw_tp_prog_func_proto() and offers the helper to tp_btf programs and to programs run from a trampoline.
+constexpr HelperSet tracing_prog_func_proto_any =
+    HelperSet{
+        "perf_event_output",       "get_stackid",      "get_stack",        "skb_event_output",
+        "xdp_event_output",        "skc_to_tcp6_sock", "skc_to_tcp_sock",  "skc_to_tcp_timewait_sock",
+        "skc_to_tcp_request_sock", "skc_to_udp6_sock", "skc_to_unix_sock", "skc_to_mptcp_sock",
+        "sock_from_file",
+    } |
+    bpf_tracing_func_proto;
+
+// The tracing program type. What follows is offered to some of its attach types only, and is listed because
+// the program type has one name here:
+// - seq_printf, seq_write, seq_printf_btf: iter programs.
+// - get_func_arg, get_func_ret, get_func_arg_cnt, get_func_ip: programs run from a trampoline (fentry,
+//   fexit, fmod_ret).
+// - get_attach_cookie: those and tp_btf programs.
+// - sk_storage_get, sk_storage_delete (bpf_sk_storage_tracing_allowed()): iter and tp_btf programs, and
+//   fentry and fexit programs that do not trace the socket storage functions themselves.
+// - d_path (bpf_d_path_allowed()): iter programs, and programs attached to one of a list of functions.
+// An iter program is also offered what its target adds (bpf_iter_get_func_proto()): the tcp and unix socket
+// iterators add setsockopt and getsockopt as bpf_sk_setsockopt(sk) and bpf_sk_getsockopt(sk), which are left
+// out like every other socket-taking binding of those ids.
+constexpr HelperSet tracing_prog_func_proto =
+    HelperSet{
+        "seq_printf",  "seq_write",         "seq_printf_btf", "get_func_arg",      "get_func_ret", "get_func_arg_cnt",
+        "get_func_ip", "get_attach_cookie", "sk_storage_get", "sk_storage_delete", "d_path",
+    } |
+    tracing_prog_func_proto_any;
+
+// kernel/bpf/bpf_lsm.c, for the attach type BPF_LSM_MAC, which is what the sections `lsm/` and `lsm.s/` hold.
+// Such a program runs from a trampoline, so tracing_prog_func_proto() offers it get_func_arg, get_func_ret and
+// get_func_arg_cnt; check_get_func_ip() refuses get_func_ip outside kprobe and tracing programs.
+// d_path, ima_inode_hash and ima_file_hash are offered to the hooks that may sleep.
+// Not cgroup_common_func_proto(), setsockopt and getsockopt: those are for BPF_LSM_CGROUP, and the last two
+// are bpf_sk_setsockopt(sk) and bpf_sk_getsockopt(sk).
+constexpr HelperSet bpf_lsm_func_proto =
+    HelperSet{
+        "inode_storage_get", "inode_storage_delete",
+        "sk_storage_get",    "sk_storage_delete",
+        "spin_lock",         "spin_unlock",
+        "bprm_opts_set",     "ima_inode_hash",
+        "ima_file_hash",     "get_attach_cookie",
+        "get_func_arg",      "get_func_ret",
+        "get_func_arg_cnt",  "d_path",
+    } |
+    tracing_prog_func_proto_any;
+
+// kernel/bpf/syscall.c. A syscall program has no attach type, so it gets none of what
+// tracing_prog_func_proto() offers by attach type or attach target.
+constexpr HelperSet syscall_prog_func_proto =
+    HelperSet{"sys_bpf", "btf_find_by_name_kind", "sys_close", "kallsyms_lookup_name"} | tracing_prog_func_proto_any;
+
+// struct_ops: each kernel structure that programs can implement has a callback of its own. This is
+// bpf_tcp_ca_get_func_proto() of net/ipv4/bpf_tcp_ca.c, for tcp_congestion_ops; sched_ext_ops, Qdisc_ops and
+// hid_bpf_ops offer bpf_base_func_proto() alone. Which structure a program implements is not known here, so
+// the larger set is offered: what it adds is a clock, and helpers that work on a socket passed to them.
+// Not setsockopt and getsockopt: here the ids are bpf_sk_setsockopt(sk) and bpf_sk_getsockopt(sk).
+constexpr HelperSet bpf_tcp_ca_get_func_proto =
+    HelperSet{"tcp_send_ack", "sk_storage_get", "sk_storage_delete", "ktime_get_coarse_ns"} | bpf_base_func_proto;
+
+// drivers/media/rc/bpf-lirc.c. This callback does not fall back to bpf_base_func_proto().
+constexpr HelperSet lirc_mode2_func_proto{
+    "rc_repeat",         "rc_keydown",    "rc_pointer_rel",  "map_lookup_elem", "map_update_elem",
+    "map_delete_elem",   "map_push_elem", "map_pop_elem",    "map_peek_elem",   "ktime_get_ns",
+    "ktime_get_boot_ns", "tail_call",     "get_prandom_u32", "trace_printk",
+};
+
+// net/netfilter/nf_bpf_link.c
+constexpr HelperSet bpf_nf_func_proto = bpf_base_func_proto;
+
+/// The helpers each program type may call, by EbpfProgramType::name.
+struct ProgramTypeHelpers {
+    std::string_view program_type;
+    HelperSet helpers;
+};
+constexpr ProgramTypeHelpers helpers_by_program_type[] = {
+    {"socket_filter", sk_filter_func_proto},
+    {"xdp", xdp_func_proto},
+    {"cgroup_device", cgroup_dev_func_proto},
+    {"cgroup_skb", cg_skb_func_proto},
+    {"cgroup_sock", sock_filter_func_proto},
+    {"kprobe", kprobe_prog_func_proto},
+    {"lwt_in", lwt_in_func_proto},
+    {"lwt_out", lwt_out_func_proto},
+    {"lwt_xmit", lwt_xmit_func_proto},
+    {"perf_event", pe_prog_func_proto},
+    {"sched_act", tc_cls_act_func_proto},
+    {"sched_cls", tc_cls_act_func_proto},
+    {"sk_skb", sk_skb_func_proto},
+    {"sock_ops", sock_ops_func_proto},
+    {"tracepoint", tp_prog_func_proto},
+    {"cgroup_sockopt", cg_sockopt_func_proto},
+    {"sk_msg", sk_msg_func_proto},
+    {"raw_tracepoint", raw_tp_prog_func_proto},
+    {"raw_tracepoint_writable", raw_tp_prog_func_proto},
+    {"cgroup_sock_addr", sock_addr_func_proto},
+    {"lwt_seg6local", lwt_seg6local_func_proto},
+    {"lirc_mode2", lirc_mode2_func_proto},
+    {"sk_reuseport", sk_reuseport_func_proto},
+    {"flow_dissector", flow_dissector_func_proto},
+    {"cgroup_sysctl", sysctl_func_proto},
+    // A freplace program takes the place of a function of another program and is offered what that program's
+    // type is. The target is not known here, so only the helpers that every callback but lirc_mode2's falls
+    // back to are offered.
+    {"ext", bpf_base_func_proto},
+    {"tracing", tracing_prog_func_proto},
+    {"struct_ops", bpf_tcp_ca_get_func_proto},
+    {"lsm", bpf_lsm_func_proto},
+    {"sk_lookup", sk_lookup_func_proto},
+    {"syscall", syscall_prog_func_proto},
+    {"netfilter", bpf_nf_func_proto},
+    // cilium's name for a sched_cls program.
+    {"lxc", tc_cls_act_func_proto},
+};
+
+/// What at least one program type may call.
+constexpr HelperSet helpers_of_some_program_type = [] {
+    HelperSet result;
+    for (const ProgramTypeHelpers& entry : helpers_by_program_type) {
+        result = result | entry.helpers;
+    }
+    return result;
+}();
+
+/// The helpers left out of some set above because the id is bound there to a function that does not take the
+/// context where the prototype row does.
+constexpr HelperSet helpers_of_several_signatures{"get_socket_cookie", "setsockopt", "getsockopt", "xdp_get_buff_len"};
+
+/// Whether Linux offers the helper to programs of the type, bound to the function that the helper's prototype
+/// row describes. A program type that the table does not name is offered nothing.
+bool is_helper_offered_to(const int32_t id, const EbpfProgramType& program_type) {
+    // A section whose name names no program type: what the program will be loaded as is not known, so neither
+    // is what it will be offered. It may call what some program type may, except where the id stands for
+    // functions of different signatures: there the program type decides what the first argument must be. The
+    // helper's context descriptor, if it has one, is then the only other restriction
+    // (docs/parity/program-types.md).
+    if (program_type.name == linux_unknown_program_type.name) {
+        return helpers_of_some_program_type.contains(id) && !helpers_of_several_signatures.contains(id);
+    }
+    for (const auto& [name, helpers] : helpers_by_program_type) {
+        if (name == program_type.name) {
+            return helpers.contains(id);
+        }
+    }
+    return false;
+}
+} // namespace
 
 bool is_helper_usable_linux(const int32_t n, const EbpfProgramType& program_type) {
     if (n >= static_cast<int>(std::size(prototypes)) || n < 0) {
@@ -2783,16 +3362,9 @@ bool is_helper_usable_linux(const int32_t n, const EbpfProgramType& program_type
         return false;
     }
 
-    // Linux binds one helper id to a different function in each program type, and for some ids those
-    // functions disagree on what the first argument is: the context in some program types, a
-    // `struct sock *` in others. The prototype row describes the function that takes the context, so
-    // the helper is offered only to the program types that bind the id to that function. In any other
-    // program type the context is the one argument the function must not get.
-    // Until attach-type-level helper gating is modeled, the lists are by program type.
-    if (const auto variant = context_variant_program_types.find(n); variant != context_variant_program_types.end()) {
-        if (!variant->second.contains(program_type.name)) {
-            return false;
-        }
+    // The program type must be one that Linux offers the helper to.
+    if (!is_helper_offered_to(n, program_type)) {
+        return false;
     }
 
     // Sleepable helpers are only usable in sleepable programs.

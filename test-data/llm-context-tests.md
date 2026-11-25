@@ -257,7 +257,7 @@ Skip any test marked as SLOW unless specifically requested.
 ./bin/prevail ebpf-samples/build/packet_reallocate.o socket_filter -v
 ```
 
-**Expected error**: `Invalid type (r7.type in {ctx, stack, packet, shared})`
+**Expected error**: `Invalid type (r7.type in {ctx, stack, packet, shared})`, once the sample is built as a tc program. As built, it is a socket filter, which may not call `bpf_skb_change_head`, and is refused at the call: `rejected: helper function is unavailable on this platform (at 12)`.
 **Pattern**: 4.12 - Stale Pointer After Reallocation
 **Key invariant**: `r7.type=packet` — r7 held a packet pointer before a helper call that may reallocate the packet buffer; after the call, the pointer is invalidated
 **Fix**: Re-derive packet pointers from `ctx->data` / `ctx->data_end` after any helper call that may resize the packet

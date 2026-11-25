@@ -66,7 +66,8 @@ PRINT_CASE("mapvalue-overrun")
 PRINT_CASE("nullmapref")
 PRINT_CASE("packet_access")
 PRINT_CASE("packet_overflow")
-PRINT_CASE("packet_reallocate")
+// packet_reallocate is not printed: the object is a socket filter that calls bpf_skb_change_head, which a socket
+// filter is not offered, and a call that is not offered prints without the helper's name and arguments.
 PRINT_CASE("packet_start_ok")
 PRINT_CASE("stackok")
 PRINT_CASE("tail_call")

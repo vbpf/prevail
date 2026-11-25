@@ -8,6 +8,9 @@
 #include "platform.hpp"
 
 namespace prevail {
+/// The program type of a section whose name names none.
+extern const EbpfProgramType linux_unknown_program_type;
+
 EbpfHelperPrototype get_helper_prototype_linux(int32_t n, const EbpfProgramType& program_type);
 bool is_helper_usable_linux(int32_t n, const EbpfProgramType& program_type);
 std::optional<int32_t> resolve_helper_id_linux(const std::string& name);
