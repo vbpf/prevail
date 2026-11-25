@@ -3655,6 +3655,59 @@ TEST_CASE("ELF loader bounds the report of unresolved symbols", "[elf][hardening
     REQUIRE(read_test_object(object, "tc").size() == 1);
 }
 
+// A load error is copied to every program of its section, and it can quote a name of any length from the
+// file. Kept whole, a file of many small functions and one long name would cost their product
+// (ANT-2026-2KVD254D).
+TEST_CASE("ELF loader bounds the load error it keeps for each program", "[elf][hardening]") {
+    // Longer than the error that is kept, and a length that any loader of names accepts.
+    const std::string long_name(4096, 'x');
+    constexpr size_t longest_kept = 1024 + 3; // The bound, and the dots that mark a cut.
+    // 64 two-instruction functions in one section. The first calls .text + 8, where no function starts.
+    constexpr size_t function_count = 64;
+    std::vector<EbpfInst> socket_insts;
+    TestObjectBuilder builder{
+        .sections = {{.name = "socket"}, {.name = ".text", .insts = {test_mov_r0_0, test_mov_r0_0, test_exit}}}};
+    for (size_t i = 0; i < function_count; i++) {
+        builder.symbols.push_back({.name = "f" + std::to_string(i), .section = 0, .value = socket_insts.size() * 8});
+        socket_insts.push_back(i == 0 ? EbpfInst{.opcode = INST_OP_CALL, .src = INST_CALL_LOCAL, .imm = 0}
+                                      : test_mov_r0_0);
+        socket_insts.push_back(test_exit);
+    }
+    builder.sections[0].insts = socket_insts;
+    builder.symbols.push_back({.name = long_name, .section = 1});
+    builder.relocations.push_back({.section = 0, .instruction = 0, .symbol = function_count, .type = R_BPF_64_32_TYPE});
+    const std::string object = builder.build();
+
+    // The one-shot reader reports the error whole: it holds one copy.
+    REQUIRE_THROWS_WITH(read_test_object(object, "socket"), Catch::Matchers::ContainsSubstring(long_name));
+
+    const std::filesystem::path path = std::filesystem::temp_directory_path() /
+                                       ("prevail-load-error-" + std::to_string(std::random_device{}()) + ".o");
+    write_file_bytes(path, std::vector<uint8_t>(object.begin(), object.end()));
+    ElfObject elf{path.string(), {}, &g_ebpf_platform_linux};
+    std::string error;
+    try {
+        elf.get_programs("socket");
+    } catch (const std::exception& e) {
+        error = e.what();
+    }
+    std::size_t rejected = 0;
+    for (const ElfProgramInfo& program : elf.list_programs()) {
+        if (program.section_name == "socket") {
+            REQUIRE(program.reject_load);
+            REQUIRE_THAT(program.reject_load_reason, Catch::Matchers::StartsWith("Subprogram not found: xxxx"));
+            rejected++;
+        }
+        REQUIRE(program.reject_load_reason.size() <= longest_kept);
+    }
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+
+    REQUIRE(rejected == function_count);
+    REQUIRE_THAT(error, Catch::Matchers::StartsWith("Subprogram not found: xxxx"));
+    REQUIRE(error.size() <= longest_kept);
+}
+
 namespace {
 struct TableLookupObject {
     std::string relocation_name = ".relxdp";

@@ -122,6 +122,23 @@ void ElfObject::ElfObjectState::discover_programs() {
     throw UnmarshalError("Can't process ELF file " + path);
 }
 
+/// At most this much of a load error is kept.
+constexpr size_t max_load_error_length = 1024;
+
+/// The text of a load error, cut to max_load_error_length.
+///
+/// A load error can quote text of any length from the file: the name of a symbol, a CO-RE access string.
+/// It is kept once for each section it applies to and once more for each program of that section
+/// (ElfProgramInfo::reject_load_reason), so kept whole, it would let a file cost the number of its
+/// programs times the length of one string. Cut, what the object holds grows with the number of programs.
+static std::string bounded_load_error(std::string text) {
+    if (text.size() > max_load_error_length) {
+        text.resize(max_load_error_length);
+        text += "...";
+    }
+    return text;
+}
+
 void ElfObject::ElfObjectState::mark_section_validity(const std::string& section_name, const bool valid,
                                                       const std::string& reason) {
     if (!section_program_indices.contains(section_name)) {
@@ -152,14 +169,17 @@ void ElfObject::ElfObjectState::read_sections() {
         global = extract_global_data(params, *reader, *symbols);
         program_reader.read_all_programs();
     } catch (const std::exception& e) {
-        file_error = e.what();
+        file_error = bounded_load_error(e.what());
     }
 
     for (auto& [section_name, cache_entry] : section_cache) {
         const auto error_it = program_reader.section_errors.find(section_name);
         if (error_it != program_reader.section_errors.end()) {
-            cache_entry.error = std::move(error_it->second.reason);
+            cache_entry.error = bounded_load_error(std::move(error_it->second.reason));
             cache_entry.diagnostics = std::move(error_it->second.diagnostics);
+            for (std::string& message : cache_entry.diagnostics) {
+                message = bounded_load_error(std::move(message));
+            }
         } else if (file_error) {
             cache_entry.error = *file_error;
         } else {
