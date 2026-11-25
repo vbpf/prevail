@@ -456,17 +456,42 @@ void ZoneDomain::operator|=(const ZoneDomain& right) { *this = do_join(*this, ri
 
 ZoneDomain ZoneDomain::operator|(const ZoneDomain& right) const { return do_join(*this, right); }
 
-ZoneDomain ZoneDomain::widen(const ZoneDomain& o) const {
-    // 1. Build alignment (intersection of variables)
+ZoneDomain ZoneDomain::widen_raw(const ZoneDomain& o) const {
+    // An unnormalized graph (non-empty unstable set) may hold a relation only
+    // as a path through a vertex the alignment is about to drop. Make those
+    // relations explicit first. Variables can only disappear finitely often,
+    // so this does not affect convergence.
+    if (!core_->unstable().empty()) {
+        std::vector<splitdbm::VertId> dropped;
+        for (const auto& [var, vert] : vert_map_) {
+            if (!try_at(o.vert_map_, var)) {
+                dropped.push_back(vert);
+            }
+        }
+        if (!dropped.empty()) {
+            ZoneDomain projected = *this;
+            projected.core_->project_out(dropped);
+            return projected.widen_raw_aligned(o);
+        }
+    }
+    return widen_raw_aligned(o);
+}
+
+ZoneDomain ZoneDomain::widen_raw_aligned(const ZoneDomain& o) const {
     auto [aligned_pair, aligned_vars] = make_intersection_alignment(*this, o);
-
-    // 2. Execute graph widen
-    auto result_core = std::make_unique<SplitDBM>(SplitDBM::widen(aligned_pair));
-
-    // 3. Build result mappings
+    auto result_core = std::make_unique<splitdbm::SplitDBM>(splitdbm::SplitDBM::widen_raw(aligned_pair));
     auto [out_vmap, out_revmap] = result_mappings(std::move(aligned_vars));
+    ZoneDomain res;
+    res.core_ = std::move(result_core);
+    res.vert_map_ = std::move(out_vmap);
+    res.rev_map_ = std::move(out_revmap);
+    return res;
+}
 
-    return ZoneDomain(std::move(out_vmap), std::move(out_revmap), std::move(result_core));
+ZoneDomain ZoneDomain::widen(const ZoneDomain& o) const {
+    ZoneDomain res = widen_raw(o);
+    res.normalize();
+    return res;
 }
 
 std::optional<ZoneDomain> ZoneDomain::meet(const ZoneDomain& o) const {

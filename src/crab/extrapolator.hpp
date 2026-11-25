@@ -4,6 +4,7 @@
 
 #include <functional>
 #include <span>
+#include <vector>
 
 #include "arith/variable.hpp"
 #include "crab/ebpf_domain.hpp"
@@ -37,7 +38,7 @@ class Extrapolator final {
     }
 
   private:
-    EbpfDomain constant_limits_;
+    std::vector<LinearConstraint> widening_thresholds_;
     std::vector<Variable> loop_counters_;
 
     static constexpr unsigned int widening_delay_ = 2;
