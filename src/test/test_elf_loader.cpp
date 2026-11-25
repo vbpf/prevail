@@ -1468,7 +1468,7 @@ TEST_CASE("ELF loader rejects non-instruction-aligned FUNC symbol", "[elf][harde
     ELFIO::symbol_section_accessor sym_writer(writer, sym_sec);
 
     // Add two FUNC symbols: one at offset 0 (the default) and one at UNALIGNED offset 7.
-    // The non-aligned FUNC symbol is rejected by get_program_name_and_size before
+    // The non-aligned FUNC symbol is rejected by get_program_extent before
     // it can produce a non-aligned program boundary.
     sym_writer.add_symbol(str_writer, "prog_a", 0 /* aligned */, 7 /* size */, ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0,
                           text_sec->get_index());
@@ -3359,6 +3359,7 @@ struct TestObjectBuilder {
         std::string name;
         std::optional<size_t> section; ///< Index into sections; undefined when empty.
         ELFIO::Elf64_Addr value{};
+        std::optional<ELFIO::Elf_Xword> size{}; ///< st_size; to the end of the section when empty.
     };
     struct Relocation {
         size_t section;     ///< Index into sections of the relocated section.
@@ -3403,9 +3404,9 @@ struct TestObjectBuilder {
         for (const Symbol& symbol : symbols) {
             if (symbol.section) {
                 const ELFIO::section* sec = elf_sections.at(*symbol.section);
-                symbol_indices.push_back(sym_writer.add_symbol(str_writer, symbol.name.c_str(), symbol.value,
-                                                               sec->get_size() - symbol.value, ELFIO::STB_GLOBAL,
-                                                               ELFIO::STT_FUNC, 0, sec->get_index()));
+                symbol_indices.push_back(sym_writer.add_symbol(
+                    str_writer, symbol.name.c_str(), symbol.value, symbol.size.value_or(sec->get_size() - symbol.value),
+                    ELFIO::STB_GLOBAL, ELFIO::STT_FUNC, 0, sec->get_index()));
             } else {
                 symbol_indices.push_back(sym_writer.add_symbol(str_writer, symbol.name.c_str(), 0, 0, ELFIO::STB_GLOBAL,
                                                                ELFIO::STT_NOTYPE, 0, ELFIO::SHN_UNDEF));
@@ -3973,6 +3974,79 @@ TEST_CASE("ELF loader rejects control flow that runs out of a function", "[elf][
         REQUIRE_THROWS_WITH(read_test_object(object, "socket"),
                             Catch::Matchers::ContainsSubstring("Function sub in section .text falls through"));
         REQUIRE(read_test_object(object, "xdp").size() == 1);
+    }
+}
+
+// A function ends where its symbol says it does. A loader that goes by the symbol table takes st_size bytes of
+// it and links its callees directly behind them, so code that follows in the section is not what a function
+// that runs off its end runs into (ANT-2026-VLJ42M08).
+TEST_CASE("ELF loader ends a function at the size its symbol declares", "[elf][hardening]") {
+    const EbpfInst call_sub{.opcode = INST_OP_CALL, .src = INST_CALL_LOCAL, .imm = -1};
+    constexpr ELFIO::Elf_Xword two = 2 * sizeof(EbpfInst);
+
+    SECTION("falling off the declared end into code of no function") {
+        // entry is `call sub; r0 = 0`, followed by `r0 = 0; exit` that no symbol covers.
+        const TestObjectBuilder builder{
+            .sections = {{.name = "socket", .insts = {call_sub, test_mov_r0_0, test_mov_r0_0, test_exit}},
+                         {.name = ".text", .insts = {test_mov_r0_0, test_exit}}},
+            .symbols = {{.name = "entry", .section = 0, .size = two}, {.name = "sub", .section = 1}},
+            .relocations = {{.section = 0, .instruction = 0, .symbol = 1, .type = R_BPF_64_32_TYPE}},
+        };
+        REQUIRE_THROWS_WITH(read_test_object(builder.build(), "socket"),
+                            Catch::Matchers::ContainsSubstring(
+                                "Function entry in section socket falls through into code of no function"));
+    }
+
+    SECTION("jumping past the declared end") {
+        const TestObjectBuilder builder{
+            .sections = {{.name = "socket",
+                          .insts = {EbpfInst{.opcode = INST_OP_JA16, .offset = 1}, test_exit, test_mov_r0_0,
+                                    test_exit}}},
+            .symbols = {{.name = "entry", .section = 0, .size = two}},
+        };
+        REQUIRE_THROWS_WITH(
+            read_test_object(builder.build(), "socket"),
+            Catch::Matchers::ContainsSubstring("Function entry in section socket jumps into code of no function"));
+    }
+
+    SECTION("code of no function is no program") {
+        // What a linker leaves of a definition it dropped: code behind f0 and behind f1 that no symbol covers.
+        const TestObjectBuilder builder{
+            .sections = {{.name = ".text",
+                          .insts = {test_mov_r0_0, test_exit, test_mov_r0_0, test_mov_r0_0, test_mov_r0_0, test_exit,
+                                    test_mov_r0_0}}},
+            .symbols = {{.name = "f0", .section = 0, .value = 0, .size = two},
+                        {.name = "f1", .section = 0, .value = 4 * sizeof(EbpfInst), .size = two}},
+        };
+        const auto programs = read_test_object(builder.build(), ".text");
+        REQUIRE(programs.size() == 2);
+        REQUIRE(programs[0].function_name == "f0");
+        REQUIRE(programs[0].prog.size() == 2);
+        REQUIRE(programs[1].function_name == "f1");
+        REQUIRE(programs[1].insn_off == 4 * sizeof(EbpfInst));
+        REQUIRE(programs[1].prog.size() == 2);
+    }
+
+    SECTION("a symbol without a size ends at the next function") {
+        const TestObjectBuilder builder{
+            .sections = {{.name = ".text", .insts = {test_mov_r0_0, test_exit, test_mov_r0_0, test_exit}}},
+            .symbols = {{.name = "f0", .section = 0, .value = 0, .size = 0},
+                        {.name = "f1", .section = 0, .value = two, .size = 0}},
+        };
+        const auto programs = read_test_object(builder.build(), ".text");
+        REQUIRE(programs.size() == 2);
+        REQUIRE(programs[0].prog.size() == 2);
+        REQUIRE(programs[1].prog.size() == 2);
+    }
+
+    SECTION("a size that is not a whole number of instructions") {
+        const TestObjectBuilder builder{
+            .sections = {{.name = ".text", .insts = {test_mov_r0_0, test_exit}}},
+            .symbols = {{.name = "f0", .section = 0, .size = 12}},
+        };
+        REQUIRE_THROWS_WITH(
+            read_test_object(builder.build(), ".text"),
+            Catch::Matchers::ContainsSubstring("has a size that is not a whole number of instructions"));
     }
 }
 

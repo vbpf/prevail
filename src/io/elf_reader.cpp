@@ -235,15 +235,14 @@ FunctionSymbols collect_function_symbols(const ELFIO::const_symbol_section_acces
     return function_symbols;
 }
 
-std::tuple<std::string, ELFIO::Elf_Xword> get_program_name_and_size(const ELFIO::section& sec,
-                                                                    const ELFIO::Elf_Xword start,
-                                                                    const ELFIO::const_symbol_section_accessor& symbols,
-                                                                    const FunctionSymbols& function_symbols) {
+ProgramExtent get_program_extent(const ELFIO::section& sec, const ELFIO::Elf_Xword start,
+                                 const ELFIO::const_symbol_section_accessor& symbols,
+                                 const FunctionSymbols& function_symbols) {
     std::string program_name = sec.get_name();
     ELFIO::Elf_Xword size = sec.get_size() - start;
     const auto section_symbols = function_symbols.find(sec.get_index());
     if (section_symbols == function_symbols.end()) {
-        return {program_name, size};
+        return {program_name, size, 0};
     }
     const auto& [by_offset, misaligned] = section_symbols->second;
     if (misaligned) {
@@ -253,14 +252,29 @@ std::tuple<std::string, ELFIO::Elf_Xword> get_program_name_and_size(const ELFIO:
     }
     // The last symbol at `start` names the program, and the next function in the section ends it.
     auto it = by_offset.lower_bound(start);
+    ELFIO::Elf_Xword declared_size = 0;
     if (it != by_offset.end() && it->first == start) {
-        program_name = get_symbol_details(symbols, it->second.second).name;
+        const auto symbol = get_symbol_details(symbols, it->second.second);
+        program_name = symbol.name;
+        declared_size = symbol.size;
         ++it;
     }
     if (it != by_offset.end() && it->first < start + size) {
         size = it->first - start;
     }
-    return {program_name, size};
+    // A symbol that declares a size ends its function there, as for a loader that goes by the symbol table
+    // (libbpf takes st_size bytes and no more). What follows, up to the next function, belongs to no function.
+    // Were it taken along, a function that runs off its end would be verified with that code behind it, and
+    // its subprograms linked behind that, while such a loader links them directly behind the function.
+    // A symbol of size zero declares nothing (hand-written assembly without .size).
+    if (declared_size % sizeof(EbpfInst) != 0) {
+        throw UnmarshalError("FUNC symbol '" + program_name + "' in section " + sec.get_name() +
+                             " has a size that is not a whole number of instructions");
+    }
+    if (declared_size != 0 && declared_size < size) {
+        return {program_name, declared_size, size - declared_size};
+    }
+    return {program_name, size, 0};
 }
 
 std::optional<std::string> find_function_symbol_at_offset(const ELFIO::const_symbol_section_accessor& symbols,
@@ -652,8 +666,8 @@ static std::string abbreviate_name(const std::string& name) {
     return name.substr(0, max_reported_name_length) + "...";
 }
 
-std::string ProgramReader::name_of_function_containing(const ELFIO::section& section,
-                                                       const ELFIO::Elf_Xword offset) const {
+std::optional<std::string> ProgramReader::function_containing(const ELFIO::section& section,
+                                                              const ELFIO::Elf_Xword offset) const {
     const auto section_symbols = function_symbols.find(section.get_index());
     if (section_symbols == function_symbols.end()) {
         return section.get_name();
@@ -664,8 +678,12 @@ std::string ProgramReader::name_of_function_containing(const ELFIO::section& sec
         return section.get_name();
     }
     --it;
-    // The last symbol at an offset names the program there, as in get_program_name_and_size.
-    return get_symbol_details(symbols, it->second.second).name;
+    // The last symbol at an offset names the program there, and its size ends it, as in get_program_extent.
+    const auto symbol = get_symbol_details(symbols, it->second.second);
+    if (symbol.size != 0 && offset - it->first >= symbol.size) {
+        return std::nullopt;
+    }
+    return symbol.name;
 }
 
 std::string ProgramReader::describe_control_flow_escape(const ELFIO::section& section,
@@ -677,9 +695,9 @@ std::string ProgramReader::describe_control_flow_escape(const ELFIO::section& se
         section_target >= 0 && section_target < gsl::narrow<int64_t>(section.get_size() / sizeof(EbpfInst));
     std::string destination = "out of the section";
     if (in_section) {
-        destination =
-            "into function " + abbreviate_name(name_of_function_containing(
-                                   section, gsl::narrow<ELFIO::Elf_Xword>(section_target) * sizeof(EbpfInst)));
+        const auto function =
+            function_containing(section, gsl::narrow<ELFIO::Elf_Xword>(section_target) * sizeof(EbpfInst));
+        destination = function ? "into function " + abbreviate_name(*function) : "into code of no function";
     }
     return "Function " + abbreviate_name(program_name) + " in section " + abbreviate_name(section.get_name()) +
            (escape.is_jump ? " jumps " : " falls through ") + destination + " at instruction " +
@@ -730,7 +748,7 @@ void ProgramReader::enqueue_synthetic_local_calls(const std::vector<EbpfInst>& i
             .source_offset = loc,
             .relocation_entry_index = std::nullopt,
             .target = {.section_index = section_index, .offset = target_offset},
-            .target_function_name = name_of_function_containing(*section, target_offset),
+            .target_function_name = function_containing(*section, target_offset).value_or(section->get_name()),
         });
     }
 }
@@ -1227,10 +1245,11 @@ void ProgramReader::read_programs(const bool all_sections) {
             builtin_offsets_for_current_program.clear();
             extern_address_offsets_for_current_program.clear();
             func_address_offsets_for_current_program.clear();
-            // A program is the code from its FUNC symbol to the next one, so that the programs of a
-            // section do not overlap. Control may leave it only by exit or by a call: a callee is
-            // appended to the program on linking, and other code it would run into is not.
-            auto [name, size] = get_program_name_and_size(*sec, offset, symbols, function_symbols);
+            // A program is the code from its FUNC symbol to the end that the symbol declares, or else to the
+            // next one, so that the programs of a section do not overlap. Control may leave it only by exit
+            // or by a call: a callee is appended to the program on linking, and other code it would run into
+            // is not. Code that belongs to no function is skipped: nothing can reach it.
+            auto [name, size, unowned] = get_program_extent(*sec, offset, symbols, function_symbols);
             auto instructions = vector_of<EbpfInst>(sec->get_data() + offset, size);
             if (const auto escape = find_control_flow_escape(instructions)) {
                 unloadable_programs.emplace(raw_programs.size(),
@@ -1277,7 +1296,7 @@ void ProgramReader::read_programs(const bool all_sections) {
                 std::move(instructions),
                 std::move(program_info),
             });
-            offset += size;
+            offset += size + unowned;
         }
     }
 
