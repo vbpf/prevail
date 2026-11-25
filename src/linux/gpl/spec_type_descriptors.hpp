@@ -32,7 +32,7 @@ constexpr int sockopt_regions = 40;                     // sizeof(bpf_sockopt)
 constexpr int sk_lookup_regions = 72;                   // sizeof(bpf_sk_lookup)
 constexpr int sk_reuseport_regions = 56;                // sizeof(sk_reuseport_md)
 constexpr int cgroup_sysctl_regions = 8;                // sizeof(bpf_sysctl): 2 × u32
-// Tracing/LSM/struct_ops programs receive function arguments as context:
+// Tracing, LSM, struct_ops and raw tracepoint programs receive arguments as context:
 // an array of u64 values. The kernel allows up to 12 args
 // (MAX_BPF_FUNC_ARGS), but typical functions have at most 5.
 constexpr int tracing_regions = 12 * 8;
@@ -133,7 +133,24 @@ constexpr ebpf_ctx_descriptor_t sk_buff_no_meta = {sk_skb_regions, 76, 80, -1};
 constexpr ebpf_ctx_descriptor_t xdp_md = {xdp_regions, 0, 4, 8}; // data/data_end/data_meta
 constexpr ebpf_ctx_descriptor_t sk_msg_md = {80, 0, 8, -1};      // sizeof(sk_msg_md), data/data_end
 constexpr ebpf_ctx_descriptor_t unspec_descr = {0, -1, -1, -1};
+// Four kinds of context are arrays of u64 of this one size. They differ in what lies around the array, and so in
+// the helpers that may be handed the context. A helper names the context it works on by the address of the
+// descriptor (is_helper_usable_linux()), so each kind has a descriptor object of its own.
+//
+// The arguments of a traced function or of an LSM hook, saved by a BPF trampoline (fentry, fexit, fmod_ret, lsm).
+// The trampoline stores the number of arguments in the word in front of the array and, where the program runs
+// after the function, the function's result in the word behind it. bpf_get_func_arg(), bpf_get_func_arg_cnt()
+// and bpf_get_func_ret() read those words.
 constexpr ebpf_ctx_descriptor_t tracing_descr = {tracing_regions, -1, -1, -1};
+// The arguments of a tracepoint, which bpf_trace_run<N>() collects in a local array of its own for a
+// raw_tracepoint, raw_tracepoint_writable or tp_btf program. No count precedes that array and no result follows
+// it: the words around it are whatever else the frame holds.
+constexpr ebpf_ctx_descriptor_t raw_tracepoint_descr = {tracing_regions, -1, -1, -1};
+// struct bpf_iter__<target>: a pointer to the metadata of the iteration, then pointers to the object visited.
+constexpr ebpf_ctx_descriptor_t iter_descr = {tracing_regions, -1, -1, -1};
+// The arguments of the kernel callback that a struct_ops program implements. The program is the callback: no
+// function is traced, and no result of one lies behind the array.
+constexpr ebpf_ctx_descriptor_t struct_ops_descr = {tracing_regions, -1, -1, -1};
 constexpr ebpf_ctx_descriptor_t lirc_mode2_descr = {lirc_mode2_regions, -1, -1, -1};
 constexpr ebpf_ctx_descriptor_t netfilter_descr = {netfilter_regions, -1, -1, -1};
 constexpr ebpf_ctx_descriptor_t syscall_descr = {syscall_regions, -1, -1, -1};
@@ -157,6 +174,9 @@ extern const ebpf_ctx_descriptor_t g_xdp_md;
 extern const ebpf_ctx_descriptor_t g_sk_msg_md;
 extern const ebpf_ctx_descriptor_t g_unspec_descr;
 extern const ebpf_ctx_descriptor_t g_tracing_descr;
+extern const ebpf_ctx_descriptor_t g_raw_tracepoint_descr;
+extern const ebpf_ctx_descriptor_t g_iter_descr;
+extern const ebpf_ctx_descriptor_t g_struct_ops_descr;
 extern const ebpf_ctx_descriptor_t g_lirc_mode2_descr;
 extern const ebpf_ctx_descriptor_t g_netfilter_descr;
 extern const ebpf_ctx_descriptor_t g_syscall_descr;

@@ -135,8 +135,8 @@ TEST_CASE("linux program-type table maps modern section prefixes", "[platform][t
         {"cgroup/getsockname4", "cgroup_sock_addr", &g_sock_addr_descr},
         {"cgroup/getsockopt", "cgroup_sockopt", &g_sockopt_descr},
         {"cgroup/setsockopt", "cgroup_sockopt", &g_sockopt_descr},
-        {"raw_tp/probe", "raw_tracepoint", &g_tracing_descr},
-        {"raw_tp.w/probe", "raw_tracepoint_writable", &g_tracing_descr},
+        {"raw_tp/probe", "raw_tracepoint", &g_raw_tracepoint_descr},
+        {"raw_tp.w/probe", "raw_tracepoint_writable", &g_raw_tracepoint_descr},
         {"sk_reuseport/test", "sk_reuseport", &g_sk_reuseport_descr},
         {"flow_dissector", "flow_dissector", &g_flow_dissector_descr},
         {"cgroup/sysctl", "cgroup_sysctl", &g_cgroup_sysctl_descr},
@@ -1005,6 +1005,75 @@ TEST_CASE("single-context helpers are gated by their context descriptor", "[plat
         REQUIRE(proto.ctx_descriptor == expected_context);
         // An xdp_md is not the context these helpers dereference.
         REQUIRE_FALSE(g_ebpf_platform_linux.is_helper_usable(id, xdp_type));
+    }
+}
+
+TEST_CASE("an argument-array context is a trampoline's only where a trampoline runs the program",
+          "[platform][tables]") {
+    // All of these contexts are arrays of u64 of one size, which a program may read and not write.
+    const std::vector<std::pair<const char*, const ebpf_ctx_descriptor_t*>> expectations{
+        {"fentry/f", &g_tracing_descr},
+        {"fentry.s/f", &g_tracing_descr},
+        {"fexit/f", &g_tracing_descr},
+        {"fexit.s/f", &g_tracing_descr},
+        {"fmod_ret/f", &g_tracing_descr},
+        {"fmod_ret.s/f", &g_tracing_descr},
+        {"lsm/hook", &g_tracing_descr},
+        {"lsm.s/hook", &g_tracing_descr},
+        {"tp_btf/sched_switch", &g_raw_tracepoint_descr},
+        {"tp_btf.s/sched_switch", &g_raw_tracepoint_descr},
+        {"raw_tp/sys_enter", &g_raw_tracepoint_descr},
+        {"raw_tracepoint/sys_enter", &g_raw_tracepoint_descr},
+        {"raw_tp.w/x", &g_raw_tracepoint_descr},
+        {"raw_tracepoint.w/x", &g_raw_tracepoint_descr},
+        {"iter/task", &g_iter_descr},
+        {"iter.s/task", &g_iter_descr},
+        {"struct_ops/cong_avoid", &g_struct_ops_descr},
+        {"struct_ops.s/cong_avoid", &g_struct_ops_descr},
+    };
+    for (const auto& [section, descriptor] : expectations) {
+        CAPTURE(section);
+        const EbpfProgramType type = g_ebpf_platform_linux.get_program_type(section, "");
+        REQUIRE(type.ctx_descriptor == descriptor);
+        REQUIRE(type.ctx_descriptor->size == 12 * 8);
+        REQUIRE(type.ctx_read_only);
+        // bpf_get_func_arg, bpf_get_func_ret and bpf_get_func_arg_cnt read the words around the array, where
+        // only a trampoline puts the argument count and the traced function's result.
+        for (const int32_t id : {183, 184, 185}) {
+            CAPTURE(id);
+            REQUIRE(g_ebpf_platform_linux.is_helper_usable(id, type) == (descriptor == &g_tracing_descr));
+        }
+    }
+    // The tp_btf and fmod_ret attach types have a row each, and neither limits what the program returns.
+    for (const char* section : {"tp_btf/sched_switch", "fmod_ret/f"}) {
+        CAPTURE(section);
+        const EbpfProgramType type = g_ebpf_platform_linux.get_program_type(section, "");
+        REQUIRE(type.name == "tracing");
+        REQUIRE_FALSE(type.return_range.has_value());
+    }
+}
+
+TEST_CASE("get_func_arg is refused where no trampoline bounds the argument index", "[platform][tables]") {
+    // bpf_get_func_arg(ctx, 100, &value): the helper compares the index with the word in front of the context
+    // and then loads ctx[100]. A tp_btf program runs on the bare u64 args[] of bpf_trace_run<N>().
+    const std::vector<std::string> get_func_arg{"r2 = 100", "r3 = r10", "r3 += -8", "call 183", "r0 = 0", "exit"};
+    using Catch::Matchers::ContainsSubstring;
+    for (const char* section : {"tp_btf/sched_switch", "raw_tp/sys_enter", "raw_tp.w/x", "iter/task",
+                                "struct_ops/cong_avoid", "tracepoint/sched/sched_switch"}) {
+        CAPTURE(section);
+        REQUIRE_THROWS_WITH(verify_lines(section, get_func_arg),
+                            ContainsSubstring("helper function is unavailable on this platform"));
+    }
+    // A trampoline stores the number of arguments there, and the helper refuses a larger index.
+    for (const char* section : {"fentry/f", "fexit/f", "fmod_ret/f", "lsm/hook"}) {
+        CAPTURE(section);
+        REQUIRE_FALSE(verify_lines(section, get_func_arg).has_value());
+    }
+    // The load that the helper would make, written out, is out of bounds in every one of them.
+    for (const char* section : {"tp_btf/sched_switch", "raw_tp/sys_enter", "iter/task", "fentry/f"}) {
+        CAPTURE(section);
+        REQUIRE(verify_lines(section, {"r0 = *(u64 *)(r1 + 800)", "r0 = 0", "exit"}) ==
+                "0: Upper bound must be at most 96 (valid_access(r1.offset+800, width=8) for read)");
     }
 }
 

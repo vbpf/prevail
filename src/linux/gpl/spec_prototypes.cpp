@@ -62,6 +62,9 @@ const ebpf_ctx_descriptor_t g_xdp_md = xdp_md;
 const ebpf_ctx_descriptor_t g_sk_msg_md = sk_msg_md;
 const ebpf_ctx_descriptor_t g_unspec_descr = unspec_descr;
 const ebpf_ctx_descriptor_t g_tracing_descr = tracing_descr;
+const ebpf_ctx_descriptor_t g_raw_tracepoint_descr = raw_tracepoint_descr;
+const ebpf_ctx_descriptor_t g_iter_descr = iter_descr;
+const ebpf_ctx_descriptor_t g_struct_ops_descr = struct_ops_descr;
 const ebpf_ctx_descriptor_t g_lirc_mode2_descr = lirc_mode2_descr;
 const ebpf_ctx_descriptor_t g_netfilter_descr = netfilter_descr;
 const ebpf_ctx_descriptor_t g_syscall_descr = syscall_descr;
@@ -2064,6 +2067,9 @@ static constexpr EbpfHelperPrototype bpf_get_branch_snapshot_proto = {
         },
 };
 
+// bpf_get_func_arg(), bpf_get_func_ret() and bpf_get_func_arg_cnt() take the number of arguments from the word in
+// front of the context, and the second reads the word behind the arguments. Only a BPF trampoline lays its frame
+// out so, so the context must be the argument array of one (tracing_descr).
 static constexpr EbpfHelperPrototype bpf_get_func_arg_proto = {
     .name = "get_func_arg",
     .return_type = EBPF_RETURN_TYPE_INTEGER,
