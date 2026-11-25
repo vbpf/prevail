@@ -134,9 +134,18 @@ symbol_details_t get_symbol_details(const ELFIO::const_symbol_section_accessor& 
 
 FunctionSymbols collect_function_symbols(const ELFIO::const_symbol_section_accessor& symbols);
 
-std::tuple<std::string, ELFIO::Elf_Xword> get_program_name_and_size(const ELFIO::section& sec, ELFIO::Elf_Xword start,
-                                                                    const ELFIO::const_symbol_section_accessor& symbols,
-                                                                    const FunctionSymbols& function_symbols);
+/// The program that starts at `start` of a section, as the symbol table describes it.
+struct ProgramExtent {
+    std::string name;      ///< Of the FUNC symbol at `start`, or of the section where there is none.
+    ELFIO::Elf_Xword size; ///< The bytes of the program.
+    /// The bytes that follow the program and belong to no function: from the end that its symbol declares to
+    /// the next FUNC symbol of the section, or to the end of the section. They are no program.
+    ELFIO::Elf_Xword unowned;
+};
+
+ProgramExtent get_program_extent(const ELFIO::section& sec, ELFIO::Elf_Xword start,
+                                 const ELFIO::const_symbol_section_accessor& symbols,
+                                 const FunctionSymbols& function_symbols);
 
 std::optional<std::string> find_function_symbol_at_offset(const ELFIO::const_symbol_section_accessor& symbols,
                                                           const FunctionSymbols& function_symbols,
@@ -266,9 +275,10 @@ class ProgramReader {
 
     void record_function_relocation(FunctionRelocation reloc);
     /// The name of the function whose code holds `offset` of `section`: its FUNC symbol, or the section name for code
-    /// before the first FUNC symbol of the section.
+    /// before the first FUNC symbol of the section. None for code behind the end that a FUNC symbol declares,
+    /// which belongs to no function (see ProgramExtent::unowned).
     [[nodiscard]]
-    std::string name_of_function_containing(const ELFIO::section& section, ELFIO::Elf_Xword offset) const;
+    std::optional<std::string> function_containing(const ELFIO::section& section, ELFIO::Elf_Xword offset) const;
     [[nodiscard]]
     std::string describe_control_flow_escape(const ELFIO::section& section, ELFIO::Elf_Xword program_offset,
                                              const std::string& program_name, const ControlFlowEscape& escape) const;

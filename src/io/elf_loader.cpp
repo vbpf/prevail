@@ -97,14 +97,14 @@ void ElfObject::ElfObjectState::discover_programs() {
             }
 
             for (ELFIO::Elf_Xword offset = 0; offset < section->get_size();) {
-                auto [function_name, size] = get_program_name_and_size(*section, offset, *symbols, function_symbols);
+                auto [function_name, size, unowned] = get_program_extent(*section, offset, *symbols, function_symbols);
                 programs.push_back(ElfProgramInfo{
                     .section_name = section_name,
                     .function_name = function_name,
                     .section_offset = gsl::narrow<uint32_t>(offset),
                 });
                 section_program_indices[section_name].push_back(programs.size() - 1);
-                offset += size;
+                offset += size + unowned;
             }
         }
 
