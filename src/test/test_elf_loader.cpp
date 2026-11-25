@@ -1528,8 +1528,8 @@ TEST_CASE("ELF loader does not rescan the symbol table for every program", "[elf
         sym_writer.add_symbol(function_name, i * sizeof(exit_inst), sizeof(exit_inst), ELFIO::STB_GLOBAL,
                               ELFIO::STT_FUNC, 0, text_sec->get_index());
     }
-    // Symbols outside the section are scanned too, and they may all share one long name.
-    const ELFIO::Elf_Word long_name = str_writer.add_string(std::string(64 * 1024, 'x'));
+    // Symbols outside the section are scanned too, and they may all share one name of the greatest length.
+    const ELFIO::Elf_Word long_name = str_writer.add_string(std::string(4096, 'x'));
     for (size_t i = 0; i < unrelated_symbol_count; ++i) {
         sym_writer.add_symbol(long_name, 0, 0, ELFIO::STB_GLOBAL, ELFIO::STT_NOTYPE, 0, ELFIO::SHN_ABS);
     }
@@ -3490,6 +3490,33 @@ TEST_CASE("ELF loader rejects a link error without a section filter", "[elf][har
     REQUIRE(read_test_object(object, ".text").size() == 1);
 }
 
+// A name is stored in the file once, and each section header or symbol that designates it gets a copy of its
+// own, so names of any length let a file cost the number of its entries times the length of one name
+// (ANT-2026-QZBGDFRW). The limit is on the names that are used: a long string that nothing designates costs
+// nothing.
+TEST_CASE("ELF loader bounds the length of section and symbol names", "[elf][hardening]") {
+    constexpr size_t limit = 4096;
+    const auto object_with = [](const std::string& section_name, const std::string& symbol_name) {
+        return TestObjectBuilder{
+            .sections = {{.name = section_name, .insts = {test_mov_r0_0, test_exit}}},
+            .symbols = {{.name = "entry", .section = 0}, {.name = symbol_name}},
+        }
+            .build();
+    };
+    const std::string longest(limit, 'n');
+    const std::string too_long(limit + 1, 'n');
+
+    REQUIRE(read_test_object(object_with("socket", "unused"), "socket").size() == 1);
+    REQUIRE(read_test_object(object_with(longest, "unused"), longest).size() == 1);
+    REQUIRE(read_test_object(object_with("socket", longest), "socket").size() == 1);
+
+    REQUIRE_THROWS_WITH(read_test_object(object_with(too_long, "unused"), ""),
+                        Catch::Matchers::ContainsSubstring("has a section name longer than 4096 bytes"));
+    // The symbol is used by nothing, but reading the symbol table reads its name.
+    REQUIRE_THROWS_WITH(read_test_object(object_with("socket", too_long), "socket"),
+                        Catch::Matchers::ContainsSubstring("has a symbol name longer than 4096 bytes"));
+}
+
 // .BTF.ext names the section of each CO-RE relocation and line info record, and nothing else, so the records of two
 // executable sections with the same name cannot be told apart. Such an object is rejected rather than having the
 // records of one section patched into the other, or dropped.
@@ -3606,7 +3633,7 @@ TEST_CASE("CO-RE relocation patches every program holding the instruction", "[el
 // Unresolved relocations are stored without their names and only the first few are reported, so a file with many
 // entries against a long name costs memory and output linear in its size. Every entry still fails the load.
 TEST_CASE("ELF loader bounds the report of unresolved symbols", "[elf][hardening]") {
-    const std::string long_name(10'000, 'x');
+    const std::string long_name(4096, 'x'); // The longest name the loader accepts.
     // One unresolved entry per instruction: an instruction may be relocated only once.
     std::vector<EbpfInst> socket_insts(1000, test_mov_r0_0);
     socket_insts.push_back(test_exit);

@@ -381,12 +381,36 @@ static std::streamsize read_stream_bytes_at(std::istream& input_stream, const st
     return bytes_read;
 }
 
+/// No name of a section or of a symbol may be longer than this.
+///
+/// A name is stored in the file once, in a string table, and any number of section headers, symbols and
+/// relocation entries may designate it. ELFIO and the loader copy it for each of them: a std::string per
+/// section, per program, per map symbol, per relocation that is applied. With names of any length, a file
+/// of N entries that share one name of length L costs N x L, which grows as the square of the file size.
+/// With names of at most this length the cost grows with N.
+///
+/// The limit is generous: it is PATH_MAX, since a section name may hold a path (uprobe sections do). The
+/// longest name among the sample objects has 52 bytes.
+constexpr size_t max_elf_name_length = 4096;
+
+/// Whether the name at `offset` of a string table is longer than max_elf_name_length. The name ends at the
+/// next null byte. One that runs to the end of the table without a null byte counts by the bytes it has:
+/// it is read as no name, but looking for its end costs its length on every read.
+static bool is_overlong_name(const char* strings, const size_t size, const size_t offset) {
+    if (offset >= size || size - offset <= max_elf_name_length) {
+        return false;
+    }
+    return std::memchr(strings + offset, '\0', max_elf_name_length + 1) == nullptr;
+}
+
 struct SectionHeaderTableLayout {
     uint64_t offset{};
     uint16_t entry_size{};
     uint16_t count{};
+    uint16_t name_table_index{}; ///< e_shstrndx: the section that holds the names of the sections.
     size_t min_entry_size{};
     size_t section_size_offset{};
+    size_t section_offset_offset{};
 };
 
 static std::optional<SectionHeaderTableLayout>
@@ -405,8 +429,11 @@ read_section_header_table_layout(const std::array<unsigned char, sizeof(ELFIO::E
             .entry_size =
                 read_uint<ELFIO::Elf_Half>(header.data() + offsetof(ELFIO::Elf32_Ehdr, e_shentsize), little_endian),
             .count = read_uint<ELFIO::Elf_Half>(header.data() + offsetof(ELFIO::Elf32_Ehdr, e_shnum), little_endian),
+            .name_table_index =
+                read_uint<ELFIO::Elf_Half>(header.data() + offsetof(ELFIO::Elf32_Ehdr, e_shstrndx), little_endian),
             .min_entry_size = elf32_section_header_size,
             .section_size_offset = elf32_section_size_offset,
+            .section_offset_offset = offsetof(ELFIO::Elf32_Shdr, sh_offset),
         };
     }
 
@@ -416,12 +443,49 @@ read_section_header_table_layout(const std::array<unsigned char, sizeof(ELFIO::E
             .entry_size =
                 read_uint<ELFIO::Elf_Half>(header.data() + offsetof(ELFIO::Elf64_Ehdr, e_shentsize), little_endian),
             .count = read_uint<ELFIO::Elf_Half>(header.data() + offsetof(ELFIO::Elf64_Ehdr, e_shnum), little_endian),
+            .name_table_index =
+                read_uint<ELFIO::Elf_Half>(header.data() + offsetof(ELFIO::Elf64_Ehdr, e_shstrndx), little_endian),
             .min_entry_size = elf64_section_header_size,
             .section_size_offset = elf64_section_size_offset,
+            .section_offset_offset = offsetof(ELFIO::Elf64_Shdr, sh_offset),
         };
     }
 
     return std::nullopt;
+}
+
+/// The bytes that ELFIO will read section names from: the contents of the section e_shstrndx designates.
+/// Empty where ELFIO finds no names: the index names no section, the section is SHT_NULL or SHT_NOBITS, or
+/// its file range does not lie within the file.
+static std::vector<char> read_section_name_table(std::istream& input_stream, const std::uintmax_t data_size,
+                                                 const SectionHeaderTableLayout& table, const unsigned char elf_class,
+                                                 const bool little_endian) {
+    if (table.name_table_index == ELFIO::SHN_UNDEF || table.name_table_index >= table.count) {
+        return {};
+    }
+    std::array<unsigned char, sizeof(ELFIO::Elf64_Shdr)> section_header{};
+    const std::uintmax_t header_offset = table.offset + std::uintmax_t{table.name_table_index} * table.entry_size;
+    if (read_stream_bytes_at(input_stream, header_offset, section_header.data(), table.min_entry_size) <
+        gsl::narrow<std::streamsize>(table.min_entry_size)) {
+        return {};
+    }
+    const auto type =
+        read_uint<ELFIO::Elf_Word>(section_header.data() + offsetof(ELFIO::Elf64_Shdr, sh_type), little_endian);
+    const bool is_32 = elf_class == ELFIO::ELFCLASS32;
+    const std::uintmax_t offset =
+        is_32 ? read_uint<ELFIO::Elf32_Off>(section_header.data() + table.section_offset_offset, little_endian)
+              : read_uint<ELFIO::Elf64_Off>(section_header.data() + table.section_offset_offset, little_endian);
+    const std::uintmax_t size =
+        is_32 ? read_uint<ELFIO::Elf_Word>(section_header.data() + table.section_size_offset, little_endian)
+              : read_uint<ELFIO::Elf_Xword>(section_header.data() + table.section_size_offset, little_endian);
+    if (type == ELFIO::SHT_NULL || type == ELFIO::SHT_NOBITS || offset > data_size || size > data_size - offset) {
+        return {};
+    }
+    std::vector<char> names(gsl::narrow<size_t>(size));
+    const auto names_read =
+        read_stream_bytes_at(input_stream, offset, reinterpret_cast<unsigned char*>(names.data()), names.size());
+    names.resize(gsl::narrow<size_t>(names_read));
+    return names;
 }
 
 static void validate_section_header_table_bounds(std::istream& input_stream, const std::string& path,
@@ -501,12 +565,22 @@ static void validate_section_header_table_bounds(std::istream& input_stream, con
     // Sections of a well-formed object do not share file bytes, so together they cannot exceed the file size.
     // ELFIO loads exactly e_shnum sections (table.count), never the extended count.
     std::uintmax_t remaining = data_size;
+    const std::vector<char> section_names =
+        read_section_name_table(input_stream, data_size, table, elf_class, little_endian);
     for (std::uintmax_t i = 0; i < table.count; ++i) {
         std::array<unsigned char, sizeof(ELFIO::Elf64_Shdr)> section_header{};
         const auto section_bytes_read = read_stream_bytes_at(input_stream, table.offset + i * table.entry_size,
                                                              section_header.data(), table.min_entry_size);
         if (section_bytes_read < gsl::narrow<std::streamsize>(table.min_entry_size)) {
             throw UnmarshalError("ELF section header table in " + path + " is out of bounds");
+        }
+
+        // ELFIO gives every section a copy of its name while it loads the file, so the names are checked
+        // here, before it does. sh_name is the first field of a section header of either class.
+        const auto name_offset = read_uint<ELFIO::Elf_Word>(section_header.data(), little_endian);
+        if (is_overlong_name(section_names.data(), section_names.size(), name_offset)) {
+            throw UnmarshalError("ELF file " + path + " has a section name longer than " +
+                                 std::to_string(max_elf_name_length) + " bytes");
         }
 
         const auto section_type =
@@ -629,6 +703,18 @@ ELFIO::const_symbol_section_accessor read_and_validate_symbol_section(const ELFI
     if (linked_strtab_index >= reader.sections.size() || reader.sections[linked_strtab_index] == nullptr ||
         reader.sections[linked_strtab_index]->get_data() == nullptr) {
         throw UnmarshalError("Invalid symbol string table link in ELF file " + path);
+    }
+    // A symbol's name is read from this table, and copied, once for each use of the symbol. st_name is the
+    // first field of a symbol of either class, in the byte order of the host (load_elf() refuses any other).
+    const ELFIO::section& symbol_names = *reader.sections[linked_strtab_index];
+    const size_t symbol_count = gsl::narrow<size_t>(symbol_section->get_size() / expected_entry_size);
+    for (size_t i = 0; i < symbol_count; ++i) {
+        ELFIO::Elf_Word name_offset;
+        std::memcpy(&name_offset, symbol_section->get_data() + i * expected_entry_size, sizeof(name_offset));
+        if (is_overlong_name(symbol_names.get_data(), gsl::narrow<size_t>(symbol_names.get_size()), name_offset)) {
+            throw UnmarshalError("ELF file " + path + " has a symbol name longer than " +
+                                 std::to_string(max_elf_name_length) + " bytes");
+        }
     }
     return ELFIO::const_symbol_section_accessor{reader, symbol_section};
 }
