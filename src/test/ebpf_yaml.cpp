@@ -18,6 +18,7 @@
 #include "config.hpp"
 #include "ebpf_verifier.hpp"
 #include "ir/syntax.hpp"
+#include "linux/linux_platform.hpp"
 #include "string_constraints.hpp"
 #include "test/ebpf_yaml.hpp"
 #include "test/parse.hpp"
@@ -40,12 +41,19 @@ static EbpfMapType ebpf_get_map_type(const uint32_t platform_specific_type) {
     return g_ebpf_platform_linux.get_map_type(platform_specific_type);
 }
 
+// A test case declares its own context and names no Linux program type. To the Linux helper tables it is a
+// program of unknown type, which may call what some program type may.
+static EbpfProgramType as_linux_program_type(EbpfProgramType program_type) {
+    program_type.name = linux_unknown_program_type.name;
+    return program_type;
+}
+
 static EbpfHelperPrototype ebpf_get_helper_prototype(const int32_t n, const EbpfProgramType& program_type) {
-    return g_ebpf_platform_linux.get_helper_prototype(n, program_type);
+    return g_ebpf_platform_linux.get_helper_prototype(n, as_linux_program_type(program_type));
 }
 
 static bool ebpf_is_helper_usable(const int32_t n, const EbpfProgramType& program_type) {
-    return g_ebpf_platform_linux.is_helper_usable(n, program_type);
+    return g_ebpf_platform_linux.is_helper_usable(n, as_linux_program_type(program_type));
 }
 
 static std::optional<int32_t> ebpf_resolve_builtin_call(const std::string& name) {

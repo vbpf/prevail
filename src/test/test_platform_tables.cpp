@@ -16,6 +16,7 @@
 #include "ir/program.hpp"
 #include "ir/syntax.hpp"
 #include "linux/gpl/spec_type_descriptors.hpp"
+#include "linux/linux_platform.hpp"
 #include "parse.hpp"
 #include "platform.hpp"
 #include "spec/function_prototypes.hpp"
@@ -849,7 +850,8 @@ TEST_CASE("helper prototypes with unmodeled ABI classes are conservatively rejec
 }
 
 TEST_CASE("new helper ABI classes map to modeled call contracts", "[platform][tables]") {
-    const auto program_type = g_ebpf_platform_linux.get_program_type("socket", "");
+    // A tc classifier may call every helper below.
+    const auto program_type = g_ebpf_platform_linux.get_program_type("classifier", "");
     const ProgramInfo info{.platform = &g_ebpf_platform_linux, .type = program_type};
 
     const auto require_supported = [&](const int32_t id) -> ResolvedCall {
@@ -1228,6 +1230,202 @@ TEST_CASE("setsockopt on the context of a cgroup/setsockopt program is refused",
     }
 }
 
+TEST_CASE("a helper is usable only in the program types that Linux offers it to", "[platform][tables]") {
+    // One section of every program type, and of every attach point that has a row of its own.
+    const std::vector<std::string> sections{
+        "socket",
+        "xdp",
+        "cgroup/dev",
+        "cgroup/skb",
+        "cgroup_skb/egress",
+        "cgroup/sock_create",
+        "cgroup/post_bind4",
+        "kprobe/x",
+        "lwt_in",
+        "lwt_out",
+        "lwt_xmit",
+        "lwt_seg6local",
+        "perf_event",
+        "action",
+        "classifier",
+        "sk_skb",
+        "sockops",
+        "tracepoint/x",
+        "cgroup/getsockopt",
+        "cgroup/setsockopt",
+        "sk_msg",
+        "raw_tp/x",
+        "raw_tp.w/x",
+        "cgroup/connect4",
+        "cgroup/bind4",
+        "cgroup/recvmsg4",
+        "lirc_mode2",
+        "sk_reuseport/x",
+        "flow_dissector",
+        "cgroup/sysctl",
+        "freplace/x",
+        "fentry/x",
+        "fmod_ret/x",
+        "tp_btf/x",
+        "iter/x",
+        "struct_ops/x",
+        "lsm/x",
+        "sk_lookup/x",
+        "syscall/x",
+        "netfilter/x",
+    };
+    using Sections = std::set<std::string>;
+    const Sections tc{"action", "classifier"};
+    const Sections tc_and_lwt_xmit{"action", "classifier", "lwt_xmit"};
+    const Sections tc_and_lwt{"action", "classifier", "lwt_in", "lwt_out", "lwt_xmit", "lwt_seg6local"};
+    const Sections tracing{"kprobe/x",   "perf_event", "tracepoint/x", "raw_tp/x", "raw_tp.w/x", "fentry/x",
+                           "fmod_ret/x", "tp_btf/x",   "iter/x",       "lsm/x",    "syscall/x"};
+    // What net/core/filter.c, kernel/trace/bpf_trace.c and kernel/bpf/syscall.c offer each helper to.
+    const std::vector<std::pair<int32_t, Sections>> expectations{
+        // These recompute the packet pointers in skb->cb, which the hook must own, and may move the packet head.
+        {9, {"action", "classifier", "lwt_xmit", "sk_skb"}},                       // skb_store_bytes
+        {10, tc_and_lwt_xmit},                                                     // l3_csum_replace
+        {11, tc_and_lwt_xmit},                                                     // l4_csum_replace
+        {39, {"action", "classifier", "lwt_in", "lwt_out", "lwt_xmit", "sk_skb"}}, // skb_pull_data
+        {18, tc},                                                                  // skb_vlan_push
+        {19, tc},                                                                  // skb_vlan_pop
+        {31, tc},                                                                  // skb_change_proto
+        {38, {"action", "classifier", "lwt_xmit", "sk_skb"}},                      // skb_change_tail
+        {43, {"action", "classifier", "lwt_xmit", "sk_skb"}},                      // skb_change_head
+        {50, {"action", "classifier", "sk_skb"}},                                  // skb_adjust_room
+        {13, tc_and_lwt_xmit},                                                     // clone_redirect
+        {41, tc_and_lwt_xmit},                                                     // set_hash_invalid
+        // These read or replace the route in skb's dst word, which holds a socket in a sockmap hook.
+        {20, tc_and_lwt_xmit}, // skb_get_tunnel_key
+        {21, tc_and_lwt_xmit}, // skb_set_tunnel_key
+        {29, tc_and_lwt_xmit}, // skb_get_tunnel_opt
+        {30, tc_and_lwt_xmit}, // skb_set_tunnel_opt
+        {24, tc_and_lwt},      // get_route_realm
+        {52, {"sk_skb"}},      // sk_redirect_map
+        {72, {"sk_skb"}},      // sk_redirect_hash
+        {34, tc_and_lwt},      // get_hash_recalc
+        // These work on state that one hook sets up.
+        {74, {"lwt_seg6local"}},      // lwt_seg6_store_bytes
+        {75, {"lwt_seg6local"}},      // lwt_seg6_adjust_srh
+        {76, {"lwt_seg6local"}},      // lwt_seg6_action
+        {73, {"lwt_in", "lwt_xmit"}}, // lwt_push_encap
+        {58, {"kprobe/x"}},           // override_return
+        // Helpers that take no context, which no context descriptor confines.
+        {51, {"xdp"}},                                     // redirect_map
+        {23, {"xdp", "action", "classifier", "lwt_xmit"}}, // redirect
+        {152, tc},                                         // redirect_neigh
+        {155, tc},                                         // redirect_peer
+        {166, {"syscall/x"}},                              // sys_bpf
+        {167, {"syscall/x"}},                              // btf_find_by_name_kind
+        {168, {"syscall/x"}},                              // sys_close
+        {179, {"syscall/x"}},                              // kallsyms_lookup_name
+        {4, tracing},                                      // probe_read
+        {27, tracing},                                     // get_stackid
+    };
+    for (const auto& [id, offered] : expectations) {
+        for (const std::string& section : sections) {
+            CAPTURE(id, section);
+            const EbpfProgramType type = g_ebpf_platform_linux.get_program_type(section, "");
+            REQUIRE(g_ebpf_platform_linux.is_helper_usable(id, type) == offered.contains(section));
+        }
+    }
+}
+
+TEST_CASE("every program type but lirc_mode2 is offered the helpers of bpf_base_func_proto", "[platform][tables]") {
+    for (const char* section : {"socket",
+                                "xdp",
+                                "cgroup/dev",
+                                "cgroup/skb",
+                                "cgroup/sock_create",
+                                "kprobe/x",
+                                "lwt_in",
+                                "perf_event",
+                                "classifier",
+                                "sk_skb",
+                                "sockops",
+                                "tracepoint/x",
+                                "cgroup/getsockopt",
+                                "sk_msg",
+                                "raw_tp/x",
+                                "cgroup/connect4",
+                                "sk_reuseport/x",
+                                "flow_dissector",
+                                "cgroup/sysctl",
+                                "freplace/x",
+                                "fentry/x",
+                                "struct_ops/x",
+                                "lsm/x",
+                                "sk_lookup/x",
+                                "syscall/x",
+                                "netfilter/x"}) {
+        CAPTURE(section);
+        const EbpfProgramType type = g_ebpf_platform_linux.get_program_type(section, "");
+        for (const int32_t id : {1, 2, 3, 5, 7, 8, 12, 14, 15, 16, 130, 131, 132}) {
+            CAPTURE(id);
+            REQUIRE(g_ebpf_platform_linux.is_helper_usable(id, type));
+        }
+    }
+    // lirc_mode2_func_proto() lists what it offers and falls back to nothing.
+    const EbpfProgramType lirc = g_ebpf_platform_linux.get_program_type("lirc_mode2", "");
+    for (const int32_t id : {1, 2, 3, 5, 6, 7, 12, 77, 78, 92}) {
+        CAPTURE(id);
+        REQUIRE(g_ebpf_platform_linux.is_helper_usable(id, lirc));
+    }
+    for (const int32_t id : {8, 14, 15, 16, 130, 131, 132}) {
+        CAPTURE(id);
+        REQUIRE_FALSE(g_ebpf_platform_linux.is_helper_usable(id, lirc));
+    }
+}
+
+TEST_CASE("skb_pull_data is refused where the hook does not own skb->cb", "[platform][tables]") {
+    // bpf_skb_pull_data(skb, 0) stores the packet pointers into skb->cb. While a socket filter or a cgroup_skb
+    // program runs, those bytes belong to the protocol that is receiving the packet.
+    const std::vector<std::string> pull_data{"r2 = 0", "call 39", "r0 = 1", "exit"};
+    using Catch::Matchers::ContainsSubstring;
+    for (const char* section : {"socket", "cgroup/skb", "cgroup_skb/ingress", "cgroup_skb/egress", "flow_dissector"}) {
+        CAPTURE(section);
+        REQUIRE_THROWS_WITH(verify_lines(section, pull_data),
+                            ContainsSubstring("helper function is unavailable on this platform"));
+    }
+    for (const char* section : {"classifier", "action", "lwt_in", "lwt_out", "lwt_xmit", "sk_skb"}) {
+        CAPTURE(section);
+        REQUIRE_FALSE(verify_lines(section, pull_data).has_value());
+    }
+    // An End.BPF program runs with a pointer to the segment routing header kept aside, and the helper may free
+    // the packet head that it points into. Linux 6.18 still offers the helper there; later kernels do not.
+    REQUIRE_THROWS_WITH(verify_lines("lwt_seg6local", pull_data),
+                        ContainsSubstring("helper function is unavailable on this platform"));
+}
+
+TEST_CASE("a section that names no program type is offered what some program type is", "[platform][tables]") {
+    const EbpfProgramType unknown = g_ebpf_platform_linux.get_program_type("from-netdev", "");
+    REQUIRE(unknown.name == linux_unknown_program_type.name);
+    // Such sections hold tc programs in the objects of loaders that do not go by section names.
+    for (const int32_t id : {1, 9, 23, 26, 39}) {
+        CAPTURE(id);
+        REQUIRE(g_ebpf_platform_linux.is_helper_usable(id, unknown));
+    }
+    // An id that stands for functions of different signatures is offered by none of them: which one the
+    // program would get depends on the program type.
+    for (const int32_t id : {46, 49, 57, 188}) {
+        CAPTURE(id);
+        REQUIRE_FALSE(g_ebpf_platform_linux.is_helper_usable(id, unknown));
+    }
+    // The context of the section is an __sk_buff, so a helper for another context stays out of reach.
+    REQUIRE_FALSE(g_ebpf_platform_linux.is_helper_usable(44, unknown)); // xdp_adjust_head
+    REQUIRE_FALSE(g_ebpf_platform_linux.is_helper_usable(58, unknown)); // override_return
+    // Not a helper.
+    REQUIRE_FALSE(g_ebpf_platform_linux.is_helper_usable(0, unknown));
+
+    // A program type that the Linux tables do not know is offered nothing.
+    EbpfProgramType other = unknown;
+    other.name = "no_such_program_type";
+    for (int32_t id = 0; id <= 211; ++id) {
+        CAPTURE(id);
+        REQUIRE_FALSE(g_ebpf_platform_linux.is_helper_usable(id, other));
+    }
+}
+
 TEST_CASE("new Linux context descriptors keep expected layout constants", "[platform][tables]") {
     REQUIRE(g_sock_addr_descr.size == 72);
     REQUIRE(g_sock_addr_descr.data == -1);
@@ -1310,7 +1508,10 @@ TEST_CASE("__sk_buff data_meta is a packet pointer for tc programs only", "[plat
         const EbpfProgramType type = g_ebpf_platform_linux.get_program_type(section, "");
         CAPTURE(section);
         REQUIRE(g_ebpf_platform_linux.is_helper_usable(26, type)); // skb_load_bytes
-        REQUIRE(g_ebpf_platform_linux.is_helper_usable(47, type)); // get_socket_uid
+    }
+    for (const char* section : {"classifier", "socket", "cgroup/skb", "sk_skb/stream_verdict"}) {
+        CAPTURE(section);
+        REQUIRE(g_ebpf_platform_linux.is_helper_usable(47, g_ebpf_platform_linux.get_program_type(section, "")));
     }
     REQUIRE_FALSE(g_ebpf_platform_linux.is_helper_usable(26, g_ebpf_platform_linux.get_program_type("xdp", "")));
 }

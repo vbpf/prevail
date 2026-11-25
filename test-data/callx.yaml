@@ -165,7 +165,7 @@ post:
 messages:
   - "0: helper argument type is unavailable on this platform: snprintf (r8.type is helper)"
 ---
-test-case: callx to a helper whose return type is unsupported
+test-case: callx 0, which is no helper's id
 
 pre: ["r8.type=number", "r8.svalue=0", "r8.uvalue=0"]
 
@@ -177,7 +177,7 @@ post:
   - "_|_"
 
 messages:
-  - "0: helper prototype is unavailable on this platform: unspec (r8.type is helper)"
+  - "0: invalid helper function id 0 (r8.type is helper)"
 ---
 test-case: callx with interval
 

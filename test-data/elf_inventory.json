@@ -770,9 +770,7 @@
           "test_overrides": {
             "sections": {
               "socket_filter": {
-                "kind": "VerifierStackInitialization",
-                "reason": "stack initialization tracking is too coarse for this access path",
-                "status": "expected_failure"
+                "status": "reject"
               }
             }
           }
@@ -1286,9 +1284,7 @@
           "test_overrides": {
             "sections": {
               "socket_filter": {
-                "kind": "VerifierTypeTracking",
-                "reason": "register type refinement is too imprecise in this control-flow pattern",
-                "status": "expected_failure"
+                "status": "reject"
               }
             }
           }

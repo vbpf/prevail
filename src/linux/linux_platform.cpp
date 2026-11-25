@@ -171,6 +171,13 @@ static EbpfProgramType returning(EbpfProgramType type, const int32_t min, const 
 const EbpfProgramType linux_socket_filter_program_type =
     with_legacy_packet_access(PTYPE("socket_filter", &g_socket_filter_descr, BPF_PROG_TYPE_SOCKET_FILTER, {"socket"}));
 
+// The program type of a section whose name names none. What such a program will be loaded as is not known:
+// loaders that do not go by section names (iproute2, cilium) leave the names free. It is checked as a program
+// on an __sk_buff without the data_meta pointer, which only tc programs have, and may call the helpers that
+// is_helper_usable_linux() lets a program of unknown type call.
+const EbpfProgramType linux_unknown_program_type =
+    with_legacy_packet_access(PTYPE("unknown", &g_socket_filter_descr, BPF_PROG_TYPE_UNSPEC, {}));
+
 const EbpfProgramType linux_xdp_program_type = PTYPE_READONLY_CTX("xdp", &g_xdp_descr, BPF_PROG_TYPE_XDP, {"xdp"});
 
 // cilium's name for a sched_cls program.
@@ -291,7 +298,7 @@ static EbpfProgramType get_program_type_linux(const std::string& section, const 
         }
     }
 
-    return linux_socket_filter_program_type;
+    return linux_unknown_program_type;
 }
 
 #ifdef __linux__
